@@ -5,6 +5,8 @@ set -euo pipefail
 CCS_VERSION="3.0.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly CONFIG_FILE="${CCS_CONFIG:-$HOME/.ccs/config.json}"
+readonly PROFILES_JSON="$HOME/.ccs/profiles.json"
+readonly INSTANCES_DIR="$HOME/.ccs/instances"
 
 # --- Color/Format Functions ---
 setup_colors() {
@@ -13,12 +15,13 @@ setup_colors() {
      ([[ -t 1 || -t 2 ]] && [[ -z "${NO_COLOR:-}" ]]) || \
      ([[ -n "${TERM:-}" && "${TERM}" != "dumb" ]] && [[ -z "${NO_COLOR:-}" ]]); then
     RED='\033[0;31m'
+    GREEN='\033[0;32m'
     YELLOW='\033[1;33m'
     CYAN='\033[0;36m'
     BOLD='\033[1m'
     RESET='\033[0m'
   else
-    RED='' YELLOW='' CYAN='' BOLD='' RESET=''
+    RED='' GREEN='' YELLOW='' CYAN='' BOLD='' RESET=''
   fi
 }
 
@@ -37,53 +40,48 @@ show_help() {
   echo ""
   echo -e "${CYAN}Usage:${RESET}"
   echo -e "  ${YELLOW}ccs${RESET} [profile] [claude-args...]"
+  echo -e "  ${YELLOW}ccs auth${RESET} <command> [options]"
   echo -e "  ${YELLOW}ccs${RESET} [flags]"
   echo ""
   echo -e "${CYAN}Description:${RESET}"
-  echo -e "  Switch between Claude models instantly. Stop hitting rate limits."
-  echo -e "  Maps profile names to Claude settings files via ~/.ccs/config.json"
+  echo -e "  Switch between Claude accounts and models instantly."
+  echo -e "  Supports concurrent multi-account sessions."
   echo ""
   echo -e "${CYAN}Profile Switching:${RESET}"
   echo -e "  ${YELLOW}ccs${RESET}                         Use default profile"
   echo -e "  ${YELLOW}ccs glm${RESET}                     Switch to GLM profile"
-  echo -e "  ${YELLOW}ccs kimi${RESET}                    Switch to Kimi profile"
-  echo -e "  ${YELLOW}ccs glm${RESET} \"debug this code\"   Switch to GLM and run command"
-  echo -e "  ${YELLOW}ccs kimi${RESET} \"write tests\"      Switch to Kimi and run command"
-  echo -e "  ${YELLOW}ccs glm${RESET} --verbose           Switch to GLM with Claude flags"
-  echo -e "  ${YELLOW}ccs kimi${RESET} --verbose           Switch to Kimi with Claude flags"
+  echo -e "  ${YELLOW}ccs work${RESET}                    Switch to work account"
+  echo -e "  ${YELLOW}ccs work${RESET} \"debug code\"       Run command with work account"
+  echo ""
+  echo -e "${CYAN}Account Management:${RESET}"
+  echo -e "  ${YELLOW}ccs auth create <profile>${RESET}   Create new account profile"
+  echo -e "  ${YELLOW}ccs auth list${RESET}               List all profiles"
+  echo -e "  ${YELLOW}ccs auth show <profile>${RESET}     Show profile details"
+  echo -e "  ${YELLOW}ccs auth remove <profile>${RESET}   Remove profile (requires --force)"
+  echo -e "  ${YELLOW}ccs auth default <profile>${RESET}  Set default profile"
   echo ""
   echo -e "${CYAN}Flags:${RESET}"
   echo -e "  ${YELLOW}-h, --help${RESET}                  Show this help message"
   echo -e "  ${YELLOW}-v, --version${RESET}               Show version and installation info"
-    echo ""
+  echo ""
   echo -e "${CYAN}Configuration:${RESET}"
-  echo -e "  Config File: ~/.ccs/config.json"
-  echo -e "  Settings:    ~/.ccs/*.settings.json"
-  echo -e "  Environment: CCS_CONFIG (override config path)"
+  echo -e "  Config:   ~/.ccs/config.json"
+  echo -e "  Profiles: ~/.ccs/profiles.json"
+  echo -e "  Settings: ~/.ccs/*.settings.json"
   echo ""
   echo -e "${CYAN}Examples:${RESET}"
-  echo -e "  # Use default Claude subscription"
-  echo -e "  ${YELLOW}ccs${RESET} \"Review this architecture\""
+  echo -e "  # Create work account profile"
+  echo -e "  ${YELLOW}ccs auth create work${RESET}"
+  echo ""
+  echo -e "  # Use work account"
+  echo -e "  ${YELLOW}ccs work${RESET} \"Review architecture\""
   echo ""
   echo -e "  # Switch to GLM for cost-effective tasks"
   echo -e "  ${YELLOW}ccs glm${RESET} \"Write unit tests\""
   echo ""
-  echo -e "  # Switch to Kimi for alternative option"
-  echo -e "  ${YELLOW}ccs kimi${RESET} \"Write integration tests\""
-  echo ""
-  echo -e "  # Use with verbose output"
-  echo -e "  ${YELLOW}ccs glm${RESET} --verbose \"Debug error\""
-  echo -e "  ${YELLOW}ccs kimi${RESET} --verbose \"Review code\""
-  echo ""
-    echo -e "${YELLOW}Uninstall:${RESET}"
-  echo -e "  macOS/Linux:  curl -fsSL ccs.kaitran.ca/uninstall | bash"
-  echo -e "  Windows:      irm ccs.kaitran.ca/uninstall | iex"
-  echo -e "  npm:          npm uninstall -g @kaitranntt/ccs"
-  echo ""
   echo -e "${CYAN}Documentation:${RESET}"
   echo -e "  GitHub:  ${CYAN}https://github.com/kaitranntt/ccs${RESET}"
   echo -e "  Docs:    https://github.com/kaitranntt/ccs/blob/main/README.md"
-  echo -e "  Issues:  https://github.com/kaitranntt/ccs/issues"
   echo ""
   echo -e "${CYAN}License:${RESET} MIT"
 }
@@ -124,199 +122,6 @@ Solutions:
 Restart your terminal after installation."
 }
 
-# WIP: .claude/ integration testing incomplete
-# Feature disabled until testing complete
-# install_commands_and_skills() {
-: <<'COMMENTED_OUT'
-  # Try both possible locations for .claude directory
-  local source_dir=""
-  local possible_dirs=(
-    "$SCRIPT_DIR/.claude"           # Development: tools/ccs/.claude
-    "$HOME/.ccs/.claude"            # Installed: ~/.ccs/.claude
-  )
-
-  for dir in "${possible_dirs[@]}"; do
-    if [[ -d "$dir" ]]; then
-      source_dir="$dir"
-      break
-    fi
-  done
-
-  local target_dir="$HOME/.claude"
-
-  echo "┌─ Installing CCS Commands & Skills"
-  echo "│  Source: $source_dir"
-  echo "│  Target: $target_dir"
-  echo "│"
-
-  # Check if source directory exists
-  if [[ ! -d "$source_dir" ]]; then
-    echo "|"
-    msg_error "Source directory not found.
-
-Checked locations:
-  - $SCRIPT_DIR/.claude (development)
-  - $HOME/.ccs/.claude (installed)
-
-Solution:
-  1. If developing: Ensure you're in the CCS repository
-  2. If installed: Reinstall CCS with: curl -fsSL ccs.kaitran.ca/install | bash"
-    return 1
-  fi
-
-  # Create target directories if they don't exist
-  mkdir -p "$target_dir/commands"
-  mkdir -p "$target_dir/skills"
-
-  local installed_count=0
-  local skipped_count=0
-
-  # Install commands
-  if [[ -d "$source_dir/commands" ]]; then
-    echo "│  Installing commands..."
-    for cmd_file in "$source_dir/commands"/*.md; do
-      if [[ -f "$cmd_file" ]]; then
-        local cmd_name=$(basename "$cmd_file" .md)
-        local target_file="$target_dir/commands/$cmd_name.md"
-
-        if [[ -f "$target_file" ]]; then
-          echo "|  |  [i]  Skipping existing command: $cmd_name.md"
-          skipped_count=$((skipped_count + 1))
-        else
-          if cp "$cmd_file" "$target_file"; then
-            echo "|  |  [OK]  Installed command: $cmd_name.md"
-            installed_count=$((installed_count + 1))
-          else
-            echo "|  |  [X]  Failed to install command: $cmd_name.md"
-          fi
-        fi
-      fi
-    done
-  else
-    echo "|  [i]  No commands directory found"
-  fi
-
-  echo "|"
-
-  # Install skills
-  if [[ -d "$source_dir/skills" ]]; then
-    echo "|  Installing skills..."
-    for skill_dir in "$source_dir/skills"/*; do
-      if [[ -d "$skill_dir" ]]; then
-        local skill_name=$(basename "$skill_dir")
-        local target_skill_dir="$target_dir/skills/$skill_name"
-
-        if [[ -d "$target_skill_dir" ]]; then
-          echo "|  |  [i]  Skipping existing skill: $skill_name"
-          skipped_count=$((skipped_count + 1))
-        else
-          if cp -r "$skill_dir" "$target_skill_dir"; then
-            echo "|  |  [OK]  Installed skill: $skill_name"
-            installed_count=$((installed_count + 1))
-          else
-            echo "|  |  [X]  Failed to install skill: $skill_name"
-          fi
-        fi
-      fi
-    done
-  else
-    echo "|  [i]  No skills directory found"
-  fi
-
-  echo "└─"
-  echo ""
-  echo "[OK] Installation complete!"
-  echo "  Installed: $installed_count items"
-  echo "  Skipped: $skipped_count items (already exist)"
-  echo ""
-  echo "You can now use the /ccs command in Claude CLI for task delegation."
-  echo "Example: /ccs glm /plan 'add user authentication'"
-COMMENTED_OUT
-# }
-
-# WIP: .claude/ integration testing incomplete
-# Feature disabled until testing complete
-# uninstall_commands_and_skills() {
-: <<'COMMENTED_OUT'
-  local target_dir="$HOME/.claude"
-  local removed_count=0
-  local not_found_count=0
-
-  echo "┌─ Uninstalling CCS Commands & Skills"
-  echo "│  Target: $target_dir"
-  echo "│"
-
-  # Check if target directory exists
-  if [[ ! -d "$target_dir" ]]; then
-    echo "|"
-    echo "│  [i]  Claude directory not found: $target_dir"
-    echo "│       Nothing to uninstall."
-    echo "└─"
-    echo ""
-    echo "[OK] Uninstall complete!"
-    echo "  Removed: 0 items (nothing was installed)"
-    return 0
-  fi
-
-  # Remove commands
-  local commands_dir="$target_dir/commands"
-  if [[ -d "$commands_dir" ]]; then
-    echo "│  Removing commands..."
-    for cmd_file in "$commands_dir"/ccs.md; do
-      if [[ -f "$cmd_file" ]]; then
-        local cmd_name=$(basename "$cmd_file" .md)
-        if rm "$cmd_file"; then
-          echo "|  |  [OK]  Removed command: $cmd_name.md"
-          removed_count=$((removed_count + 1))
-        else
-          echo "|  |  [X]  Failed to remove command: $cmd_name.md"
-        fi
-      else
-        echo "|  |  [i]  CCS command not found"
-        not_found_count=$((not_found_count + 1))
-      fi
-    done
-  else
-    echo "│  [i]  Commands directory not found"
-    not_found_count=$((not_found_count + 1))
-  fi
-
-  echo "|"
-
-  # Remove skills
-  local skills_dir="$target_dir/skills"
-  if [[ -d "$skills_dir" ]]; then
-    echo "|  Removing skills..."
-    for skill_dir in "$skills_dir"/ccs-delegation; do
-      if [[ -d "$skill_dir" ]]; then
-        local skill_name=$(basename "$skill_dir")
-        if rm -rf "$skill_dir"; then
-          echo "|  |  [OK]  Removed skill: $skill_name"
-          removed_count=$((removed_count + 1))
-        else
-          echo "|  |  [X]  Failed to remove skill: $skill_name"
-        fi
-      else
-        echo "|  |  [i]  CCS skill not found"
-        not_found_count=$((not_found_count + 1))
-      fi
-    done
-  else
-    echo "│  [i]  Skills directory not found"
-    not_found_count=$((not_found_count + 1))
-  fi
-
-  echo "└─"
-  echo ""
-  echo "[OK] Uninstall complete!"
-  echo "  Removed: $removed_count items"
-  echo "  Not found: $not_found_count items (already removed)"
-  echo ""
-  echo "The /ccs command is no longer available in Claude CLI."
-  echo "To reinstall: ccs --install"
-COMMENTED_OUT
-# }
-
 show_version() {
   echo -e "${BOLD}CCS (Claude Code Switch) v${CCS_VERSION}${RESET}"
   echo ""
@@ -337,6 +142,573 @@ show_version() {
   echo -e "${YELLOW}Run 'ccs --help' for usage information${RESET}"
 }
 
+# --- Profile Registry Functions (Phase 4) ---
+
+# Initialize empty registry if missing
+init_profiles_json() {
+  [[ -f "$PROFILES_JSON" ]] && return 0
+
+  local init_data='{
+  "version": "2.0.0",
+  "profiles": {},
+  "default": null
+}'
+
+  echo "$init_data" > "$PROFILES_JSON"
+  chmod 0600 "$PROFILES_JSON"
+}
+
+# Read entire profiles.json
+read_profiles_json() {
+  init_profiles_json
+  cat "$PROFILES_JSON"
+}
+
+# Write entire profiles.json (atomic)
+write_profiles_json() {
+  local content="$1"
+  local temp_file="$PROFILES_JSON.tmp"
+
+  echo "$content" > "$temp_file" || {
+    msg_error "Failed to write profiles registry"
+    return 1
+  }
+
+  chmod 0600 "$temp_file"
+  mv "$temp_file" "$PROFILES_JSON" || {
+    rm -f "$temp_file"
+    msg_error "Failed to update profiles registry"
+    return 1
+  }
+}
+
+# Check if profile exists
+profile_exists() {
+  local profile_name="$1"
+  init_profiles_json
+
+  local exists=$(jq -r ".profiles.\"$profile_name\" // empty" "$PROFILES_JSON")
+  [[ -n "$exists" ]]
+}
+
+# Create new profile
+register_profile() {
+  local profile_name="$1"
+  local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+
+  init_profiles_json
+
+  # Check if exists
+  profile_exists "$profile_name" && {
+    msg_error "Profile already exists: $profile_name"
+    return 1
+  }
+
+  # Read current data
+  local data=$(read_profiles_json)
+
+  # Add new profile
+  data=$(echo "$data" | jq \
+    --arg name "$profile_name" \
+    --arg timestamp "$timestamp" \
+    '.profiles[$name] = {
+      "type": "account",
+      "created": $timestamp,
+      "last_used": null
+    }')
+
+  # Set as default if none exists
+  local has_default=$(echo "$data" | jq -r '.default // empty')
+  if [[ -z "$has_default" ]]; then
+    data=$(echo "$data" | jq --arg name "$profile_name" '.default = $name')
+  fi
+
+  write_profiles_json "$data"
+}
+
+# Delete profile
+unregister_profile() {
+  local profile_name="$1"
+
+  init_profiles_json
+
+  profile_exists "$profile_name" || return 0  # Idempotent
+
+  local data=$(read_profiles_json)
+
+  # Remove profile
+  data=$(echo "$data" | jq --arg name "$profile_name" 'del(.profiles[$name])')
+
+  # Update default if it was the deleted profile
+  local current_default=$(echo "$data" | jq -r '.default // empty')
+  if [[ "$current_default" == "$profile_name" ]]; then
+    # Set to first remaining profile or null
+    local first_profile=$(echo "$data" | jq -r '.profiles | keys[0] // empty')
+    data=$(echo "$data" | jq --arg first "$first_profile" '
+      .default = if $first != "" then $first else null end
+    ')
+  fi
+
+  write_profiles_json "$data"
+}
+
+# Update last_used timestamp
+touch_profile() {
+  local profile_name="$1"
+  local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+
+  profile_exists "$profile_name" || return 0  # Silent fail if not exists
+
+  local data=$(read_profiles_json)
+
+  data=$(echo "$data" | jq \
+    --arg name "$profile_name" \
+    --arg timestamp "$timestamp" \
+    '.profiles[$name].last_used = $timestamp')
+
+  write_profiles_json "$data"
+}
+
+# Get default profile
+get_default_profile() {
+  init_profiles_json
+  jq -r '.default // empty' "$PROFILES_JSON"
+}
+
+# Set default profile
+set_default_profile() {
+  local profile_name="$1"
+
+  profile_exists "$profile_name" || {
+    msg_error "Profile not found: $profile_name"
+    return 1
+  }
+
+  local data=$(read_profiles_json)
+  data=$(echo "$data" | jq --arg name "$profile_name" '.default = $name')
+
+  write_profiles_json "$data"
+}
+
+# --- Instance Management Functions (Phase 2) ---
+
+# Sanitize profile name for filesystem
+sanitize_profile_name() {
+  local name="$1"
+  # Replace unsafe chars with dash, lowercase
+  echo "$name" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/-/g'
+}
+
+# Initialize new instance directory
+initialize_instance() {
+  local instance_path="$1"
+
+  # Create base directory
+  mkdir -m 0700 -p "$instance_path"
+
+  # Create subdirectories
+  local subdirs=(session-env todos logs file-history shell-snapshots debug .anthropic commands skills)
+  for dir in "${subdirs[@]}"; do
+    mkdir -m 0700 -p "$instance_path/$dir"
+  done
+
+  # Copy global configs (optional)
+  copy_global_configs "$instance_path"
+}
+
+# Validate instance structure (auto-repair)
+validate_instance() {
+  local instance_path="$1"
+  local required_dirs=(session-env todos logs file-history shell-snapshots debug .anthropic)
+
+  for dir in "${required_dirs[@]}"; do
+    if [[ ! -d "$instance_path/$dir" ]]; then
+      mkdir -m 0700 -p "$instance_path/$dir"
+    fi
+  done
+}
+
+# Copy global Claude configs to instance
+copy_global_configs() {
+  local instance_path="$1"
+  local global_claude="$HOME/.claude"
+
+  # Copy settings.json
+  [[ -f "$global_claude/settings.json" ]] && \
+    cp "$global_claude/settings.json" "$instance_path/settings.json" 2>/dev/null || true
+
+  # Copy commands/
+  [[ -d "$global_claude/commands" ]] && \
+    cp -r "$global_claude/commands" "$instance_path/" 2>/dev/null || true
+
+  # Copy skills/
+  [[ -d "$global_claude/skills" ]] && \
+    cp -r "$global_claude/skills" "$instance_path/" 2>/dev/null || true
+}
+
+# Ensure instance exists (lazy initialization)
+ensure_instance() {
+  local profile_name="$1"
+  local safe_name=$(sanitize_profile_name "$profile_name")
+  local instance_path="$INSTANCES_DIR/$safe_name"
+
+  # Create if missing
+  if [[ ! -d "$instance_path" ]]; then
+    initialize_instance "$instance_path"
+  fi
+
+  # Validate structure
+  validate_instance "$instance_path"
+
+  echo "$instance_path"
+}
+
+# --- Profile Detection Logic (Phase 1) ---
+
+# List available profiles for error messages
+list_available_profiles() {
+  local lines=()
+
+  # Settings-based profiles
+  if [[ -f "$CONFIG_FILE" ]]; then
+    local settings_profiles=$(jq -r '.profiles | keys[]' "$CONFIG_FILE" 2>/dev/null || true)
+    if [[ -n "$settings_profiles" ]]; then
+      lines+=("Settings-based profiles (GLM, Kimi, etc.):")
+      while IFS= read -r name; do
+        lines+=("  - $name")
+      done <<< "$settings_profiles"
+    fi
+  fi
+
+  # Account-based profiles
+  if [[ -f "$PROFILES_JSON" ]]; then
+    local account_profiles=$(jq -r '.profiles | keys[]' "$PROFILES_JSON" 2>/dev/null || true)
+    local default_profile=$(jq -r '.default // empty' "$PROFILES_JSON" 2>/dev/null || true)
+
+    if [[ -n "$account_profiles" ]]; then
+      lines+=("Account-based profiles:")
+      while IFS= read -r name; do
+        local is_default=""
+        [[ "$name" == "$default_profile" ]] && is_default=" [DEFAULT]"
+        lines+=("  - $name$is_default")
+      done <<< "$account_profiles"
+    fi
+  fi
+
+  if [[ ${#lines[@]} -eq 0 ]]; then
+    echo "  (no profiles configured)"
+    echo "  Run \"ccs auth create <profile>\" to create your first account profile."
+  else
+    printf '%s\n' "${lines[@]}"
+  fi
+}
+
+# Detect profile type and return info
+# Sets global variables: PROFILE_TYPE, PROFILE_PATH/INSTANCE_PATH
+detect_profile_type() {
+  local profile_name="$1"
+
+  # Special case: 'default' resolves to default profile
+  if [[ "$profile_name" == "default" ]]; then
+    # Check account-based default first
+    if [[ -f "$PROFILES_JSON" ]]; then
+      local default_account=$(jq -r '.default // empty' "$PROFILES_JSON" 2>/dev/null || true)
+      if [[ -n "$default_account" ]] && profile_exists "$default_account"; then
+        PROFILE_TYPE="account"
+        PROFILE_NAME="$default_account"
+        return 0
+      fi
+    fi
+
+    # Check settings-based default
+    if [[ -f "$CONFIG_FILE" ]]; then
+      local default_settings=$(jq -r '.profiles.default // empty' "$CONFIG_FILE" 2>/dev/null || true)
+      if [[ -n "$default_settings" ]]; then
+        PROFILE_TYPE="settings"
+        PROFILE_PATH="$default_settings"
+        PROFILE_NAME="default"
+        return 0
+      fi
+    fi
+
+    # No default configured, use Claude's defaults
+    PROFILE_TYPE="default"
+    PROFILE_NAME="default"
+    return 0
+  fi
+
+  # Priority 1: Check settings-based profiles (backward compatibility)
+  if [[ -f "$CONFIG_FILE" ]]; then
+    local settings_path=$(jq -r ".profiles.\"$profile_name\" // empty" "$CONFIG_FILE" 2>/dev/null || true)
+    if [[ -n "$settings_path" ]]; then
+      PROFILE_TYPE="settings"
+      PROFILE_PATH="$settings_path"
+      PROFILE_NAME="$profile_name"
+      return 0
+    fi
+  fi
+
+  # Priority 2: Check account-based profiles
+  if [[ -f "$PROFILES_JSON" ]] && profile_exists "$profile_name"; then
+    PROFILE_TYPE="account"
+    PROFILE_NAME="$profile_name"
+    return 0
+  fi
+
+  # Not found
+  PROFILE_TYPE="error"
+  return 1
+}
+
+# --- Auth Commands (Phase 3) ---
+
+auth_help() {
+  echo -e "${BOLD}CCS Account Management${RESET}"
+  echo ""
+  echo -e "${CYAN}Usage:${RESET}"
+  echo -e "  ${YELLOW}ccs auth${RESET} <command> [options]"
+  echo ""
+  echo -e "${CYAN}Commands:${RESET}"
+  echo -e "  ${YELLOW}create <profile>${RESET}        Create new profile and login"
+  echo -e "  ${YELLOW}list${RESET}                   List all saved profiles"
+  echo -e "  ${YELLOW}show <profile>${RESET}         Show profile details"
+  echo -e "  ${YELLOW}remove <profile>${RESET}       Remove saved profile"
+  echo -e "  ${YELLOW}default <profile>${RESET}      Set default profile"
+  echo ""
+  echo -e "${CYAN}Examples:${RESET}"
+  echo -e "  ${YELLOW}ccs auth create work${RESET}"
+  echo -e "  ${YELLOW}ccs auth list${RESET}"
+  echo -e "  ${YELLOW}ccs auth remove work --force${RESET}"
+  echo ""
+}
+
+auth_create() {
+  local profile_name=""
+  local force=false
+
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --force) force=true ;;
+      -*) msg_error "Unknown option: $1"; return 1 ;;
+      *) profile_name="$1" ;;
+    esac
+    shift
+  done
+
+  # Validate profile name
+  [[ -z "$profile_name" ]] && {
+    msg_error "Profile name is required"
+    echo ""
+    echo "Usage: ${YELLOW}ccs auth create <profile> [--force]${RESET}"
+    return 1
+  }
+
+  # Check if exists
+  if ! $force && profile_exists "$profile_name"; then
+    msg_error "Profile already exists: $profile_name"
+    echo "Use ${YELLOW}--force${RESET} to overwrite"
+    return 1
+  fi
+
+  # Create instance
+  echo "[i] Creating profile: $profile_name"
+  local instance_path=$(ensure_instance "$profile_name")
+  echo "[i] Instance directory: $instance_path"
+  echo ""
+
+  # Register profile
+  register_profile "$profile_name"
+
+  # Launch Claude for login
+  echo -e "${YELLOW}[i] Starting Claude in isolated instance...${RESET}"
+  echo -e "${YELLOW}[i] You will be prompted to login with your account.${RESET}"
+  echo ""
+
+  CLAUDE_CONFIG_DIR="$instance_path" $(detect_claude_cli) || {
+    msg_error "Login failed or cancelled"
+    echo "To retry: ${YELLOW}ccs auth create $profile_name --force${RESET}"
+    return 1
+  }
+
+  echo ""
+  echo -e "${GREEN}[OK] Profile created successfully${RESET}"
+  echo ""
+  echo "  Profile: $profile_name"
+  echo "  Instance: $instance_path"
+  echo ""
+  echo "Usage:"
+  echo "  ${YELLOW}ccs $profile_name \"your prompt here\"${RESET}"
+  echo ""
+}
+
+auth_list() {
+  local verbose=false
+  [[ "${1:-}" == "--verbose" ]] && verbose=true
+
+  # Read profiles.json
+  [[ ! -f "$PROFILES_JSON" ]] && {
+    echo -e "${YELLOW}No account profiles found${RESET}"
+    echo ""
+    echo "To create your first profile:"
+    echo "  ${YELLOW}ccs auth create <profile>${RESET}"
+    return 0
+  }
+
+  local profiles=$(jq -r '.profiles | keys[]' "$PROFILES_JSON" 2>/dev/null || true)
+  local default_profile=$(jq -r '.default // empty' "$PROFILES_JSON" 2>/dev/null || true)
+
+  [[ -z "$profiles" ]] && {
+    echo -e "${YELLOW}No account profiles found${RESET}"
+    return 0
+  }
+
+  echo -e "${BOLD}Saved Account Profiles:${RESET}"
+  echo ""
+
+  # Display profiles
+  while IFS= read -r profile; do
+    local is_default=false
+    [[ "$profile" == "$default_profile" ]] && is_default=true
+
+    if $is_default; then
+      echo -e "${GREEN}[*] ${CYAN}$profile${GREEN} (default)${RESET}"
+    else
+      echo -e "[ ] ${CYAN}$profile${RESET}"
+    fi
+
+    local type=$(jq -r ".profiles.\"$profile\".type // \"account\"" "$PROFILES_JSON" 2>/dev/null || true)
+    echo "    Type: $type"
+
+    if $verbose; then
+      local created=$(jq -r ".profiles.\"$profile\".created" "$PROFILES_JSON" 2>/dev/null || true)
+      local last_used=$(jq -r ".profiles.\"$profile\".last_used // \"Never\"" "$PROFILES_JSON" 2>/dev/null || true)
+      echo "    Created: $created"
+      echo "    Last used: $last_used"
+    fi
+
+    echo ""
+  done <<< "$profiles"
+}
+
+auth_show() {
+  local profile_name="${1:-}"
+
+  [[ -z "$profile_name" ]] && {
+    msg_error "Profile name is required"
+    echo "Usage: ${YELLOW}ccs auth show <profile>${RESET}"
+    return 1
+  }
+
+  # Check if exists
+  profile_exists "$profile_name" || {
+    msg_error "Profile not found: $profile_name"
+    return 1
+  }
+
+  local default_profile=$(jq -r '.default // empty' "$PROFILES_JSON" 2>/dev/null || true)
+  local is_default=false
+  [[ "$profile_name" == "$default_profile" ]] && is_default=true
+
+  echo -e "${BOLD}Profile: $profile_name${RESET}"
+  echo ""
+
+  local type=$(jq -r ".profiles.\"$profile_name\".type // \"account\"" "$PROFILES_JSON" 2>/dev/null || true)
+  local created=$(jq -r ".profiles.\"$profile_name\".created" "$PROFILES_JSON" 2>/dev/null || true)
+  local last_used=$(jq -r ".profiles.\"$profile_name\".last_used // \"Never\"" "$PROFILES_JSON" 2>/dev/null || true)
+  local instance_path="$INSTANCES_DIR/$(sanitize_profile_name "$profile_name")"
+
+  echo "  Type: $type"
+  echo "  Default: $($is_default && echo "Yes" || echo "No")"
+  echo "  Instance: $instance_path"
+  echo "  Created: $created"
+  echo "  Last used: $last_used"
+  echo ""
+}
+
+auth_remove() {
+  local profile_name=""
+  local force=false
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --force) force=true ;;
+      *) profile_name="$1" ;;
+    esac
+    shift
+  done
+
+  [[ -z "$profile_name" ]] && {
+    msg_error "Profile name is required"
+    echo "Usage: ${YELLOW}ccs auth remove <profile> --force${RESET}"
+    return 1
+  }
+
+  profile_exists "$profile_name" || {
+    msg_error "Profile not found: $profile_name"
+    return 1
+  }
+
+  $force || {
+    msg_error "Removal requires --force flag for safety"
+    echo "Run: ${YELLOW}ccs auth remove $profile_name --force${RESET}"
+    return 1
+  }
+
+  # Delete instance directory
+  local instance_path="$INSTANCES_DIR/$(sanitize_profile_name "$profile_name")"
+  rm -rf "$instance_path"
+
+  # Remove from registry
+  unregister_profile "$profile_name"
+
+  echo -e "${GREEN}[OK] Profile removed successfully${RESET}"
+  echo "    Profile: $profile_name"
+  echo ""
+}
+
+auth_default() {
+  local profile_name="${1:-}"
+
+  [[ -z "$profile_name" ]] && {
+    msg_error "Profile name is required"
+    echo "Usage: ${YELLOW}ccs auth default <profile>${RESET}"
+    return 1
+  }
+
+  profile_exists "$profile_name" || {
+    msg_error "Profile not found: $profile_name"
+    return 1
+  }
+
+  set_default_profile "$profile_name"
+
+  echo -e "${GREEN}[OK] Default profile set${RESET}"
+  echo "    Profile: $profile_name"
+  echo ""
+  echo "Now you can use:"
+  echo "  ${YELLOW}ccs \"your prompt\"${RESET}  # Uses $profile_name profile"
+  echo ""
+}
+
+handle_auth_commands() {
+  shift  # Remove 'auth'
+
+  local subcommand="${1:-}"
+  shift || true
+
+  case "$subcommand" in
+    create) auth_create "$@" ;;
+    list) auth_list "$@" ;;
+    show) auth_show "$@" ;;
+    remove) auth_remove "$@" ;;
+    default) auth_default "$@" ;;
+    *) auth_help ;;
+  esac
+}
+
+# --- Main Execution Logic ---
+
 # Special case: version command (check BEFORE profile detection)
 if [[ $# -gt 0 ]] && [[ "${1}" == "version" || "${1}" == "--version" || "${1}" == "-v" ]]; then
   show_version
@@ -345,35 +717,14 @@ fi
 
 # Special case: help command (check BEFORE profile detection)
 if [[ $# -gt 0 ]] && [[ "${1}" == "--help" || "${1}" == "-h" || "${1}" == "help" ]]; then
-  setup_colors
   show_help
   exit 0
 fi
 
-# Special case: install command (check BEFORE profile detection)
-if [[ $# -gt 0 ]] && [[ "${1}" == "--install" ]]; then
-  echo ""
-  echo "Feature not available"
-  echo ""
-  echo "The --install flag is currently under development."
-  echo ".claude/ integration testing is not complete."
-  echo ""
-  echo "For updates: https://github.com/kaitranntt/ccs/issues"
-  echo ""
-  exit 0
-fi
-
-# Special case: uninstall command (check BEFORE profile detection)
-if [[ $# -gt 0 ]] && [[ "${1}" == "--uninstall" ]]; then
-  echo ""
-  echo "Feature not available"
-  echo ""
-  echo "The --uninstall flag is currently under development."
-  echo ".claude/ integration testing is not complete."
-  echo ""
-  echo "For updates: https://github.com/kaitranntt/ccs/issues"
-  echo ""
-  exit 0
+# Special case: auth commands
+if [[ $# -gt 0 ]] && [[ "${1}" == "auth" ]]; then
+  handle_auth_commands "$@"
+  exit $?
 fi
 
 # Smart profile detection: if first arg starts with '-', it's a flag not a profile
@@ -385,29 +736,6 @@ else
   PROFILE="${1}"
 fi
 
-# Check config exists
-if [[ ! -f "$CONFIG_FILE" ]]; then
-  msg_error "Config file not found: $CONFIG_FILE
-
-Solutions:
-  1. Reinstall CCS:
-     curl -fsSL ccs.kaitran.ca/install | bash
-
-  2. Or create config manually:
-     mkdir -p ~/.ccs
-     cat > ~/.ccs/config.json << 'EOF'
-{
-  \"profiles\": {
-    \"glm\": \"~/.ccs/glm.settings.json\",
-    \"kimi\": \"~/.ccs/kimi.settings.json\",
-    \"default\": \"~/.claude/settings.json\"
-  }
-}
-EOF"
-  exit 1
-fi
-
-
 # Validate profile name (alphanumeric, dash, underscore only)
 if [[ "$PROFILE" =~ [^a-zA-Z0-9_-] ]]; then
   msg_error "Invalid profile name: $PROFILE
@@ -416,44 +744,12 @@ Use only alphanumeric characters, dash, or underscore."
   exit 1
 fi
 
-# Single check gets profile path, validates JSON + structure in one step
-SETTINGS_PATH=$(jq -r --arg profile "$PROFILE" '.profiles[$profile] // empty' "$CONFIG_FILE" 2>/dev/null)
-
-if [[ -z "$SETTINGS_PATH" ]]; then
-  # Could be: invalid JSON, no profiles object, or profile not found
-  # Show helpful error based on what we can detect
-  if ! jq -e . "$CONFIG_FILE" &>/dev/null; then
-    msg_error "Invalid JSON in $CONFIG_FILE
-
-Fix the JSON syntax or reinstall:
-  curl -fsSL ccs.kaitran.ca/install | bash"
-  elif ! jq -e '.profiles' "$CONFIG_FILE" &>/dev/null; then
-    msg_error "Config must have 'profiles' object
-
-See config/config.example.json for correct format
-Or reinstall:
-  curl -fsSL ccs.kaitran.ca/install | bash"
-  else
-    AVAILABLE_PROFILES=$(jq -r '.profiles | keys[]' "$CONFIG_FILE" 2>/dev/null | sed 's/^/  - /')
-    msg_error "Profile '$PROFILE' not found in $CONFIG_FILE
+# Detect profile type
+if ! detect_profile_type "$PROFILE"; then
+  msg_error "Profile '$PROFILE' not found
 
 Available profiles:
-$AVAILABLE_PROFILES"
-  fi
-  exit 1
-fi
-
-# Expand ~ in path
-SETTINGS_PATH="${SETTINGS_PATH/#\~/$HOME}"
-
-# Validate settings file exists
-if [[ ! -f "$SETTINGS_PATH" ]]; then
-  msg_error "Settings file not found: $SETTINGS_PATH
-
-Solutions:
-  1. Create the settings file for profile '$PROFILE'
-  2. Update the path in $CONFIG_FILE
-  3. Or reinstall: curl -fsSL ccs.kaitran.ca/install | bash"
+$(list_available_profiles)"
   exit 1
 fi
 
@@ -465,9 +761,45 @@ fi
 # Detect Claude CLI executable
 CLAUDE_CLI=$(detect_claude_cli)
 
-# Execute Claude with the profile settings
-# If claude is not found, exec will fail and show an error
-if ! exec "$CLAUDE_CLI" --settings "$SETTINGS_PATH" "$@"; then
-  show_claude_not_found_error
-  exit 1
-fi
+# Execute based on profile type (Phase 5)
+case "$PROFILE_TYPE" in
+  account)
+    # Account-based profile: use CLAUDE_CONFIG_DIR
+    INSTANCE_PATH=$(ensure_instance "$PROFILE_NAME")
+    touch_profile "$PROFILE_NAME"  # Update last_used
+
+    # Execute Claude with isolated config
+    CLAUDE_CONFIG_DIR="$INSTANCE_PATH" exec "$CLAUDE_CLI" "$@" || {
+      show_claude_not_found_error
+      exit 1
+    }
+    ;;
+
+  settings)
+    # Settings-based profile: use --settings flag
+    SETTINGS_PATH="${PROFILE_PATH/#\~/$HOME}"
+
+    [[ ! -f "$SETTINGS_PATH" ]] && {
+      msg_error "Settings file not found: $SETTINGS_PATH"
+      exit 1
+    }
+
+    exec "$CLAUDE_CLI" --settings "$SETTINGS_PATH" "$@" || {
+      show_claude_not_found_error
+      exit 1
+    }
+    ;;
+
+  default)
+    # Default: no special handling
+    exec "$CLAUDE_CLI" "$@" || {
+      show_claude_not_found_error
+      exit 1
+    }
+    ;;
+
+  *)
+    msg_error "Unknown profile type: $PROFILE_TYPE"
+    exit 1
+    ;;
+esac
