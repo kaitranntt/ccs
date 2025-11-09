@@ -8,6 +8,13 @@ on:
       - 'scripts/wrangler.toml'
       - 'installers/**'
 
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/worker.js'
+      - 'scripts/wrangler.toml'
+      - 'installers/**'
+
   # Allow manual trigger
   workflow_dispatch:
 
@@ -20,7 +27,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy Worker
+      - name: Validate Worker (PR Mode)
+        if: github.event_name == 'pull_request'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: scripts
+          wranglerVersion: "4.45.3"
+          command: deploy --dry-run
+
+      - name: Deploy Worker (Production)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
