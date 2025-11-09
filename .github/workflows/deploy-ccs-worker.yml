@@ -8,12 +8,9 @@ on:
       - 'scripts/wrangler.toml'
       - 'installers/**'
 
+  # Run on all PRs to satisfy branch protection (no path filter)
   pull_request:
     branches: [main]
-    paths:
-      - 'scripts/worker.js'
-      - 'scripts/wrangler.toml'
-      - 'installers/**'
 
   # Allow manual trigger
   workflow_dispatch:
