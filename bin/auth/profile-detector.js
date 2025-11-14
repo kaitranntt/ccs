@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { findSimilarStrings } = require('../utils/helpers');
 
 /**
  * Profile Detector
@@ -85,12 +86,16 @@ class ProfileDetector {
       };
     }
 
-    // Not found
-    throw new Error(
-      `Profile not found: ${profileName}\n` +
-      `Available profiles:\n` +
-      this._listAvailableProfiles()
-    );
+    // Not found - generate suggestions
+    const allProfiles = this.getAllProfiles();
+    const allProfileNames = [...allProfiles.settings, ...allProfiles.accounts];
+    const suggestions = findSimilarStrings(profileName, allProfileNames);
+
+    const error = new Error(`Profile not found: ${profileName}`);
+    error.profileName = profileName;
+    error.suggestions = suggestions;
+    error.availableProfiles = this._listAvailableProfiles();
+    throw error;
   }
 
   /**

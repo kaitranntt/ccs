@@ -18,6 +18,9 @@ $ConfigFile = if ($env:CCS_CONFIG) { $env:CCS_CONFIG } else { "$env:USERPROFILE\
 $ProfilesJson = "$env:USERPROFILE\.ccs\profiles.json"
 $InstancesDir = "$env:USERPROFILE\.ccs\instances"
 
+# Source error codes
+. "$ScriptDir\error-codes.ps1"
+
 # --- Color/Format Functions ---
 function Write-ErrorMsg {
     param([string]$Message)
@@ -27,6 +30,104 @@ function Write-ErrorMsg {
     Write-Host "=============================================" -ForegroundColor Red
     Write-Host ""
     Write-Host $Message -ForegroundColor Red
+    Write-Host ""
+}
+
+# Calculate Levenshtein distance between two strings
+function Get-LevenshteinDistance {
+    param(
+        [string]$a,
+        [string]$b
+    )
+
+    $lenA = $a.Length
+    $lenB = $b.Length
+
+    if ($lenA -eq 0) { return $lenB }
+    if ($lenB -eq 0) { return $lenA }
+
+    # Initialize matrix
+    $matrix = New-Object 'int[,]' ($lenB + 1), ($lenA + 1)
+
+    # Initialize first row and column
+    for ($i = 0; $i -le $lenB; $i++) {
+        $matrix[$i, 0] = $i
+    }
+    for ($j = 0; $j -le $lenA; $j++) {
+        $matrix[0, $j] = $j
+    }
+
+    # Fill matrix
+    for ($i = 1; $i -le $lenB; $i++) {
+        for ($j = 1; $j -le $lenA; $j++) {
+            if ($a[$j - 1] -eq $b[$i - 1]) {
+                $matrix[$i, $j] = $matrix[$i - 1, $j - 1]
+            } else {
+                $sub = $matrix[$i - 1, $j - 1]
+                $ins = $matrix[$i, $j - 1]
+                $del = $matrix[$i - 1, $j]
+                $min = [Math]::Min([Math]::Min($sub, $ins), $del)
+                $matrix[$i, $j] = $min + 1
+            }
+        }
+    }
+
+    return $matrix[$lenB, $lenA]
+}
+
+# Find similar strings using fuzzy matching
+function Find-SimilarStrings {
+    param(
+        [string]$Target,
+        [string[]]$Candidates,
+        [int]$MaxDistance = 2
+    )
+
+    $targetLower = $Target.ToLower()
+    $matches = @()
+
+    foreach ($candidate in $Candidates) {
+        $candidateLower = $candidate.ToLower()
+        $distance = Get-LevenshteinDistance $targetLower $candidateLower
+
+        if ($distance -le $MaxDistance -and $distance -gt 0) {
+            $matches += [PSCustomObject]@{
+                Name = $candidate
+                Distance = $distance
+            }
+        }
+    }
+
+    # Sort by distance and return top 3
+    return $matches | Sort-Object Distance | Select-Object -First 3 | ForEach-Object { $_.Name }
+}
+
+# Enhanced error message with error codes
+function Show-EnhancedError {
+    param(
+        [string]$ErrorCode,
+        [string]$ShortMsg,
+        [string]$Context = "",
+        [string]$Suggestions = ""
+    )
+
+    Write-Host ""
+    Write-Host "[X] $ShortMsg" -ForegroundColor Red
+    Write-Host ""
+
+    if ($Context) {
+        Write-Host $Context
+        Write-Host ""
+    }
+
+    if ($Suggestions) {
+        Write-Host "Solutions:" -ForegroundColor Yellow
+        Write-Host $Suggestions
+        Write-Host ""
+    }
+
+    Write-Host "Error: $ErrorCode" -ForegroundColor Yellow
+    Write-Host (Get-ErrorDocUrl $ErrorCode) -ForegroundColor Yellow
     Write-Host ""
 }
 
@@ -110,6 +211,19 @@ function Show-Help {
     Write-ColorLine "  ccs glmt                    Switch to GLM with thinking mode" "Yellow"
     Write-ColorLine "  ccs kimi                    Switch to Kimi for Coding" "Yellow"
     Write-ColorLine "  ccs glm 'debug this code'   Use GLM and run command" "Yellow"
+    Write-Host ""
+    Write-ColorLine "Examples:" "Cyan"
+    Write-Host "  Quick start:"
+    Write-ColorLine "    `$ ccs" "Yellow" -NoNewline
+    Write-Host "                        # Use default account"
+    Write-ColorLine "    `$ ccs glm `"implement API`"" "Yellow" -NoNewline
+    Write-Host "    # Cost-optimized model"
+    Write-Host ""
+    Write-Host "  Profile usage:"
+    Write-ColorLine "    `$ ccs work `"debug code`"" "Yellow" -NoNewline
+    Write-Host "      # Switch to work profile"
+    Write-ColorLine "    `$ ccs personal" "Yellow" -NoNewline
+    Write-Host "                # Open personal account"
     Write-Host ""
     Write-ColorLine "Account Management:" "Cyan"
     Write-ColorLine "  ccs auth --help             Manage multiple Claude accounts" "Yellow"
@@ -585,6 +699,28 @@ function Ensure-Instance {
 
 # --- Profile Detection Logic (Phase 1) ---
 
+function Get-AllProfileNames {
+    $names = @()
+
+    # Settings-based profiles
+    if (Test-Path $ConfigFile) {
+        try {
+            $Config = Get-Content $ConfigFile -Raw | ConvertFrom-Json
+            $names += $Config.profiles.PSObject.Properties.Name
+        } catch {}
+    }
+
+    # Account-based profiles
+    if (Test-Path $ProfilesJson) {
+        try {
+            $Profiles = Read-ProfilesJson
+            $names += $Profiles.profiles.PSObject.Properties.Name
+        } catch {}
+    }
+
+    return $names
+}
+
 function Get-AvailableProfiles {
     $lines = @()
 
@@ -1025,11 +1161,36 @@ if ($Profile -notmatch '^[a-zA-Z0-9_-]+$') {
 $ProfileInfo = Get-ProfileType $Profile
 
 if ($ProfileInfo.Type -eq "error") {
-    $ErrorMessage = "Profile '$Profile' not found" + "`n`n" +
-    "Available profiles:" + "`n" +
-    (Get-AvailableProfiles)
+    # Get suggestions using fuzzy matching
+    $AllProfiles = Get-AllProfileNames
+    $Suggestions = Find-SimilarStrings -Target $Profile -Candidates $AllProfiles
 
-    Write-ErrorMsg $ErrorMessage
+    Write-Host ""
+    Write-Host "[X] Profile '$Profile' not found" -ForegroundColor Red
+    Write-Host ""
+
+    # Show suggestions if any
+    if ($Suggestions -and $Suggestions.Count -gt 0) {
+        Write-Host "Did you mean:" -ForegroundColor Yellow
+        foreach ($suggestion in $Suggestions) {
+            Write-Host "  $suggestion"
+        }
+        Write-Host ""
+    }
+
+    Write-Host "Available profiles:" -ForegroundColor Cyan
+    Get-AvailableProfiles | ForEach-Object { Write-Host $_ }
+    Write-Host ""
+    Write-Host "Solutions:" -ForegroundColor Yellow
+    Write-Host "  # Use existing profile"
+    Write-Host "  ccs <profile> `"your prompt`""
+    Write-Host ""
+    Write-Host "  # Create new account profile"
+    Write-Host "  ccs auth create <name>"
+    Write-Host ""
+    Write-Host "Error: $script:E_PROFILE_NOT_FOUND" -ForegroundColor Yellow
+    Write-Host (Get-ErrorDocUrl $script:E_PROFILE_NOT_FOUND) -ForegroundColor Yellow
+    Write-Host ""
     exit 1
 }
 

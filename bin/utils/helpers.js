@@ -63,10 +63,74 @@ function expandPath(pathStr) {
   return path.normalize(pathStr);
 }
 
+/**
+ * Calculate Levenshtein distance between two strings
+ * @param {string} a - First string
+ * @param {string} b - Second string
+ * @returns {number} Edit distance
+ */
+function levenshteinDistance(a, b) {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+
+  const matrix = [];
+
+  // Initialize first row and column
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  // Fill in the rest of the matrix
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+
+  return matrix[b.length][a.length];
+}
+
+/**
+ * Find similar strings using fuzzy matching
+ * @param {string} target - Target string
+ * @param {string[]} candidates - List of candidate strings
+ * @param {number} maxDistance - Maximum edit distance (default: 2)
+ * @returns {string[]} Similar strings sorted by distance
+ */
+function findSimilarStrings(target, candidates, maxDistance = 2) {
+  const targetLower = target.toLowerCase();
+
+  const matches = candidates
+    .map(candidate => ({
+      name: candidate,
+      distance: levenshteinDistance(targetLower, candidate.toLowerCase())
+    }))
+    .filter(item => item.distance <= maxDistance && item.distance > 0)
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, 3)  // Show at most 3 suggestions
+    .map(item => item.name);
+
+  return matches;
+}
+
 
 module.exports = {
   colors,
   colored,
   error,
-  expandPath
+  expandPath,
+  levenshteinDistance,
+  findSimilarStrings
 };

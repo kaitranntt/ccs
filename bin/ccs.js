@@ -456,7 +456,13 @@ async function main() {
       execClaude(claudeCli, remainingArgs);
     }
   } catch (error) {
-    console.error(`[X] ${error.message}`);
+    // Check if this is a profile not found error with suggestions
+    if (error.profileName && error.availableProfiles !== undefined) {
+      const allProfiles = error.availableProfiles.split('\n');
+      ErrorManager.showProfileNotFound(error.profileName, allProfiles, error.suggestions);
+    } else {
+      console.error(`[X] ${error.message}`);
+    }
     process.exit(1);
   }
 }

@@ -65,6 +65,86 @@ show_enhanced_error() {
   echo "" >&2
 }
 
+# Calculate Levenshtein distance between two strings
+levenshtein_distance() {
+  local a="$1"
+  local b="$2"
+  local len_a=${#a}
+  local len_b=${#b}
+
+  # Return early for empty strings
+  [[ $len_a -eq 0 ]] && { echo "$len_b"; return; }
+  [[ $len_b -eq 0 ]] && { echo "$len_a"; return; }
+
+  # Initialize matrix using associative array
+  declare -A matrix
+
+  # Initialize first row and column
+  for ((i=0; i<=len_b; i++)); do
+    matrix[0,$i]=$i
+  done
+  for ((j=0; j<=len_a; j++)); do
+    matrix[$j,0]=$j
+  done
+
+  # Fill matrix
+  for ((i=1; i<=len_b; i++)); do
+    for ((j=1; j<=len_a; j++)); do
+      if [[ "${a:j-1:1}" == "${b:i-1:1}" ]]; then
+        matrix[$i,$j]=${matrix[$((i-1)),$((j-1))]}
+      else
+        local sub=${matrix[$((i-1)),$((j-1))]}
+        local ins=${matrix[$i,$((j-1))]}
+        local del=${matrix[$((i-1)),$j]}
+        local min=$sub
+        [[ $ins -lt $min ]] && min=$ins
+        [[ $del -lt $min ]] && min=$del
+        matrix[$i,$j]=$((min + 1))
+      fi
+    done
+  done
+
+  echo "${matrix[$len_b,$len_a]}"
+}
+
+# Find similar strings using fuzzy matching
+find_similar_strings() {
+  local target="$1"
+  shift
+  local candidates=("$@")
+  local max_distance=2
+  local target_lower="${target,,}"
+
+  declare -A distances
+  local matches=()
+
+  # Calculate distances
+  for candidate in "${candidates[@]}"; do
+    local candidate_lower="${candidate,,}"
+    local dist=$(levenshtein_distance "$target_lower" "$candidate_lower")
+    if [[ $dist -le $max_distance && $dist -gt 0 ]]; then
+      distances["$candidate"]=$dist
+      matches+=("$candidate")
+    fi
+  done
+
+  # Sort by distance (simple bubble sort for small arrays)
+  for ((i=0; i<${#matches[@]}; i++)); do
+    for ((j=i+1; j<${#matches[@]}; j++)); do
+      if [[ ${distances[${matches[i]}]} -gt ${distances[${matches[j]}]} ]]; then
+        local temp="${matches[i]}"
+        matches[i]="${matches[j]}"
+        matches[j]="$temp"
+      fi
+    done
+  done
+
+  # Return first 3 matches
+  for ((i=0; i<${#matches[@]} && i<3; i++)); do
+    echo "${matches[i]}"
+  done
+}
+
 show_help() {
   echo -e "${BOLD}CCS (Claude Code Switch) - Instant profile switching for Claude CLI${RESET}"
   echo ""
@@ -670,6 +750,27 @@ ensure_instance() {
 # --- Profile Detection Logic (Phase 1) ---
 
 # List available profiles for error messages
+# Get all profile names (for fuzzy matching)
+get_all_profile_names() {
+  local names=()
+
+  # Settings-based profiles
+  if [[ -f "$CONFIG_FILE" ]]; then
+    while IFS= read -r name; do
+      names+=("$name")
+    done < <(jq -r '.profiles | keys[]' "$CONFIG_FILE" 2>/dev/null || true)
+  fi
+
+  # Account-based profiles
+  if [[ -f "$PROFILES_JSON" ]]; then
+    while IFS= read -r name; do
+      names+=("$name")
+    done < <(jq -r '.profiles | keys[]' "$PROFILES_JSON" 2>/dev/null || true)
+  fi
+
+  printf '%s\n' "${names[@]}"
+}
+
 list_available_profiles() {
   local lines=()
 
@@ -1071,10 +1172,36 @@ fi
 
 # Detect profile type
 if ! detect_profile_type "$PROFILE"; then
-  msg_error "Profile '$PROFILE' not found
+  # Get suggestions using fuzzy matching
+  mapfile -t all_profiles < <(get_all_profile_names)
+  mapfile -t suggestions < <(find_similar_strings "$PROFILE" "${all_profiles[@]}")
 
-Available profiles:
-$(list_available_profiles)"
+  echo "" >&2
+  echo -e "${RED}[X] Profile '$PROFILE' not found${RESET}" >&2
+  echo "" >&2
+
+  # Show suggestions if any
+  if [[ ${#suggestions[@]} -gt 0 ]]; then
+    echo -e "${YELLOW}Did you mean:${RESET}" >&2
+    for suggestion in "${suggestions[@]}"; do
+      echo "  $suggestion" >&2
+    done
+    echo "" >&2
+  fi
+
+  echo -e "${CYAN}Available profiles:${RESET}" >&2
+  list_available_profiles >&2
+  echo "" >&2
+  echo -e "${YELLOW}Solutions:${RESET}" >&2
+  echo "  # Use existing profile" >&2
+  echo "  ccs <profile> \"your prompt\"" >&2
+  echo "" >&2
+  echo "  # Create new account profile" >&2
+  echo "  ccs auth create <name>" >&2
+  echo "" >&2
+  echo -e "${YELLOW}Error: $E_PROFILE_NOT_FOUND${RESET}" >&2
+  echo -e "${YELLOW}$(get_error_doc_url "$E_PROFILE_NOT_FOUND")${RESET}" >&2
+  echo "" >&2
   exit 1
 fi
 
