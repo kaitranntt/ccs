@@ -4,14 +4,32 @@
 **Status:** Planning Complete
 **Owner:** Development Team
 
+## Context
+
+**Project Documentation:**
+- [Project Overview](../../CLAUDE.md) - Core project context
+- [Development Rules](../../workflows/development-rules.md) - YAGNI, KISS, DRY principles
+- [Primary Workflow](../../workflows/primary-workflow.md) - Implementation workflow
+- [README](../../README.md) - Project overview and constraints
+
+**Plan Documentation:**
+- [CLI Best Practices Research](research/01-cli-best-practices.md)
+- [Current State Analysis](reports/01-current-state-analysis.md)
+
 ## Overview
 
 Comprehensive CLI user experience enhancement for CCS following modern best practices while maintaining strict YAGNI, KISS, DRY principles and existing constraints (ASCII-only, cross-platform parity, non-invasive behavior).
 
-## Research & Analysis
+## Skills & Subagents Required
 
-- [CLI Best Practices Research](research/01-cli-best-practices.md)
-- [Current State Analysis](reports/01-current-state-analysis.md)
+**No special skills needed** - Uses core development tools only
+
+**Subagents to delegate:**
+- `tester` - Run tests after each phase (bash/PowerShell/Node.js)
+- `code-reviewer` - Review code quality and cross-platform consistency
+- `debugger` - Diagnose any platform-specific issues
+- `docs-manager` - Update README.md and documentation
+- `project-manager` - Track progress and update plan status
 
 ## Implementation Phases
 

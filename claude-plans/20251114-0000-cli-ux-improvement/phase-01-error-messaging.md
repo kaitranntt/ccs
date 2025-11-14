@@ -4,7 +4,11 @@
 
 **Parent Plan:** [CLI UI/UX Improvement Plan](plan.md)
 **Dependencies:** None
-**Documentation:** [CLI Best Practices](research/01-cli-best-practices.md), [Current Analysis](reports/01-current-state-analysis.md)
+**Project Docs:** [CLAUDE.md](../../CLAUDE.md), [Development Rules](../../workflows/development-rules.md)
+**Research:** [CLI Best Practices](research/01-cli-best-practices.md), [Current Analysis](reports/01-current-state-analysis.md)
+
+**Skills Required:** None (core development only)
+**Subagents:** `tester`, `code-reviewer`, `docs-manager`
 
 ## Overview
 
