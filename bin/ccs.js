@@ -149,6 +149,19 @@ function handleHelpCommand() {
   console.log('  Note: Commands, skills, and agents are symlinked across all profiles');
   console.log('');
 
+  // Examples
+  console.log(colored('Examples:', 'cyan'));
+  console.log('  Quick start:');
+  console.log(`    ${colored('$ ccs', 'yellow')}                        # Use default account`);
+  console.log(`    ${colored('$ ccs glm "implement API"', 'yellow')}    # Cost-optimized model`);
+  console.log('');
+  console.log('  Multi-account workflow:');
+  console.log(`    ${colored('$ ccs auth create work', 'yellow')}       # Create work profile`);
+  console.log(`    ${colored('$ ccs work "review PR"', 'yellow')}       # Use work account`);
+  console.log('');
+  console.log(`  For more: ${colored('https://github.com/kaitranntt/ccs#usage', 'cyan')}`);
+  console.log('');
+
   // Uninstall
   console.log(colored('Uninstall:', 'yellow'));
   console.log('  npm:          npm uninstall -g @kaitranntt/ccs');

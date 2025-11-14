@@ -8,6 +8,9 @@ readonly CONFIG_FILE="${CCS_CONFIG:-$HOME/.ccs/config.json}"
 readonly PROFILES_JSON="$HOME/.ccs/profiles.json"
 readonly INSTANCES_DIR="$HOME/.ccs/instances"
 
+# Source error codes
+source "$SCRIPT_DIR/error-codes.sh"
+
 # --- Color/Format Functions ---
 setup_colors() {
   # Enable colors if: FORCE_COLOR set OR (TTY detected AND NO_COLOR not set) OR (TERM supports colors AND NO_COLOR not set)
@@ -32,6 +35,33 @@ msg_error() {
   echo -e "${RED}${BOLD}╚═════════════════════════════════════════════╝${RESET}" >&2
   echo "" >&2
   echo -e "${RED}$1${RESET}" >&2
+  echo "" >&2
+}
+
+# Enhanced error message with error codes
+show_enhanced_error() {
+  local error_code="$1"
+  local short_msg="$2"
+  local context="${3:-}"
+  local suggestions="${4:-}"
+
+  echo "" >&2
+  echo -e "${RED}[X] $short_msg${RESET}" >&2
+  echo "" >&2
+
+  [[ -n "$context" ]] && {
+    echo -e "$context" >&2
+    echo "" >&2
+  }
+
+  [[ -n "$suggestions" ]] && {
+    echo -e "${YELLOW}Solutions:${RESET}" >&2
+    echo -e "$suggestions" >&2
+    echo "" >&2
+  }
+
+  echo -e "${YELLOW}Error: $error_code${RESET}" >&2
+  echo -e "${YELLOW}$(get_error_doc_url "$error_code")${RESET}" >&2
   echo "" >&2
 }
 
@@ -77,6 +107,17 @@ show_help() {
   echo -e "  Commands:  ~/.ccs/shared/commands/"
   echo -e "  Skills:    ~/.ccs/shared/skills/"
   echo -e "  Note: Commands, skills, and agents are symlinked across all profiles"
+  echo ""
+  echo -e "${CYAN}Examples:${RESET}"
+  echo -e "  Quick start:"
+  echo -e "    ${YELLOW}\$ ccs${RESET}                        # Use default account"
+  echo -e "    ${YELLOW}\$ ccs glm \"implement API\"${RESET}    # Cost-optimized model"
+  echo ""
+  echo -e "  Multi-account workflow:"
+  echo -e "    ${YELLOW}\$ ccs auth create work${RESET}       # Create work profile"
+  echo -e "    ${YELLOW}\$ ccs work \"review PR\"${RESET}       # Use work account"
+  echo ""
+  echo -e "  For more: ${CYAN}https://github.com/kaitranntt/ccs#usage${RESET}"
   echo ""
   echo -e "${CYAN}Documentation:${RESET}"
   echo -e "  GitHub:  ${CYAN}https://github.com/kaitranntt/ccs${RESET}"
