@@ -1,10 +1,13 @@
 'use strict';
 
 const { spawn } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const ProfileRegistry = require('./profile-registry');
 const InstanceManager = require('../management/instance-manager');
 const { colored } = require('../utils/helpers');
 const { detectClaudeCli } = require('../utils/claude-detector');
+const { InteractivePrompt } = require('../utils/prompt');
 
 /**
  * Auth Commands (Simplified)
@@ -45,7 +48,8 @@ class AuthCommands {
     console.log(`  ${colored('ccs "review code"', 'yellow')}                        # Use default profile`);
     console.log('');
     console.log(colored('Options:', 'cyan'));
-    console.log(`  ${colored('--force', 'yellow')}                   Allow overwriting existing profile`);
+    console.log(`  ${colored('--force', 'yellow')}                   Allow overwriting existing profile (create)`);
+    console.log(`  ${colored('--yes, -y', 'yellow')}                 Skip confirmation prompts (remove)`);
     console.log('');
     console.log(colored('Note:', 'cyan'));
     console.log(`  By default, ${colored('ccs', 'yellow')} uses Claude CLI defaults from ~/.claude/`);
@@ -273,13 +277,12 @@ class AuthCommands {
    * @param {Array} args - Command arguments
    */
   async handleRemove(args) {
-    const profileName = args.find(arg => !arg.startsWith('--'));
-    const force = args.includes('--force');
+    const profileName = args.find(arg => !arg.startsWith('--') && !arg.startsWith('-'));
 
     if (!profileName) {
       console.error('[X] Profile name is required');
       console.log('');
-      console.log(`Usage: ${colored('ccs auth remove <profile> [--force]', 'yellow')}`);
+      console.log(`Usage: ${colored('ccs auth remove <profile> [--yes]', 'yellow')}`);
       process.exit(1);
     }
 
@@ -288,15 +291,39 @@ class AuthCommands {
       process.exit(1);
     }
 
-    // Require --force for safety
-    if (!force) {
-      console.error('[X] Removal requires --force flag for safety');
-      console.log('');
-      console.log(`Run: ${colored(`ccs auth remove ${profileName} --force`, 'yellow')}`);
-      process.exit(1);
-    }
-
     try {
+      // Get instance path and session count for impact display
+      const instancePath = this.instanceMgr.getInstancePath(profileName);
+      let sessionCount = 0;
+
+      try {
+        const sessionsDir = path.join(instancePath, 'session-env');
+        if (fs.existsSync(sessionsDir)) {
+          const files = fs.readdirSync(sessionsDir);
+          sessionCount = files.filter(f => f.endsWith('.json')).length;
+        }
+      } catch (e) {
+        // Ignore errors counting sessions
+      }
+
+      // Display impact
+      console.log('');
+      console.log(`Profile '${colored(profileName, 'cyan')}' will be permanently deleted.`);
+      console.log(`  Instance path: ${instancePath}`);
+      console.log(`  Sessions: ${sessionCount} conversation${sessionCount !== 1 ? 's' : ''}`);
+      console.log('');
+
+      // Interactive confirmation (or --yes flag)
+      const confirmed = await InteractivePrompt.confirm(
+        'Delete this profile?',
+        { default: false } // Default to NO (safe)
+      );
+
+      if (!confirmed) {
+        console.log('[i] Cancelled');
+        process.exit(0);
+      }
+
       // Delete instance
       this.instanceMgr.deleteInstance(profileName);
 

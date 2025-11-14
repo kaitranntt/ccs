@@ -21,6 +21,12 @@ $InstancesDir = "$env:USERPROFILE\.ccs\instances"
 # Source error codes
 . "$ScriptDir\error-codes.ps1"
 
+# Source progress indicators
+. "$ScriptDir\progress-indicator.ps1"
+
+# Source interactive prompts
+. "$ScriptDir\prompt.ps1"
+
 # --- Color/Format Functions ---
 function Write-ErrorMsg {
     param([string]$Message)
@@ -854,6 +860,10 @@ function Show-AuthHelp {
     Write-Host '  ccs work "review code"                   # Use work profile' -ForegroundColor Yellow
     Write-Host '  ccs "review code"                        # Use default profile' -ForegroundColor Yellow
     Write-Host ""
+    Write-Host "Options:" -ForegroundColor Cyan
+    Write-Host "  --force                   Allow overwriting existing profile (create)" -ForegroundColor Yellow
+    Write-Host "  --yes, -y                 Skip confirmation prompts (remove)" -ForegroundColor Yellow
+    Write-Host ""
     Write-Host "Note:" -ForegroundColor Cyan
     Write-Host "  By default, " -NoNewline
     Write-Host "ccs" -ForegroundColor Yellow -NoNewline
@@ -1018,18 +1028,24 @@ function Invoke-AuthRemove {
     param([string[]]$Args)
 
     $ProfileName = ""
-    $Force = $false
 
+    # Parse arguments
     foreach ($arg in $Args) {
-        if ($arg -eq "--force") {
-            $Force = $true
+        if ($arg -eq "--yes" -or $arg -eq "-y") {
+            $env:CCS_YES = "1"  # Auto-confirm
+        } elseif ($arg -like "-*") {
+            Write-ErrorMsg "Unknown option: $arg"
+            return 1
         } else {
             $ProfileName = $arg
         }
     }
 
     if (-not $ProfileName) {
-        Write-ErrorMsg "Profile name is required`nUsage: ccs auth remove <profile> --force"
+        Write-ErrorMsg "Profile name is required"
+        Write-Host ""
+        Write-Host "Usage: " -NoNewline
+        Write-Host "ccs auth remove <profile> [--yes]" -ForegroundColor Yellow
         return 1
     }
 
@@ -1038,13 +1054,33 @@ function Invoke-AuthRemove {
         return 1
     }
 
-    if (-not $Force) {
-        Write-ErrorMsg "Removal requires --force flag for safety`nRun: ccs auth remove $ProfileName --force"
-        return 1
+    # Get instance path and session count for impact display
+    $InstancePath = "$InstancesDir\$(Get-SanitizedProfileName $ProfileName)"
+    $SessionCount = 0
+
+    if (Test-Path "$InstancePath\session-env") {
+        $SessionFiles = Get-ChildItem "$InstancePath\session-env" -Filter "*.json" -ErrorAction SilentlyContinue
+        $SessionCount = $SessionFiles.Count
+    }
+
+    # Display impact
+    Write-Host ""
+    Write-Host "Profile '" -NoNewline
+    Write-Host $ProfileName -ForegroundColor Cyan -NoNewline
+    Write-Host "' will be permanently deleted."
+    Write-Host "  Instance path: $InstancePath"
+    Write-Host "  Sessions: $SessionCount conversation$(if ($SessionCount -ne 1) { 's' } else { '' })"
+    Write-Host ""
+
+    # Interactive confirmation (or --yes flag)
+    $Confirmed = Confirm-Action "Delete this profile?" "No"
+
+    if (-not $Confirmed) {
+        Write-Host "[i] Cancelled"
+        return 0
     }
 
     # Delete instance directory
-    $InstancePath = "$InstancesDir\$(Get-SanitizedProfileName $ProfileName)"
     if (Test-Path $InstancePath) {
         Remove-Item $InstancePath -Recurse -Force
     }

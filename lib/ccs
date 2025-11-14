@@ -14,6 +14,9 @@ source "$SCRIPT_DIR/error-codes.sh"
 # Source progress indicators
 source "$SCRIPT_DIR/progress-indicator.sh"
 
+# Source interactive prompts
+source "$SCRIPT_DIR/prompt.sh"
+
 # --- Color/Format Functions ---
 setup_colors() {
   # Enable colors if: FORCE_COLOR set OR (TTY detected AND NO_COLOR not set) OR (TERM supports colors AND NO_COLOR not set)
@@ -931,6 +934,10 @@ auth_help() {
   echo -e "  ${YELLOW}ccs work \"review code\"${RESET}                   # Use work profile"
   echo -e "  ${YELLOW}ccs \"review code\"${RESET}                        # Use default profile"
   echo ""
+  echo -e "${CYAN}Options:${RESET}"
+  echo -e "  ${YELLOW}--force${RESET}                   Allow overwriting existing profile (create)"
+  echo -e "  ${YELLOW}--yes, -y${RESET}                 Skip confirmation prompts (remove)"
+  echo ""
   echo -e "${CYAN}Note:${RESET}"
   echo -e "  By default, ${YELLOW}ccs${RESET} uses Claude CLI defaults from ~/.claude/"
   echo -e "  Use ${YELLOW}ccs auth default <profile>${RESET} to change the default profile."
@@ -1086,11 +1093,12 @@ auth_show() {
 
 auth_remove() {
   local profile_name=""
-  local force=false
 
+  # Parse arguments
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --force) force=true ;;
+      --yes|-y) CCS_YES=1 ;;  # Auto-confirm
+      -*) msg_error "Unknown option: $1"; return 1 ;;
       *) profile_name="$1" ;;
     esac
     shift
@@ -1098,7 +1106,8 @@ auth_remove() {
 
   [[ -z "$profile_name" ]] && {
     msg_error "Profile name is required"
-    echo "Usage: ${YELLOW}ccs auth remove <profile> --force${RESET}"
+    echo ""
+    echo "Usage: ${YELLOW}ccs auth remove <profile> [--yes]${RESET}"
     return 1
   }
 
@@ -1107,14 +1116,28 @@ auth_remove() {
     return 1
   }
 
-  $force || {
-    msg_error "Removal requires --force flag for safety"
-    echo "Run: ${YELLOW}ccs auth remove $profile_name --force${RESET}"
-    return 1
-  }
+  # Get instance path and session count for impact display
+  local instance_path="$INSTANCES_DIR/$(sanitize_profile_name "$profile_name")"
+  local session_count=0
+
+  if [[ -d "$instance_path/session-env" ]]; then
+    session_count=$(find "$instance_path/session-env" -name "*.json" 2>/dev/null | wc -l | tr -d ' ')
+  fi
+
+  # Display impact
+  echo ""
+  echo "Profile '${CYAN}$profile_name${RESET}' will be permanently deleted."
+  echo "  Instance path: $instance_path"
+  echo "  Sessions: $session_count conversation$([ "$session_count" -ne 1 ] && echo "s" || echo "")"
+  echo ""
+
+  # Interactive confirmation (or --yes flag)
+  if ! confirm_action "Delete this profile?" "no"; then
+    echo "[i] Cancelled"
+    return 0
+  fi
 
   # Delete instance directory
-  local instance_path="$INSTANCES_DIR/$(sanitize_profile_name "$profile_name")"
   rm -rf "$instance_path"
 
   # Remove from registry
