@@ -20,6 +20,9 @@ PASSED_TESTS=0
 FAILED_TESTS=0
 SKIPPED_TESTS=0
 
+# Current test tracking
+CURRENT_TEST_HAS_FAILURE=0
+
 # Test results
 RESULTS=()
 
@@ -30,28 +33,41 @@ log_info() {
 
 log_success() {
     echo -e "${GREEN}[PASS]${RESET} $1"
-    PASSED_TESTS=$((PASSED_TESTS + 1))
-    RESULTS+=("PASS: $1")
 }
 
 log_fail() {
     echo -e "${RED}[FAIL]${RESET} $1"
-    FAILED_TESTS=$((FAILED_TESTS + 1))
-    RESULTS+=("FAIL: $1")
+    CURRENT_TEST_HAS_FAILURE=1
 }
 
 log_skip() {
     echo -e "${YELLOW}[SKIP]${RESET} $1"
-    SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
-    RESULTS+=("SKIP: $1")
+    CURRENT_TEST_HAS_FAILURE=-1  # Mark as skipped
 }
 
 test_start() {
+    # Finalize previous test if any
+    if [[ $TOTAL_TESTS -gt 0 ]]; then
+        test_end
+    fi
+
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
+    CURRENT_TEST_HAS_FAILURE=0
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
     echo -e "${CYAN}Test $TOTAL_TESTS: $1${RESET}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+}
+
+test_end() {
+    # Count this test as passed, failed, or skipped
+    if [[ $CURRENT_TEST_HAS_FAILURE -eq -1 ]]; then
+        SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
+    elif [[ $CURRENT_TEST_HAS_FAILURE -eq 0 ]]; then
+        PASSED_TESTS=$((PASSED_TESTS + 1))
+    else
+        FAILED_TESTS=$((FAILED_TESTS + 1))
+    fi
 }
 
 # Check prerequisites
@@ -442,14 +458,19 @@ test_ascii_error_boxes() {
 test_help_consistency() {
     test_start "Phase 5.2 - Help text structure consistency"
 
-    # Get section headers from both versions
-    local node_sections=$(node "$PROJECT_ROOT/bin/ccs.js" --help 2>&1 | grep -E "^[A-Z][a-z]+:" | sort)
-    local bash_sections=$(lib/ccs --help 2>&1 | grep -E "^[A-Z][a-z]+:" | sort)
+    # Get section headers from both versions (use LC_ALL=C for consistent sorting)
+    local node_sections=$(node "$PROJECT_ROOT/bin/ccs.js" --help 2>&1 | grep -E "^[A-Z][a-z]+:" | LC_ALL=C sort)
+    local bash_sections=$("$PROJECT_ROOT/lib/ccs" --help 2>&1 | grep -E "^[A-Z][a-z]+:" | LC_ALL=C sort)
 
     if [[ "$node_sections" == "$bash_sections" ]]; then
         log_success "Help text structure consistent"
     else
         log_fail "Help text structure differs between Node.js and bash"
+        # Debug output
+        echo "  Node.js sections:" >&2
+        echo "$node_sections" | sed 's/^/    /' >&2
+        echo "  Bash sections:" >&2
+        echo "$bash_sections" | sed 's/^/    /' >&2
     fi
 }
 
@@ -533,6 +554,9 @@ main() {
     test_bash_completion
     test_fish_completion
 
+    # Finalize last test
+    test_end
+
     cleanup_test_env
 
     # Print summary
@@ -547,8 +571,13 @@ main() {
     echo -e "${YELLOW}Skipped:       $SKIPPED_TESTS${RESET}"
     echo ""
 
-    local pass_rate=$((PASSED_TESTS * 100 / TOTAL_TESTS))
-    echo "Pass Rate:     $pass_rate%"
+    # Calculate pass rate based on non-skipped tests
+    local tests_run=$((TOTAL_TESTS - SKIPPED_TESTS))
+    local pass_rate=0
+    if [[ $tests_run -gt 0 ]]; then
+        pass_rate=$((PASSED_TESTS * 100 / tests_run))
+    fi
+    echo "Pass Rate:     $pass_rate% ($PASSED_TESTS/$tests_run non-skipped tests)"
     echo ""
 
     if [[ $pass_rate -ge 90 ]]; then
