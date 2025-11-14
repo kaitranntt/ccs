@@ -1026,7 +1026,7 @@ auth_list() {
   # Read profiles.json
   [[ ! -f "$PROFILES_JSON" ]] && {
     if $json; then
-      echo '{"version":"1.0","profiles":[]}'
+      echo "{\"version\":\"$CCS_VERSION\",\"profiles\":[]}"
       return 0
     fi
     echo -e "${YELLOW}No account profiles found${RESET}"
@@ -1041,7 +1041,7 @@ auth_list() {
   # JSON output mode
   if $json; then
     jq -n \
-      --arg version "1.0" \
+      --arg version "$CCS_VERSION" \
       --arg default "$default_profile" \
       --argjson data "$(cat "$PROFILES_JSON")" \
       '{

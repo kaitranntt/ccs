@@ -948,7 +948,7 @@ function Invoke-AuthList {
 
     if (-not (Test-Path $ProfilesJson)) {
         if ($Json) {
-            Write-Output '{"version":"1.0","profiles":[]}'
+            Write-Output "{`"version`":`"$CcsVersion`",`"profiles`":[]}"
             return
         }
         Write-Host "No account profiles found" -ForegroundColor Yellow
@@ -963,7 +963,7 @@ function Invoke-AuthList {
 
     if ($Profiles.Count -eq 0) {
         if ($Json) {
-            Write-Output '{"version":"1.0","profiles":[]}'
+            Write-Output "{`"version`":`"$CcsVersion`",`"profiles`":[]}"
             return
         }
         Write-Host "No account profiles found" -ForegroundColor Yellow
@@ -992,7 +992,7 @@ function Invoke-AuthList {
         }
 
         $Output = @{
-            version = "1.0"
+            version = $CcsVersion
             profiles = $ProfilesList
         }
 

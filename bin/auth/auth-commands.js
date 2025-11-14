@@ -8,6 +8,7 @@ const InstanceManager = require('../management/instance-manager');
 const { colored } = require('../utils/helpers');
 const { detectClaudeCli } = require('../utils/claude-detector');
 const { InteractivePrompt } = require('../utils/prompt');
+const CCS_VERSION = require('../../package.json').version;
 
 /**
  * Auth Commands (Simplified)
@@ -175,7 +176,7 @@ class AuthCommands {
       // JSON output mode
       if (json) {
         const output = {
-          version: '1.0',
+          version: CCS_VERSION,
           profiles: profileNames.map(name => {
             const profile = profiles[name];
             const isDefault = name === defaultProfile;
