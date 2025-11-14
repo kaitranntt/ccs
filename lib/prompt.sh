@@ -11,9 +11,9 @@ confirm_action() {
   local message="$1"
   local default="${2:-no}"  # Default to NO for safety
 
-  # Check for --yes flag (automation)
+  # Check for --yes flag (automation) - always returns true (0)
   if [[ "${CCS_YES:-}" == "1" ]]; then
-    [[ "$default" == "yes" ]] && return 0 || return 1
+    return 0
   fi
 
   # Check for --no-input flag (CI)

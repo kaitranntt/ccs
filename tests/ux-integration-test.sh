@@ -113,6 +113,17 @@ EOF
     echo '{}' > ~/.ccs/instances/test-work/session-env/session2.json
     echo '{}' > ~/.ccs/instances/test-personal/session-env/session3.json
 
+    # Create config.json with settings-based profiles (for fuzzy matching tests)
+    cat > ~/.ccs/config.json <<'EOF'
+{
+  "profiles": {
+    "glm": "~/.ccs/glm.settings.json",
+    "kimi": "~/.ccs/kimi.settings.json",
+    "default": "~/.claude/settings.json"
+  }
+}
+EOF
+
     log_success "Test environment ready"
 }
 
@@ -140,35 +151,68 @@ test_error_codes() {
     test_start "Phase 1.1 - Error codes display"
 
     # Node.js version
-    if node "$PROJECT_ROOT/bin/ccs.js" nonexistent-profile "test" 2>&1 | grep -q "E[0-9]\{3\}"; then
+    local node_output=$(node "$PROJECT_ROOT/bin/ccs.js" nonexistent-profile "test" 2>&1)
+    if echo "$node_output" | grep -q "E[0-9]\{3\}"; then
         log_success "Node.js: Error code displayed"
     else
         log_fail "Node.js: Error code NOT displayed"
+        echo "  Debug: Output was:" >&2
+        echo "$node_output" | tail -3 >&2
     fi
 
     # Bash version
-    if "$PROJECT_ROOT/lib/ccs" nonexistent-profile "test" 2>&1 | grep -q "E[0-9]\{3\}"; then
+    local bash_output=$("$PROJECT_ROOT/lib/ccs" nonexistent-profile "test" 2>&1)
+    if echo "$bash_output" | grep -q "E[0-9]\{3\}"; then
         log_success "Bash: Error code displayed"
     else
         log_fail "Bash: Error code NOT displayed"
+        echo "  Debug: Output was:" >&2
+        echo "$bash_output" | tail -3 >&2
     fi
 }
 
 test_fuzzy_matching() {
     test_start "Phase 1.2 - Fuzzy matching 'Did you mean?'"
 
-    # Node.js version (typo: test-wrk instead of test-work)
-    if node "$PROJECT_ROOT/bin/ccs.js" test-wrk "test" 2>&1 | grep -qi "did you mean"; then
+    # Node.js version (typo: glmm instead of glm)
+    local node_output=$(node "$PROJECT_ROOT/bin/ccs.js" glmm "test" 2>&1)
+    if echo "$node_output" | grep -qi "did you mean"; then
         log_success "Node.js: Fuzzy matching works"
     else
         log_fail "Node.js: Fuzzy matching NOT working"
+        echo "  Debug: Looking for 'did you mean' in output:" >&2
+        echo "$node_output" | grep -i "mean\|glm\|profile" | head -5 >&2
     fi
 
     # Bash version
-    if "$PROJECT_ROOT/lib/ccs" test-wrk "test" 2>&1 | grep -qi "did you mean"; then
+    local bash_output=$("$PROJECT_ROOT/lib/ccs" glmm "test" 2>&1)
+    if echo "$bash_output" | grep -qi "did you mean"; then
         log_success "Bash: Fuzzy matching works"
     else
         log_fail "Bash: Fuzzy matching NOT working"
+        echo "  Debug: Looking for 'did you mean' in output:" >&2
+        echo "$bash_output" | grep -i "mean\|glm\|profile" | head -5 >&2
+    fi
+
+    # Additional test with account profiles (if they exist)
+    if [[ -f ~/.ccs/profiles.json ]] && grep -q "test-work" ~/.ccs/profiles.json; then
+        local node_acct_output=$(node "$PROJECT_ROOT/bin/ccs.js" test-wrk "test" 2>&1)
+        if echo "$node_acct_output" | grep -qi "did you mean"; then
+            log_success "Node.js: Fuzzy matching works for account profiles"
+        else
+            log_fail "Node.js: Fuzzy matching NOT working for account profiles"
+            echo "  Debug: test-wrk output:" >&2
+            echo "$node_acct_output" | grep -i "mean\|test\|profile" | head -5 >&2
+        fi
+
+        local bash_acct_output=$("$PROJECT_ROOT/lib/ccs" test-wrk "test" 2>&1)
+        if echo "$bash_acct_output" | grep -qi "did you mean"; then
+            log_success "Bash: Fuzzy matching works for account profiles"
+        else
+            log_fail "Bash: Fuzzy matching NOT working for account profiles"
+            echo "  Debug: test-wrk output:" >&2
+            echo "$bash_acct_output" | grep -i "mean\|test\|profile" | head -5 >&2
+        fi
     fi
 }
 

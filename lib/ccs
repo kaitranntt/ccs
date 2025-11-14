@@ -86,11 +86,11 @@ levenshtein_distance() {
   declare -A matrix
 
   # Initialize first row and column
-  for ((i=0; i<=len_b; i++)); do
-    matrix[0,$i]=$i
-  done
   for ((j=0; j<=len_a; j++)); do
-    matrix[$j,0]=$j
+    matrix[0,$j]=$j
+  done
+  for ((i=0; i<=len_b; i++)); do
+    matrix[$i,0]=$i
   done
 
   # Fill matrix
@@ -1177,7 +1177,7 @@ auth_remove() {
   # Parse arguments
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --yes|-y) CCS_YES=1 ;;  # Auto-confirm
+      --yes|-y) export CCS_YES=1 ;;  # Auto-confirm (export for confirm_action)
       -*) msg_error "Unknown option: $1"; return 1 ;;
       *) profile_name="$1" ;;
     esac

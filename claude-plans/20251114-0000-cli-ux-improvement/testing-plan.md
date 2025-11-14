@@ -86,26 +86,34 @@ lib/ccs nonexistent-profile "test" 2>&1 | grep -E "E[0-9]{3}"
 
 **Node.js Version:**
 ```bash
-# Typo: "wrk" instead of "work"
-node bin/ccs.js test-wrk "test" 2>&1 | grep -i "did you mean"
+# Typo: "glmm" instead of "glm"
+node bin/ccs.js glmm "test" 2>&1 | grep -i "did you mean"
 ```
 
 **Expected Output:**
 ```
-[X] Profile 'test-wrk' not found
+[X] Profile 'glmm' not found
 
 Did you mean:
-  test-work
-  test-personal
+  glm
 
 Available profiles:
-  test-work
-  test-personal
+Settings-based profiles (GLM, Kimi, etc.):
+  - default
+  - glm
+  - kimi
 ```
 
 **Bash Version:**
 ```bash
 # Same test
+lib/ccs glmm "test" 2>&1 | grep -i "did you mean"
+```
+
+**Additional Tests:**
+```bash
+# Test with account profiles (if test-work exists)
+node bin/ccs.js test-wrk "test" 2>&1 | grep -i "did you mean"  # Should suggest test-work
 lib/ccs test-wrk "test" 2>&1 | grep -i "did you mean"
 ```
 

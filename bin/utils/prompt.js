@@ -24,9 +24,9 @@ class InteractivePrompt {
   static async confirm(message, options = {}) {
     const { default: defaultValue = false } = options;
 
-    // Check for --yes flag (automation)
+    // Check for --yes flag (automation) - always returns true
     if (process.env.CCS_YES === '1' || process.argv.includes('--yes') || process.argv.includes('-y')) {
-      return defaultValue;
+      return true;
     }
 
     // Check for --no-input flag (CI)
