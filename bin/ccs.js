@@ -254,6 +254,10 @@ async function execClaudeWithProxy(claudeCli, profileName, args) {
   });
 
   // 3. Wait for proxy ready signal (with timeout)
+  const { ProgressIndicator } = require('./utils/progress-indicator');
+  const spinner = new ProgressIndicator('Starting GLMT proxy');
+  spinner.start();
+
   let port;
   try {
     port = await new Promise((resolve, reject) => {
@@ -281,8 +285,11 @@ async function execClaudeWithProxy(claudeCli, profileName, args) {
         }
       });
     });
+
+    spinner.succeed(`GLMT proxy ready on port ${port}`);
   } catch (error) {
-    console.error('[X] Failed to start GLMT proxy:', error.message);
+    spinner.fail('Failed to start GLMT proxy');
+    console.error('[X] Error:', error.message);
     console.error('');
     console.error('Possible causes:');
     console.error('  1. Port conflict (unlikely with random port)');
