@@ -863,6 +863,8 @@ function Show-AuthHelp {
     Write-Host "Options:" -ForegroundColor Cyan
     Write-Host "  --force                   Allow overwriting existing profile (create)" -ForegroundColor Yellow
     Write-Host "  --yes, -y                 Skip confirmation prompts (remove)" -ForegroundColor Yellow
+    Write-Host "  --json                    Output in JSON format (list, show)" -ForegroundColor Yellow
+    Write-Host "  --verbose                 Show additional details (list)" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "Note:" -ForegroundColor Cyan
     Write-Host "  By default, " -NoNewline
@@ -942,8 +944,13 @@ function Invoke-AuthList {
     param([string[]]$Args)
 
     $Verbose = $Args -contains "--verbose"
+    $Json = $Args -contains "--json"
 
     if (-not (Test-Path $ProfilesJson)) {
+        if ($Json) {
+            Write-Output '{"version":"1.0","profiles":[]}'
+            return
+        }
         Write-Host "No account profiles found" -ForegroundColor Yellow
         Write-Host ""
         Write-Host "To create your first profile:"
@@ -955,10 +962,45 @@ function Invoke-AuthList {
     $Profiles = $Data.profiles.PSObject.Properties.Name
 
     if ($Profiles.Count -eq 0) {
+        if ($Json) {
+            Write-Output '{"version":"1.0","profiles":[]}'
+            return
+        }
         Write-Host "No account profiles found" -ForegroundColor Yellow
         return
     }
 
+    # JSON output mode
+    if ($Json) {
+        $ProfilesList = @()
+        foreach ($profile in $Profiles) {
+            $IsDefault = $profile -eq $Data.default
+            $Type = $Data.profiles.$profile.type
+            if (-not $Type) { $Type = "account" }
+            $Created = $Data.profiles.$profile.created
+            $LastUsed = $Data.profiles.$profile.last_used
+            $InstancePath = "$InstancesDir\$(Get-SanitizedProfileName $profile)"
+
+            $ProfilesList += @{
+                name = $profile
+                type = $Type
+                is_default = $IsDefault
+                created = $Created
+                last_used = $LastUsed
+                instance_path = $InstancePath
+            }
+        }
+
+        $Output = @{
+            version = "1.0"
+            profiles = $ProfilesList
+        }
+
+        Write-Output ($Output | ConvertTo-Json -Depth 10)
+        return
+    }
+
+    # Human-readable output
     Write-Host "Saved Account Profiles:" -ForegroundColor White
     Write-Host ""
 
@@ -992,10 +1034,26 @@ function Invoke-AuthList {
 function Invoke-AuthShow {
     param([string[]]$Args)
 
-    $ProfileName = $Args[0]
+    $ProfileName = ""
+    $Json = $false
+
+    # Parse arguments
+    foreach ($arg in $Args) {
+        if ($arg -eq "--json") {
+            $Json = $true
+        } elseif ($arg -like "-*") {
+            Write-ErrorMsg "Unknown option: $arg"
+            return 1
+        } else {
+            $ProfileName = $arg
+        }
+    }
 
     if (-not $ProfileName) {
-        Write-ErrorMsg "Profile name is required`nUsage: ccs auth show <profile>"
+        Write-ErrorMsg "Profile name is required"
+        Write-Host ""
+        Write-Host "Usage: " -NoNewline
+        Write-Host "ccs auth show <profile> [--json]" -ForegroundColor Yellow
         return 1
     }
 
@@ -1007,20 +1065,48 @@ function Invoke-AuthShow {
     $Data = Read-ProfilesJson
     $IsDefault = $ProfileName -eq $Data.default
 
-    Write-Host "Profile: $ProfileName" -ForegroundColor White
-    Write-Host ""
-
     $Type = $Data.profiles.$ProfileName.type
+    if (-not $Type) { $Type = "account" }
     $Created = $Data.profiles.$ProfileName.created
     $LastUsed = $Data.profiles.$ProfileName.last_used
-    if (-not $LastUsed) { $LastUsed = "Never" }
     $InstancePath = "$InstancesDir\$(Get-SanitizedProfileName $ProfileName)"
+
+    # Count sessions
+    $SessionCount = 0
+    if (Test-Path "$InstancePath\session-env") {
+        $SessionFiles = Get-ChildItem "$InstancePath\session-env" -Filter "*.json" -ErrorAction SilentlyContinue
+        $SessionCount = $SessionFiles.Count
+    }
+
+    # JSON output mode
+    if ($Json) {
+        $Output = @{
+            name = $ProfileName
+            type = $Type
+            is_default = $IsDefault
+            created = $Created
+            last_used = $LastUsed
+            instance_path = $InstancePath
+            session_count = $SessionCount
+        }
+
+        Write-Output ($Output | ConvertTo-Json -Depth 10)
+        return
+    }
+
+    # Human-readable output
+    Write-Host "Profile: $ProfileName" -ForegroundColor White
+    Write-Host ""
 
     Write-Host "  Type: $Type"
     Write-Host "  Default: $(if ($IsDefault) { 'Yes' } else { 'No' })"
     Write-Host "  Instance: $InstancePath"
     Write-Host "  Created: $Created"
-    Write-Host "  Last used: $LastUsed"
+    if ($LastUsed) {
+        Write-Host "  Last used: $LastUsed"
+    } else {
+        Write-Host "  Last used: Never"
+    }
     Write-Host ""
 }
 

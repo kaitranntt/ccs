@@ -937,6 +937,8 @@ auth_help() {
   echo -e "${CYAN}Options:${RESET}"
   echo -e "  ${YELLOW}--force${RESET}                   Allow overwriting existing profile (create)"
   echo -e "  ${YELLOW}--yes, -y${RESET}                 Skip confirmation prompts (remove)"
+  echo -e "  ${YELLOW}--json${RESET}                    Output in JSON format (list, show)"
+  echo -e "  ${YELLOW}--verbose${RESET}                 Show additional details (list)"
   echo ""
   echo -e "${CYAN}Note:${RESET}"
   echo -e "  By default, ${YELLOW}ccs${RESET} uses Claude CLI defaults from ~/.claude/"
@@ -1009,10 +1011,24 @@ auth_create() {
 
 auth_list() {
   local verbose=false
-  [[ "${1:-}" == "--verbose" ]] && verbose=true
+  local json=false
+
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --verbose) verbose=true ;;
+      --json) json=true ;;
+      *) ;;
+    esac
+    shift
+  done
 
   # Read profiles.json
   [[ ! -f "$PROFILES_JSON" ]] && {
+    if $json; then
+      echo '{"version":"1.0","profiles":[]}'
+      return 0
+    fi
     echo -e "${YELLOW}No account profiles found${RESET}"
     echo ""
     echo "To create your first profile:"
@@ -1020,8 +1036,32 @@ auth_list() {
     return 0
   }
 
-  local profiles=$(jq -r '.profiles | keys[]' "$PROFILES_JSON" 2>/dev/null || true)
   local default_profile=$(jq -r '.default // empty' "$PROFILES_JSON" 2>/dev/null || true)
+
+  # JSON output mode
+  if $json; then
+    jq -n \
+      --arg version "1.0" \
+      --arg default "$default_profile" \
+      --argjson data "$(cat "$PROFILES_JSON")" \
+      '{
+        version: $version,
+        profiles: [
+          $data.profiles | to_entries[] | {
+            name: .key,
+            type: (.value.type // "account"),
+            is_default: (.key == $default),
+            created: .value.created,
+            last_used: (.value.last_used // null),
+            instance_path: ($ENV.INSTANCES_DIR + "/" + .key)
+          }
+        ]
+      }'
+    return 0
+  fi
+
+  # Human-readable output
+  local profiles=$(jq -r '.profiles | keys[]' "$PROFILES_JSON" 2>/dev/null || true)
 
   [[ -z "$profiles" ]] && {
     echo -e "${YELLOW}No account profiles found${RESET}"
@@ -1057,11 +1097,22 @@ auth_list() {
 }
 
 auth_show() {
-  local profile_name="${1:-}"
+  local profile_name=""
+  local json=false
+
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json) json=true ;;
+      -*) msg_error "Unknown option: $1"; return 1 ;;
+      *) profile_name="$1" ;;
+    esac
+    shift
+  done
 
   [[ -z "$profile_name" ]] && {
     msg_error "Profile name is required"
-    echo "Usage: ${YELLOW}ccs auth show <profile>${RESET}"
+    echo "Usage: ${YELLOW}ccs auth show <profile> [--json]${RESET}"
     return 1
   }
 
@@ -1075,19 +1126,48 @@ auth_show() {
   local is_default=false
   [[ "$profile_name" == "$default_profile" ]] && is_default=true
 
-  echo -e "${BOLD}Profile: $profile_name${RESET}"
-  echo ""
-
   local type=$(jq -r ".profiles.\"$profile_name\".type // \"account\"" "$PROFILES_JSON" 2>/dev/null || true)
   local created=$(jq -r ".profiles.\"$profile_name\".created" "$PROFILES_JSON" 2>/dev/null || true)
-  local last_used=$(jq -r ".profiles.\"$profile_name\".last_used // \"Never\"" "$PROFILES_JSON" 2>/dev/null || true)
+  local last_used=$(jq -r ".profiles.\"$profile_name\".last_used // null" "$PROFILES_JSON" 2>/dev/null || true)
   local instance_path="$INSTANCES_DIR/$(sanitize_profile_name "$profile_name")"
+
+  # Count sessions
+  local session_count=0
+  if [[ -d "$instance_path/session-env" ]]; then
+    session_count=$(find "$instance_path/session-env" -name "*.json" 2>/dev/null | wc -l | tr -d ' ')
+  fi
+
+  # JSON output mode
+  if $json; then
+    jq -n \
+      --arg name "$profile_name" \
+      --arg type "$type" \
+      --argjson is_default "$is_default" \
+      --arg created "$created" \
+      --arg last_used "$last_used" \
+      --arg instance_path "$instance_path" \
+      --argjson session_count "$session_count" \
+      '{
+        name: $name,
+        type: $type,
+        is_default: $is_default,
+        created: $created,
+        last_used: $last_used,
+        instance_path: $instance_path,
+        session_count: $session_count
+      }'
+    return 0
+  fi
+
+  # Human-readable output
+  echo -e "${BOLD}Profile: $profile_name${RESET}"
+  echo ""
 
   echo "  Type: $type"
   echo "  Default: $($is_default && echo "Yes" || echo "No")"
   echo "  Instance: $instance_path"
   echo "  Created: $created"
-  echo "  Last used: $last_used"
+  [[ "$last_used" != "null" ]] && echo "  Last used: $last_used" || echo "  Last used: Never"
   echo ""
 }
 
