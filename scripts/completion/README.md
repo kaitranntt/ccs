@@ -2,6 +2,8 @@
 
 Tab completion for CCS commands, subcommands, profiles, and flags.
 
+**Supported Shells:** Bash, Zsh, Fish, PowerShell
+
 ## Features
 
 - Complete profile names (both settings-based and account-based)
@@ -95,6 +97,28 @@ Copy-Item scripts\completion\ccs.ps1 ~\Documents\PowerShell\Scripts\
 
 # Add to profile
 Add-Content $PROFILE ". ~\Documents\PowerShell\Scripts\ccs.ps1"
+```
+
+### Fish
+
+**User installation (recommended)**
+
+Fish automatically loads completions from `~/.config/fish/completions/`:
+
+```fish
+# Create completion directory if it doesn't exist
+mkdir -p ~/.config/fish/completions
+
+# Copy completion script
+cp scripts/completion/ccs.fish ~/.config/fish/completions/
+```
+
+That's it! Fish will automatically load the completion on demand. No need to source or reload.
+
+**System-wide installation (requires sudo)**
+
+```fish
+sudo cp scripts/completion/ccs.fish /usr/share/fish/vendor_completions.d/
 ```
 
 ## Usage Examples
@@ -217,6 +241,33 @@ $ ccs auth show work <TAB>
    (Get-ArgumentCompleter).CommandName | Select-String ccs
    ```
 
+### Fish: Completion not working
+
+1. Check Fish version (3.0+ required):
+   ```fish
+   fish --version
+   ```
+
+2. Verify completion file is in the right location:
+   ```fish
+   ls ~/.config/fish/completions/ccs.fish
+   ```
+
+3. Verify jq is installed (required for profile completion):
+   ```fish
+   which jq
+   ```
+
+4. Test completion manually:
+   ```fish
+   complete -C'ccs '
+   ```
+
+5. If needed, rebuild completions:
+   ```fish
+   fish_update_completions
+   ```
+
 ## Technical Details
 
 ### Bash Implementation
@@ -237,6 +288,14 @@ $ ccs auth show work <TAB>
 - Reads profiles dynamically using `ConvertFrom-Json`
 - Provides `CompletionResult` objects
 
+### Fish Implementation
+- Uses declarative `complete` command
+- Compatible with Fish 3.0+
+- Automatic loading from `~/.config/fish/completions/`
+- Helper functions for dynamic profile loading
+- Context-aware using `__fish_seen_subcommand_from`
+- No manual sourcing required
+
 ## Dependencies
 
 - **jq**: Required for reading profiles from JSON files
@@ -246,14 +305,15 @@ $ ccs auth show work <TAB>
 ## Contributing
 
 When adding new commands or flags:
-1. Update all three completion scripts (bash, zsh, PowerShell)
-2. Test on each platform
+1. Update all four completion scripts (bash, zsh, fish, PowerShell)
+2. Test on each shell
 3. Update this README with new completion examples
-4. Maintain cross-platform parity
+4. Maintain cross-shell parity
 
 ## See Also
 
 - [CCS Documentation](https://github.com/kaitranntt/ccs)
 - [Bash Programmable Completion](https://www.gnu.org/software/bash/manual/html_node/Programmable-Completion.html)
 - [Zsh Completion System](http://zsh.sourceforge.net/Doc/Release/Completion-System.html)
+- [Fish Completion Tutorial](https://fishshell.com/docs/current/completions.html)
 - [PowerShell Argument Completers](https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/register-argumentcompleter)
