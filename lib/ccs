@@ -36,9 +36,9 @@ setup_colors() {
 
 msg_error() {
   echo "" >&2
-  echo -e "${RED}${BOLD}╔═════════════════════════════════════════════╗${RESET}" >&2
-  echo -e "${RED}${BOLD}║  ERROR                                      ║${RESET}" >&2
-  echo -e "${RED}${BOLD}╚═════════════════════════════════════════════╝${RESET}" >&2
+  echo -e "${RED}${BOLD}=============================================${RESET}" >&2
+  echo -e "${RED}${BOLD}  ERROR${RESET}" >&2
+  echo -e "${RED}${BOLD}=============================================${RESET}" >&2
   echo "" >&2
   echo -e "${RED}$1${RESET}" >&2
   echo "" >&2
