@@ -11,6 +11,9 @@ readonly INSTANCES_DIR="$HOME/.ccs/instances"
 # Source error codes
 source "$SCRIPT_DIR/error-codes.sh"
 
+# Source progress indicators
+source "$SCRIPT_DIR/progress-indicator.sh"
+
 # --- Color/Format Functions ---
 setup_colors() {
   # Enable colors if: FORCE_COLOR set OR (TTY detected AND NO_COLOR not set) OR (TERM supports colors AND NO_COLOR not set)
@@ -310,96 +313,137 @@ doctor_run() {
   echo ""
 
   local has_errors=false
+  local total_checks=9
+  local current_check=0
 
   # Check Claude CLI
+  current_check=$((current_check + 1))
+  show_progress_step $current_check $total_checks "Checking Claude CLI"
   if command -v "$(detect_claude_cli)" &>/dev/null; then
+    clear_progress
     doctor_check "Claude CLI" "success"
   else
+    clear_progress
     doctor_check "Claude CLI" "error" "Not found in PATH"
     has_errors=true
   fi
 
   # Check ~/.ccs/
+  current_check=$((current_check + 1))
+  show_progress_step $current_check $total_checks "Checking CCS directory"
   if [[ -d "$HOME/.ccs" ]]; then
+    clear_progress
     doctor_check "CCS Directory" "success"
   else
+    clear_progress
     doctor_check "CCS Directory" "error" "~/.ccs/ not found"
     has_errors=true
   fi
 
   # Check config.json
+  current_check=$((current_check + 1))
+  show_progress_step $current_check $total_checks "Checking config.json"
   if [[ -f "$CONFIG_FILE" ]]; then
     if jq empty "$CONFIG_FILE" 2>/dev/null; then
+      clear_progress
       doctor_check "config.json" "success"
     else
+      clear_progress
       doctor_check "config.json" "error" "Invalid JSON"
       has_errors=true
     fi
   else
+    clear_progress
     doctor_check "config.json" "error" "Not found"
     has_errors=true
   fi
 
   # Check glm.settings.json
+  current_check=$((current_check + 1))
+  show_progress_step $current_check $total_checks "Checking glm.settings.json"
   local glm_file="$HOME/.ccs/glm.settings.json"
   if [[ -f "$glm_file" ]]; then
     if jq empty "$glm_file" 2>/dev/null; then
+      clear_progress
       doctor_check "glm.settings.json" "success"
     else
+      clear_progress
       doctor_check "glm.settings.json" "error" "Invalid JSON"
       has_errors=true
     fi
   else
+    clear_progress
     doctor_check "glm.settings.json" "error" "Not found"
     has_errors=true
   fi
 
   # Check kimi.settings.json
+  current_check=$((current_check + 1))
+  show_progress_step $current_check $total_checks "Checking kimi.settings.json"
   local kimi_file="$HOME/.ccs/kimi.settings.json"
   if [[ -f "$kimi_file" ]]; then
     if jq empty "$kimi_file" 2>/dev/null; then
+      clear_progress
       doctor_check "kimi.settings.json" "success"
     else
+      clear_progress
       doctor_check "kimi.settings.json" "error" "Invalid JSON"
       has_errors=true
     fi
   else
+    clear_progress
     doctor_check "kimi.settings.json" "error" "Not found"
     has_errors=true
   fi
 
   # Check ~/.claude/settings.json
+  current_check=$((current_check + 1))
+  show_progress_step $current_check $total_checks "Checking Claude settings"
   if [[ -f "$HOME/.claude/settings.json" ]]; then
     if jq empty "$HOME/.claude/settings.json" 2>/dev/null; then
+      clear_progress
       doctor_check "Claude Settings" "success"
     else
+      clear_progress
       doctor_check "Claude Settings" "warning" "Invalid JSON"
     fi
   else
+    clear_progress
     doctor_check "Claude Settings" "warning" "Not found - run 'claude /login'"
   fi
 
   # Check profiles
+  current_check=$((current_check + 1))
+  show_progress_step $current_check $total_checks "Checking profiles"
   if [[ -f "$CONFIG_FILE" ]]; then
     local profile_count=$(jq -r '.profiles | length' "$CONFIG_FILE" 2>/dev/null || echo "0")
+    clear_progress
     doctor_check "Profiles" "success" "($profile_count configured)"
   fi
 
   # Check instances
+  current_check=$((current_check + 1))
+  show_progress_step $current_check $total_checks "Checking instances"
   if [[ -d "$INSTANCES_DIR" ]]; then
     local instance_count=$(find "$INSTANCES_DIR" -maxdepth 1 -type d 2>/dev/null | wc -l)
     instance_count=$((instance_count - 1))  # Exclude parent dir
+    clear_progress
     doctor_check "Instances" "success" "($instance_count account profiles)"
   else
+    clear_progress
     doctor_check "Instances" "success" "(no account profiles)"
   fi
 
   # Check permissions
+  current_check=$((current_check + 1))
+  show_progress_step $current_check $total_checks "Checking permissions"
   local test_file="$HOME/.ccs/.permission-test"
   if echo "test" > "$test_file" 2>/dev/null; then
     rm -f "$test_file" 2>/dev/null
+    clear_progress
     doctor_check "Permissions" "success"
   else
+    clear_progress
     doctor_check "Permissions" "error" "Cannot write to ~/.ccs/"
     has_errors=true
   fi
