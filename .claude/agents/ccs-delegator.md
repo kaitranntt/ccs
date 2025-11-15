@@ -57,94 +57,117 @@ fi
 
 ### Step 3: Execute via Headless Mode
 
-Execute the delegated task using Claude CLI in headless mode:
+**IMPORTANT**: Use the HeadlessExecutor module for consistent execution.
 
-```bash
-# Single-turn headless execution
-claude -p "$ENHANCED_PROMPT" --settings ~/.ccs/profiles/$PROFILE/settings.json
+```javascript
+// Use Node.js HeadlessExecutor module
+const { HeadlessExecutor } = require('../../bin/delegation/headless-executor');
+
+// Execute with retry logic
+const result = await HeadlessExecutor.executeWithRetry(profile, enhancedPrompt, {
+  cwd: workingDirectory,
+  timeout: 120000,  // 2 minutes
+  maxRetries: 2
+});
+
+// result contains:
+// - exitCode: Process exit code
+// - stdout: Standard output
+// - stderr: Standard error
+// - cwd: Working directory used
+// - profile: Profile name
+// - duration: Execution time in ms
+// - success: Boolean success flag
 ```
 
-**Capture output**:
-- Redirect stdout to variable
-- Capture stderr separately
-- Record exit code
+**Alternative**: If JavaScript not available, use bash:
 
-**Example execution**:
 ```bash
 #!/bin/bash
 set -euo pipefail
 
 # Setup
-PROFILE="glm"  # or kimi, or custom
-CWD="/absolute/path/to/project"
-ENHANCED_PROMPT="..."
+PROFILE="$1"  # glm, kimi, or custom
+CWD="$2"      # Working directory
+ENHANCED_PROMPT="$3"  # Enhanced prompt
 
 # Change directory
 cd "$CWD"
 
-# Execute headless
-OUTPUT=$(claude -p "$ENHANCED_PROMPT" --settings ~/.ccs/profiles/$PROFILE/settings.json 2>&1)
+# Execute headless with timeout
+timeout 120s claude -p "$ENHANCED_PROMPT" --settings ~/.ccs/profiles/$PROFILE/settings.json 2>&1
 EXIT_CODE=$?
 
-# Report results
-echo "Exit Code: $EXIT_CODE"
-echo "Output:"
-echo "$OUTPUT"
+# Capture for reporting
+echo "EXIT_CODE=$EXIT_CODE"
 ```
 
-### Step 4: Parse Output for File Changes
+### Step 4: Parse Output and Format Result
 
-Analyze the output to extract file changes:
+**IMPORTANT**: Use the ResultFormatter module for consistent output.
 
-```bash
-# Look for patterns like:
-# - "Created: path/to/file"
-# - "Modified: path/to/file"
-# - "Wrote: path/to/file"
-# - "Updated: path/to/file"
+```javascript
+// Use Node.js ResultFormatter module
+const { ResultFormatter } = require('../../bin/delegation/result-formatter');
 
-# Extract file paths
-CREATED_FILES=$(echo "$OUTPUT" | grep -i "created:" | awk '{print $2}' || true)
-MODIFIED_FILES=$(echo "$OUTPUT" | grep -i "modified:\|updated:\|wrote:" | awk '{print $2}' || true)
+// Format the result
+const formattedOutput = ResultFormatter.format(result);
+
+// Display to user
+console.log(formattedOutput);
+
+// formattedOutput includes:
+// - ASCII box with delegation info
+// - Task output
+// - File change lists (created/modified)
+// - Success/failure indicator
 ```
 
-**Fallback**: If no explicit file markers, list files modified in last minute:
+**Alternative**: If JavaScript not available, parse manually:
 
 ```bash
-find . -type f -mmin -1 | grep -v ".git"
+# Extract file changes
+CREATED_FILES=$(echo "$OUTPUT" | grep -iE "created:|new file:" | awk '{print $2}' || true)
+MODIFIED_FILES=$(echo "$OUTPUT" | grep -iE "modified:|updated:|changed:" | awk '{print $2}' || true)
+
+# Fallback: Find recently modified files
+if [[ -z "$CREATED_FILES" ]] && [[ -z "$MODIFIED_FILES" ]]; then
+  MODIFIED_FILES=$(find . -type f -mmin -1 -not -path "./.git/*" || true)
+fi
 ```
 
 ### Step 5: Report Complete Source-of-Truth
 
-Format comprehensive report:
+The ResultFormatter automatically generates a comprehensive report with:
 
+**Formatted Output Example**:
 ```
-=== CCS Delegation Report ===
+[i] Delegated to GLM-4.6 (ccs:glm)
+╔══════════════════════════════════════════════════════════════╗
+║ Working Directory: /home/user/project                       ║
+║ Model: GLM-4.6                                                ║
+║ Duration: 2.3s                                                ║
+║ Exit Code: 0                                                  ║
+║ Files Created: 1                                              ║
+║ Files Modified: 2                                             ║
+╚══════════════════════════════════════════════════════════════╝
 
-Working Directory: $CWD
-Profile: $PROFILE
-Exit Code: $EXIT_CODE
+<task output from delegated execution>
 
-=== Task Output ===
-$OUTPUT
+[i] Created Files:
+  - /home/user/project/tests/auth.test.js
 
-=== Files Created ===
-$CREATED_FILES
+[i] Modified Files:
+  - /home/user/project/src/auth/auth.js
+  - /home/user/project/package.json
 
-=== Files Modified ===
-$MODIFIED_FILES
-
-=== Summary ===
-- Working directory: $CWD
-- Total files created: $(echo "$CREATED_FILES" | wc -l)
-- Total files modified: $(echo "$MODIFIED_FILES" | wc -l)
-- Exit status: $([ $EXIT_CODE -eq 0 ] && echo "Success" || echo "Failed")
-
-=== Source of Truth ===
-WHERE: $CWD
-WHAT: [Brief description of changes based on output]
-SCOPE: [Number of files affected, areas modified]
+[OK] Delegation completed
 ```
+
+**Source of Truth Elements**:
+- **WHERE**: Working directory (absolute path)
+- **WHAT**: Task output shows changes made
+- **SCOPE**: File lists show extent of modifications
 
 ## Error Handling
 
