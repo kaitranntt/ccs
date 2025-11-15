@@ -15,38 +15,15 @@ User's delegation request: `$ARGUMENTS`
 
 ## Workflow
 
-### Step 1: Validate GLM Profile
+### Step 1: Enhance Prompt
 
-**CRITICAL**: Before delegation, validate GLM setup.
-
-```bash
-# Check if delegation validator exists
-if [[ -f bin/utils/delegation-validator.js ]]; then
-  # Run validation (will output JSON result)
-  node bin/utils/delegation-validator.js glm
-else
-  echo "[X] Delegation system not initialized"
-  echo "Run: npm install to set up CCS delegation"
-  exit 1
-fi
-```
-
-**Handle validation result**:
-- If validation fails, show error message with setup instructions
-- Do NOT proceed with delegation if validation fails
-- Error message should include exact path to settings file
-
-### Step 2: Enhance Prompt
-
-**CRITICAL**: Never pass raw user input to GLM.
-
-Use prompt enhancer to add context:
+**CRITICAL**: Never pass raw user input to GLM. Always enhance with context.
 
 ```bash
 # Get current working directory
 CWD=$(pwd)
 
-# Enhance prompt (simplified - real implementation uses Node.js module)
+# Enhance prompt with context
 ENHANCED_PROMPT="Task: $ARGUMENTS
 
 Working Directory: $CWD
@@ -55,7 +32,7 @@ Requirements:
 - Use absolute paths in all responses
 - Report all files created/modified
 - Clearly indicate WHERE and WHAT was changed
-- Follow project standards (read CLAUDE.md)
+- Follow project standards (read CLAUDE.md if exists)
 
 Success Criteria:
 - All changes implemented
@@ -63,9 +40,7 @@ Success Criteria:
 - Working directory documented"
 ```
 
-**Note**: In production, use `PromptEnhancer` class from `bin/utils/prompt-enhancer.js`
-
-### Step 3: Invoke Delegation Subagent
+### Step 2: Invoke Delegation Subagent
 
 Use Task tool to delegate execution:
 
@@ -92,7 +67,7 @@ Execute now.`
 });
 ```
 
-### Step 4: Format and Display Result
+### Step 3: Format and Display Result
 
 After subagent completes, format the result:
 
@@ -118,52 +93,25 @@ Files Created:
 
 ## Error Handling
 
-### Validation Failure
-
-If GLM profile validation fails:
-
-```
-[X] GLM delegation not configured
-
-Profile settings missing or invalid API key detected.
-
-Setup Instructions:
-  1. Ensure profile directory exists:
-     mkdir -p ~/.ccs/profiles/glm
-
-  2. Copy base settings:
-     cp config/base-glm.settings.json ~/.ccs/profiles/glm/settings.json
-
-  3. Edit settings file:
-     Edit ~/.ccs/profiles/glm/settings.json
-
-  4. Set your Z.AI API key:
-     Replace ANTHROPIC_AUTH_TOKEN value
-
-  5. Get API key:
-     https://open.bigmodel.cn/usercenter/apikeys
-
-After setup, try delegation again:
-  /ccs:glm "your task here"
-```
-
 ### Delegation Execution Failure
 
-If subagent execution fails:
+If delegation execution fails (profile not configured, network issues, etc.):
 
 ```
 [X] Delegation failed: <error message>
 
-Possible causes:
+Common causes:
+  - GLM profile not configured (run: ccs doctor)
+  - Invalid API key in ~/.ccs/profiles/glm/settings.json
   - Network connectivity issues
   - API rate limiting
-  - Invalid GLM API key
 
-Suggestions:
-  - Verify API key in ~/.ccs/profiles/glm/settings.json
-  - Check network connection
-  - Retry with: /ccs:glm "your task here"
-  - Or execute directly with main Claude
+Setup GLM profile:
+  1. Configure with: ccs --setup glm
+  2. Or manually edit: ~/.ccs/profiles/glm/settings.json
+  3. Get API key: https://open.bigmodel.cn/usercenter/apikeys
+
+Fallback: Execute directly with main Claude session
 ```
 
 ## Usage Examples
@@ -192,8 +140,8 @@ Suggestions:
 
 - **Cost optimization**: GLM is cheaper than main Claude, use for simple tasks
 - **Token savings**: Delegation keeps main context clean
+- **Non-blocking**: Fails gracefully if profile not configured
 - **Explicit**: Results clearly show GLM was used
-- **Validation**: Always checks API key before delegation
 - **Enhancement**: Prompts are enriched with context automatically
 - **Source of truth**: Results show exactly where/what was changed
 
@@ -201,6 +149,5 @@ Suggestions:
 
 - Kimi delegation: `/ccs:kimi` for long-context tasks
 - Custom models: `/ccs:create <model>` to add more delegation targets
-- Configuration: `~/.ccs/delegation-rules.json`
-- Validation: `bin/utils/delegation-validator.js`
-- Enhancement: `bin/utils/prompt-enhancer.js`
+- Health check: `ccs doctor` to verify delegation setup
+- Configuration: `~/.ccs/profiles/glm/settings.json`

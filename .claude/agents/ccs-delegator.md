@@ -57,30 +57,7 @@ fi
 
 ### Step 3: Execute via Headless Mode
 
-**IMPORTANT**: Use the HeadlessExecutor module for consistent execution.
-
-```javascript
-// Use Node.js HeadlessExecutor module
-const { HeadlessExecutor } = require('../../bin/delegation/headless-executor');
-
-// Execute with retry logic
-const result = await HeadlessExecutor.executeWithRetry(profile, enhancedPrompt, {
-  cwd: workingDirectory,
-  timeout: 120000,  // 2 minutes
-  maxRetries: 2
-});
-
-// result contains:
-// - exitCode: Process exit code
-// - stdout: Standard output
-// - stderr: Standard error
-// - cwd: Working directory used
-// - profile: Profile name
-// - duration: Execution time in ms
-// - success: Boolean success flag
-```
-
-**Alternative**: If JavaScript not available, use bash:
+Execute using `claude` CLI in headless mode with the specified profile:
 
 ```bash
 #!/bin/bash
@@ -104,26 +81,7 @@ echo "EXIT_CODE=$EXIT_CODE"
 
 ### Step 4: Parse Output and Format Result
 
-**IMPORTANT**: Use the ResultFormatter module for consistent output.
-
-```javascript
-// Use Node.js ResultFormatter module
-const { ResultFormatter } = require('../../bin/delegation/result-formatter');
-
-// Format the result
-const formattedOutput = ResultFormatter.format(result);
-
-// Display to user
-console.log(formattedOutput);
-
-// formattedOutput includes:
-// - ASCII box with delegation info
-// - Task output
-// - File change lists (created/modified)
-// - Success/failure indicator
-```
-
-**Alternative**: If JavaScript not available, parse manually:
+Parse the output and format for the user:
 
 ```bash
 # Extract file changes
@@ -138,7 +96,7 @@ fi
 
 ### Step 5: Report Complete Source-of-Truth
 
-The ResultFormatter automatically generates a comprehensive report with:
+Generate a comprehensive report with:
 
 **Formatted Output Example**:
 ```
@@ -305,7 +263,7 @@ Summary:
 
 ## Related
 
-- Validation: Uses `DelegationValidator` from parent
-- Enhancement: Receives enhanced prompts from `PromptEnhancer`
 - Slash commands: Invoked by `/ccs:glm`, `/ccs:kimi`, etc.
 - Configuration: Reads from `~/.ccs/profiles/<profile>/settings.json`
+- Health check: `ccs doctor` verifies setup
+- Headless mode: Uses `claude -p` for execution
