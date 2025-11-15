@@ -6,7 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/)
 
 ### Added
 - Shell auto-completion (bash, zsh, PowerShell, Fish)
-- `--shell-completion` command (auto-installs for detected shell with proper comment markers)
+- `--shell-completion` command (auto-installs for detected shell with proper comment markers, cross-platform)
 - Error codes (E101-E901) with documentation at docs/errors/
 - Fuzzy matching "Did you mean?" suggestions (Levenshtein distance)
 - Progress indicators (doctor command: [n/9] counter, GLMT proxy startup spinner)
@@ -23,6 +23,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/)
 - Test suite properly counts test cases (not assertions)
 
 ### Fixed
+- Standalone installer dependency handling (now downloads error-codes, progress-indicator, prompt files)
 - `--yes` flag bug (returned false instead of true, preventing auto-confirmation)
 - Help text consistency between Node.js and bash versions (added Uninstall section to bash)
 - Test pass rate calculation (now excludes skipped tests from denominator)
