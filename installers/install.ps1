@@ -275,6 +275,46 @@ if ($InstallMethod -eq "standalone") {
         $BaseUrl = "https://raw.githubusercontent.com/kaitranntt/ccs/main"
         Invoke-WebRequest -Uri "$BaseUrl/lib/ccs.ps1" -OutFile "$CcsDir\ccs.ps1" -UseBasicParsing
         Write-Host "|  [OK] Downloaded ccs.ps1"
+
+        # Download required dependencies
+        $LibDir = "$CcsDir\lib"
+        if (-not (Test-Path $LibDir)) {
+            New-Item -ItemType Directory -Path $LibDir -Force | Out-Null
+        }
+
+        try {
+            Invoke-WebRequest -Uri "$BaseUrl/lib/error-codes.ps1" -OutFile "$LibDir\error-codes.ps1" -UseBasicParsing
+            Write-Host "|  [OK] Downloaded error-codes.ps1"
+        } catch {
+            Write-Host "|  [!]  Warning: Failed to download error-codes.ps1"
+        }
+
+        try {
+            Invoke-WebRequest -Uri "$BaseUrl/lib/progress-indicator.ps1" -OutFile "$LibDir\progress-indicator.ps1" -UseBasicParsing
+            Write-Host "|  [OK] Downloaded progress-indicator.ps1"
+        } catch {
+            Write-Host "|  [!]  Warning: Failed to download progress-indicator.ps1"
+        }
+
+        try {
+            Invoke-WebRequest -Uri "$BaseUrl/lib/prompt.ps1" -OutFile "$LibDir\prompt.ps1" -UseBasicParsing
+            Write-Host "|  [OK] Downloaded prompt.ps1"
+        } catch {
+            Write-Host "|  [!]  Warning: Failed to download prompt.ps1"
+        }
+
+        # Download shell completion files
+        $CompletionsDir = "$CcsDir\completions"
+        if (-not (Test-Path $CompletionsDir)) {
+            New-Item -ItemType Directory -Path $CompletionsDir -Force | Out-Null
+        }
+
+        try {
+            Invoke-WebRequest -Uri "$BaseUrl/scripts/completion/ccs.ps1" -OutFile "$CompletionsDir\ccs.ps1" -UseBasicParsing
+            Write-Host "|  [OK] Downloaded completion files"
+        } catch {
+            Write-Host "|  [!]  Warning: Failed to download completion files"
+        }
     } catch {
         Write-Host "|"
         Write-Host "[X] Error: Failed to download ccs.ps1 from GitHub" -ForegroundColor Red
@@ -292,6 +332,56 @@ if ($InstallMethod -eq "standalone") {
     }
     Copy-Item $CcsPs1Path "$CcsDir\ccs.ps1" -Force
     Write-Host "|  [OK] Installed ccs.ps1"
+
+    # Copy required dependencies
+    $LibDir = "$CcsDir\lib"
+    if (-not (Test-Path $LibDir)) {
+        New-Item -ItemType Directory -Path $LibDir -Force | Out-Null
+    }
+
+    $SourceLibDir = if (Test-Path "$ScriptDir\lib") {
+        "$ScriptDir\lib"
+    } elseif (Test-Path "$ScriptDir\..\lib") {
+        "$ScriptDir\..\lib"
+    } else {
+        $null
+    }
+
+    if ($SourceLibDir) {
+        if (Test-Path "$SourceLibDir\error-codes.ps1") {
+            Copy-Item "$SourceLibDir\error-codes.ps1" "$LibDir\error-codes.ps1" -Force
+            Write-Host "|  [OK] Copied error-codes.ps1"
+        }
+
+        if (Test-Path "$SourceLibDir\progress-indicator.ps1") {
+            Copy-Item "$SourceLibDir\progress-indicator.ps1" "$LibDir\progress-indicator.ps1" -Force
+            Write-Host "|  [OK] Copied progress-indicator.ps1"
+        }
+
+        if (Test-Path "$SourceLibDir\prompt.ps1") {
+            Copy-Item "$SourceLibDir\prompt.ps1" "$LibDir\prompt.ps1" -Force
+            Write-Host "|  [OK] Copied prompt.ps1"
+        }
+    }
+
+    # Copy shell completion files
+    $CompletionsDir = "$CcsDir\completions"
+    if (-not (Test-Path $CompletionsDir)) {
+        New-Item -ItemType Directory -Path $CompletionsDir -Force | Out-Null
+    }
+
+    $SourceCompletionDir = if (Test-Path "$ScriptDir\scripts\completion") {
+        "$ScriptDir\scripts\completion"
+    } elseif (Test-Path "$ScriptDir\..\scripts\completion") {
+        "$ScriptDir\..\scripts\completion"
+    } else {
+        $null
+    }
+
+    if ($SourceCompletionDir -and (Test-Path "$SourceCompletionDir\ccs.ps1")) {
+        Copy-Item "$SourceCompletionDir\ccs.ps1" "$CompletionsDir\ccs.ps1" -Force -ErrorAction SilentlyContinue
+        Write-Host "|  [OK] Copied completion files"
+    }
 }
 
 # Install uninstall script as ccs-uninstall.ps1

@@ -469,7 +469,10 @@ if [[ "$INSTALL_METHOD" == "standalone" ]]; then
     exit 1
   fi
 
-  if curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/lib/ccs -o "$CCS_DIR/ccs"; then
+  BASE_URL="https://raw.githubusercontent.com/kaitranntt/ccs/main"
+
+  # Download main executable
+  if curl -fsSL "$BASE_URL/lib/ccs" -o "$CCS_DIR/ccs"; then
     chmod +x "$CCS_DIR/ccs"
     ln -sf "$CCS_DIR/ccs" "$INSTALL_DIR/ccs"
     echo "|  [OK] Downloaded executable"
@@ -478,21 +481,85 @@ if [[ "$INSTALL_METHOD" == "standalone" ]]; then
     echo "[X] Error: Failed to download ccs from GitHub"
     exit 1
   fi
+
+  # Download required dependencies
+  mkdir -p "$CCS_DIR/lib"
+  if curl -fsSL "$BASE_URL/lib/error-codes.sh" -o "$CCS_DIR/lib/error-codes.sh" 2>/dev/null; then
+    echo "|  [OK] Downloaded error-codes.sh"
+  else
+    echo "|  [!]  Warning: Failed to download error-codes.sh"
+  fi
+
+  if curl -fsSL "$BASE_URL/lib/progress-indicator.sh" -o "$CCS_DIR/lib/progress-indicator.sh" 2>/dev/null; then
+    echo "|  [OK] Downloaded progress-indicator.sh"
+  else
+    echo "|  [!]  Warning: Failed to download progress-indicator.sh"
+  fi
+
+  if curl -fsSL "$BASE_URL/lib/prompt.sh" -o "$CCS_DIR/lib/prompt.sh" 2>/dev/null; then
+    echo "|  [OK] Downloaded prompt.sh"
+  else
+    echo "|  [!]  Warning: Failed to download prompt.sh"
+  fi
+
+  # Download shell completion files
+  mkdir -p "$CCS_DIR/completions"
+  if curl -fsSL "$BASE_URL/scripts/completion/ccs.bash" -o "$CCS_DIR/completions/ccs.bash" 2>/dev/null; then
+    echo "|  [OK] Downloaded completion files"
+  fi
+  curl -fsSL "$BASE_URL/scripts/completion/ccs.zsh" -o "$CCS_DIR/completions/ccs.zsh" 2>/dev/null || true
+  curl -fsSL "$BASE_URL/scripts/completion/ccs.fish" -o "$CCS_DIR/completions/ccs.fish" 2>/dev/null || true
 else
   # Git install - use local ccs file
   # Handle both running from root or from installers/ subdirectory
+  local LIB_DIR=""
   if [[ -f "$SCRIPT_DIR/lib/ccs" ]]; then
     chmod +x "$SCRIPT_DIR/lib/ccs"
     ln -sf "$SCRIPT_DIR/lib/ccs" "$INSTALL_DIR/ccs"
+    LIB_DIR="$SCRIPT_DIR/lib"
   elif [[ -f "$SCRIPT_DIR/../lib/ccs" ]]; then
     chmod +x "$SCRIPT_DIR/../lib/ccs"
     ln -sf "$SCRIPT_DIR/../lib/ccs" "$INSTALL_DIR/ccs"
+    LIB_DIR="$SCRIPT_DIR/../lib"
   else
     echo "|"
     echo "[X] Error: lib/ccs executable not found"
     exit 1
   fi
   echo "|  [OK] Installed executable"
+
+  # Copy required dependencies
+  mkdir -p "$CCS_DIR/lib"
+  if [[ -f "$LIB_DIR/error-codes.sh" ]]; then
+    cp "$LIB_DIR/error-codes.sh" "$CCS_DIR/lib/error-codes.sh"
+    echo "|  [OK] Copied error-codes.sh"
+  fi
+
+  if [[ -f "$LIB_DIR/progress-indicator.sh" ]]; then
+    cp "$LIB_DIR/progress-indicator.sh" "$CCS_DIR/lib/progress-indicator.sh"
+    echo "|  [OK] Copied progress-indicator.sh"
+  fi
+
+  if [[ -f "$LIB_DIR/prompt.sh" ]]; then
+    cp "$LIB_DIR/prompt.sh" "$CCS_DIR/lib/prompt.sh"
+    echo "|  [OK] Copied prompt.sh"
+  fi
+
+  # Copy shell completion files
+  mkdir -p "$CCS_DIR/completions"
+  local COMPLETION_DIR=""
+  if [[ -d "$SCRIPT_DIR/scripts/completion" ]]; then
+    COMPLETION_DIR="$SCRIPT_DIR/scripts/completion"
+  elif [[ -d "$SCRIPT_DIR/../scripts/completion" ]]; then
+    COMPLETION_DIR="$SCRIPT_DIR/../scripts/completion"
+  fi
+
+  if [[ -n "$COMPLETION_DIR" ]]; then
+    cp "$COMPLETION_DIR/ccs.bash" "$CCS_DIR/completions/ccs.bash" 2>/dev/null || true
+    cp "$COMPLETION_DIR/ccs.zsh" "$CCS_DIR/completions/ccs.zsh" 2>/dev/null || true
+    cp "$COMPLETION_DIR/ccs.fish" "$CCS_DIR/completions/ccs.fish" 2>/dev/null || true
+    echo "|  [OK] Copied completion files"
+  fi
 fi
 
 if [[ ! -L "$INSTALL_DIR/ccs" ]]; then

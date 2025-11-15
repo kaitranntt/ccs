@@ -18,14 +18,25 @@ $ConfigFile = if ($env:CCS_CONFIG) { $env:CCS_CONFIG } else { "$env:USERPROFILE\
 $ProfilesJson = "$env:USERPROFILE\.ccs\profiles.json"
 $InstancesDir = "$env:USERPROFILE\.ccs\instances"
 
+# Determine dependency location (git vs installed)
+# Git: lib/ccs.ps1 and dependencies are in same dir (lib/)
+# Installed: lib/ccs.ps1 is in ~/.ccs/, dependencies in ~/.ccs/lib/
+$DepDir = if (Test-Path "$ScriptDir\error-codes.ps1") {
+    # Git install - files in same directory
+    $ScriptDir
+} else {
+    # Standalone install - files in ~/.ccs/lib/
+    "$env:USERPROFILE\.ccs\lib"
+}
+
 # Source error codes
-. "$ScriptDir\error-codes.ps1"
+. "$DepDir\error-codes.ps1"
 
 # Source progress indicators
-. "$ScriptDir\progress-indicator.ps1"
+. "$DepDir\progress-indicator.ps1"
 
 # Source interactive prompts
-. "$ScriptDir\prompt.ps1"
+. "$DepDir\prompt.ps1"
 
 # --- Color/Format Functions ---
 function Write-ErrorMsg {

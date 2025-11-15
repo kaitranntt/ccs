@@ -8,14 +8,25 @@ readonly CONFIG_FILE="${CCS_CONFIG:-$HOME/.ccs/config.json}"
 readonly PROFILES_JSON="$HOME/.ccs/profiles.json"
 readonly INSTANCES_DIR="$HOME/.ccs/instances"
 
+# Determine dependency location (git vs installed)
+# Git: lib/ccs and dependencies are in same dir (lib/)
+# Installed: lib/ccs is symlinked from ~/.local/bin/ccs, dependencies in ~/.ccs/lib/
+if [[ -f "$SCRIPT_DIR/error-codes.sh" ]]; then
+  # Git install - files in same directory
+  DEP_DIR="$SCRIPT_DIR"
+else
+  # Standalone install - files in ~/.ccs/lib/
+  DEP_DIR="$HOME/.ccs/lib"
+fi
+
 # Source error codes
-source "$SCRIPT_DIR/error-codes.sh"
+source "$DEP_DIR/error-codes.sh"
 
 # Source progress indicators
-source "$SCRIPT_DIR/progress-indicator.sh"
+source "$DEP_DIR/progress-indicator.sh"
 
 # Source interactive prompts
-source "$SCRIPT_DIR/prompt.sh"
+source "$DEP_DIR/prompt.sh"
 
 # --- Color/Format Functions ---
 setup_colors() {
