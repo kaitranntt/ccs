@@ -130,6 +130,7 @@ function handleHelpCommand() {
   console.log(colored('Flags:', 'cyan'));
   console.log(`  ${colored('-h, --help', 'yellow')}                  Show this help message`);
   console.log(`  ${colored('-v, --version', 'yellow')}               Show version and installation info`);
+  console.log(`  ${colored('--shell-completion', 'yellow')}          Install shell auto-completion`);
   console.log('');
 
   // Configuration
@@ -361,6 +362,58 @@ async function execClaudeWithProxy(claudeCli, profileName, args) {
   });
 }
 
+/**
+ * Handle shell completion installation
+ */
+async function handleShellCompletionCommand(args) {
+  const { ShellCompletionInstaller } = require('./utils/shell-completion');
+  const { colored } = require('./utils/helpers');
+
+  console.log(colored('Shell Completion Installer', 'bold'));
+  console.log('');
+
+  // Parse flags
+  let targetShell = null;
+  if (args.includes('--bash')) targetShell = 'bash';
+  else if (args.includes('--zsh')) targetShell = 'zsh';
+  else if (args.includes('--fish')) targetShell = 'fish';
+  else if (args.includes('--powershell')) targetShell = 'powershell';
+
+  try {
+    const installer = new ShellCompletionInstaller();
+    const result = installer.install(targetShell);
+
+    if (result.alreadyInstalled) {
+      console.log(colored('[OK] Shell completion already installed', 'green'));
+      console.log('');
+      return;
+    }
+
+    console.log(colored('[OK] Shell completion installed successfully!', 'green'));
+    console.log('');
+    console.log(result.message);
+    console.log('');
+    console.log(colored('To activate:', 'cyan'));
+    console.log(`  ${result.reload}`);
+    console.log('');
+    console.log(colored('Then test:', 'cyan'));
+    console.log('  ccs <TAB>        # See available profiles');
+    console.log('  ccs auth <TAB>   # See auth subcommands');
+    console.log('');
+  } catch (error) {
+    console.error(colored('[X] Error:', 'red'), error.message);
+    console.error('');
+    console.error(colored('Usage:', 'yellow'));
+    console.error('  ccs --shell-completion           # Auto-detect shell');
+    console.error('  ccs --shell-completion --bash    # Install for bash');
+    console.error('  ccs --shell-completion --zsh     # Install for zsh');
+    console.error('  ccs --shell-completion --fish    # Install for fish');
+    console.error('  ccs --shell-completion --powershell  # Install for PowerShell');
+    console.error('');
+    process.exit(1);
+  }
+}
+
 // Main execution
 async function main() {
   const args = process.argv.slice(2);
@@ -386,6 +439,12 @@ async function main() {
   // Special case: uninstall command
   if (firstArg === '--uninstall') {
     handleUninstallCommand();
+    return;
+  }
+
+  // Special case: shell completion installer
+  if (firstArg === '--shell-completion') {
+    await handleShellCompletionCommand(args.slice(1));
     return;
   }
 

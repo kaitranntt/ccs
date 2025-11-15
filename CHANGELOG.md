@@ -6,7 +6,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/)
 
 ### Added
 - Shell auto-completion (bash, zsh, PowerShell, Fish)
-- Error codes (E001-E999) with documentation URLs
+- `--shell-completion` command (auto-installs for detected shell with proper comment markers)
+- Error codes (E101-E901) with documentation at docs/errors/
 - Fuzzy matching "Did you mean?" suggestions (Levenshtein distance)
 - Progress indicators (doctor command: [n/9] counter, GLMT proxy startup spinner)
 - Interactive confirmation prompts for destructive operations

@@ -287,6 +287,30 @@ function createConfigFiles() {
       console.log('[OK] Kimi profile exists: ~/.ccs/kimi.settings.json (preserved)');
     }
 
+    // Copy shell completion files to ~/.ccs/completions/
+    const completionsDir = path.join(ccsDir, 'completions');
+    const scriptsCompletionDir = path.join(__dirname, '../scripts/completion');
+
+    if (!fs.existsSync(completionsDir)) {
+      fs.mkdirSync(completionsDir, { recursive: true, mode: 0o755 });
+    }
+
+    const completionFiles = ['ccs.bash', 'ccs.zsh', 'ccs.fish', 'ccs.ps1'];
+    completionFiles.forEach(file => {
+      const src = path.join(scriptsCompletionDir, file);
+      const dest = path.join(completionsDir, file);
+
+      if (fs.existsSync(src)) {
+        fs.copyFileSync(src, dest);
+      }
+    });
+
+    console.log('[OK] Installed shell completions: ~/.ccs/completions/');
+    console.log('');
+    console.log('  [i] Enable auto-completion:');
+    console.log('      Run: ccs --shell-completion');
+    console.log('');
+
     // Create ~/.claude/settings.json if missing (NEW)
     const claudeDir = path.join(homedir, '.claude');
     const claudeSettingsPath = path.join(claudeDir, 'settings.json');

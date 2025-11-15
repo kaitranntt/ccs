@@ -12,91 +12,80 @@ Tab completion for CCS commands, subcommands, profiles, and flags.
 - Complete profile names for auth subcommands
 - Context-aware: suggests relevant options based on current command
 
-## Installation
+## Quick Install (Recommended)
+
+```bash
+ccs --shell-completion
+```
+
+This will:
+- Auto-detect your shell
+- Copy completion files to `~/.ccs/completions/`
+- Configure your shell profile with proper comment markers
+- Show instructions to activate
+
+**Manual shell selection:**
+```bash
+ccs --shell-completion --bash        # Force bash
+ccs --shell-completion --zsh         # Force zsh
+ccs --shell-completion --fish        # Force fish
+ccs --shell-completion --powershell  # Force PowerShell
+```
+
+## Manual Installation
+
+Completion files are installed to `~/.ccs/completions/` during `npm install`.
 
 ### Bash
-
-**Option 1: User installation (recommended)**
 
 Add to `~/.bashrc` or `~/.bash_profile`:
 
 ```bash
-source /path/to/ccs/scripts/completion/ccs.bash
+# CCS shell completion
+source ~/.ccs/completions/ccs.bash
 ```
 
-Then reload your shell:
+Then reload:
 ```bash
 source ~/.bashrc
 ```
 
-**Option 2: System-wide installation (requires sudo)**
-
-```bash
-sudo cp scripts/completion/ccs.bash /etc/bash_completion.d/ccs
-```
-
 ### Zsh
 
-**Option 1: User installation (recommended)**
-
-1. Create completion directory if it doesn't exist:
+1. Create completion directory:
    ```zsh
    mkdir -p ~/.zsh/completion
    ```
 
-2. Copy the completion script:
+2. Copy completion file:
    ```zsh
-   cp scripts/completion/ccs.zsh ~/.zsh/completion/_ccs
+   cp ~/.ccs/completions/ccs.zsh ~/.zsh/completion/_ccs
    ```
 
 3. Add to `~/.zshrc`:
    ```zsh
+   # CCS shell completion
    fpath=(~/.zsh/completion $fpath)
    autoload -Uz compinit && compinit
    ```
 
-4. Reload your shell:
+4. Reload:
    ```zsh
    source ~/.zshrc
    ```
 
-**Option 2: System-wide installation (requires sudo)**
-
-```zsh
-sudo cp scripts/completion/ccs.zsh /usr/local/share/zsh/site-functions/_ccs
-```
-
-Then rebuild completion cache:
-```zsh
-rm ~/.zcompdump && compinit
-```
-
 ### PowerShell
-
-**Option 1: User installation (recommended)**
 
 Add to your PowerShell profile (`$PROFILE`):
 
 ```powershell
-. C:\path\to\ccs\scripts\completion\ccs.ps1
+# CCS shell completion
+. "$HOME\.ccs\completions\ccs.ps1"
 ```
 
-Then reload your profile:
+Then reload:
 ```powershell
 . $PROFILE
-```
-
-**Option 2: Install to Scripts directory**
-
-```powershell
-# Create Scripts directory if it doesn't exist
-New-Item -Path ~\Documents\PowerShell\Scripts -ItemType Directory -Force
-
-# Copy completion script
-Copy-Item scripts\completion\ccs.ps1 ~\Documents\PowerShell\Scripts\
-
-# Add to profile
-Add-Content $PROFILE ". ~\Documents\PowerShell\Scripts\ccs.ps1"
 ```
 
 ### Fish
