@@ -187,6 +187,13 @@ show_help() {
   echo -e "  ${YELLOW}ccs work${RESET}                    Switch to work account"
   echo -e "  ${YELLOW}ccs personal${RESET}                Switch to personal account"
   echo ""
+  echo -e "${CYAN}Delegation (Token Optimization):${RESET}"
+  echo -e "  ${YELLOW}/ccs:glm \"task\"${RESET}             Delegate to GLM-4.6 within Claude session"
+  echo -e "  ${YELLOW}/ccs:kimi \"task\"${RESET}            Delegate to Kimi for long context"
+  echo -e "  ${YELLOW}/ccs:create m2${RESET}              Create custom delegation command"
+  echo -e "  Use delegation to save tokens on simple tasks"
+  echo -e "  Commands work inside Claude Code sessions only"
+  echo ""
   echo -e "${CYAN}Diagnostics:${RESET}"
   echo -e "  ${YELLOW}ccs doctor${RESET}                  Run health check and diagnostics"
   echo ""
@@ -522,6 +529,33 @@ show_version() {
   # Simple config display
   local config="${CCS_CONFIG:-$HOME/.ccs/config.json}"
   echo -e "  ${CYAN}Config:${RESET} ${config}"
+
+  # Delegation status
+  local delegation_rules="$HOME/.ccs/delegation-rules.json"
+  if [[ -f "$delegation_rules" ]]; then
+    echo -e "  ${CYAN}Delegation:${RESET} Enabled"
+
+    # Check which profiles are delegation-ready
+    local ready_profiles=()
+    for profile in glm kimi; do
+      local settings_file="$HOME/.ccs/profiles/$profile/settings.json"
+      if [[ -f "$settings_file" ]]; then
+        # Check if API key is configured (not a placeholder)
+        local api_key=$(jq -r '.env.ANTHROPIC_AUTH_TOKEN // empty' "$settings_file" 2>/dev/null)
+        if [[ -n "$api_key" ]] && [[ ! "$api_key" =~ YOUR_.*_API_KEY_HERE ]]; then
+          ready_profiles+=("$profile")
+        fi
+      fi
+    done
+
+    if [[ ${#ready_profiles[@]} -gt 0 ]]; then
+      echo -e "  ${CYAN}Ready:${RESET} ${ready_profiles[*]}"
+    else
+      echo -e "  ${CYAN}Ready:${RESET} None (configure profiles first)"
+    fi
+  else
+    echo -e "  ${CYAN}Delegation:${RESET} Not configured"
+  fi
   echo ""
 
   echo -e "${CYAN}Documentation:${RESET} https://github.com/kaitranntt/ccs"

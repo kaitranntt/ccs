@@ -73,6 +73,33 @@ function handleVersionCommand() {
   // Config path
   const configPath = getConfigPath();
   console.log(`  ${colored('Config:', 'cyan')} ${configPath}`);
+
+  // Delegation status
+  const delegationRulesPath = path.join(os.homedir(), '.ccs', 'delegation-rules.json');
+  const delegationEnabled = fs.existsSync(delegationRulesPath);
+
+  if (delegationEnabled) {
+    console.log(`  ${colored('Delegation:', 'cyan')} Enabled`);
+
+    // Check which profiles are delegation-ready
+    const readyProfiles = [];
+    const { DelegationValidator } = require('./utils/delegation-validator');
+
+    for (const profile of ['glm', 'kimi']) {
+      const validation = DelegationValidator.validate(profile);
+      if (validation.valid) {
+        readyProfiles.push(profile);
+      }
+    }
+
+    if (readyProfiles.length > 0) {
+      console.log(`  ${colored('Ready:', 'cyan')} ${readyProfiles.join(', ')}`);
+    } else {
+      console.log(`  ${colored('Ready:', 'cyan')} None (configure profiles first)`);
+    }
+  } else {
+    console.log(`  ${colored('Delegation:', 'cyan')} Not configured`);
+  }
   console.log('');
 
   // Documentation
@@ -119,6 +146,15 @@ function handleHelpCommand() {
   console.log(`  ${colored('ccs auth --help', 'yellow')}             Manage multiple Claude accounts`);
   console.log(`  ${colored('ccs work', 'yellow')}                    Switch to work account`);
   console.log(`  ${colored('ccs personal', 'yellow')}                Switch to personal account`);
+  console.log('');
+
+  // Delegation (NEW)
+  console.log(colored('Delegation (Token Optimization):', 'cyan'));
+  console.log(`  ${colored('/ccs:glm "task"', 'yellow')}             Delegate to GLM-4.6 within Claude session`);
+  console.log(`  ${colored('/ccs:kimi "task"', 'yellow')}            Delegate to Kimi for long context`);
+  console.log(`  ${colored('/ccs:create m2', 'yellow')}              Create custom delegation command`);
+  console.log('  Use delegation to save tokens on simple tasks');
+  console.log('  Commands work inside Claude Code sessions only');
   console.log('');
 
   // Diagnostics
