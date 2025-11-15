@@ -131,7 +131,7 @@ echo "[OK] Profile validated: $MODEL_NAME"
 
 ```bash
 # Check if command file exists
-COMMAND_FILE=".claude/commands/ccs-$MODEL_NAME.md"
+COMMAND_FILE=".claude/commands/ccs/$MODEL_NAME.md"
 
 if [[ -f "$COMMAND_FILE" ]] && [[ "$FORCE" != true ]]; then
   echo "[X] Command already exists: /ccs:$MODEL_NAME"
@@ -150,11 +150,11 @@ fi
 
 ### Step 4: Generate Command File from Template
 
-**Template Source**: Use `.claude/commands/ccs-glm.md` as template.
+**Template Source**: Use `.claude/commands/ccs/glm.md` as template.
 
 ```bash
 # Read template
-TEMPLATE_FILE=".claude/commands/ccs-glm.md"
+TEMPLATE_FILE=".claude/commands/ccs/glm.md"
 
 if [[ ! -f "$TEMPLATE_FILE" ]]; then
   echo "[X] Template file not found: $TEMPLATE_FILE"
@@ -224,7 +224,7 @@ echo "[OK] Ready for delegation!"
 User: /ccs:create m2
 
 [OK] Profile validated: m2
-[OK] Command file created: .claude/commands/ccs-m2.md
+[OK] Command file created: .claude/commands/ccs/m2.md
 
 ╔══════════════════════════════════════════════════════════════╗
 ║ Custom Delegation Command Created                           ║

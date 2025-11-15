@@ -72,9 +72,9 @@ Create custom delegation command for user-defined models.
 
 **What it does:**
 1. Validates profile exists and is configured
-2. Reads `.claude/commands/ccs-glm.md` template
+2. Reads `.claude/commands/ccs/glm.md` template
 3. Substitutes "glm" → "<model-name>" throughout
-4. Creates `.claude/commands/ccs-<model-name>.md`
+4. Creates `.claude/commands/ccs/<model-name>.md`
 5. Confirms creation and shows usage
 
 **--force flag:**

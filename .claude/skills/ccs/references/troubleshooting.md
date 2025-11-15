@@ -28,14 +28,14 @@ npm install -g @kaitranntt/ccs --force
 
 **Verify:**
 ```bash
-ls ~/.ccs/shared/commands/ccs-*.md
+ls ~/.ccs/shared/commands/ccs/*.md
 ```
 
 Should show:
 ```
-ccs-glm.md
-ccs-kimi.md
-ccs-create.md
+ccs/glm.md
+ccs/kimi.md
+ccs/create.md
 ```
 
 ## Issue: Placeholder API Key Detected
