@@ -72,15 +72,22 @@ class ResultFormatter {
     const created = [];
     const modified = [];
 
-    // Patterns to match file operations
+    // Patterns to match file operations (case-insensitive)
     const createdPatterns = [
-      /(?:Created|created|CREATE|wrote|Wrote|WRITE):\s*([^\n\r]+)/g,
-      /(?:New file|new file|NEW FILE):\s*([^\n\r]+)/g
+      /created:\s*([^\n\r]+)/gi,
+      /create:\s*([^\n\r]+)/gi,
+      /wrote:\s*([^\n\r]+)/gi,
+      /write:\s*([^\n\r]+)/gi,
+      /new file:\s*([^\n\r]+)/gi
     ];
 
     const modifiedPatterns = [
-      /(?:Modified|modified|MODIFIED|Updated|updated|UPDATE|Edited|edited|EDIT):\s*([^\n\r]+)/g,
-      /(?:Changed|changed|CHANGE):\s*([^\n\r]+)/g
+      /modified:\s*([^\n\r]+)/gi,
+      /update:\s*([^\n\r]+)/gi,
+      /updated:\s*([^\n\r]+)/gi,
+      /edit:\s*([^\n\r]+)/gi,
+      /edited:\s*([^\n\r]+)/gi,
+      /changed:\s*([^\n\r]+)/gi
     ];
 
     // Extract created files

@@ -159,21 +159,29 @@ class CwdResolver {
    */
   static _findProjectRoot(startPath) {
     let currentPath = startPath;
+    let foundRoot = null;
 
     while (currentPath !== path.dirname(currentPath)) {
       // Check for project markers
       const packageJson = path.join(currentPath, 'package.json');
       const gitDir = path.join(currentPath, '.git');
 
-      if (fs.existsSync(packageJson) || fs.existsSync(gitDir)) {
+      // Prioritize .git directories over package.json
+      if (fs.existsSync(gitDir)) {
         return currentPath;
+      }
+
+      if (fs.existsSync(packageJson)) {
+        foundRoot = currentPath;
+        // Don't return immediately - continue looking for .git or parent package.json
+        // in case this is a workspace in a monorepo
       }
 
       // Move up one directory
       currentPath = path.dirname(currentPath);
     }
 
-    return null;
+    return foundRoot;
   }
 
   /**
@@ -207,7 +215,9 @@ class CwdResolver {
   static getRelativePath(absolutePath) {
     const projectRoot = this._findProjectRoot(absolutePath);
     if (projectRoot && absolutePath.startsWith(projectRoot)) {
-      return path.relative(projectRoot, absolutePath);
+      const relative = path.relative(projectRoot, absolutePath);
+      // Normalize path separators and ensure forward slashes
+      return relative.replace(/\\/g, '/');
     }
     return absolutePath;
   }

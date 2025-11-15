@@ -41,10 +41,10 @@ class DelegationValidator {
     } catch (error) {
       return {
         valid: false,
-        error: `Invalid settings.json for ${profileName}`,
+        error: `Failed to parse settings.json for ${profileName}`,
         suggestion: `Settings file is corrupted or invalid JSON.\n\n` +
                    `Location: ${settingsPath}\n` +
-                   `Error: ${error.message}\n\n` +
+                   `Parse error: ${error.message}\n\n` +
                    `Fix: Restore from base config:\n` +
                    `  cp config/base-${profileName}.settings.json ~/.ccs/profiles/${profileName}/settings.json`
       };
@@ -77,8 +77,9 @@ class DelegationValidator {
         valid: false,
         error: `Default API key placeholder detected for ${profileName}`,
         suggestion: `API key is still set to default placeholder.\n\n` +
-                   `Edit: ${settingsPath}\n` +
-                   `Replace ANTHROPIC_AUTH_TOKEN with your actual API key.\n\n` +
+                   `To configure your profile:\n` +
+                   `  1. Edit: ${settingsPath}\n` +
+                   `  2. Replace ANTHROPIC_AUTH_TOKEN with your actual API key\n\n` +
                    `Get API key:\n` +
                    `  GLM: https://open.bigmodel.cn/usercenter/apikeys\n` +
                    `  Kimi: https://platform.moonshot.cn/console/api-keys`

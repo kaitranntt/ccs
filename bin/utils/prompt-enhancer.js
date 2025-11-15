@@ -76,6 +76,10 @@ class PromptEnhancer {
   static _getRequirements(metadata = {}) {
     let requirements = '';
 
+    requirements += '- **Use existing project conventions** and architectural patterns\n';
+    requirements += '- **Follow YAGNI**: Only implement features that are actually needed\n';
+    requirements += '- **KISS**: Keep implementations simple and straightforward\n';
+    requirements += '- **DRY**: Avoid code duplication\n';
     requirements += '- **Use absolute paths** in all file references and outputs\n';
     requirements += '- **Report all changes**: List every file created, modified, or deleted\n';
     requirements += '- **Source of truth**: Clearly indicate:\n';
@@ -85,12 +89,22 @@ class PromptEnhancer {
     requirements += '- **Error handling**: Report any errors encountered with full context\n';
     requirements += '- **Follow project standards**: Read CLAUDE.md and any relevant docs/ files in the project\n';
 
+    // Add model hint from metadata
+    if (metadata.modelHint) {
+      requirements += `- **Model Guidance**: ${metadata.modelHint}\n`;
+    }
+
     // Add custom requirements from metadata
     if (metadata.customRequirements) {
       requirements += '\n**Additional Requirements**:\n';
       metadata.customRequirements.forEach(req => {
         requirements += `- ${req}\n`;
       });
+    }
+
+    // Add other metadata fields
+    if (metadata.priority) {
+      requirements += `- **Priority**: ${metadata.priority}\n`;
     }
 
     requirements += '\n';
@@ -111,7 +125,9 @@ class PromptEnhancer {
     criteria += '2. Code compiles without errors\n';
     criteria += '3. Complete file list is reported (created/modified)\n';
     criteria += '4. Working directory and scope are clearly documented\n';
-    criteria += '5. Any issues or blockers are explicitly stated\n\n';
+    criteria += '5. Any issues or blockers are explicitly stated\n';
+    criteria += '6. Task completed successfully\n';
+    criteria += '7. No breaking changes introduced\n\n';
 
     return criteria;
   }
