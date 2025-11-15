@@ -83,14 +83,25 @@ class HeadlessExecutor {
         reject(new Error(`Failed to execute Claude CLI: ${error.message}`));
       });
 
-      // Handle timeout
+      // Handle timeout with graceful SIGTERM then forceful SIGKILL
       if (timeout > 0) {
-        setTimeout(() => {
+        const timeoutHandle = setTimeout(() => {
           if (!proc.killed) {
             proc.kill('SIGTERM');
+
+            // If process doesn't terminate within 5s, force kill
+            setTimeout(() => {
+              if (!proc.killed) {
+                proc.kill('SIGKILL');
+              }
+            }, 5000);
+
             reject(new Error(`Execution timeout after ${timeout}ms`));
           }
         }, timeout);
+
+        // Clear timeout on successful completion
+        proc.on('close', () => clearTimeout(timeoutHandle));
       }
     });
   }

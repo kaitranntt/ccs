@@ -192,7 +192,7 @@ class ResultFormatter {
    * @private
    */
   static _formatStderr(stderr) {
-    return `[!] Stderr:\n${stderr.trim()}\n`;
+    return `[!] Stderr:\n${stderr.trim()}\n\n`;
   }
 
   /**
