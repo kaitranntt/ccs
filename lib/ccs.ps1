@@ -242,6 +242,7 @@ function Show-Help {
     Write-ColorLine "Flags:" "Cyan"
     Write-ColorLine "  -h, --help                  Show this help message" "Yellow"
     Write-ColorLine "  -v, --version               Show version and installation info" "Yellow"
+    Write-ColorLine "  --shell-completion          Install shell auto-completion" "Yellow"
     Write-Host ""
     Write-ColorLine "Configuration:" "Cyan"
     Write-Host "  Config:    ~/.ccs/config.json"
@@ -1220,6 +1221,65 @@ function Invoke-AuthCommands {
     }
 }
 
+function Install-ShellCompletion {
+    param([string[]]$Args)
+
+    Write-Host ""
+    Write-Host "Shell Completion Installer" -ForegroundColor Yellow
+    Write-Host ""
+
+    # Ensure completion directory exists
+    $CompletionsDir = Join-Path $env:USERPROFILE ".ccs\completions"
+    if (-not (Test-Path $CompletionsDir)) {
+        New-Item -ItemType Directory -Path $CompletionsDir -Force | Out-Null
+    }
+
+    # Ensure completion file exists
+    $CompletionFile = Join-Path $CompletionsDir "ccs.ps1"
+    if (-not (Test-Path $CompletionFile)) {
+        Write-Host "[X] Completion file not found. Please reinstall CCS." -ForegroundColor Red
+        Write-Host ""
+        exit 1
+    }
+
+    # Get PowerShell profile path
+    $ProfilePath = $PROFILE
+    $ProfileDir = Split-Path $ProfilePath -Parent
+
+    # Create profile directory if it doesn't exist
+    if (-not (Test-Path $ProfileDir)) {
+        New-Item -ItemType Directory -Path $ProfileDir -Force | Out-Null
+    }
+
+    # Comment marker for easy identification
+    $Marker = "# CCS shell completion"
+    $SourceCmd = ". `"$CompletionFile`""
+
+    # Check if already installed
+    if (Test-Path $ProfilePath) {
+        $Content = Get-Content $ProfilePath -Raw -ErrorAction SilentlyContinue
+        if ($Content -and $Content.Contains($Marker)) {
+            Write-Host "[OK] Shell completion already installed" -ForegroundColor Green
+            Write-Host ""
+            return 0
+        }
+    }
+
+    # Append to PowerShell profile
+    $Block = "`n$Marker`n$SourceCmd`n"
+    Add-Content -Path $ProfilePath -Value $Block -NoNewline
+
+    Write-Host "[OK] Shell completion installed successfully!" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Added to $ProfilePath"
+    Write-Host ""
+    Write-Host "To activate:" -ForegroundColor Cyan
+    Write-Host "  . `$PROFILE"
+    Write-Host ""
+
+    return 0
+}
+
 # --- Main Execution Logic ---
 
 # Special case: version command (check BEFORE profile detection)
@@ -1244,6 +1304,13 @@ if ($Help) {
         Show-Help
         exit 0
     }
+}
+
+# Special case: shell completion installer
+if ($RemainingArgs.Count -gt 0 -and $RemainingArgs[0] -eq "--shell-completion") {
+    $CompletionArgs = if ($RemainingArgs.Count -gt 1) { $RemainingArgs[1..($RemainingArgs.Count-1)] } else { @() }
+    $Result = Install-ShellCompletion $CompletionArgs
+    exit $Result
 }
 
 # Special case: auth commands

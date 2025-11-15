@@ -182,6 +182,7 @@ show_help() {
   echo -e "${CYAN}Flags:${RESET}"
   echo -e "  ${YELLOW}-h, --help${RESET}                  Show this help message"
   echo -e "  ${YELLOW}-v, --version${RESET}               Show version and installation info"
+  echo -e "  ${YELLOW}--shell-completion${RESET}          Install shell auto-completion"
   echo ""
   echo -e "${CYAN}Configuration:${RESET}"
   echo -e "  Config:    ~/.ccs/config.json"
@@ -1273,6 +1274,184 @@ handle_auth_commands() {
   esac
 }
 
+# --- Shell Completion Installer ---
+
+install_shell_completion() {
+  shift  # Remove --shell-completion
+
+  echo -e "${BOLD}Shell Completion Installer${RESET}"
+  echo ""
+
+  # Parse flags for manual shell selection
+  local target_shell=""
+  for arg in "$@"; do
+    case "$arg" in
+      --bash) target_shell="bash" ;;
+      --zsh) target_shell="zsh" ;;
+      --fish) target_shell="fish" ;;
+      *) ;;
+    esac
+  done
+
+  # Auto-detect shell if not specified
+  if [[ -z "$target_shell" ]]; then
+    if [[ -n "$BASH_VERSION" ]]; then
+      target_shell="bash"
+    elif [[ -n "$ZSH_VERSION" ]]; then
+      target_shell="zsh"
+    elif [[ -n "$FISH_VERSION" ]]; then
+      target_shell="fish"
+    else
+      echo -e "${RED}[X] Could not detect shell${RESET}" >&2
+      echo "" >&2
+      echo -e "${YELLOW}Usage:${RESET}" >&2
+      echo "  ccs --shell-completion           # Auto-detect shell" >&2
+      echo "  ccs --shell-completion --bash    # Install for bash" >&2
+      echo "  ccs --shell-completion --zsh     # Install for zsh" >&2
+      echo "  ccs --shell-completion --fish    # Install for fish" >&2
+      echo "" >&2
+      return 1
+    fi
+  fi
+
+  # Ensure completion files exist in ~/.ccs/completions/
+  local completions_dir="$HOME/.ccs/completions"
+  if [[ ! -d "$completions_dir" ]]; then
+    mkdir -p "$completions_dir"
+  fi
+
+  # Copy from scripts if not present
+  local script_dir="$(dirname "$0")"
+  if [[ -f "$script_dir/../scripts/completion/ccs.bash" ]]; then
+    cp "$script_dir/../scripts/completion/ccs.bash" "$completions_dir/" 2>/dev/null || true
+    cp "$script_dir/../scripts/completion/ccs.zsh" "$completions_dir/" 2>/dev/null || true
+    cp "$script_dir/../scripts/completion/ccs.fish" "$completions_dir/" 2>/dev/null || true
+  fi
+
+  # Install based on target shell
+  case "$target_shell" in
+    bash)
+      local rc_file="$HOME/.bashrc"
+      local completion_file="$completions_dir/ccs.bash"
+      local marker="# CCS shell completion"
+
+      if [[ ! -f "$completion_file" ]]; then
+        echo -e "${RED}[X] Completion file not found: $completion_file${RESET}" >&2
+        echo "    Please reinstall CCS." >&2
+        return 1
+      fi
+
+      # Check if already installed
+      if grep -q "$marker" "$rc_file" 2>/dev/null; then
+        echo -e "${GREEN}[OK] Shell completion already installed${RESET}"
+        echo ""
+        return 0
+      fi
+
+      # Append to .bashrc
+      {
+        echo ""
+        echo "$marker"
+        echo "source \"$completion_file\""
+      } >> "$rc_file"
+
+      echo -e "${GREEN}[OK] Shell completion installed successfully!${RESET}"
+      echo ""
+      echo "Added to $rc_file"
+      echo ""
+      echo -e "${CYAN}To activate:${RESET}"
+      echo "  source ~/.bashrc"
+      echo ""
+      echo -e "${CYAN}Then test:${RESET}"
+      echo "  ccs <TAB>        # See available profiles"
+      echo "  ccs auth <TAB>   # See auth subcommands"
+      echo ""
+      ;;
+
+    zsh)
+      local rc_file="$HOME/.zshrc"
+      local completion_dir="$HOME/.zsh/completion"
+      local completion_file="$completions_dir/ccs.zsh"
+      local marker="# CCS shell completion"
+
+      if [[ ! -f "$completion_file" ]]; then
+        echo -e "${RED}[X] Completion file not found: $completion_file${RESET}" >&2
+        echo "    Please reinstall CCS." >&2
+        return 1
+      fi
+
+      # Create zsh completion directory
+      mkdir -p "$completion_dir"
+
+      # Copy to zsh completion directory
+      cp "$completion_file" "$completion_dir/_ccs"
+
+      # Check if already installed
+      if grep -q "$marker" "$rc_file" 2>/dev/null; then
+        echo -e "${GREEN}[OK] Shell completion already installed${RESET}"
+        echo ""
+        return 0
+      fi
+
+      # Append to .zshrc
+      {
+        echo ""
+        echo "$marker"
+        echo "fpath=(~/.zsh/completion \$fpath)"
+        echo "autoload -Uz compinit && compinit"
+      } >> "$rc_file"
+
+      echo -e "${GREEN}[OK] Shell completion installed successfully!${RESET}"
+      echo ""
+      echo "Added to $rc_file"
+      echo ""
+      echo -e "${CYAN}To activate:${RESET}"
+      echo "  source ~/.zshrc"
+      echo ""
+      echo -e "${CYAN}Then test:${RESET}"
+      echo "  ccs <TAB>        # See available profiles"
+      echo "  ccs auth <TAB>   # See auth subcommands"
+      echo ""
+      ;;
+
+    fish)
+      local fish_dir="$HOME/.config/fish/completions"
+      local completion_file="$completions_dir/ccs.fish"
+
+      if [[ ! -f "$completion_file" ]]; then
+        echo -e "${RED}[X] Completion file not found: $completion_file${RESET}" >&2
+        echo "    Please reinstall CCS." >&2
+        return 1
+      fi
+
+      # Create fish completion directory
+      mkdir -p "$fish_dir"
+
+      # Copy to fish completion directory (fish auto-loads from here)
+      cp "$completion_file" "$fish_dir/ccs.fish"
+
+      echo -e "${GREEN}[OK] Shell completion installed successfully!${RESET}"
+      echo ""
+      echo "Installed to $fish_dir/ccs.fish"
+      echo ""
+      echo -e "${CYAN}To activate:${RESET}"
+      echo "  Fish auto-loads completions (no reload needed)"
+      echo ""
+      echo -e "${CYAN}Then test:${RESET}"
+      echo "  ccs <TAB>        # See available profiles"
+      echo "  ccs auth <TAB>   # See auth subcommands"
+      echo ""
+      ;;
+
+    *)
+      echo -e "${RED}[X] Unsupported shell: $target_shell${RESET}" >&2
+      return 1
+      ;;
+  esac
+
+  return 0
+}
+
 # --- Main Execution Logic ---
 
 # Special case: version command (check BEFORE profile detection)
@@ -1290,6 +1469,12 @@ fi
 # Special case: auth commands
 if [[ $# -gt 0 ]] && [[ "${1}" == "auth" ]]; then
   handle_auth_commands "$@"
+  exit $?
+fi
+
+# Special case: shell completion installer
+if [[ $# -gt 0 ]] && [[ "${1}" == "--shell-completion" ]]; then
+  install_shell_completion "$@"
   exit $?
 fi
 
