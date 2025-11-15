@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # CCS Error Codes
-# Documentation: ../docs/errors.md
+# Documentation: ../docs/errors/README.md
 
 # Configuration Errors (E100-E199)
 readonly E_CONFIG_MISSING="E101"
@@ -37,7 +37,7 @@ readonly E_INVALID_STATE="E901"
 # Get error documentation URL
 get_error_doc_url() {
   local error_code="$1"
-  echo "https://github.com/kaitranntt/ccs/blob/main/docs/errors.md#${error_code,,}"
+  echo "https://github.com/kaitranntt/ccs/blob/main/docs/errors/README.md#${error_code,,}"
 }
 
 # Get error category from code

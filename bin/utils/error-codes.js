@@ -1,5 +1,5 @@
 // CCS Error Codes
-// Documentation: ../../docs/errors.md
+// Documentation: ../../docs/errors/README.md
 
 const ERROR_CODES = {
   // Configuration Errors (E100-E199)
@@ -37,7 +37,7 @@ const ERROR_CODES = {
 
 // Error code documentation URL generator
 function getErrorDocUrl(errorCode) {
-  return `https://github.com/kaitranntt/ccs/blob/main/docs/errors.md#${errorCode.toLowerCase()}`;
+  return `https://github.com/kaitranntt/ccs/blob/main/docs/errors/README.md#${errorCode.toLowerCase()}`;
 }
 
 // Get error category from code

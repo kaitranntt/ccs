@@ -1,5 +1,5 @@
 # CCS Error Codes
-# Documentation: ../docs/errors.md
+# Documentation: ../docs/errors/README.md
 
 # Configuration Errors (E100-E199)
 $script:E_CONFIG_MISSING = "E101"
@@ -36,7 +36,7 @@ $script:E_INVALID_STATE = "E901"
 # Get error documentation URL
 function Get-ErrorDocUrl {
     param([string]$ErrorCode)
-    return "https://github.com/kaitranntt/ccs/blob/main/docs/errors.md#$($ErrorCode.ToLower())"
+    return "https://github.com/kaitranntt/ccs/blob/main/docs/errors/README.md#$($ErrorCode.ToLower())"
 }
 
 # Get error category from code
