@@ -72,11 +72,11 @@ Example:
 
 **Pattern:** Exit code 1 with JSON parse error
 ```
-Root cause: Claude CLI returned non-JSON output
+Root cause: Claude CLI returned non-stream-JSON output
 Resolution:
-  1. Check if --output-format json is supported
-  2. Verify Claude CLI version (need recent version)
-  3. Test manually: claude -p "test" --output-format json
+  1. Check if --output-format stream-json is supported
+  2. Verify Claude CLI version (need recent version with stream-json support)
+  3. Test manually: claude -p "test" --output-format stream-json
   4. If not supported, delegation won't work
 ```
 

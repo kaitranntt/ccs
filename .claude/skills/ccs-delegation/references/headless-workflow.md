@@ -6,7 +6,7 @@ CCS delegation uses Claude Code headless mode with enhanced features for token o
 
 ## Core Concept
 
-CCS delegation executes tasks via alternative models using enhanced Claude Code headless mode with JSON output, session management, and cost tracking.
+CCS delegation executes tasks via alternative models using enhanced Claude Code headless mode with stream-JSON output, session management, and cost tracking.
 
 **Actual Command:**
 ```bash
@@ -15,7 +15,7 @@ ccs {profile} -p "prompt"
 
 Internally executes:
 ```bash
-claude -p "prompt" --settings ~/.ccs/{profile}.settings.json --output-format json --permission-mode acceptEdits --max-turns <auto>
+claude -p "prompt" --settings ~/.ccs/{profile}.settings.json --output-format stream-json --permission-mode acceptEdits
 ```
 
 **Docs:** https://code.claude.com/docs/en/headless.md
@@ -25,18 +25,19 @@ claude -p "prompt" --settings ~/.ccs/{profile}.settings.json --output-format jso
 **Workflow:**
 1. User: `/ccs:glm "task"` in Claude Code session
 2. CCS detects `-p` flag and routes to HeadlessExecutor
-3. HeadlessExecutor spawns: `claude -p "task" --settings ~/.ccs/glm.settings.json --output-format json --permission-mode acceptEdits`
+3. HeadlessExecutor spawns: `claude -p "task" --settings ~/.ccs/glm.settings.json --output-format stream-json --permission-mode acceptEdits`
 4. Claude Code runs headless with GLM profile + enhanced flags
-5. Returns JSON with session_id, cost, turns
-6. ResultFormatter displays formatted results with metadata
+5. Returns stream-JSON with session_id, cost, turns
+6. Real-time tool use visibility in TTY
+7. ResultFormatter displays formatted results with metadata
 
 **Enhanced Features:**
-- JSON output parsing (`--output-format json`)
+- Stream-JSON output parsing (`--output-format stream-json`)
+- Real-time tool use visibility (e.g., `[Tool Use: Bash]`)
 - Session persistence (`~/.ccs/delegation-sessions.json`)
 - Cost tracking (displays USD cost per execution)
-- Auto-determined max-turns (5/10/20 based on complexity)
+- Time-based limits (10 min default timeout with graceful termination)
 - Multi-turn session management (resume via session_id)
-- File change tracking (created/modified files)
 - Formatted ASCII box output
 
 ## Profile Settings
@@ -60,37 +61,35 @@ claude -p "prompt" --settings ~/.ccs/{profile}.settings.json --output-format jso
 
 ## Output Format
 
-**JSON Mode** (automatically enabled):
+**Stream-JSON Mode** (automatically enabled):
+Each message is a separate JSON object (jsonl format):
 ```json
-{
-  "type": "result",
-  "subtype": "success",
-  "total_cost_usd": 0.0025,
-  "is_error": false,
-  "duration_ms": 1500,
-  "duration_api_ms": 1200,
-  "num_turns": 3,
-  "result": "Task completed successfully",
-  "session_id": "abc123def456"
-}
+{"type":"init","session_id":"abc123def456"}
+{"type":"user","message":{"role":"user","content":"Task description"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash"}]}}
+{"type":"result","subtype":"success","total_cost_usd":0.0025,"num_turns":3,"session_id":"abc123def456","result":"Task completed"}
+```
+
+**Real-time Progress** (TTY only):
+```
+[i] Delegating to GLM-4.6...
+[Tool Use: Write]
+[Tool Use: Write]
+[Tool Use: Bash]
+[i] Execution completed in 1.5s
 ```
 
 **Formatted Output** (displayed to user):
 ```
-[i] Delegated to GLM-4.6 (ccs:glm)
 ╔══════════════════════════════════════════════════════╗
 ║ Working Directory: /path/to/project                 ║
 ║ Model: GLM-4.6                                       ║
 ║ Duration: 1.5s                                       ║
 ║ Exit Code: 0                                         ║
-║ Files Created: 1                                     ║
-║ Files Modified: 2                                    ║
-║ Session ID: abc123def456                             ║
+║ Session ID: abc123de                                 ║
 ║ Cost: $0.0025                                        ║
 ║ Turns: 3                                             ║
 ╚══════════════════════════════════════════════════════╝
-
-[OK] Delegation completed
 ```
 
 **Extracted Fields:**
@@ -141,7 +140,6 @@ ccs glm -p "task description"
 
 **With options:**
 ```bash
-ccs glm -p "task" --max-turns 10
 ccs glm -p "task" --permission-mode plan
 ```
 
