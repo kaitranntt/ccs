@@ -56,10 +56,14 @@ class HeadlessExecutor {
       throw new Error(`Settings file not found: ${settingsPath}\nProfile "${profile}" may not be configured.`);
     }
 
+    // Smart slash command detection and preservation
+    // Detects if prompt contains slash command and restructures for proper execution
+    const processedPrompt = this._processSlashCommand(enhancedPrompt);
+
     // Wrap prompt with safety instructions to prevent modifying infrastructure
     const safePrompt = `IMPORTANT: Do not modify any files in the .claude/ directory. This directory contains Claude Code infrastructure and should never be touched by delegated tasks.
 
-${enhancedPrompt}`;
+${processedPrompt}`;
 
     // Prepare arguments
     const args = ['-p', safePrompt, '--settings', settingsPath];
@@ -515,6 +519,54 @@ ${enhancedPrompt}`;
    */
   static _sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Process prompt to detect and preserve slash commands
+   * Implements smart enhancement: preserves slash command at start, allows context in rest
+   * @param {string} prompt - Original prompt (may contain slash command)
+   * @returns {string} Processed prompt with slash command preserved
+   * @private
+   */
+  static _processSlashCommand(prompt) {
+    // Detect slash command at the start of the prompt
+    // Pattern: /command-name followed by space or end of string
+    const slashMatch = prompt.trim().match(/^(\/[\w:-]+)(?:\s+(.*))?$/s);
+
+    if (slashMatch) {
+      const command = slashMatch[1]; // e.g., "/plan"
+      const args = slashMatch[2] || ''; // Everything after the command
+
+      // Return slash command at start, followed by the rest
+      // The delegated session will execute the slash command with the args
+      return args ? `${command} ${args}` : command;
+    }
+
+    // Check if slash command appears later in enhanced context
+    // Pattern: "Context text... /command args"
+    const embeddedMatch = prompt.match(/^([\s\S]*?)(\/[\w:-]+(?:\s+[\s\S]*)?)$/);
+
+    if (embeddedMatch) {
+      const context = embeddedMatch[1].trim();
+      const commandPart = embeddedMatch[2].trim();
+
+      // Extract the actual command and its args
+      const cmdMatch = commandPart.match(/^(\/[\w:-]+)(?:\s+(.*))?$/s);
+      if (cmdMatch) {
+        const command = cmdMatch[1];
+        const cmdArgs = cmdMatch[2] || '';
+
+        // Restructure: put slash command first, context as part of args
+        // Format: /command Context: ... Original args: ...
+        if (context) {
+          return `${command} Context: ${context}\n\n${cmdArgs}`;
+        }
+        return commandPart;
+      }
+    }
+
+    // No slash command detected, return as-is
+    return prompt;
   }
 
   /**
