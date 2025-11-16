@@ -46,7 +46,7 @@ When delegating tasks, you will:
 1. **Task Analysis**
    - Read `ccs-delegation` skill for decision framework
    - Determine if task is delegation-appropriate
-   - Analyze complexity: Simple (5 turns) / Medium (10) / Complex (20)
+   - Estimate time needed: Quick (<2 min) / Medium (<10 min) / Complex (>10 min)
    - Identify scope: Single file vs multiple files
 
 2. **Profile Selection**

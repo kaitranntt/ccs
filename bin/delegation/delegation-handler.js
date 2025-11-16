@@ -97,7 +97,7 @@ class DelegationHandler {
     // Extract prompt from -p or --prompt
     const prompt = this._extractPrompt(args);
 
-    // Extract options (--max-turns, --permission-mode, etc.)
+    // Extract options (--timeout, --permission-mode, etc.)
     const options = this._extractOptions(args);
 
     return { profile, prompt, options };
@@ -168,12 +168,6 @@ class DelegationHandler {
       outputFormat: 'json',
       permissionMode: defaultPermissionMode
     };
-
-    // Parse max-turns
-    const maxTurnsIndex = args.indexOf('--max-turns');
-    if (maxTurnsIndex !== -1 && maxTurnsIndex < args.length - 1) {
-      options.maxTurns = parseInt(args[maxTurnsIndex + 1], 10);
-    }
 
     // Parse permission-mode (CLI flag overrides settings file)
     const permModeIndex = args.indexOf('--permission-mode');

@@ -19,23 +19,21 @@ class HeadlessExecutor {
    * @param {string} enhancedPrompt - Enhanced prompt with context
    * @param {Object} options - Execution options
    * @param {string} options.cwd - Working directory (absolute path)
-   * @param {number} options.timeout - Timeout in milliseconds (default: 120000)
+   * @param {number} options.timeout - Timeout in milliseconds (default: 600000 = 10 minutes)
    * @param {string} options.outputFormat - Output format: 'json' or 'text' (default: 'json')
    * @param {string} options.permissionMode - Permission mode: 'default', 'plan', 'acceptEdits', 'bypassPermissions' (default: 'acceptEdits')
    * @param {boolean} options.resumeSession - Resume last session for profile (default: false)
    * @param {string} options.sessionId - Specific session ID to resume
-   * @param {number} options.maxTurns - Max turns (auto-determined if not provided)
    * @returns {Promise<Object>} Execution result
    */
   static async execute(profile, enhancedPrompt, options = {}) {
     const {
       cwd = process.cwd(),
-      timeout = 120000,
+      timeout = 600000, // 10 minutes default
       outputFormat = 'json',
       permissionMode = 'acceptEdits',
       resumeSession = false,
-      sessionId = null,
-      maxTurns = null
+      sessionId = null
     } = options;
 
     // Validate permission mode
@@ -122,15 +120,7 @@ ${enhancedPrompt}`;
       toolRestrictions.disallowedTools.forEach(tool => args.push(tool));
     }
 
-    // Add max-turns (auto-determine if not specified)
-    const determinedMaxTurns = maxTurns || this._determineMaxTurns(enhancedPrompt);
-    args.push('--max-turns', determinedMaxTurns.toString());
-
-    if (process.env.CCS_DEBUG) {
-      if (!maxTurns) {
-        console.error(`[i] Auto-determined max-turns: ${determinedMaxTurns}`);
-      }
-    }
+    // Note: No max-turns limit - using time-based limits instead (default 10min timeout)
 
     // Debug log args
     if (process.env.CCS_DEBUG) {
@@ -202,7 +192,11 @@ ${enhancedPrompt}`;
         // Show completion message
         if (showProgress) {
           const durationSec = (duration / 1000).toFixed(1);
-          console.error(`[i] Execution completed in ${durationSec}s`);
+          if (timedOut) {
+            console.error(`[i] Execution timed out after ${durationSec}s`);
+          } else {
+            console.error(`[i] Execution completed in ${durationSec}s`);
+          }
           console.error(''); // Blank line before formatted output
         }
 
@@ -213,7 +207,8 @@ ${enhancedPrompt}`;
           cwd,
           profile,
           duration,
-          success: exitCode === 0
+          timedOut,
+          success: exitCode === 0 && !timedOut
         };
 
         // Parse JSON output if format is JSON
@@ -250,8 +245,8 @@ ${enhancedPrompt}`;
           result.content = stdout;
         }
 
-        // Store or update session if successful and JSON mode
-        if (result.success && result.sessionId && outputFormat === 'json') {
+        // Store or update session if we have session ID (even on timeout, for :continue support)
+        if (result.sessionId && outputFormat === 'json') {
           if (resumeSession || sessionId) {
             // Update existing session
             sessionMgr.updateSession(profile, result.sessionId, {
@@ -284,24 +279,33 @@ ${enhancedPrompt}`;
       });
 
       // Handle timeout with graceful SIGTERM then forceful SIGKILL
+      let timedOut = false;
       if (timeout > 0) {
         const timeoutHandle = setTimeout(() => {
           if (!proc.killed) {
+            timedOut = true;
+
             if (progressInterval) {
               clearInterval(progressInterval);
               process.stderr.write('\r\x1b[K'); // Clear line
             }
 
+            if (process.env.CCS_DEBUG) {
+              console.error(`[!] Timeout reached after ${timeout}ms, sending SIGTERM for graceful shutdown...`);
+            }
+
+            // Send SIGTERM for graceful shutdown
             proc.kill('SIGTERM');
 
-            // If process doesn't terminate within 5s, force kill
+            // If process doesn't terminate within 10s, force kill
             setTimeout(() => {
               if (!proc.killed) {
+                if (process.env.CCS_DEBUG) {
+                  console.error(`[!] Process did not terminate gracefully, sending SIGKILL...`);
+                }
                 proc.kill('SIGKILL');
               }
-            }, 5000);
-
-            reject(new Error(`Execution timeout after ${timeout}ms`));
+            }, 10000); // Give 10s for graceful shutdown instead of 5s
           }
         }, timeout);
 
@@ -324,48 +328,6 @@ ${enhancedPrompt}`;
         `Invalid permission mode: "${mode}". Valid modes: ${VALID_MODES.join(', ')}`
       );
     }
-  }
-
-  /**
-   * Determine max turns based on task complexity
-   * @param {string} prompt - Task prompt
-   * @returns {number} Max turns (10, 20, or 30)
-   * @private
-   */
-  static _determineMaxTurns(prompt) {
-    const promptLower = prompt.toLowerCase();
-
-    // Simple task indicators (10 turns)
-    const simpleKeywords = [
-      'typo', 'fix typo', 'comment', 'rename', 'format',
-      'add comment', 'remove comment', 'spacing', 'indentation',
-      'whitespace', 'semicolon', 'comma', 'quote'
-    ];
-
-    // Complex task indicators (30 turns)
-    const complexKeywords = [
-      'implement', 'design', 'architect', 'refactor', 'migrate',
-      'analyze', 'optimize', 'integrate', 'feature', 'system',
-      'framework', 'codebase', 'infrastructure', 'deployment',
-      'security', 'performance', 'scalability', 'create', 'build'
-    ];
-
-    // Check for simple indicators first
-    for (const keyword of simpleKeywords) {
-      if (promptLower.includes(keyword)) {
-        return 10; // Simple: 10 turns
-      }
-    }
-
-    // Check for complex indicators
-    for (const keyword of complexKeywords) {
-      if (promptLower.includes(keyword)) {
-        return 30; // Complex: 30 turns
-      }
-    }
-
-    // Default to medium (20 turns)
-    return 20;
   }
 
   /**

@@ -25,11 +25,16 @@ class ResultFormatter {
    * @returns {string} Formatted result
    */
   static format(result) {
-    const { profile, cwd, exitCode, stdout, stderr, duration, success, content, sessionId, totalCost, numTurns, subtype, permissionDenials, errors, json } = result;
+    const { profile, cwd, exitCode, stdout, stderr, duration, success, content, sessionId, totalCost, numTurns, subtype, permissionDenials, errors, json, timedOut } = result;
 
-    // Handle special JSON subtypes
+    // Handle timeout (graceful termination)
+    if (timedOut) {
+      return this._formatTimeoutError(result);
+    }
+
+    // Handle legacy max_turns error (Claude CLI might still return this)
     if (subtype === 'error_max_turns') {
-      return this._formatMaxTurnsError(result);
+      return this._formatTimeoutError(result);
     }
 
     // Use content field for output (JSON result or fallback stdout)
@@ -376,12 +381,12 @@ class ResultFormatter {
   }
 
   /**
-   * Format max turns error (special handling for error_max_turns subtype)
+   * Format timeout error (session exceeded time limit)
    * @param {Object} result - Execution result
-   * @returns {string} Formatted max turns error
+   * @returns {string} Formatted timeout error
    * @private
    */
-  static _formatMaxTurnsError(result) {
+  static _formatTimeoutError(result) {
     const { profile, cwd, duration, sessionId, totalCost, numTurns, permissionDenials } = result;
 
     let output = '';
@@ -392,27 +397,28 @@ class ResultFormatter {
     // Info box
     output += this._formatInfoBox(cwd, profile, duration, 0, 0, 0, sessionId, totalCost, numTurns);
 
-    // Max turns message
+    // Timeout message
     output += '\n';
-    output += `[!] Max turns reached (${numTurns}/${numTurns})\n\n`;
-    output += 'The delegated session reached its turn limit before completing the task.\n';
+    const timeoutMin = (duration / 60000).toFixed(1);
+    output += `[!] Execution timed out after ${timeoutMin} minutes\n\n`;
+    output += 'The delegated session exceeded its time limit before completing the task.\n';
+    output += 'Session was gracefully terminated and saved for continuation.\n';
 
     // Permission denials if present
     if (permissionDenials && permissionDenials.length > 0) {
       output += '\n';
       output += this._formatPermissionDenials(permissionDenials);
       output += '\n';
-      output += 'The task likely requires permissions that were denied.\n';
+      output += 'The task may require permissions that were denied.\n';
       output += 'Consider running with --permission-mode bypassPermissions or execute manually.\n';
     }
 
     // Suggestions
     output += '\n';
     output += 'Suggestions:\n';
-    // Suggest double the current max turns, or 50 if already high
-    const suggestedMaxTurns = numTurns < 30 ? numTurns * 2 : 50;
-    output += `  - Increase max turns: ccs ${profile} -p "task" --max-turns ${suggestedMaxTurns}\n`;
     output += `  - Continue session: ccs ${profile}:continue -p "finish the task"\n`;
+    output += `  - Increase timeout: ccs ${profile} -p "task" --timeout ${duration * 2}\n`;
+    output += '  - Break task into smaller steps\n';
     output += '  - Run task manually in main Claude session\n';
 
     output += '\n';
