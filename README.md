@@ -178,18 +178,18 @@ Then: 🔴 _"You've reached your usage limit."_
 
 ```mermaid
 graph LR
-    A[2pm: Building features<br/>🟢 In the zone] --> B[3pm: Usage limit hit<br/>🔴 BLOCKED]
+    A[2pm: Building features<br/>In the zone] --> B[3pm: Usage limit hit<br/>BLOCKED]
     B --> C[3:05pm: Stop work<br/>Edit settings.json]
-    C --> D[3:15pm: Switch accounts<br/>❌ Context lost]
-    D --> E[3:30pm: Restart<br/>⚠️ Trying to focus]
-    E --> F[4pm: Finally productive<br/>🟡 Back in flow]
+    C --> D[3:15pm: Switch accounts<br/>Context lost]
+    D --> E[3:30pm: Restart<br/>Trying to focus]
+    E --> F[4pm: Finally productive<br/>Back in flow]
 
-    style A fill:#90EE90
-    style B fill:#FF6B6B
-    style C fill:#FFB347
-    style D fill:#FF6B6B
-    style E fill:#FFD700
-    style F fill:#90EE90
+    style A fill:#d4edda,stroke:#333,color:#000
+    style B fill:#f8d7da,stroke:#333,color:#000
+    style C fill:#fff3cd,stroke:#333,color:#000
+    style D fill:#f8d7da,stroke:#333,color:#000
+    style E fill:#fff3cd,stroke:#333,color:#000
+    style F fill:#d4edda,stroke:#333,color:#000
 ```
 
 **Result:** 1 hour lost, momentum destroyed, frustration builds
@@ -203,19 +203,19 @@ graph LR
 
 ```mermaid
 graph LR
-    A[2pm: Start work] --> B[Terminal 1: Claude Pro<br/>🎯 Strategic planning]
-    A --> C[Terminal 2: GLM<br/>⚡ Code execution]
-    B --> D[3pm: Still shipping<br/>🟢 No interruptions]
+    A[2pm: Start work] --> B[Terminal 1: Claude Pro<br/>Strategic planning]
+    A --> C[Terminal 2: GLM<br/>Code execution]
+    B --> D[3pm: Still shipping<br/>No interruptions]
     C --> D
-    D --> E[4pm: Flow state<br/>🚀 Productivity peak]
-    E --> F[5pm: Features shipped<br/>✅ Context maintained]
+    D --> E[4pm: Flow state<br/>Productivity peak]
+    E --> F[5pm: Features shipped<br/>Context maintained]
 
-    style A fill:#E8F4F8
-    style B fill:#B8E6F0
-    style C fill:#B8E6F0
-    style D fill:#90EE90
-    style E fill:#7FD4A8
-    style F fill:#4CAF50
+    style A fill:#e7f3ff,stroke:#333,color:#000
+    style B fill:#cfe2ff,stroke:#333,color:#000
+    style C fill:#cfe2ff,stroke:#333,color:#000
+    style D fill:#d4edda,stroke:#333,color:#000
+    style E fill:#d4edda,stroke:#333,color:#000
+    style F fill:#d4edda,stroke:#333,color:#000
 ```
 
 **Result:** Zero downtime, continuous productivity, less frustration
