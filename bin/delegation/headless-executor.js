@@ -136,6 +136,12 @@ class HeadlessExecutor {
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
 
+      // Show initial progress message
+      if (!process.env.CCS_QUIET) {
+        const modelName = profile === 'glm' ? 'GLM-4.6' : profile === 'kimi' ? 'Kimi' : profile.toUpperCase();
+        console.error(`[i] Delegating to ${modelName}...`);
+      }
+
       const proc = spawn(claudeCli, args, {
         cwd,
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -144,20 +150,52 @@ class HeadlessExecutor {
 
       let stdout = '';
       let stderr = '';
+      let progressInterval;
 
-      // Capture stdout
+      // Progress indicator (show elapsed time every 5 seconds)
+      if (!process.env.CCS_QUIET) {
+        progressInterval = setInterval(() => {
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+          process.stderr.write(`[i] Still running... ${elapsed}s elapsed\r`);
+        }, 5000);
+      }
+
+      // Capture stdout (JSON output)
       proc.stdout.on('data', (data) => {
         stdout += data.toString();
       });
 
-      // Capture stderr
+      // Stream stderr in real-time (progress messages from Claude CLI)
       proc.stderr.on('data', (data) => {
-        stderr += data.toString();
+        const stderrText = data.toString();
+        stderr += stderrText;
+
+        // Show stderr in real-time unless quiet mode
+        if (!process.env.CCS_QUIET) {
+          // Clear progress line before showing stderr
+          if (progressInterval) {
+            process.stderr.write('\r\x1b[K'); // Clear line
+          }
+          process.stderr.write(stderrText);
+        }
       });
 
       // Handle completion
       proc.on('close', (exitCode) => {
         const duration = Date.now() - startTime;
+
+        // Clear progress indicator
+        if (progressInterval) {
+          clearInterval(progressInterval);
+          process.stderr.write('\r\x1b[K'); // Clear line
+        }
+
+        // Show completion message
+        if (!process.env.CCS_QUIET) {
+          const durationSec = (duration / 1000).toFixed(1);
+          console.error(`[i] Execution completed in ${durationSec}s`);
+          console.error(''); // Blank line before formatted output
+        }
 
         const result = {
           exitCode,
@@ -230,6 +268,9 @@ class HeadlessExecutor {
 
       // Handle errors
       proc.on('error', (error) => {
+        if (progressInterval) {
+          clearInterval(progressInterval);
+        }
         reject(new Error(`Failed to execute Claude CLI: ${error.message}`));
       });
 
@@ -237,6 +278,11 @@ class HeadlessExecutor {
       if (timeout > 0) {
         const timeoutHandle = setTimeout(() => {
           if (!proc.killed) {
+            if (progressInterval) {
+              clearInterval(progressInterval);
+              process.stderr.write('\r\x1b[K'); // Clear line
+            }
+
             proc.kill('SIGTERM');
 
             // If process doesn't terminate within 5s, force kill
