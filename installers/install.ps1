@@ -31,7 +31,7 @@ $InstallMethod = if ($ScriptDir -and ((Test-Path "$ScriptDir\lib\ccs.ps1") -or (
 # IMPORTANT: Update this version when releasing new versions!
 # This hardcoded version is used for standalone installations (irm | iex)
 # For git installations, VERSION file is read if available
-$CcsVersion = "4.0.0"
+$CcsVersion = "4.1.0"
 
 # Try to read VERSION file for git installations
 if ($ScriptDir) {
@@ -619,6 +619,75 @@ function Initialize-SharedSymlinks {
 
 Write-Host "[i] Setting up shared directories..."
 Initialize-SharedSymlinks
+Write-Host ""
+
+# Install CCS items to ~/.claude/ via symlinks (v4.1.0)
+Write-Host "[i] Installing CCS items to ~/.claude/..."
+if (Get-Command node -ErrorAction SilentlyContinue) {
+    # Check if .claude/ was successfully installed
+    if (Test-Path "$CcsDir\.claude") {
+        # Download or copy claude-symlink-manager.js
+        $UtilsDir = "$CcsDir\bin\utils"
+        if (-not (Test-Path $UtilsDir)) {
+            New-Item -ItemType Directory -Path $UtilsDir -Force | Out-Null
+        }
+
+        if ($InstallMethod -eq "git" -and $ScriptDir) {
+            # Git install - copy from local repo
+            $SourcePath = $null
+            if (Test-Path "$ScriptDir\..\bin\utils\claude-symlink-manager.js") {
+                $SourcePath = "$ScriptDir\..\bin\utils\claude-symlink-manager.js"
+            } elseif (Test-Path "$ScriptDir\bin\utils\claude-symlink-manager.js") {
+                $SourcePath = "$ScriptDir\bin\utils\claude-symlink-manager.js"
+            }
+
+            if ($SourcePath) {
+                Copy-Item $SourcePath "$UtilsDir\claude-symlink-manager.js" -Force
+            }
+        } else {
+            # Standalone install - download from GitHub
+            try {
+                Invoke-WebRequest -Uri "https://raw.githubusercontent.com/kaitranntt/ccs/main/bin/utils/claude-symlink-manager.js" `
+                    -OutFile "$UtilsDir\claude-symlink-manager.js" -UseBasicParsing
+            } catch {
+                Write-Host "[!] Failed to download claude-symlink-manager.js"
+            }
+        }
+
+        # Call ClaudeSymlinkManager if available
+        if (Test-Path "$UtilsDir\claude-symlink-manager.js") {
+            try {
+                $scriptBlock = @"
+                try {
+                    const ClaudeSymlinkManager = require('$($UtilsDir -replace '\\', '/')/claude-symlink-manager.js');
+                    const manager = new ClaudeSymlinkManager();
+                    manager.install();
+                } catch (err) {
+                    console.log('[!] CCS item installation warning: ' + err.message);
+                    console.log('    Run "ccs update" to retry');
+                }
+"@
+                node -e $scriptBlock 2>$null
+                if (-not $?) {
+                    Write-Host "[!] CCS item installation skipped (run 'ccs update' later)"
+                }
+            } catch {
+                Write-Host "[!] CCS item installation failed: $($_.Exception.Message)"
+                Write-Host "    Run 'ccs update' after installation to complete setup"
+            }
+        } else {
+            Write-Host "[!] claude-symlink-manager.js not found, skipping"
+            Write-Host "    Run 'ccs update' after installation to complete setup"
+        }
+    } else {
+        Write-Host "[!] .claude/ folder not found, skipping CCS item installation"
+    }
+} else {
+    Write-Host "[!] Node.js not found, skipping CCS item installation"
+    Write-Host "    Install Node.js and run 'ccs update' to complete setup"
+}
+Write-Host ""
+Write-Host "[i] Note: Windows symlink support requires Developer Mode (v4.2 will add fallback)"
 Write-Host ""
 
 # Check and update PATH

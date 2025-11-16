@@ -160,6 +160,7 @@ function handleHelpCommand() {
   // Diagnostics
   console.log(colored('Diagnostics:', 'cyan'));
   console.log(`  ${colored('ccs doctor', 'yellow')}                  Run health check and diagnostics`);
+  console.log(`  ${colored('ccs update', 'yellow')}                  Re-install CCS items to ~/.claude/`);
   console.log('');
 
   // Flags
@@ -251,6 +252,16 @@ async function handleDoctorCommand() {
 
   // Exit with error code if unhealthy
   process.exit(doctor.results.isHealthy() ? 0 : 1);
+}
+
+async function handleUpdateCommand() {
+  const ClaudeSymlinkManager = require('./utils/claude-symlink-manager');
+  const manager = new ClaudeSymlinkManager();
+
+  console.log('[i] Updating CCS items in ~/.claude/...');
+  manager.update();
+
+  process.exit(0);
 }
 
 // Smart profile detection
@@ -487,6 +498,12 @@ async function main() {
   // Special case: doctor command
   if (firstArg === 'doctor' || firstArg === '--doctor') {
     await handleDoctorCommand();
+    return;
+  }
+
+  // Special case: update command (re-install CCS symlinks)
+  if (firstArg === 'update' || firstArg === '--update') {
+    await handleUpdateCommand();
     return;
   }
 

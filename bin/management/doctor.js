@@ -63,6 +63,7 @@ class Doctor {
     this.checkInstances();
     this.checkDelegation();
     this.checkPermissions();
+    this.checkCcsSymlinks();
 
     this.showReport();
     return this.results;
@@ -346,6 +347,40 @@ class Doctor {
         'error',
         'Cannot write to ~/.ccs/',
         'Fix: sudo chown -R $USER ~/.ccs ~/.claude && chmod 755 ~/.ccs ~/.claude'
+      );
+    }
+  }
+
+  /**
+   * Check 9: CCS symlinks to ~/.claude/
+   */
+  checkCcsSymlinks() {
+    process.stdout.write('[?] Checking CCS symlinks... ');
+
+    try {
+      const ClaudeSymlinkManager = require('../utils/claude-symlink-manager');
+      const manager = new ClaudeSymlinkManager();
+      const health = manager.checkHealth();
+
+      if (health.healthy) {
+        console.log(colored('[OK]', 'green'));
+        this.results.addCheck('CCS Symlinks', 'success', 'All CCS items properly symlinked');
+      } else {
+        console.log(colored('[!]', 'yellow'));
+        this.results.addCheck(
+          'CCS Symlinks',
+          'warning',
+          health.issues.join(', '),
+          'Run: ccs update'
+        );
+      }
+    } catch (e) {
+      console.log(colored('[!]', 'yellow'));
+      this.results.addCheck(
+        'CCS Symlinks',
+        'warning',
+        'Could not check CCS symlinks: ' + e.message,
+        'Run: ccs update'
       );
     }
   }

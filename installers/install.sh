@@ -32,7 +32,7 @@ fi
 # IMPORTANT: Update this version when releasing new versions!
 # This hardcoded version is used for standalone installations (curl | bash)
 # For git installations, VERSION file is read if available
-CCS_VERSION="4.0.0"
+CCS_VERSION="4.1.0"
 
 # Try to read VERSION file for git installations
 if [[ -f "$SCRIPT_DIR/VERSION" ]]; then
@@ -767,6 +767,53 @@ setup_shared_symlinks() {
 
 echo "[i] Setting up shared directories..."
 setup_shared_symlinks
+echo ""
+
+# Install CCS items to ~/.claude/ via symlinks (v4.1.0)
+echo "[i] Installing CCS items to ~/.claude/..."
+if command -v node &> /dev/null; then
+  # Check if .claude/ was successfully installed
+  if [[ -d "$CCS_DIR/.claude" ]]; then
+    # Download or copy claude-symlink-manager.js
+    mkdir -p "$CCS_DIR/bin/utils"
+
+    if [[ "$INSTALL_METHOD" == "git" ]]; then
+      # Git install - copy from local repo
+      if [[ -f "$SCRIPT_DIR/../bin/utils/claude-symlink-manager.js" ]]; then
+        cp "$SCRIPT_DIR/../bin/utils/claude-symlink-manager.js" "$CCS_DIR/bin/utils/claude-symlink-manager.js"
+      elif [[ -f "$SCRIPT_DIR/bin/utils/claude-symlink-manager.js" ]]; then
+        cp "$SCRIPT_DIR/bin/utils/claude-symlink-manager.js" "$CCS_DIR/bin/utils/claude-symlink-manager.js"
+      fi
+    else
+      # Standalone install - download from GitHub
+      if ! curl -fsSL "https://raw.githubusercontent.com/kaitranntt/ccs/main/bin/utils/claude-symlink-manager.js" -o "$CCS_DIR/bin/utils/claude-symlink-manager.js" 2>/dev/null; then
+        echo "[!] Failed to download claude-symlink-manager.js"
+      fi
+    fi
+
+    # Call ClaudeSymlinkManager if available
+    if [[ -f "$CCS_DIR/bin/utils/claude-symlink-manager.js" ]]; then
+      node -e "
+        try {
+          const ClaudeSymlinkManager = require('$CCS_DIR/bin/utils/claude-symlink-manager.js');
+          const manager = new ClaudeSymlinkManager();
+          manager.install();
+        } catch (err) {
+          console.log('[!] CCS item installation warning: ' + err.message);
+          console.log('    Run \"ccs update\" to retry');
+        }
+      " 2>/dev/null || echo "[!] CCS item installation skipped (run 'ccs update' later)"
+    else
+      echo "[!] claude-symlink-manager.js not found, skipping"
+      echo "    Run 'ccs update' after installation to complete setup"
+    fi
+  else
+    echo "[!] .claude/ folder not found, skipping CCS item installation"
+  fi
+else
+  echo "[!] Node.js not found, skipping CCS item installation"
+  echo "    Install Node.js and run 'ccs update' to complete setup"
+fi
 echo ""
 
 # Auto-configure PATH if needed (all Unix platforms)

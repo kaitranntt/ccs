@@ -103,6 +103,17 @@ function createConfigFiles() {
     }
     console.log('');
 
+    // Install CCS items to ~/.claude/ (v4.1.0)
+    try {
+      const ClaudeSymlinkManager = require('../bin/utils/claude-symlink-manager');
+      const claudeSymlinkManager = new ClaudeSymlinkManager();
+      claudeSymlinkManager.install();
+    } catch (err) {
+      console.warn('[!] CCS item installation warning:', err.message);
+      console.warn('    Run "ccs update" to retry');
+    }
+    console.log('');
+
     // Create config.json if missing
     const configPath = path.join(ccsDir, 'config.json');
     if (!fs.existsSync(configPath)) {

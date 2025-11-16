@@ -313,16 +313,22 @@ graph LR
 - Uses `CLAUDE_CONFIG_DIR` for isolated instances
 - Create with `ccs auth create <profile>`
 
-### Shared Data (v3.1)
+### Shared Data (v3.1+)
 
-Commands and skills symlinked from `~/.ccs/shared/` - **no duplication across profiles**.
+**CCS items (v4.1)**: Commands and skills symlinked from `~/.ccs/.claude/` to `~/.claude/` - **single source of truth with auto-propagation**.
+
+**Profile access**: `~/.ccs/shared/` symlinks to `~/.claude/` - **no duplication across profiles**.
 
 ```plaintext
 ~/.ccs/
-├── shared/                  # Shared across all profiles
-│   ├── agents/
-│   ├── commands/
-│   └── skills/
+├── .claude/                 # CCS items (ships with package, v4.1)
+│   ├── commands/ccs/        # Delegation commands (/ccs:glm, /ccs:kimi)
+│   ├── skills/ccs-delegation/  # AI decision framework
+│   └── agents/ccs-delegator.md # Proactive delegation agent
+├── shared/                  # Symlinks to ~/.claude/ (for profiles)
+│   ├── agents@ → ~/.claude/agents/
+│   ├── commands@ → ~/.claude/commands/
+│   └── skills@ → ~/.claude/skills/
 ├── instances/               # Profile-specific data
 │   └── work/
 │       ├── agents@ → shared/agents/
@@ -331,15 +337,23 @@ Commands and skills symlinked from `~/.ccs/shared/` - **no duplication across pr
 │       ├── settings.json    # API keys, credentials
 │       ├── sessions/        # Conversation history
 │       └── ...
+
+~/.claude/                   # User's Claude directory
+├── commands/ccs@ → ~/.ccs/.claude/commands/ccs/  # Selective symlink
+├── skills/ccs-delegation@ → ~/.ccs/.claude/skills/ccs-delegation/
+└── agents/ccs-delegator.md@ → ~/.ccs/.claude/agents/ccs-delegator.md
 ```
+
+**Symlink Chain**: `work profile → ~/.ccs/shared/ → ~/.claude/ → ~/.ccs/.claude/` (CCS items)
 
 | Type | Files |
 |:-----|:------|
-| **Shared** | `commands/`, `skills/`, `agents/` |
+| **CCS items** | `~/.ccs/.claude/` (ships with package, selective symlinks to `~/.claude/`) |
+| **Shared** | `~/.ccs/shared/` (symlinks to `~/.claude/`) |
 | **Profile-specific** | `settings.json`, `sessions/`, `todolists/`, `logs/` |
 
 > [!NOTE]
-> **Windows**: Copies directories if symlinks unavailable (enable Developer Mode for true symlinks)
+> **Windows**: Symlink support requires Developer Mode (v4.2 will add copy fallback)
 
 <br>
 
@@ -704,6 +718,53 @@ cat ~/.ccs/logs/*response-openai.json | jq '.choices[0].message.reasoning_conten
 - **If present**: Transformation issue (check `response-anthropic.json`)
 
 </details>
+
+<br>
+
+## Maintenance
+
+### Health Check
+
+Run diagnostics to verify your CCS installation:
+
+```bash
+ccs doctor
+```
+
+**Checks performed**:
+- ✓ Claude CLI availability
+- ✓ Configuration files (config.json, profiles)
+- ✓ CCS symlinks to ~/.claude/
+- ✓ Delegation system
+- ✓ File permissions
+
+**Output**:
+```
+[?] Checking Claude CLI... [OK]
+[?] Checking ~/.ccs/ directory... [OK]
+[?] Checking config.json... [OK]
+[?] Checking CCS symlinks... [OK]
+...
+Status: Installation healthy
+```
+
+### Update CCS Items
+
+If you modify CCS items or need to re-install symlinks:
+
+```bash
+ccs update
+```
+
+**What it does**:
+- Re-creates selective symlinks from `~/.ccs/.claude/` to `~/.claude/`
+- Backs up existing files before replacing
+- Safe to run multiple times (idempotent)
+
+**When to use**:
+- After manual modifications to ~/.claude/
+- If `ccs doctor` reports symlink issues
+- After upgrading CCS to a new version
 
 <br>
 
