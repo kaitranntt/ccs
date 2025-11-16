@@ -429,11 +429,47 @@ ${enhancedPrompt}`;
     try {
       const childProcess = require('child_process');
 
-      // Find all files, excluding infrastructure (.git, node_modules, .claude)
-      const findCmd = `find . -type f -not -path "./.git/*" -not -path "./node_modules/*" -not -path "./.claude/*" 2>/dev/null`;
-      const result = childProcess.execSync(findCmd, { cwd: dir, encoding: 'utf8', timeout: 10000 });
+      let files = [];
 
-      const files = result.split('\n').filter(f => f.trim());
+      // Try git ls-files first (respects .gitignore automatically)
+      try {
+        const gitCmd = `git ls-files --cached --others --exclude-standard 2>/dev/null`;
+        const gitResult = childProcess.execSync(gitCmd, { cwd: dir, encoding: 'utf8', timeout: 10000 });
+        files = gitResult.split('\n').filter(f => f.trim());
+
+        if (process.env.CCS_DEBUG) {
+          console.error(`[i] Using git ls-files for snapshot (${files.length} files)`);
+        }
+      } catch (gitError) {
+        // Not a git repo or git not available, use comprehensive find exclusions
+        if (process.env.CCS_DEBUG) {
+          console.error(`[i] Git not available, using find with exclusions`);
+        }
+
+        const excludes = [
+          '.git', 'node_modules', '.claude',
+          // Build outputs
+          'dist', 'build', 'out', '.next', '.nuxt', '.cache', 'target',
+          // Dependencies
+          'vendor', 'bower_components', '.pnp', '.yarn',
+          // IDE and OS
+          '.vscode', '.idea', '.DS_Store', 'Thumbs.db',
+          // Test coverage
+          'coverage', '.nyc_output', '.pytest_cache', '__pycache__',
+          // Logs
+          'logs',
+          // Temp files
+          '.tmp', 'tmp'
+        ];
+
+        const excludeArgs = excludes.map(pattern =>
+          `-not -path "./${pattern}/*" -not -path "./${pattern}"`
+        ).join(' ');
+
+        const findCmd = `find . -type f ${excludeArgs} 2>/dev/null`;
+        const findResult = childProcess.execSync(findCmd, { cwd: dir, encoding: 'utf8', timeout: 10000 });
+        files = findResult.split('\n').filter(f => f.trim());
+      }
 
       for (const file of files) {
         const fullPath = path.join(dir, file);
