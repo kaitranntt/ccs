@@ -324,43 +324,43 @@ class HeadlessExecutor {
   /**
    * Determine max turns based on task complexity
    * @param {string} prompt - Task prompt
-   * @returns {number} Max turns (5, 10, or 20)
+   * @returns {number} Max turns (10, 20, or 30)
    * @private
    */
   static _determineMaxTurns(prompt) {
     const promptLower = prompt.toLowerCase();
 
-    // Simple task indicators (5 turns)
+    // Simple task indicators (10 turns)
     const simpleKeywords = [
       'typo', 'fix typo', 'comment', 'rename', 'format',
       'add comment', 'remove comment', 'spacing', 'indentation',
       'whitespace', 'semicolon', 'comma', 'quote'
     ];
 
-    // Complex task indicators (20 turns)
+    // Complex task indicators (30 turns)
     const complexKeywords = [
       'implement', 'design', 'architect', 'refactor', 'migrate',
       'analyze', 'optimize', 'integrate', 'feature', 'system',
       'framework', 'codebase', 'infrastructure', 'deployment',
-      'security', 'performance', 'scalability'
+      'security', 'performance', 'scalability', 'create', 'build'
     ];
 
     // Check for simple indicators first
     for (const keyword of simpleKeywords) {
       if (promptLower.includes(keyword)) {
-        return 5; // Simple: 5 turns
+        return 10; // Simple: 10 turns
       }
     }
 
     // Check for complex indicators
     for (const keyword of complexKeywords) {
       if (promptLower.includes(keyword)) {
-        return 20; // Complex: 20 turns
+        return 30; // Complex: 30 turns
       }
     }
 
-    // Default to medium (10 turns)
-    return 10;
+    // Default to medium (20 turns)
+    return 20;
   }
 
   /**

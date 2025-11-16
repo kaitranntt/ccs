@@ -215,7 +215,9 @@ class ResultFormatter {
 
     // Add JSON-specific fields if available
     if (sessionId) {
-      lines.push(`Session ID: ${sessionId}`);
+      // Abbreviate session ID (Git-style first 8 chars) to prevent wrapping
+      const shortId = sessionId.length > 8 ? sessionId.substring(0, 8) : sessionId;
+      lines.push(`Session ID: ${shortId}`);
     }
     if (totalCost !== undefined && totalCost !== null) {
       lines.push(`Cost: $${totalCost.toFixed(4)}`);
@@ -401,12 +403,16 @@ class ResultFormatter {
     // Suggestions
     output += '\n';
     output += 'Suggestions:\n';
-    output += `  - Increase max turns: ccs ${profile} -p "task" --max-turns 20\n`;
+    // Suggest double the current max turns, or 50 if already high
+    const suggestedMaxTurns = numTurns < 30 ? numTurns * 2 : 50;
+    output += `  - Increase max turns: ccs ${profile} -p "task" --max-turns ${suggestedMaxTurns}\n`;
     output += `  - Continue session: ccs ${profile}:continue -p "finish the task"\n`;
     output += '  - Run task manually in main Claude session\n';
 
     output += '\n';
-    output += `[i] Session persisted with ID: ${sessionId}\n`;
+    // Abbreviate session ID (Git-style first 8 chars)
+    const shortId = sessionId && sessionId.length > 8 ? sessionId.substring(0, 8) : sessionId;
+    output += `[i] Session persisted with ID: ${shortId}\n`;
     output += `[i] Cost: $${totalCost.toFixed(4)}\n`;
 
     return output;
