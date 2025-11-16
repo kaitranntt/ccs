@@ -181,9 +181,12 @@ class HeadlessExecutor {
             result.numTurns = jsonData.num_turns || 0;
             result.isError = jsonData.is_error || false;
             result.content = jsonData.result || '';
-            result.durationType = jsonData.type || null;
-            result.durationSubtype = jsonData.subtype || null;
+            result.type = jsonData.type || null;
+            result.subtype = jsonData.subtype || null;
             result.durationApi = jsonData.duration_api_ms || 0;
+            result.permissionDenials = jsonData.permission_denials || [];
+            result.errors = jsonData.errors || [];
+            result.modelUsage = jsonData.modelUsage || null;
           } catch (parseError) {
             // Fallback to text mode on parse error
             result.jsonParseError = parseError.message;

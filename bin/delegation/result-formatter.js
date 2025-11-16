@@ -25,13 +25,18 @@ class ResultFormatter {
    * @returns {string} Formatted result
    */
   static format(result) {
-    const { profile, cwd, exitCode, stdout, stderr, duration, success, content, sessionId, totalCost, numTurns } = result;
+    const { profile, cwd, exitCode, stdout, stderr, duration, success, content, sessionId, totalCost, numTurns, subtype, permissionDenials, errors, json } = result;
+
+    // Handle special JSON subtypes
+    if (subtype === 'error_max_turns') {
+      return this._formatMaxTurnsError(result);
+    }
 
     // Use content field for output (JSON result or fallback stdout)
     const displayOutput = content || stdout;
 
     // Parse file changes from output
-    const { created, modified } = this.extractFileChanges(displayOutput);
+    const { created, modified } = this.extractFileChanges(displayOutput, cwd);
 
     // Build formatted output
     let output = '';
@@ -45,6 +50,18 @@ class ResultFormatter {
     // Task output
     output += '\n';
     output += this._formatOutput(displayOutput);
+
+    // Permission denials if present
+    if (permissionDenials && permissionDenials.length > 0) {
+      output += '\n';
+      output += this._formatPermissionDenials(permissionDenials);
+    }
+
+    // Errors if present
+    if (errors && errors.length > 0) {
+      output += '\n';
+      output += this._formatErrors(errors);
+    }
 
     // Stderr if present
     if (stderr && stderr.trim()) {
@@ -73,9 +90,10 @@ class ResultFormatter {
   /**
    * Extract file changes from output
    * @param {string} output - Command output
+   * @param {string} cwd - Working directory for filesystem scanning fallback
    * @returns {Object} { created: Array<string>, modified: Array<string> }
    */
-  static extractFileChanges(output) {
+  static extractFileChanges(output, cwd) {
     const created = [];
     const modified = [];
 
@@ -85,7 +103,9 @@ class ResultFormatter {
       /create:\s*([^\n\r]+)/gi,
       /wrote:\s*([^\n\r]+)/gi,
       /write:\s*([^\n\r]+)/gi,
-      /new file:\s*([^\n\r]+)/gi
+      /new file:\s*([^\n\r]+)/gi,
+      /generated:\s*([^\n\r]+)/gi,
+      /added:\s*([^\n\r]+)/gi
     ];
 
     const modifiedPatterns = [
@@ -116,6 +136,31 @@ class ResultFormatter {
         // Don't include if already in created list
         if (filePath && !modified.includes(filePath) && !created.includes(filePath)) {
           modified.push(filePath);
+        }
+      }
+    }
+
+    // Fallback: Scan filesystem for recently modified files (last 5 minutes)
+    if (created.length === 0 && modified.length === 0 && cwd) {
+      try {
+        const fs = require('fs');
+        const childProcess = require('child_process');
+
+        // Use find command to get recently modified files
+        const findCmd = `find . -type f -mmin -5 -not -path "./.git/*" -not -path "./node_modules/*" 2>/dev/null | head -20`;
+        const result = childProcess.execSync(findCmd, { cwd, encoding: 'utf8', timeout: 5000 });
+
+        const files = result.split('\n').filter(f => f.trim());
+        files.forEach(file => {
+          const fullPath = path.join(cwd, file);
+          if (!modified.includes(fullPath)) {
+            modified.push(fullPath);
+          }
+        });
+      } catch (scanError) {
+        // Silently fail if filesystem scan doesn't work
+        if (process.env.CCS_DEBUG) {
+          console.error(`[!] Filesystem scan failed: ${scanError.message}`);
         }
       }
     }
@@ -320,6 +365,88 @@ class ResultFormatter {
    */
   static _shouldDisableColors() {
     return process.env.NO_COLOR !== undefined;
+  }
+
+  /**
+   * Format max turns error (special handling for error_max_turns subtype)
+   * @param {Object} result - Execution result
+   * @returns {string} Formatted max turns error
+   * @private
+   */
+  static _formatMaxTurnsError(result) {
+    const { profile, cwd, duration, sessionId, totalCost, numTurns, permissionDenials } = result;
+
+    let output = '';
+
+    // Header
+    output += this._formatHeader(profile, false);
+
+    // Info box
+    output += this._formatInfoBox(cwd, profile, duration, 0, 0, 0, sessionId, totalCost, numTurns);
+
+    // Max turns message
+    output += '\n';
+    output += `[!] Max turns reached (${numTurns}/${numTurns})\n\n`;
+    output += 'The delegated session reached its turn limit before completing the task.\n';
+
+    // Permission denials if present
+    if (permissionDenials && permissionDenials.length > 0) {
+      output += '\n';
+      output += this._formatPermissionDenials(permissionDenials);
+      output += '\n';
+      output += 'The task likely requires permissions that were denied.\n';
+      output += 'Consider running with --permission-mode bypassPermissions or execute manually.\n';
+    }
+
+    // Suggestions
+    output += '\n';
+    output += 'Suggestions:\n';
+    output += `  - Increase max turns: ccs ${profile} -p "task" --max-turns 20\n`;
+    output += `  - Continue session: ccs ${profile}:continue -p "finish the task"\n`;
+    output += '  - Run task manually in main Claude session\n';
+
+    output += '\n';
+    output += `[i] Session persisted with ID: ${sessionId}\n`;
+    output += `[i] Cost: $${totalCost.toFixed(4)}\n`;
+
+    return output;
+  }
+
+  /**
+   * Format permission denials
+   * @param {Array<Object>} denials - Permission denial objects
+   * @returns {string} Formatted permission denials
+   * @private
+   */
+  static _formatPermissionDenials(denials) {
+    let output = '[!] Permission Denials:\n';
+
+    for (const denial of denials) {
+      const tool = denial.tool_name || 'Unknown';
+      const input = denial.tool_input || {};
+      const command = input.command || input.description || JSON.stringify(input);
+
+      output += `  - ${tool}: ${command}\n`;
+    }
+
+    return output;
+  }
+
+  /**
+   * Format errors array
+   * @param {Array<Object>} errors - Error objects
+   * @returns {string} Formatted errors
+   * @private
+   */
+  static _formatErrors(errors) {
+    let output = '[X] Errors:\n';
+
+    for (const error of errors) {
+      const message = error.message || error.error || JSON.stringify(error);
+      output += `  - ${message}\n`;
+    }
+
+    return output;
   }
 }
 
