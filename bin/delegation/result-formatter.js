@@ -25,7 +25,7 @@ class ResultFormatter {
    * @returns {string} Formatted result
    */
   static format(result) {
-    const { profile, cwd, exitCode, stdout, stderr, duration, success, content, sessionId, totalCost, numTurns, subtype, permissionDenials, errors, json, timedOut, filesCreated, filesModified, filesDeleted } = result;
+    const { profile, cwd, exitCode, stdout, stderr, duration, success, content, sessionId, totalCost, numTurns, subtype, permissionDenials, errors, json, timedOut } = result;
 
     // Handle timeout (graceful termination)
     if (timedOut) {
@@ -40,27 +40,14 @@ class ResultFormatter {
     // Use content field for output (JSON result or fallback stdout)
     const displayOutput = content || stdout;
 
-    // Use snapshot-based file changes if available, otherwise fallback to parsing output
-    let created, modified;
-    if (filesCreated !== undefined && filesModified !== undefined) {
-      // Professional snapshot-based detection
-      created = filesCreated;
-      modified = filesModified;
-    } else {
-      // Fallback to legacy output parsing (for backwards compatibility)
-      const changes = this.extractFileChanges(displayOutput, cwd);
-      created = changes.created;
-      modified = changes.modified;
-    }
-
     // Build formatted output
     let output = '';
 
     // Header
     output += this._formatHeader(profile, success);
 
-    // Info box
-    output += this._formatInfoBox(cwd, profile, duration, exitCode, created.length, modified.length, sessionId, totalCost, numTurns);
+    // Info box (file detection handled by delegated session itself)
+    output += this._formatInfoBox(cwd, profile, duration, exitCode, sessionId, totalCost, numTurns);
 
     // Task output
     output += '\n';
@@ -82,17 +69,6 @@ class ResultFormatter {
     if (stderr && stderr.trim()) {
       output += '\n';
       output += this._formatStderr(stderr);
-    }
-
-    // File lists
-    if (created.length > 0) {
-      output += '\n';
-      output += this._formatFileList('Created', created);
-    }
-
-    if (modified.length > 0) {
-      output += '\n';
-      output += this._formatFileList('Modified', modified);
     }
 
     // Footer
@@ -238,15 +214,13 @@ class ResultFormatter {
    * @param {string} profile - Profile name
    * @param {number} duration - Duration in ms
    * @param {number} exitCode - Exit code
-   * @param {number} createdCount - Number of created files
-   * @param {number} modifiedCount - Number of modified files
    * @param {string} sessionId - Session ID (from JSON)
    * @param {number} totalCost - Total cost USD (from JSON)
    * @param {number} numTurns - Number of turns (from JSON)
    * @returns {string} Formatted info box
    * @private
    */
-  static _formatInfoBox(cwd, profile, duration, exitCode, createdCount, modifiedCount, sessionId, totalCost, numTurns) {
+  static _formatInfoBox(cwd, profile, duration, exitCode, sessionId, totalCost, numTurns) {
     const modelName = this._getModelDisplayName(profile);
     const durationSec = (duration / 1000).toFixed(1);
 
@@ -259,9 +233,7 @@ class ResultFormatter {
       `Working Directory: ${this._truncate(cwd, boxWidth - 22)}`,
       `Model: ${modelName}`,
       `Duration: ${durationSec}s`,
-      `Exit Code: ${exitCode}`,
-      `Files Created: ${createdCount}`,
-      `Files Modified: ${modifiedCount}`
+      `Exit Code: ${exitCode}`
     ];
 
     // Add JSON-specific fields if available
@@ -435,7 +407,7 @@ class ResultFormatter {
     output += this._formatHeader(profile, false);
 
     // Info box
-    output += this._formatInfoBox(cwd, profile, duration, 0, 0, 0, sessionId, totalCost, numTurns);
+    output += this._formatInfoBox(cwd, profile, duration, 0, sessionId, totalCost, numTurns);
 
     // Timeout message
     output += '\n';

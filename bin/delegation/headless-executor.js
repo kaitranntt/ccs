@@ -135,9 +135,6 @@ ${enhancedPrompt}`;
       // This prevents messy output when run through Claude Code's Bash tool
       const showProgress = process.stderr.isTTY && !process.env.CCS_QUIET;
 
-      // Take filesystem snapshot BEFORE execution
-      const beforeSnapshot = this._takeFilesystemSnapshot(cwd);
-
       // Show initial progress message
       if (showProgress) {
         const modelName = profile === 'glm' ? 'GLM-4.6' : profile === 'kimi' ? 'Kimi' : profile.toUpperCase();
@@ -203,12 +200,6 @@ ${enhancedPrompt}`;
           console.error(''); // Blank line before formatted output
         }
 
-        // Take filesystem snapshot AFTER execution
-        const afterSnapshot = this._takeFilesystemSnapshot(cwd);
-
-        // Compare snapshots to detect file changes
-        const fileChanges = this._compareSnapshots(beforeSnapshot, afterSnapshot);
-
         const result = {
           exitCode,
           stdout,
@@ -217,10 +208,7 @@ ${enhancedPrompt}`;
           profile,
           duration,
           timedOut,
-          success: exitCode === 0 && !timedOut,
-          filesCreated: fileChanges.created,
-          filesModified: fileChanges.modified,
-          filesDeleted: fileChanges.deleted
+          success: exitCode === 0 && !timedOut
         };
 
         // Parse JSON output if format is JSON
@@ -415,118 +403,6 @@ ${enhancedPrompt}`;
    */
   static _sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Take filesystem snapshot (file paths with mtimes)
-   * @param {string} dir - Directory to snapshot
-   * @returns {Map<string, object>} Map of file paths to metadata
-   * @private
-   */
-  static _takeFilesystemSnapshot(dir) {
-    const snapshot = new Map();
-
-    try {
-      const childProcess = require('child_process');
-
-      let files = [];
-
-      // Try git ls-files first (respects .gitignore automatically)
-      try {
-        const gitCmd = `git ls-files --cached --others --exclude-standard 2>/dev/null`;
-        const gitResult = childProcess.execSync(gitCmd, { cwd: dir, encoding: 'utf8', timeout: 10000 });
-        files = gitResult.split('\n').filter(f => f.trim());
-
-        if (process.env.CCS_DEBUG) {
-          console.error(`[i] Using git ls-files for snapshot (${files.length} files)`);
-        }
-      } catch (gitError) {
-        // Not a git repo or git not available, use comprehensive find exclusions
-        if (process.env.CCS_DEBUG) {
-          console.error(`[i] Git not available, using find with exclusions`);
-        }
-
-        const excludes = [
-          '.git', 'node_modules', '.claude',
-          // Build outputs
-          'dist', 'build', 'out', '.next', '.nuxt', '.cache', 'target',
-          // Dependencies
-          'vendor', 'bower_components', '.pnp', '.yarn',
-          // IDE and OS
-          '.vscode', '.idea', '.DS_Store', 'Thumbs.db',
-          // Test coverage
-          'coverage', '.nyc_output', '.pytest_cache', '__pycache__',
-          // Logs
-          'logs',
-          // Temp files
-          '.tmp', 'tmp'
-        ];
-
-        const excludeArgs = excludes.map(pattern =>
-          `-not -path "./${pattern}/*" -not -path "./${pattern}"`
-        ).join(' ');
-
-        const findCmd = `find . -type f ${excludeArgs} 2>/dev/null`;
-        const findResult = childProcess.execSync(findCmd, { cwd: dir, encoding: 'utf8', timeout: 10000 });
-        files = findResult.split('\n').filter(f => f.trim());
-      }
-
-      for (const file of files) {
-        const fullPath = path.join(dir, file);
-        try {
-          const stats = fs.statSync(fullPath);
-          snapshot.set(file, {
-            mtime: stats.mtimeMs,
-            size: stats.size
-          });
-        } catch (statError) {
-          // Skip files that can't be stat'd
-        }
-      }
-    } catch (error) {
-      // If snapshot fails, return empty map (fallback to old behavior)
-      if (process.env.CCS_DEBUG) {
-        console.error(`[!] Snapshot failed: ${error.message}`);
-      }
-    }
-
-    return snapshot;
-  }
-
-  /**
-   * Compare filesystem snapshots to detect changes
-   * @param {Map} before - Snapshot before execution
-   * @param {Map} after - Snapshot after execution
-   * @returns {object} File changes: { created: [], modified: [], deleted: [] }
-   * @private
-   */
-  static _compareSnapshots(before, after) {
-    const created = [];
-    const modified = [];
-    const deleted = [];
-
-    // Find created and modified files
-    for (const [filePath, afterMeta] of after.entries()) {
-      if (!before.has(filePath)) {
-        // File exists in after but not before = created
-        created.push(filePath);
-      } else {
-        // File exists in both, check if modified
-        const beforeMeta = before.get(filePath);
-        if (afterMeta.mtime !== beforeMeta.mtime || afterMeta.size !== beforeMeta.size) {
-          modified.push(filePath);
-        }
-      }
-    }
-
-    // Find deleted files
-    for (const filePath of before.keys()) {
-      if (!after.has(filePath)) {
-        deleted.push(filePath);
-      }
-    }
-
-    return { created, modified, deleted };
   }
 
   /**
