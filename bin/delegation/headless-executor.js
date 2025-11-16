@@ -150,6 +150,36 @@ class HeadlessExecutor {
       const messages = []; // Accumulate stream-json messages
       let partialLine = ''; // Buffer for incomplete JSON lines
 
+      // Handle parent process termination (Ctrl+C or Esc in Claude)
+      // When main Claude session is killed, cleanup spawned child process
+      const cleanupHandler = () => {
+        if (!proc.killed) {
+          if (process.env.CCS_DEBUG) {
+            console.error('[!] Parent process terminating, killing delegated session...');
+          }
+          proc.kill('SIGTERM');
+          // Force kill if not dead after 2s
+          setTimeout(() => {
+            if (!proc.killed) {
+              proc.kill('SIGKILL');
+            }
+          }, 2000);
+        }
+      };
+
+      // Register signal handlers for parent process termination
+      process.once('SIGINT', cleanupHandler);
+      process.once('SIGTERM', cleanupHandler);
+
+      // Cleanup signal handlers when child process exits
+      const removeSignalHandlers = () => {
+        process.removeListener('SIGINT', cleanupHandler);
+        process.removeListener('SIGTERM', cleanupHandler);
+      };
+
+      proc.on('close', removeSignalHandlers);
+      proc.on('error', removeSignalHandlers);
+
       // Progress indicator (show elapsed time every 5 seconds)
       if (showProgress) {
         progressInterval = setInterval(() => {
