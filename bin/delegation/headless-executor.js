@@ -30,7 +30,7 @@ class HeadlessExecutor {
     const {
       cwd = process.cwd(),
       timeout = 600000, // 10 minutes default
-      outputFormat = 'json',
+      outputFormat = 'stream-json', // Use stream-json for real-time progress
       permissionMode = 'acceptEdits',
       resumeSession = false,
       sessionId = null
@@ -64,10 +64,8 @@ ${enhancedPrompt}`;
     // Prepare arguments
     const args = ['-p', safePrompt, '--settings', settingsPath];
 
-    // Add JSON output format if requested
-    if (outputFormat === 'json') {
-      args.push('--output-format', 'json');
-    }
+    // Always use stream-json for real-time progress visibility
+    args.push('--output-format', 'stream-json');
 
     // Add permission mode
     if (permissionMode && permissionMode !== 'default') {
@@ -150,6 +148,8 @@ ${enhancedPrompt}`;
       let stdout = '';
       let stderr = '';
       let progressInterval;
+      const messages = []; // Accumulate stream-json messages
+      let partialLine = ''; // Buffer for incomplete JSON lines
 
       // Progress indicator (show elapsed time every 5 seconds)
       if (showProgress) {
@@ -159,9 +159,37 @@ ${enhancedPrompt}`;
         }, 5000);
       }
 
-      // Capture stdout (JSON output)
+      // Capture stdout (stream-json format - jsonl)
       proc.stdout.on('data', (data) => {
         stdout += data.toString();
+
+        // Parse stream-json messages (jsonl format - one JSON per line)
+        const chunk = partialLine + data.toString();
+        const lines = chunk.split('\n');
+        partialLine = lines.pop() || ''; // Save incomplete line for next chunk
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          try {
+            const msg = JSON.parse(line);
+            messages.push(msg);
+
+            // Show real-time tool use if in TTY
+            if (showProgress && msg.type === 'assistant') {
+              const toolUses = msg.message?.content?.filter(c => c.type === 'tool_use') || [];
+              for (const tool of toolUses) {
+                process.stderr.write('\r\x1b[K'); // Clear line
+                process.stderr.write(`[Tool Use: ${tool.name}]\n`);
+              }
+            }
+          } catch (parseError) {
+            // Skip malformed JSON lines (shouldn't happen with stream-json)
+            if (process.env.CCS_DEBUG) {
+              console.error(`[!] Failed to parse stream-json line: ${parseError.message}`);
+            }
+          }
+        }
       });
 
       // Stream stderr in real-time (progress messages from Claude CLI)
@@ -208,45 +236,36 @@ ${enhancedPrompt}`;
           profile,
           duration,
           timedOut,
-          success: exitCode === 0 && !timedOut
+          success: exitCode === 0 && !timedOut,
+          messages // Include all stream-json messages
         };
 
-        // Parse JSON output if format is JSON
-        if (outputFormat === 'json' && stdout.trim()) {
-          try {
-            const jsonData = JSON.parse(stdout);
+        // Extract metadata from final 'result' message in stream-json
+        const resultMessage = messages.find(m => m.type === 'result');
+        if (resultMessage) {
+          // Add parsed fields from result message
+          result.sessionId = resultMessage.session_id || null;
+          result.totalCost = resultMessage.total_cost_usd || 0;
+          result.numTurns = resultMessage.num_turns || 0;
+          result.isError = resultMessage.is_error || false;
+          result.type = resultMessage.type || null;
+          result.subtype = resultMessage.subtype || null;
+          result.durationApi = resultMessage.duration_api_ms || 0;
+          result.permissionDenials = resultMessage.permission_denials || [];
+          result.errors = resultMessage.errors || [];
 
-            // Add parsed JSON fields
-            result.json = jsonData;
-            result.sessionId = jsonData.session_id || null;
-            result.totalCost = jsonData.total_cost_usd || 0;
-            result.numTurns = jsonData.num_turns || 0;
-            result.isError = jsonData.is_error || false;
-            result.content = jsonData.result || '';
-            result.type = jsonData.type || null;
-            result.subtype = jsonData.subtype || null;
-            result.durationApi = jsonData.duration_api_ms || 0;
-            result.permissionDenials = jsonData.permission_denials || [];
-            result.errors = jsonData.errors || [];
-            result.modelUsage = jsonData.modelUsage || null;
-          } catch (parseError) {
-            // Fallback to text mode on parse error
-            result.jsonParseError = parseError.message;
-            result.content = stdout;
-
-            // Log parse error in debug mode
-            if (process.env.CCS_DEBUG) {
-              console.error(`[!] JSON parse failed: ${parseError.message}`);
-              console.error(`[!] Raw stdout: ${stdout.substring(0, 200)}...`);
-            }
-          }
+          // Extract content from result message
+          result.content = resultMessage.result || '';
         } else {
-          // Text mode
+          // Fallback: no result message found (shouldn't happen)
           result.content = stdout;
+          if (process.env.CCS_DEBUG) {
+            console.error(`[!] No result message found in stream-json output`);
+          }
         }
 
         // Store or update session if we have session ID (even on timeout, for :continue support)
-        if (result.sessionId && outputFormat === 'json') {
+        if (result.sessionId) {
           if (resumeSession || sessionId) {
             // Update existing session
             sessionMgr.updateSession(profile, result.sessionId, {
