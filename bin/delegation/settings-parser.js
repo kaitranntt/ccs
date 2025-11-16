@@ -9,6 +9,25 @@ const path = require('path');
  */
 class SettingsParser {
   /**
+   * Parse default permission mode from project settings
+   * @param {string} projectDir - Project directory (usually cwd)
+   * @returns {string} Default permission mode (e.g., 'acceptEdits', 'bypassPermissions', 'plan', 'default')
+   */
+  static parseDefaultPermissionMode(projectDir) {
+    const settings = this._loadSettings(projectDir);
+    const permissions = settings.permissions || {};
+
+    // Priority: local > shared > fallback to 'acceptEdits'
+    const defaultMode = permissions.defaultMode || 'acceptEdits';
+
+    if (process.env.CCS_DEBUG) {
+      console.error(`[i] Permission mode from settings: ${defaultMode}`);
+    }
+
+    return defaultMode;
+  }
+
+  /**
    * Parse project settings for tool restrictions
    * @param {string} projectDir - Project directory (usually cwd)
    * @returns {Object} { allowedTools: string[], disallowedTools: string[] }
@@ -47,7 +66,7 @@ class SettingsParser {
     // Load local settings (overrides shared)
     const local = this._readJsonSafe(localPath) || {};
 
-    // Merge permissions arrays (local + shared, local has priority)
+    // Merge permissions (local overrides shared)
     return {
       permissions: {
         allow: [
@@ -57,7 +76,9 @@ class SettingsParser {
         deny: [
           ...(shared.permissions?.deny || []),
           ...(local.permissions?.deny || [])
-        ]
+        ],
+        // Local defaultMode takes priority over shared
+        defaultMode: local.permissions?.defaultMode || shared.permissions?.defaultMode || null
       }
     };
   }

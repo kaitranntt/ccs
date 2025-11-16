@@ -5,6 +5,7 @@ const { HeadlessExecutor } = require('./headless-executor');
 const { SessionManager } = require('./session-manager');
 const { ResultFormatter } = require('./result-formatter');
 const { DelegationValidator } = require('../utils/delegation-validator');
+const { SettingsParser } = require('./settings-parser');
 
 /**
  * Delegation command handler
@@ -156,10 +157,16 @@ class DelegationHandler {
    * @returns {Object} Options for HeadlessExecutor
    */
   _extractOptions(args) {
+    const cwd = process.cwd();
+
+    // Read default permission mode from .claude/settings.local.json
+    // Falls back to 'acceptEdits' if file doesn't exist
+    const defaultPermissionMode = SettingsParser.parseDefaultPermissionMode(cwd);
+
     const options = {
-      cwd: process.cwd(),
+      cwd,
       outputFormat: 'json',
-      permissionMode: 'acceptEdits'
+      permissionMode: defaultPermissionMode
     };
 
     // Parse max-turns
@@ -168,7 +175,7 @@ class DelegationHandler {
       options.maxTurns = parseInt(args[maxTurnsIndex + 1], 10);
     }
 
-    // Parse permission-mode
+    // Parse permission-mode (CLI flag overrides settings file)
     const permModeIndex = args.indexOf('--permission-mode');
     if (permModeIndex !== -1 && permModeIndex < args.length - 1) {
       options.permissionMode = args[permModeIndex + 1];
