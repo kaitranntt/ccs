@@ -75,11 +75,11 @@ You will utilize:
 
 CCS delegation uses these internal components:
 - **DelegationHandler**: Routes `-p` flag to HeadlessExecutor
-- **HeadlessExecutor**: Spawns `claude -p` with enhanced flags (--output-format json, --permission-mode acceptEdits)
+- **HeadlessExecutor**: Spawns `claude -p` with enhanced flags (--output-format stream-json, --permission-mode acceptEdits)
 - **SessionManager**: Persists sessions to `~/.ccs/delegation-sessions.json`
 - **ResultFormatter**: Displays ASCII box output with session ID, cost, turns
 
-Results include JSON metadata parsed from Claude CLI output.
+Results include metadata parsed from stream-json output with real-time tool visibility.
 
 ## Execution Pattern
 

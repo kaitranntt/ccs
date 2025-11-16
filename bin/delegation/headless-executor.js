@@ -20,7 +20,7 @@ class HeadlessExecutor {
    * @param {Object} options - Execution options
    * @param {string} options.cwd - Working directory (absolute path)
    * @param {number} options.timeout - Timeout in milliseconds (default: 600000 = 10 minutes)
-   * @param {string} options.outputFormat - Output format: 'json' or 'text' (default: 'json')
+   * @param {string} options.outputFormat - Output format: 'stream-json' or 'text' (default: 'stream-json')
    * @param {string} options.permissionMode - Permission mode: 'default', 'plan', 'acceptEdits', 'bypassPermissions' (default: 'acceptEdits')
    * @param {boolean} options.resumeSession - Resume last session for profile (default: false)
    * @param {string} options.sessionId - Specific session ID to resume

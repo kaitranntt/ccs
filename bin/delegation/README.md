@@ -15,11 +15,12 @@ Enhanced Claude Code delegation system for multi-model task delegation.
 ## Features
 
 ### Enhanced Headless Execution
-- JSON output parsing (`--output-format json`)
+- Stream-JSON output parsing (`--output-format stream-json`)
+- Real-time tool use visibility in TTY
 - Permission mode acceptEdits (`--permission-mode acceptEdits`)
 - Tool restrictions from `.claude/settings.local.json`
 - Multi-turn session management (`--resume <session-id>`)
-- Auto max-turns determination (5/10/20 based on complexity)
+- Time-based limits (10 min default timeout with graceful termination)
 - Cost tracking and aggregation
 
 ### Session Management
@@ -41,8 +42,9 @@ const { HeadlessExecutor } = require('./headless-executor');
 
 const result = await HeadlessExecutor.execute('glm', 'Refactor auth.js', {
   cwd: '/path/to/project',
-  outputFormat: 'json',
-  permissionMode: 'acceptEdits'
+  outputFormat: 'stream-json',
+  permissionMode: 'acceptEdits',
+  timeout: 600000  // 10 minutes
 });
 
 console.log(result.sessionId);  // For multi-turn
@@ -100,9 +102,8 @@ Each command directly invokes:
 ```bash
 claude -p "$ARGUMENTS" \
   --settings ~/.ccs/{profile}.settings.json \
-  --output-format json \
-  --permission-mode acceptEdits \
-  --max-turns N
+  --output-format stream-json \
+  --permission-mode acceptEdits
 ```
 
 ## Debug Mode

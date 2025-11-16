@@ -165,7 +165,7 @@ class DelegationHandler {
 
     const options = {
       cwd,
-      outputFormat: 'json',
+      outputFormat: 'stream-json',
       permissionMode: defaultPermissionMode
     };
 
