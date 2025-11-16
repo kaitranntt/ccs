@@ -136,8 +136,12 @@ class HeadlessExecutor {
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
 
+      // Only show progress if in a TTY (terminal) and not in quiet mode
+      // This prevents messy output when run through Claude Code's Bash tool
+      const showProgress = process.stderr.isTTY && !process.env.CCS_QUIET;
+
       // Show initial progress message
-      if (!process.env.CCS_QUIET) {
+      if (showProgress) {
         const modelName = profile === 'glm' ? 'GLM-4.6' : profile === 'kimi' ? 'Kimi' : profile.toUpperCase();
         console.error(`[i] Delegating to ${modelName}...`);
       }
@@ -153,7 +157,7 @@ class HeadlessExecutor {
       let progressInterval;
 
       // Progress indicator (show elapsed time every 5 seconds)
-      if (!process.env.CCS_QUIET) {
+      if (showProgress) {
         progressInterval = setInterval(() => {
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
           process.stderr.write(`[i] Still running... ${elapsed}s elapsed\r`);
@@ -170,8 +174,8 @@ class HeadlessExecutor {
         const stderrText = data.toString();
         stderr += stderrText;
 
-        // Show stderr in real-time unless quiet mode
-        if (!process.env.CCS_QUIET) {
+        // Show stderr in real-time if in TTY
+        if (showProgress) {
           // Clear progress line before showing stderr
           if (progressInterval) {
             process.stderr.write('\r\x1b[K'); // Clear line
@@ -191,7 +195,7 @@ class HeadlessExecutor {
         }
 
         // Show completion message
-        if (!process.env.CCS_QUIET) {
+        if (showProgress) {
           const durationSec = (duration / 1000).toFixed(1);
           console.error(`[i] Execution completed in ${durationSec}s`);
           console.error(''); // Blank line before formatted output
