@@ -58,8 +58,13 @@ class HeadlessExecutor {
       throw new Error(`Settings file not found: ${settingsPath}\nProfile "${profile}" may not be configured.`);
     }
 
+    // Wrap prompt with safety instructions to prevent modifying infrastructure
+    const safePrompt = `IMPORTANT: Do not modify any files in the .claude/ directory. This directory contains Claude Code infrastructure and should never be touched by delegated tasks.
+
+${enhancedPrompt}`;
+
     // Prepare arguments
-    const args = ['-p', enhancedPrompt, '--settings', settingsPath];
+    const args = ['-p', safePrompt, '--settings', settingsPath];
 
     // Add JSON output format if requested
     if (outputFormat === 'json') {

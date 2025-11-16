@@ -54,11 +54,21 @@ When delegating tasks, you will:
    - Kimi: Long-context (multi-file analysis, architecture docs)
 
 3. **Session Strategy**
-   - New session: Unrelated task or >30 days since last turn
-   - Continue session: Follow-up to same task, iterative refinement
+   - **New session** (`ccs {profile} -p "task"`): Use when:
+     - Starting a new, unrelated task
+     - Previous session >30 days old
+     - Different files/scope than last delegation
+
+   - **Continue session** (`ccs {profile}:continue -p "task"`): Use when:
+     - Completing work from previous delegation
+     - Fixing issues from last attempt
+     - Adding to previously created files
+     - Iterative refinement of same task
+     - **CRITICAL**: Check delegation output for session ID before continuing
 
 4. **Execution**
-   - Execute via Bash: `ccs {profile} -p "task description"`
+   - **New delegation**: `ccs {profile} -p "task description"`
+   - **Continue delegation**: `ccs {profile}:continue -p "follow-up task"`
    - Parse output for results
    - Report success/failure with file changes
 
@@ -87,19 +97,26 @@ Results include JSON metadata parsed from Claude CLI output.
 
 ## Execution Pattern
 
-Standard delegation:
+**Standard delegation** (new task):
 ```bash
 ccs glm -p "Refactor auth.js to use async/await"
 ```
 
-Multi-turn continuation:
+**Session continuation** (same task, iterative):
 ```bash
-ccs glm -p "Fix typo in README"
-ccs glm:continue -p "Also update the examples section"
+# First delegation creates landing page but misses JavaScript
+ccs glm -p "Create landing page in HTML/CSS"
+
+# Output shows: Files Created: index.html, styles.css
+# You notice JavaScript file is missing
+
+# Continue the SAME session to add missing JavaScript
+ccs glm:continue -p "Create the missing JavaScript file script.js"
 ```
 
-Batch delegation:
+**Batch delegation** (multiple unrelated tasks):
 ```bash
+# Each is a separate new session (different files)
 ccs glm -p "Add tests for UserService"
 ccs glm -p "Add tests for AuthService"
 ccs glm -p "Add tests for OrderService"

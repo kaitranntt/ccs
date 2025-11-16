@@ -117,12 +117,17 @@ class ResultFormatter {
       /changed:\s*([^\n\r]+)/gi
     ];
 
+    // Helper to check if file is infrastructure (should be ignored)
+    const isInfrastructure = (filePath) => {
+      return filePath.includes('/.claude/') || filePath.startsWith('.claude/');
+    };
+
     // Extract created files
     for (const pattern of createdPatterns) {
       let match;
       while ((match = pattern.exec(output)) !== null) {
         const filePath = match[1].trim();
-        if (filePath && !created.includes(filePath)) {
+        if (filePath && !created.includes(filePath) && !isInfrastructure(filePath)) {
           created.push(filePath);
         }
       }
@@ -133,8 +138,8 @@ class ResultFormatter {
       let match;
       while ((match = pattern.exec(output)) !== null) {
         const filePath = match[1].trim();
-        // Don't include if already in created list
-        if (filePath && !modified.includes(filePath) && !created.includes(filePath)) {
+        // Don't include if already in created list or is infrastructure
+        if (filePath && !modified.includes(filePath) && !created.includes(filePath) && !isInfrastructure(filePath)) {
           modified.push(filePath);
         }
       }
@@ -146,14 +151,15 @@ class ResultFormatter {
         const fs = require('fs');
         const childProcess = require('child_process');
 
-        // Use find command to get recently modified files
-        const findCmd = `find . -type f -mmin -5 -not -path "./.git/*" -not -path "./node_modules/*" 2>/dev/null | head -20`;
+        // Use find command to get recently modified files (excluding infrastructure)
+        const findCmd = `find . -type f -mmin -5 -not -path "./.git/*" -not -path "./node_modules/*" -not -path "./.claude/*" 2>/dev/null | head -20`;
         const result = childProcess.execSync(findCmd, { cwd, encoding: 'utf8', timeout: 5000 });
 
         const files = result.split('\n').filter(f => f.trim());
         files.forEach(file => {
           const fullPath = path.join(cwd, file);
-          if (!modified.includes(fullPath)) {
+          // Double-check not infrastructure
+          if (!modified.includes(fullPath) && !isInfrastructure(fullPath)) {
             modified.push(fullPath);
           }
         });
