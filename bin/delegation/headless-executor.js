@@ -178,15 +178,7 @@ class HeadlessExecutor {
             if (showProgress && msg.type === 'assistant') {
               const toolUses = msg.message?.content?.filter(c => c.type === 'tool_use') || [];
 
-              // Filter out internal/meta tools that don't represent actual work
-              const internalTools = ['TodoWrite', 'Skill', 'SlashCommand'];
-
               for (const tool of toolUses) {
-                // Skip internal tools - they're task management, not actual work
-                if (internalTools.includes(tool.name)) {
-                  continue;
-                }
-
                 process.stderr.write('\r\x1b[K'); // Clear line
 
                 // Show verbose tool use with description/input if available
@@ -235,6 +227,12 @@ class HeadlessExecutor {
                     }
                     break;
 
+                  case 'SlashCommand':
+                    if (toolInput.command) {
+                      verboseMsg += `: ${toolInput.command}`;
+                    }
+                    break;
+
                   case 'Task':
                     if (toolInput.description) {
                       verboseMsg += `: ${toolInput.description}`;
@@ -243,6 +241,19 @@ class HeadlessExecutor {
                         ? toolInput.prompt.substring(0, 57) + '...'
                         : toolInput.prompt;
                       verboseMsg += `: ${prompt}`;
+                    }
+                    break;
+
+                  case 'TodoWrite':
+                    if (toolInput.todos && Array.isArray(toolInput.todos)) {
+                      // Show in_progress task instead of just count
+                      const inProgressTask = toolInput.todos.find(t => t.status === 'in_progress');
+                      if (inProgressTask && inProgressTask.activeForm) {
+                        verboseMsg += `: ${inProgressTask.activeForm}`;
+                      } else {
+                        // Fallback to count if no in_progress task
+                        verboseMsg += `: ${toolInput.todos.length} task(s)`;
+                      }
                     }
                     break;
 
