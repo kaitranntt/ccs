@@ -8,18 +8,11 @@ Delegate simple, deterministic tasks to GLM-4.6 for token optimization.
 
 **Workflow:**
 - Analyze the task description in `$ARGUMENTS`
-- **IMPORTANT**: Check if task contains a slash command (e.g., /cook, /plan, /commit)
-  - If YES: Preserve slash command at the start, add context after
-  - If NO: Enhance normally with context
 - Gather context if needed (read files, check structure)
+- Enhance prompt with specific details (file paths, context, success criteria)
 - Execute delegation via `ccs glm -p "$ENHANCED_PROMPT"`
 
-**Slash Command Detection:**
-If `$ARGUMENTS` contains a slash command like "/cook create landing page":
-- Extract the command: `/cook`
-- Enhance the rest: "create landing page with HTML/CSS/JS in /home/user/project"
-- Format as: `/cook create landing page with HTML/CSS/JS in /home/user/project`
-- NOT: "You are in /home/user/project. Task: /cook create landing page"
+**Note:** `$ENHANCED_PROMPT` is an enhanced version that adds specifics like file paths, current implementation context, expected behavior, and success criteria. If the task contains a slash command (e.g., /cook, /plan), keep it at the start of the enhanced prompt.
 
 **Usage:**
 ```
