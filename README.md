@@ -174,29 +174,51 @@ Then: 🔴 _"You've reached your usage limit."_
 <details>
 <summary><strong>❌ OLD WAY:</strong> Switch When You Hit Limits (Reactive)</summary>
 
-### Your Current Workflow:
-- **2pm:** Building features, in the zone
-- **3pm:** 🔴 Usage limit hit
-- **3:05pm:** Stop work, edit `~/.claude/settings.json`
-- **3:15pm:** Switch accounts, lose context
-- **3:30pm:** Try to get back in flow state
-- **4pm:** Finally productive again
+<br>
 
-- **Result:** 1 hour lost, momentum destroyed, frustration builds
+```mermaid
+graph LR
+    A[2pm: Building features<br/>🟢 In the zone] --> B[3pm: Usage limit hit<br/>🔴 BLOCKED]
+    B --> C[3:05pm: Stop work<br/>Edit settings.json]
+    C --> D[3:15pm: Switch accounts<br/>❌ Context lost]
+    D --> E[3:30pm: Restart<br/>⚠️ Trying to focus]
+    E --> F[4pm: Finally productive<br/>🟡 Back in flow]
+
+    style A fill:#90EE90
+    style B fill:#FF6B6B
+    style C fill:#FFB347
+    style D fill:#FF6B6B
+    style E fill:#FFD700
+    style F fill:#90EE90
+```
+
+**Result:** 1 hour lost, momentum destroyed, frustration builds
 
 </details>
 
 <details open>
 <summary><strong>✨ NEW WAY:</strong> Run Parallel From Start (Proactive) - <strong>RECOMMENDED</strong></summary>
 
-### Your New Workflow:
-- **2pm:** **Terminal 1:** `ccs "Plan the API architecture"` → Strategic thinking (Claude Pro)
-- **2pm:** **Terminal 2:** `ccs glm "Implement the endpoints"` → Code execution (GLM)
-- **3pm:** Still shipping, no interruptions
-- **4pm:** Flow state achieved, productivity spiking
-- **5pm:** Features shipped, context maintained
+<br>
 
-- **Result:** Zero downtime, continuous productivity, less frustration
+```mermaid
+graph LR
+    A[2pm: Start work] --> B[Terminal 1: Claude Pro<br/>🎯 Strategic planning]
+    A --> C[Terminal 2: GLM<br/>⚡ Code execution]
+    B --> D[3pm: Still shipping<br/>🟢 No interruptions]
+    C --> D
+    D --> E[4pm: Flow state<br/>🚀 Productivity peak]
+    E --> F[5pm: Features shipped<br/>✅ Context maintained]
+
+    style A fill:#E8F4F8
+    style B fill:#B8E6F0
+    style C fill:#B8E6F0
+    style D fill:#90EE90
+    style E fill:#7FD4A8
+    style F fill:#4CAF50
+```
+
+**Result:** Zero downtime, continuous productivity, less frustration
 
 ### 💰 **The Value Proposition:**
 - **Setup:** Your existing Claude Pro + GLM Lite (cost-effective add-on)
