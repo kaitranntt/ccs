@@ -54,28 +54,23 @@ User: ccs glm -p "add tests for UserService"
   │           ├─→ Parse args
   │           │     ├─ profile: "glm"
   │           │     ├─ prompt: "add tests for UserService"
-  │           │     └─ options: { outputFormat: "json", maxTurns: auto }
+  │           │     └─ options: { outputFormat: "stream-json", timeout: 600000 }
   │           │
   │           ├─→ Validate profile (DelegationValidator)
   │           │
   │           └─→ HeadlessExecutor.execute("glm", prompt, options)
   │                 │
-  │                 ├─→ Determine max-turns (auto: 5/10/20)
-  │                 │
   │                 ├─→ spawn("claude", [
   │                 │       "-p", prompt,
   │                 │       "--settings", "~/.ccs/glm.settings",
-  │                 │       "--output-format", "json",
-  │                 │       "--permission-mode", "acceptEdits",
-  │                 │       "--max-turns", "10"
+  │                 │       "--output-format", "stream-json",
+  │                 │       "--permission-mode", "acceptEdits"
   │                 │   ])
   │                 │
-  │                 ├─→ Parse JSON output
-  │                 │     {
-  │                 │       "session_id": "abc123",
-  │                 │       "total_cost_usd": 0.0042,
-  │                 │       "num_turns": 3
-  │                 │     }
+  │                 ├─→ Parse stream-JSON output (jsonl format)
+  │                 │     {"type":"init","session_id":"abc123"}
+  │                 │     {"type":"assistant","message":{...}}
+  │                 │     {"type":"result","total_cost_usd":0.0042,"num_turns":3}
   │                 │
   │                 ├─→ SessionManager.saveSession()
   │                 │     └─→ ~/.ccs/delegation-sessions.json
