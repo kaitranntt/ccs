@@ -185,26 +185,92 @@ ${enhancedPrompt}`;
                 const toolInput = tool.input || {};
                 let verboseMsg = `[Tool] ${tool.name}`;
 
-                // Add context based on tool type
-                if (tool.name === 'Bash' && toolInput.command) {
-                  verboseMsg += `: ${toolInput.command}`;
-                } else if (tool.name === 'Read' && toolInput.file_path) {
-                  verboseMsg += `: ${toolInput.file_path}`;
-                } else if (tool.name === 'Write' && toolInput.file_path) {
-                  verboseMsg += `: ${toolInput.file_path}`;
-                } else if (tool.name === 'Edit' && toolInput.file_path) {
-                  verboseMsg += `: ${toolInput.file_path}`;
-                } else if (tool.name === 'Grep' && toolInput.pattern) {
-                  verboseMsg += `: searching for "${toolInput.pattern}"`;
-                } else if (tool.name === 'Glob' && toolInput.pattern) {
-                  verboseMsg += `: ${toolInput.pattern}`;
-                } else if (Object.keys(toolInput).length > 0) {
-                  // For other tools, show first meaningful parameter
-                  const firstKey = Object.keys(toolInput)[0];
-                  const firstValue = toolInput[firstKey];
-                  if (typeof firstValue === 'string' && firstValue.length < 60) {
-                    verboseMsg += `: ${firstValue}`;
-                  }
+                // Add context based on tool type (all Claude Code tools)
+                switch (tool.name) {
+                  case 'Bash':
+                    if (toolInput.command) {
+                      // Truncate long commands
+                      const cmd = toolInput.command.length > 80
+                        ? toolInput.command.substring(0, 77) + '...'
+                        : toolInput.command;
+                      verboseMsg += `: ${cmd}`;
+                    }
+                    break;
+
+                  case 'Edit':
+                  case 'Write':
+                  case 'Read':
+                    if (toolInput.file_path) {
+                      verboseMsg += `: ${toolInput.file_path}`;
+                    }
+                    break;
+
+                  case 'NotebookEdit':
+                  case 'NotebookRead':
+                    if (toolInput.notebook_path) {
+                      verboseMsg += `: ${toolInput.notebook_path}`;
+                    }
+                    break;
+
+                  case 'Grep':
+                    if (toolInput.pattern) {
+                      verboseMsg += `: searching for "${toolInput.pattern}"`;
+                      if (toolInput.path) {
+                        verboseMsg += ` in ${toolInput.path}`;
+                      }
+                    }
+                    break;
+
+                  case 'Glob':
+                    if (toolInput.pattern) {
+                      verboseMsg += `: ${toolInput.pattern}`;
+                    }
+                    break;
+
+                  case 'SlashCommand':
+                    if (toolInput.command) {
+                      verboseMsg += `: ${toolInput.command}`;
+                    }
+                    break;
+
+                  case 'Task':
+                    if (toolInput.description) {
+                      verboseMsg += `: ${toolInput.description}`;
+                    } else if (toolInput.prompt) {
+                      const prompt = toolInput.prompt.length > 60
+                        ? toolInput.prompt.substring(0, 57) + '...'
+                        : toolInput.prompt;
+                      verboseMsg += `: ${prompt}`;
+                    }
+                    break;
+
+                  case 'TodoWrite':
+                    if (toolInput.todos && Array.isArray(toolInput.todos)) {
+                      verboseMsg += `: ${toolInput.todos.length} task(s)`;
+                    }
+                    break;
+
+                  case 'WebFetch':
+                    if (toolInput.url) {
+                      verboseMsg += `: ${toolInput.url}`;
+                    }
+                    break;
+
+                  case 'WebSearch':
+                    if (toolInput.query) {
+                      verboseMsg += `: "${toolInput.query}"`;
+                    }
+                    break;
+
+                  default:
+                    // For unknown tools, show first meaningful parameter
+                    if (Object.keys(toolInput).length > 0) {
+                      const firstKey = Object.keys(toolInput)[0];
+                      const firstValue = toolInput[firstKey];
+                      if (typeof firstValue === 'string' && firstValue.length < 60) {
+                        verboseMsg += `: ${firstValue}`;
+                      }
+                    }
                 }
 
                 process.stderr.write(`${verboseMsg}\n`);
