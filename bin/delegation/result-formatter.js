@@ -25,7 +25,7 @@ class ResultFormatter {
    * @returns {string} Formatted result
    */
   static format(result) {
-    const { profile, cwd, exitCode, stdout, stderr, duration, success, content, sessionId, totalCost, numTurns, subtype, permissionDenials, errors, json, timedOut } = result;
+    const { profile, cwd, exitCode, stdout, stderr, duration, success, content, sessionId, totalCost, numTurns, subtype, permissionDenials, errors, json, timedOut, filesCreated, filesModified, filesDeleted } = result;
 
     // Handle timeout (graceful termination)
     if (timedOut) {
@@ -40,8 +40,18 @@ class ResultFormatter {
     // Use content field for output (JSON result or fallback stdout)
     const displayOutput = content || stdout;
 
-    // Parse file changes from output
-    const { created, modified } = this.extractFileChanges(displayOutput, cwd);
+    // Use snapshot-based file changes if available, otherwise fallback to parsing output
+    let created, modified;
+    if (filesCreated !== undefined && filesModified !== undefined) {
+      // Professional snapshot-based detection
+      created = filesCreated;
+      modified = filesModified;
+    } else {
+      // Fallback to legacy output parsing (for backwards compatibility)
+      const changes = this.extractFileChanges(displayOutput, cwd);
+      created = changes.created;
+      modified = changes.modified;
+    }
 
     // Build formatted output
     let output = '';

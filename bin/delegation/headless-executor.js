@@ -135,6 +135,9 @@ ${enhancedPrompt}`;
       // This prevents messy output when run through Claude Code's Bash tool
       const showProgress = process.stderr.isTTY && !process.env.CCS_QUIET;
 
+      // Take filesystem snapshot BEFORE execution
+      const beforeSnapshot = this._takeFilesystemSnapshot(cwd);
+
       // Show initial progress message
       if (showProgress) {
         const modelName = profile === 'glm' ? 'GLM-4.6' : profile === 'kimi' ? 'Kimi' : profile.toUpperCase();
@@ -200,6 +203,12 @@ ${enhancedPrompt}`;
           console.error(''); // Blank line before formatted output
         }
 
+        // Take filesystem snapshot AFTER execution
+        const afterSnapshot = this._takeFilesystemSnapshot(cwd);
+
+        // Compare snapshots to detect file changes
+        const fileChanges = this._compareSnapshots(beforeSnapshot, afterSnapshot);
+
         const result = {
           exitCode,
           stdout,
@@ -208,7 +217,10 @@ ${enhancedPrompt}`;
           profile,
           duration,
           timedOut,
-          success: exitCode === 0 && !timedOut
+          success: exitCode === 0 && !timedOut,
+          filesCreated: fileChanges.created,
+          filesModified: fileChanges.modified,
+          filesDeleted: fileChanges.deleted
         };
 
         // Parse JSON output if format is JSON
@@ -403,6 +415,82 @@ ${enhancedPrompt}`;
    */
   static _sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Take filesystem snapshot (file paths with mtimes)
+   * @param {string} dir - Directory to snapshot
+   * @returns {Map<string, object>} Map of file paths to metadata
+   * @private
+   */
+  static _takeFilesystemSnapshot(dir) {
+    const snapshot = new Map();
+
+    try {
+      const childProcess = require('child_process');
+
+      // Find all files, excluding infrastructure (.git, node_modules, .claude)
+      const findCmd = `find . -type f -not -path "./.git/*" -not -path "./node_modules/*" -not -path "./.claude/*" 2>/dev/null`;
+      const result = childProcess.execSync(findCmd, { cwd: dir, encoding: 'utf8', timeout: 10000 });
+
+      const files = result.split('\n').filter(f => f.trim());
+
+      for (const file of files) {
+        const fullPath = path.join(dir, file);
+        try {
+          const stats = fs.statSync(fullPath);
+          snapshot.set(file, {
+            mtime: stats.mtimeMs,
+            size: stats.size
+          });
+        } catch (statError) {
+          // Skip files that can't be stat'd
+        }
+      }
+    } catch (error) {
+      // If snapshot fails, return empty map (fallback to old behavior)
+      if (process.env.CCS_DEBUG) {
+        console.error(`[!] Snapshot failed: ${error.message}`);
+      }
+    }
+
+    return snapshot;
+  }
+
+  /**
+   * Compare filesystem snapshots to detect changes
+   * @param {Map} before - Snapshot before execution
+   * @param {Map} after - Snapshot after execution
+   * @returns {object} File changes: { created: [], modified: [], deleted: [] }
+   * @private
+   */
+  static _compareSnapshots(before, after) {
+    const created = [];
+    const modified = [];
+    const deleted = [];
+
+    // Find created and modified files
+    for (const [filePath, afterMeta] of after.entries()) {
+      if (!before.has(filePath)) {
+        // File exists in after but not before = created
+        created.push(filePath);
+      } else {
+        // File exists in both, check if modified
+        const beforeMeta = before.get(filePath);
+        if (afterMeta.mtime !== beforeMeta.mtime || afterMeta.size !== beforeMeta.size) {
+          modified.push(filePath);
+        }
+      }
+    }
+
+    // Find deleted files
+    for (const filePath of before.keys()) {
+      if (!after.has(filePath)) {
+        deleted.push(filePath);
+      }
+    }
+
+    return { created, modified, deleted };
   }
 
   /**
