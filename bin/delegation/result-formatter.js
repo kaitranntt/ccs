@@ -163,9 +163,39 @@ class ResultFormatter {
         const files = result.split('\n').filter(f => f.trim());
         files.forEach(file => {
           const fullPath = path.join(cwd, file);
+
           // Double-check not infrastructure
-          if (!modified.includes(fullPath) && !isInfrastructure(fullPath)) {
-            modified.push(fullPath);
+          if (isInfrastructure(fullPath)) {
+            return;
+          }
+
+          try {
+            const stats = fs.statSync(fullPath);
+            const now = Date.now();
+            const mtime = stats.mtimeMs;
+            const ctime = stats.ctimeMs;
+
+            // If both mtime and ctime are very recent (within 10 minutes), likely created
+            // ctime = inode change time, for new files this is close to creation time
+            const isVeryRecent = (now - mtime) < 600000 && (now - ctime) < 600000;
+            const timeDiff = Math.abs(mtime - ctime);
+
+            // If mtime and ctime are very close (< 1 second apart) and both recent, it's created
+            if (isVeryRecent && timeDiff < 1000) {
+              if (!created.includes(fullPath)) {
+                created.push(fullPath);
+              }
+            } else {
+              // Otherwise, it's modified
+              if (!modified.includes(fullPath)) {
+                modified.push(fullPath);
+              }
+            }
+          } catch (statError) {
+            // If stat fails, default to created (since we're in fallback mode)
+            if (!created.includes(fullPath) && !modified.includes(fullPath)) {
+              created.push(fullPath);
+            }
           }
         });
       } catch (scanError) {
