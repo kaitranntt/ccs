@@ -65,7 +65,8 @@ ${enhancedPrompt}`;
     const args = ['-p', safePrompt, '--settings', settingsPath];
 
     // Always use stream-json for real-time progress visibility
-    args.push('--output-format', 'stream-json');
+    // Note: --verbose is required when using --print with stream-json
+    args.push('--output-format', 'stream-json', '--verbose');
 
     // Add permission mode
     if (permissionMode && permissionMode !== 'default') {
