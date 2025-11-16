@@ -5,6 +5,8 @@ const { spawn } = require('child_process');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const { SessionManager } = require('./session-manager');
+const { SettingsParser } = require('./settings-parser');
 
 /**
  * Headless executor for Claude CLI delegation
@@ -18,10 +20,29 @@ class HeadlessExecutor {
    * @param {Object} options - Execution options
    * @param {string} options.cwd - Working directory (absolute path)
    * @param {number} options.timeout - Timeout in milliseconds (default: 120000)
+   * @param {string} options.outputFormat - Output format: 'json' or 'text' (default: 'json')
+   * @param {string} options.permissionMode - Permission mode: 'default', 'plan', 'acceptEdits', 'bypassPermissions' (default: 'acceptEdits')
+   * @param {boolean} options.resumeSession - Resume last session for profile (default: false)
+   * @param {string} options.sessionId - Specific session ID to resume
+   * @param {number} options.maxTurns - Max turns (auto-determined if not provided)
    * @returns {Promise<Object>} Execution result
    */
   static async execute(profile, enhancedPrompt, options = {}) {
-    const { cwd = process.cwd(), timeout = 120000 } = options;
+    const {
+      cwd = process.cwd(),
+      timeout = 120000,
+      outputFormat = 'json',
+      permissionMode = 'acceptEdits',
+      resumeSession = false,
+      sessionId = null,
+      maxTurns = null
+    } = options;
+
+    // Validate permission mode
+    this._validatePermissionMode(permissionMode);
+
+    // Initialize session manager
+    const sessionMgr = new SessionManager();
 
     // Detect Claude CLI path
     const claudeCli = this._detectClaudeCli();
@@ -30,7 +51,7 @@ class HeadlessExecutor {
     }
 
     // Get settings path for profile
-    const settingsPath = path.join(os.homedir(), '.ccs', 'profiles', profile, 'settings.json');
+    const settingsPath = path.join(os.homedir(), '.ccs', `${profile}.settings.json`);
 
     // Validate settings file exists
     if (!fs.existsSync(settingsPath)) {
@@ -39,6 +60,77 @@ class HeadlessExecutor {
 
     // Prepare arguments
     const args = ['-p', enhancedPrompt, '--settings', settingsPath];
+
+    // Add JSON output format if requested
+    if (outputFormat === 'json') {
+      args.push('--output-format', 'json');
+    }
+
+    // Add permission mode
+    if (permissionMode && permissionMode !== 'default') {
+      if (permissionMode === 'bypassPermissions') {
+        args.push('--dangerously-skip-permissions');
+        // Warn about dangerous mode
+        if (process.env.CCS_DEBUG) {
+          console.warn('[!] WARNING: Using --dangerously-skip-permissions mode');
+          console.warn('[!] This bypasses ALL permission checks. Use only in trusted environments.');
+        }
+      } else {
+        args.push('--permission-mode', permissionMode);
+      }
+    }
+
+    // Add resume flag for multi-turn sessions
+    if (resumeSession) {
+      const lastSession = sessionMgr.getLastSession(profile);
+
+      if (lastSession) {
+        args.push('--resume', lastSession.sessionId);
+        if (process.env.CCS_DEBUG) {
+          console.error(`[i] Resuming session: ${lastSession.sessionId} (${lastSession.turns} turns, $${lastSession.totalCost.toFixed(4)})`);
+        }
+      } else if (sessionId) {
+        args.push('--resume', sessionId);
+        if (process.env.CCS_DEBUG) {
+          console.error(`[i] Resuming specific session: ${sessionId}`);
+        }
+      } else {
+        console.warn('[!] No previous session found, starting new session');
+      }
+    } else if (sessionId) {
+      args.push('--resume', sessionId);
+      if (process.env.CCS_DEBUG) {
+        console.error(`[i] Resuming specific session: ${sessionId}`);
+      }
+    }
+
+    // Add tool restrictions from settings
+    const toolRestrictions = SettingsParser.parseToolRestrictions(cwd);
+
+    if (toolRestrictions.allowedTools.length > 0) {
+      args.push('--allowedTools');
+      toolRestrictions.allowedTools.forEach(tool => args.push(tool));
+    }
+
+    if (toolRestrictions.disallowedTools.length > 0) {
+      args.push('--disallowedTools');
+      toolRestrictions.disallowedTools.forEach(tool => args.push(tool));
+    }
+
+    // Add max-turns (auto-determine if not specified)
+    const determinedMaxTurns = maxTurns || this._determineMaxTurns(enhancedPrompt);
+    args.push('--max-turns', determinedMaxTurns.toString());
+
+    if (process.env.CCS_DEBUG) {
+      if (!maxTurns) {
+        console.error(`[i] Auto-determined max-turns: ${determinedMaxTurns}`);
+      }
+    }
+
+    // Debug log args
+    if (process.env.CCS_DEBUG) {
+      console.error(`[i] Claude CLI args: ${args.join(' ')}`);
+    }
 
     // Execute with spawn
     return new Promise((resolve, reject) => {
@@ -67,7 +159,7 @@ class HeadlessExecutor {
       proc.on('close', (exitCode) => {
         const duration = Date.now() - startTime;
 
-        resolve({
+        const result = {
           exitCode,
           stdout,
           stderr,
@@ -75,7 +167,62 @@ class HeadlessExecutor {
           profile,
           duration,
           success: exitCode === 0
-        });
+        };
+
+        // Parse JSON output if format is JSON
+        if (outputFormat === 'json' && stdout.trim()) {
+          try {
+            const jsonData = JSON.parse(stdout);
+
+            // Add parsed JSON fields
+            result.json = jsonData;
+            result.sessionId = jsonData.session_id || null;
+            result.totalCost = jsonData.total_cost_usd || 0;
+            result.numTurns = jsonData.num_turns || 0;
+            result.isError = jsonData.is_error || false;
+            result.content = jsonData.result || '';
+            result.durationType = jsonData.type || null;
+            result.durationSubtype = jsonData.subtype || null;
+            result.durationApi = jsonData.duration_api_ms || 0;
+          } catch (parseError) {
+            // Fallback to text mode on parse error
+            result.jsonParseError = parseError.message;
+            result.content = stdout;
+
+            // Log parse error in debug mode
+            if (process.env.CCS_DEBUG) {
+              console.error(`[!] JSON parse failed: ${parseError.message}`);
+              console.error(`[!] Raw stdout: ${stdout.substring(0, 200)}...`);
+            }
+          }
+        } else {
+          // Text mode
+          result.content = stdout;
+        }
+
+        // Store or update session if successful and JSON mode
+        if (result.success && result.sessionId && outputFormat === 'json') {
+          if (resumeSession || sessionId) {
+            // Update existing session
+            sessionMgr.updateSession(profile, result.sessionId, {
+              totalCost: result.totalCost
+            });
+          } else {
+            // Store new session
+            sessionMgr.storeSession(profile, {
+              sessionId: result.sessionId,
+              totalCost: result.totalCost,
+              cwd: result.cwd
+            });
+          }
+
+          // Cleanup expired sessions periodically
+          if (Math.random() < 0.1) { // 10% chance
+            sessionMgr.cleanupExpired();
+          }
+        }
+
+        resolve(result);
       });
 
       // Handle errors
@@ -104,6 +251,63 @@ class HeadlessExecutor {
         proc.on('close', () => clearTimeout(timeoutHandle));
       }
     });
+  }
+
+  /**
+   * Validate permission mode
+   * @param {string} mode - Permission mode
+   * @throws {Error} If mode is invalid
+   * @private
+   */
+  static _validatePermissionMode(mode) {
+    const VALID_MODES = ['default', 'plan', 'acceptEdits', 'bypassPermissions'];
+    if (!VALID_MODES.includes(mode)) {
+      throw new Error(
+        `Invalid permission mode: "${mode}". Valid modes: ${VALID_MODES.join(', ')}`
+      );
+    }
+  }
+
+  /**
+   * Determine max turns based on task complexity
+   * @param {string} prompt - Task prompt
+   * @returns {number} Max turns (5, 10, or 20)
+   * @private
+   */
+  static _determineMaxTurns(prompt) {
+    const promptLower = prompt.toLowerCase();
+
+    // Simple task indicators (5 turns)
+    const simpleKeywords = [
+      'typo', 'fix typo', 'comment', 'rename', 'format',
+      'add comment', 'remove comment', 'spacing', 'indentation',
+      'whitespace', 'semicolon', 'comma', 'quote'
+    ];
+
+    // Complex task indicators (20 turns)
+    const complexKeywords = [
+      'implement', 'design', 'architect', 'refactor', 'migrate',
+      'analyze', 'optimize', 'integrate', 'feature', 'system',
+      'framework', 'codebase', 'infrastructure', 'deployment',
+      'security', 'performance', 'scalability'
+    ];
+
+    // Check for simple indicators first
+    for (const keyword of simpleKeywords) {
+      if (promptLower.includes(keyword)) {
+        return 5; // Simple: 5 turns
+      }
+    }
+
+    // Check for complex indicators
+    for (const keyword of complexKeywords) {
+      if (promptLower.includes(keyword)) {
+        return 20; // Complex: 20 turns
+      }
+    }
+
+    // Default to medium (10 turns)
+    return 10;
   }
 
   /**

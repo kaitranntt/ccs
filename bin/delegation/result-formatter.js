@@ -18,13 +18,20 @@ class ResultFormatter {
    * @param {string} result.stderr - Standard error
    * @param {number} result.duration - Duration in milliseconds
    * @param {boolean} result.success - Success flag
+   * @param {string} result.content - Parsed content (from JSON or stdout)
+   * @param {string} result.sessionId - Session ID (from JSON)
+   * @param {number} result.totalCost - Total cost USD (from JSON)
+   * @param {number} result.numTurns - Number of turns (from JSON)
    * @returns {string} Formatted result
    */
   static format(result) {
-    const { profile, cwd, exitCode, stdout, stderr, duration, success } = result;
+    const { profile, cwd, exitCode, stdout, stderr, duration, success, content, sessionId, totalCost, numTurns } = result;
+
+    // Use content field for output (JSON result or fallback stdout)
+    const displayOutput = content || stdout;
 
     // Parse file changes from output
-    const { created, modified } = this.extractFileChanges(stdout);
+    const { created, modified } = this.extractFileChanges(displayOutput);
 
     // Build formatted output
     let output = '';
@@ -33,11 +40,11 @@ class ResultFormatter {
     output += this._formatHeader(profile, success);
 
     // Info box
-    output += this._formatInfoBox(cwd, profile, duration, exitCode, created.length, modified.length);
+    output += this._formatInfoBox(cwd, profile, duration, exitCode, created.length, modified.length, sessionId, totalCost, numTurns);
 
     // Task output
     output += '\n';
-    output += this._formatOutput(stdout);
+    output += this._formatOutput(displayOutput);
 
     // Stderr if present
     if (stderr && stderr.trim()) {
@@ -137,10 +144,13 @@ class ResultFormatter {
    * @param {number} exitCode - Exit code
    * @param {number} createdCount - Number of created files
    * @param {number} modifiedCount - Number of modified files
+   * @param {string} sessionId - Session ID (from JSON)
+   * @param {number} totalCost - Total cost USD (from JSON)
+   * @param {number} numTurns - Number of turns (from JSON)
    * @returns {string} Formatted info box
    * @private
    */
-  static _formatInfoBox(cwd, profile, duration, exitCode, createdCount, modifiedCount) {
+  static _formatInfoBox(cwd, profile, duration, exitCode, createdCount, modifiedCount, sessionId, totalCost, numTurns) {
     const modelName = this._getModelDisplayName(profile);
     const durationSec = (duration / 1000).toFixed(1);
 
@@ -157,6 +167,17 @@ class ResultFormatter {
       `Files Created: ${createdCount}`,
       `Files Modified: ${modifiedCount}`
     ];
+
+    // Add JSON-specific fields if available
+    if (sessionId) {
+      lines.push(`Session ID: ${sessionId}`);
+    }
+    if (totalCost !== undefined && totalCost !== null) {
+      lines.push(`Cost: $${totalCost.toFixed(4)}`);
+    }
+    if (numTurns) {
+      lines.push(`Turns: ${numTurns}`);
+    }
 
     let box = '';
     box += '╔' + '═'.repeat(boxWidth - 2) + '╗\n';

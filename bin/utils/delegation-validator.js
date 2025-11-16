@@ -17,7 +17,7 @@ class DelegationValidator {
    */
   static validate(profileName) {
     const homeDir = os.homedir();
-    const settingsPath = path.join(homeDir, '.ccs', 'profiles', profileName, 'settings.json');
+    const settingsPath = path.join(homeDir, '.ccs', `${profileName}.settings.json`);
 
     // Check if profile directory exists
     if (!fs.existsSync(settingsPath)) {
@@ -26,10 +26,9 @@ class DelegationValidator {
         error: `Profile not found: ${profileName}`,
         suggestion: `Profile settings missing at: ${settingsPath}\n\n` +
                    `To set up ${profileName} profile:\n` +
-                   `  1. Create profile directory: mkdir -p ~/.ccs/profiles/${profileName}\n` +
-                   `  2. Copy base settings: cp config/base-${profileName}.settings.json ~/.ccs/profiles/${profileName}/settings.json\n` +
-                   `  3. Edit settings: Edit ~/.ccs/profiles/${profileName}/settings.json\n` +
-                   `  4. Set your API key in ANTHROPIC_AUTH_TOKEN field`
+                   `  1. Copy base settings: cp config/base-${profileName}.settings.json ~/.ccs/${profileName}.settings.json\n` +
+                   `  2. Edit settings: Edit ~/.ccs/${profileName}.settings.json\n` +
+                   `  3. Set your API key in ANTHROPIC_AUTH_TOKEN field`
       };
     }
 
@@ -46,7 +45,7 @@ class DelegationValidator {
                    `Location: ${settingsPath}\n` +
                    `Parse error: ${error.message}\n\n` +
                    `Fix: Restore from base config:\n` +
-                   `  cp config/base-${profileName}.settings.json ~/.ccs/profiles/${profileName}/settings.json`
+                   `  cp config/base-${profileName}.settings.json ~/.ccs/${profileName}.settings.json`
       };
     }
 
@@ -81,7 +80,7 @@ class DelegationValidator {
                    `  1. Edit: ${settingsPath}\n` +
                    `  2. Replace ANTHROPIC_AUTH_TOKEN with your actual API key\n\n` +
                    `Get API key:\n` +
-                   `  GLM: https://open.bigmodel.cn/usercenter/apikeys\n` +
+                   `  GLM: https://z.ai/manage-apikey/apikey-list\n` +
                    `  Kimi: https://platform.moonshot.cn/console/api-keys`
       };
     }
@@ -129,19 +128,21 @@ class DelegationValidator {
    */
   static getReadyProfiles() {
     const homeDir = os.homedir();
-    const profilesDir = path.join(homeDir, '.ccs', 'profiles');
+    const ccsDir = path.join(homeDir, '.ccs');
 
-    if (!fs.existsSync(profilesDir)) {
+    if (!fs.existsSync(ccsDir)) {
       return [];
     }
 
     const profiles = [];
-    const entries = fs.readdirSync(profilesDir, { withFileTypes: true });
+    const entries = fs.readdirSync(ccsDir, { withFileTypes: true });
 
+    // Look for *.settings.json files
     for (const entry of entries) {
-      if (entry.isDirectory()) {
-        if (this.isReady(entry.name)) {
-          profiles.push(entry.name);
+      if (entry.isFile() && entry.name.endsWith('.settings.json')) {
+        const profileName = entry.name.replace('.settings.json', '');
+        if (this.isReady(profileName)) {
+          profiles.push(profileName);
         }
       }
     }

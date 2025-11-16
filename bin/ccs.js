@@ -498,6 +498,14 @@ async function main() {
     return;
   }
 
+  // Special case: headless delegation (-p flag)
+  if (args.includes('-p') || args.includes('--prompt')) {
+    const DelegationHandler = require('./delegation/delegation-handler');
+    const handler = new DelegationHandler();
+    await handler.route(args);
+    return;
+  }
+
   // Auto-recovery for missing configuration
   const recovery = new RecoveryManager();
   const recovered = recovery.recoverAll();
