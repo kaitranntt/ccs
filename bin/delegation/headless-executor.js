@@ -529,40 +529,35 @@ ${processedPrompt}`;
    * @private
    */
   static _processSlashCommand(prompt) {
-    // Detect slash command at the start of the prompt
-    // Pattern: /command-name followed by space or end of string
-    const slashMatch = prompt.trim().match(/^(\/[\w:-]+)(?:\s+(.*))?$/s);
+    const trimmed = prompt.trim();
 
-    if (slashMatch) {
-      const command = slashMatch[1]; // e.g., "/plan"
-      const args = slashMatch[2] || ''; // Everything after the command
-
-      // Return slash command at start, followed by the rest
-      // The delegated session will execute the slash command with the args
-      return args ? `${command} ${args}` : command;
+    // Case 1: Already starts with slash command - keep as-is
+    if (trimmed.match(/^\/[\w:-]+(\s|$)/)) {
+      return prompt;
     }
 
-    // Check if slash command appears later in enhanced context
-    // Pattern: "Context text... /command args"
-    const embeddedMatch = prompt.match(/^([\s\S]*?)(\/[\w:-]+(?:\s+[\s\S]*)?)$/);
+    // Case 2: Find slash command embedded in text
+    // Look for /command that's NOT part of a file path
+    // File paths: /home/user, /path/to/file (have / before or after)
+    // Commands: /cook, /plan (standalone, preceded by space/colon/start)
+    // Strategy: Find LAST occurrence that looks like a command, not a path
+    const embeddedSlash = trimmed.match(/(?:^|[^\w/])(\/[\w:-]+)(\s+[\s\S]*)?$/);
 
-    if (embeddedMatch) {
-      const context = embeddedMatch[1].trim();
-      const commandPart = embeddedMatch[2].trim();
+    if (embeddedSlash) {
+      const command = embeddedSlash[1]; // e.g., "/cook"
+      const args = (embeddedSlash[2] || '').trim(); // Everything after command
 
-      // Extract the actual command and its args
-      const cmdMatch = commandPart.match(/^(\/[\w:-]+)(?:\s+(.*))?$/s);
-      if (cmdMatch) {
-        const command = cmdMatch[1];
-        const cmdArgs = cmdMatch[2] || '';
+      // Calculate where the command starts (excluding preceding char if any)
+      const matchStart = embeddedSlash.index + (embeddedSlash[0][0] === '/' ? 0 : 1);
+      const beforeCommand = trimmed.substring(0, matchStart).trim();
 
-        // Restructure: put slash command first, context as part of args
-        // Format: /command Context: ... Original args: ...
-        if (context) {
-          return `${command} Context: ${context}\n\n${cmdArgs}`;
-        }
-        return commandPart;
+      // Restructure: command first, context after
+      if (beforeCommand && args) {
+        return `${command} ${args}\n\nContext: ${beforeCommand}`;
+      } else if (beforeCommand) {
+        return `${command}\n\nContext: ${beforeCommand}`;
       }
+      return args ? `${command} ${args}` : command;
     }
 
     // No slash command detected, return as-is
