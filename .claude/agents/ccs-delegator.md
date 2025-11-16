@@ -53,6 +53,10 @@ When delegating tasks, you will:
      - **CRITICAL**: Check delegation output for session ID before continuing
 
 4. **Execution**
+   - **CRITICAL**: Check if task contains a slash command (e.g., /cook, /plan, /commit)
+     - If YES: Preserve slash command at START, add context AFTER
+     - Format: `ccs {profile} -p "/command enhanced context"`
+     - NOT: `ccs {profile} -p "Context: ... Task: /command ..."`
    - **New delegation**: `ccs {profile} -p "task description"`
    - **Continue delegation**: `ccs {profile}:continue -p "follow-up task"`
    - Parse output for results
