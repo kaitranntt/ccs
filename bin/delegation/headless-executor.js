@@ -130,9 +130,8 @@ ${enhancedPrompt}`;
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
 
-      // Only show progress if in a TTY (terminal) and not in quiet mode
-      // This prevents messy output when run through Claude Code's Bash tool
-      const showProgress = process.stderr.isTTY && !process.env.CCS_QUIET;
+      // Show progress unless explicitly disabled with CCS_QUIET
+      const showProgress = !process.env.CCS_QUIET;
 
       // Show initial progress message
       if (showProgress) {
@@ -176,12 +175,39 @@ ${enhancedPrompt}`;
             const msg = JSON.parse(line);
             messages.push(msg);
 
-            // Show real-time tool use if in TTY
+            // Show real-time tool use with verbose details
             if (showProgress && msg.type === 'assistant') {
               const toolUses = msg.message?.content?.filter(c => c.type === 'tool_use') || [];
               for (const tool of toolUses) {
                 process.stderr.write('\r\x1b[K'); // Clear line
-                process.stderr.write(`[Tool Use: ${tool.name}]\n`);
+
+                // Show verbose tool use with description/input if available
+                const toolInput = tool.input || {};
+                let verboseMsg = `[Tool] ${tool.name}`;
+
+                // Add context based on tool type
+                if (tool.name === 'Bash' && toolInput.command) {
+                  verboseMsg += `: ${toolInput.command}`;
+                } else if (tool.name === 'Read' && toolInput.file_path) {
+                  verboseMsg += `: ${toolInput.file_path}`;
+                } else if (tool.name === 'Write' && toolInput.file_path) {
+                  verboseMsg += `: ${toolInput.file_path}`;
+                } else if (tool.name === 'Edit' && toolInput.file_path) {
+                  verboseMsg += `: ${toolInput.file_path}`;
+                } else if (tool.name === 'Grep' && toolInput.pattern) {
+                  verboseMsg += `: searching for "${toolInput.pattern}"`;
+                } else if (tool.name === 'Glob' && toolInput.pattern) {
+                  verboseMsg += `: ${toolInput.pattern}`;
+                } else if (Object.keys(toolInput).length > 0) {
+                  // For other tools, show first meaningful parameter
+                  const firstKey = Object.keys(toolInput)[0];
+                  const firstValue = toolInput[firstKey];
+                  if (typeof firstValue === 'string' && firstValue.length < 60) {
+                    verboseMsg += `: ${firstValue}`;
+                  }
+                }
+
+                process.stderr.write(`${verboseMsg}\n`);
               }
             }
           } catch (parseError) {
