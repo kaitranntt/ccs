@@ -60,13 +60,8 @@ class HeadlessExecutor {
     // Detects if prompt contains slash command and restructures for proper execution
     const processedPrompt = this._processSlashCommand(enhancedPrompt);
 
-    // Wrap prompt with safety instructions to prevent modifying infrastructure
-    const safePrompt = `IMPORTANT: Do not modify any files in the .claude/ directory. This directory contains Claude Code infrastructure and should never be touched by delegated tasks.
-
-${processedPrompt}`;
-
     // Prepare arguments
-    const args = ['-p', safePrompt, '--settings', settingsPath];
+    const args = ['-p', processedPrompt, '--settings', settingsPath];
 
     // Always use stream-json for real-time progress visibility
     // Note: --verbose is required when using --print with stream-json
