@@ -132,7 +132,8 @@ User: ccs glm:continue -p "add validation tests"
               ├─→ spawn("claude", [
               │       "-p", "add validation tests",
               │       "--resume", "session-001",  ← Continue!
-              │       "--output-format", "json",
+              │       "--output-format", "stream-json",
+              │       "--verbose",
               │       ...
               │   ])
               │
@@ -332,8 +333,11 @@ Savings: $0.032 - $0.0045 = $0.0275 (86% reduction) ⚡
 ### Feature Coverage
 
 ```
-✅ JSON Output Parsing
-   └─→ Extracts: session_id, cost, turns, errors
+✅ Stream-JSON Output Parsing
+   └─→ Real-time jsonl format, extracts: session_id, cost, turns, errors
+
+✅ Real-Time Tool Visibility
+   └─→ Shows: [Tool] Bash: npm install, [Tool] Write: index.html
 
 ✅ Session Management
    └─→ Persists to: ~/.ccs/delegation-sessions.json
@@ -344,14 +348,17 @@ Savings: $0.032 - $0.0045 = $0.0275 (86% reduction) ⚡
 ✅ Cost Tracking
    └─→ Aggregates across turns, displays in USD
 
-✅ Auto Max-Turns
-   └─→ Simple: 5, Medium: 10, Complex: 20
+✅ Time-Based Limits
+   └─→ Default: 10min timeout with graceful SIGTERM termination
 
 ✅ Permission Mode
    └─→ Default: acceptEdits (auto-approve file ops)
 
-✅ File Change Tracking
-   └─→ Shows: files created/modified
+✅ Signal Handling
+   └─→ Kills child process on Ctrl+C/Esc (no orphans)
+
+✅ Slash Command Preservation
+   └─→ Detects /cook, /plan in prompts, keeps at start
 
 ✅ Formatted Output
    └─→ ASCII box with metadata
@@ -481,5 +488,5 @@ Issue: "Missing prompt after -p flag"
 
 ---
 
-**Last Updated**: 2025-11-15
+**Last Updated**: 2025-11-16
 **Related**: `SKILL.md`, `headless-workflow.md`, `delegation-guidelines.md`

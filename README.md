@@ -358,6 +358,123 @@ ccs --help       # Show all commands and options
 
 <br>
 
+## AI-Powered Delegation
+
+> [!TIP]
+> **New in v4.0**: Delegate tasks to cost-optimized models (GLM, Kimi) directly from your main Claude session. Save 81% on simple tasks with real-time visibility.
+
+### What is Delegation?
+
+CCS Delegation lets you **send tasks to alternative models** (`glm`, `kimi`) **from your main Claude session** using the `-p` flag or slash commands (`/ccs:glm`, `/ccs:kimi`).
+
+**Why use it?**
+- **Token efficiency**: Simple tasks cost 81% less on GLM vs main Claude session
+- **Context preservation**: Main session stays clean, no pollution from mechanical tasks
+- **Real-time visibility**: See tool usage as tasks execute (`[Tool] Write: index.html`)
+- **Multi-turn support**: Resume sessions with `:continue` for iterative work
+
+### Quick Examples
+
+**Direct CLI:**
+```bash
+# Delegate simple task to GLM (cost-optimized)
+ccs glm -p "add tests for UserService"
+
+# Delegate long-context task to Kimi
+ccs kimi -p "analyze all files in src/ and document architecture"
+
+# Continue previous session
+ccs glm:continue -p "run the tests and fix any failures"
+```
+
+**Via Slash Commands** (inside Claude sessions):
+```bash
+# In your main Claude session:
+/ccs:glm "refactor auth.js to use async/await"
+/ccs:kimi "find all deprecated API usages across codebase"
+/ccs:glm:continue "also update the README examples"
+```
+
+**Via Natural Language** (Claude auto-delegates):
+```bash
+# Claude detects delegation patterns and auto-executes:
+"Use ccs glm to add tests for all *.service.js files"
+"Delegate to kimi: analyze project structure"
+```
+
+### Real-Time Output
+
+See exactly what's happening as tasks execute:
+
+```
+$ ccs glm -p "/cook create a landing page"
+[i] Delegating to GLM-4.6...
+[Tool] Write: /home/user/project/index.html
+[Tool] Write: /home/user/project/styles.css
+[Tool] Write: /home/user/project/script.js
+[Tool] Edit: /home/user/project/styles.css
+[i] Execution completed in 45.2s
+
+╔══════════════════════════════════════════════════════╗
+║ Working Directory: /home/user/project               ║
+║ Model: GLM-4.6                                       ║
+║ Duration: 45.2s                                      ║
+║ Exit Code: 0                                         ║
+║ Session ID: 3a4f8c21                                 ║
+║ Total Cost: $0.0015                                  ║
+║ Turns: 3                                             ║
+╚══════════════════════════════════════════════════════╝
+```
+
+### Advanced Features
+
+**Slash Command Support:**
+Delegation preserves custom slash commands in prompts:
+```bash
+ccs glm -p "/cook create responsive landing page"
+# Executes /cook command in delegated GLM session
+```
+
+**Signal Handling:**
+Ctrl+C or Esc properly kills delegated processes (no orphans):
+```bash
+# Hit Ctrl+C during delegation
+[!] Parent process terminating, killing delegated session...
+```
+
+**Time-Based Limits:**
+10-minute default timeout with graceful termination (supports `:continue`):
+```bash
+ccs glm -p "complex task"  # Auto-terminates after 10min if needed
+ccs glm:continue -p "pick up where we left off"
+```
+
+### Cost Savings Example
+
+**Traditional (Main Session):**
+```
+Context load: 2000 tokens
+Discussion:   1500 tokens
+Code gen:     4500 tokens
+─────────────────────────
+Total:        8000 tokens → $0.032
+```
+
+**Delegation (GLM):**
+```
+3x tasks via GLM: 1500 tokens → $0.0045
+─────────────────────────────────────────
+Savings:                        $0.0275 (86% reduction)
+```
+
+### Documentation
+
+- **Workflow Diagrams**: See [docs/ccs-delegation-diagrams.md](docs/ccs-delegation-diagrams.md) for visual architecture
+- **Skill Reference**: `.claude/skills/ccs-delegation/` for AI decision framework
+- **Agent Docs**: `.claude/agents/ccs-delegator.md` for orchestration patterns
+
+<br>
+
 ## GLM with Thinking (GLMT)
 
 > [!CAUTION]
