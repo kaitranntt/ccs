@@ -276,17 +276,12 @@ class Doctor {
   checkDelegation() {
     process.stdout.write('[?] Checking delegation... ');
 
-    // Check if delegation-rules.json exists
-    const delegationRulesPath = path.join(this.ccsDir, 'delegation-rules.json');
-    const hasDelegationRules = fs.existsSync(delegationRulesPath);
+    // Check if delegation commands exist in ~/.ccs/.claude/commands/ccs/
+    const ccsClaudeCommandsDir = path.join(this.ccsDir, '.claude', 'commands', 'ccs');
+    const hasGlmCommand = fs.existsSync(path.join(ccsClaudeCommandsDir, 'glm.md'));
+    const hasKimiCommand = fs.existsSync(path.join(ccsClaudeCommandsDir, 'kimi.md'));
 
-    // Check if delegation commands exist
-    const sharedCommandsDir = path.join(this.ccsDir, 'shared', 'commands', 'ccs');
-    const hasGlmCommand = fs.existsSync(path.join(sharedCommandsDir, 'glm.md'));
-    const hasKimiCommand = fs.existsSync(path.join(sharedCommandsDir, 'kimi.md'));
-    const hasCreateCommand = fs.existsSync(path.join(sharedCommandsDir, 'create.md'));
-
-    if (!hasGlmCommand || !hasKimiCommand || !hasCreateCommand) {
+    if (!hasGlmCommand || !hasKimiCommand) {
       console.log(colored('[!]', 'yellow'), '(not installed)');
       this.results.addCheck(
         'Delegation',
