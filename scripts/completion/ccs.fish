@@ -72,21 +72,21 @@ complete -c ccs -s h -l help -d 'Show help message'
 complete -c ccs -s v -l version -d 'Show version information'
 complete -c ccs -l shell-completion -d 'Install shell completion'
 
-# Top-level commands
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'auth' -d 'Manage multiple Claude accounts'
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'doctor' -d 'Run health check and diagnostics'
+# Top-level commands (blue color for commands)
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'auth' -d (set_color blue)'Manage multiple Claude accounts'(set_color normal)
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'doctor' -d (set_color blue)'Run health check and diagnostics'(set_color normal)
 
-# Top-level known settings profiles (with specific descriptions)
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'default' -d 'Default Claude Sonnet 4.5'
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'glm' -d 'GLM-4.6 (cost-optimized)'
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'glmt' -d 'GLM-4.6 with thinking mode'
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'kimi' -d 'Kimi for Coding (long-context)'
+# Top-level known settings profiles (green color for model profiles)
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'default' -d (set_color green)'Default Claude Sonnet 4.5'(set_color normal)
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'glm' -d (set_color green)'GLM-4.6 (cost-optimized)'(set_color normal)
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'glmt' -d (set_color green)'GLM-4.6 with thinking mode'(set_color normal)
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'kimi' -d (set_color green)'Kimi for Coding (long-context)'(set_color normal)
 
-# Top-level custom settings profiles (dynamic, with generic description)
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a '(__fish_ccs_get_custom_settings_profiles)' -d 'Settings-based profile'
+# Top-level custom settings profiles (dynamic, with generic description in green)
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a '(__fish_ccs_get_custom_settings_profiles)' -d (set_color green)'Settings-based profile'(set_color normal)
 
-# Top-level account profiles (dynamic)
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a '(__fish_ccs_get_account_profiles)' -d 'Account profile'
+# Top-level account profiles (dynamic, yellow color for account profiles)
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a '(__fish_ccs_get_account_profiles)' -d (set_color yellow)'Account profile'(set_color normal)
 
 # shell-completion subflags
 complete -c ccs -n '__fish_seen_argument -l shell-completion' -l bash -d 'Install for bash'
