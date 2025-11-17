@@ -13,7 +13,7 @@
 #     sudo cp scripts/completion/ccs.zsh /usr/local/share/zsh/site-functions/_ccs
 
 _ccs() {
-  local -a commands profiles settings_profiles account_profiles
+  local -a commands settings_profiles_described account_profiles_described
   local curcontext="$curcontext" state line
   typeset -A opt_args
 
@@ -23,30 +23,53 @@ _ccs() {
     'doctor:Run health check and diagnostics'
   )
 
+  # Define known settings profiles with descriptions
+  local -A profile_descriptions
+  profile_descriptions=(
+    'default' 'Default Claude Sonnet 4.5'
+    'glm' 'GLM-4.6 (cost-optimized)'
+    'glmt' 'GLM-4.6 with thinking mode'
+    'kimi' 'Kimi for Coding (long-context)'
+    'max' 'Claude Opus (maximum capability)'
+  )
+
   # Load settings-based profiles from config.json
   if [[ -f ~/.ccs/config.json ]]; then
-    settings_profiles=(${(f)"$(jq -r '.profiles | keys[]' ~/.ccs/config.json 2>/dev/null)"})
+    local -a raw_settings_profiles
+    raw_settings_profiles=(${(f)"$(jq -r '.profiles | keys[]' ~/.ccs/config.json 2>/dev/null)"})
+
+    # Add descriptions to settings profiles
+    for profile in $raw_settings_profiles; do
+      local desc="${profile_descriptions[$profile]:-Settings-based profile}"
+      settings_profiles_described+=("${profile}:${desc}")
+    done
   fi
 
   # Load account-based profiles from profiles.json
   if [[ -f ~/.ccs/profiles.json ]]; then
-    account_profiles=(${(f)"$(jq -r '.profiles | keys[]' ~/.ccs/profiles.json 2>/dev/null)"})
-  fi
+    local -a raw_account_profiles
+    raw_account_profiles=(${(f)"$(jq -r '.profiles | keys[]' ~/.ccs/profiles.json 2>/dev/null)"})
 
-  # Combine all profiles
-  profiles=($settings_profiles $account_profiles)
+    # Add descriptions to account profiles
+    for profile in $raw_account_profiles; do
+      account_profiles_described+=("${profile}:Account-based profile")
+    done
+  fi
 
   _arguments -C \
     '(- *)'{-h,--help}'[Show help message]' \
     '(- *)'{-v,--version}'[Show version information]' \
+    '(- *)--shell-completion[Install shell completion]' \
     '1: :->command' \
     '*:: :->args'
 
   case $state in
     command)
-      local -a all_options
-      all_options=($commands $profiles)
-      _describe -t commands 'ccs commands' all_options
+      # Use _alternative to group commands and profiles separately
+      _alternative \
+        'commands:commands:_describe -t commands "commands" commands' \
+        'settings-profiles:model profiles:_describe -t settings-profiles "model profiles" settings_profiles_described' \
+        'account-profiles:account profiles:_describe -t account-profiles "account profiles" account_profiles_described'
       ;;
 
     args)
@@ -57,6 +80,13 @@ _ccs() {
         doctor)
           _arguments \
             '(- *)'{-h,--help}'[Show help for doctor command]'
+          ;;
+        --shell-completion)
+          _arguments \
+            '--bash[Install for bash]' \
+            '--zsh[Install for zsh]' \
+            '--fish[Install for fish]' \
+            '--powershell[Install for PowerShell]'
           ;;
         *)
           # For profile names, complete with Claude CLI arguments

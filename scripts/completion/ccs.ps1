@@ -12,8 +12,9 @@
 Register-ArgumentCompleter -CommandName ccs -ScriptBlock {
     param($commandName, $wordToComplete, $commandAst, $fakeBoundParameters)
 
-    $commands = @('auth', 'doctor', '--help', '--version', '-h', '-v')
+    $commands = @('auth', 'doctor', '--help', '--version', '--shell-completion', '-h', '-v')
     $authCommands = @('create', 'list', 'show', 'remove', 'default', '--help', '-h')
+    $shellCompletionFlags = @('--bash', '--zsh', '--fish', '--powershell')
     $listFlags = @('--verbose', '--json')
     $removeFlags = @('--yes', '-y')
     $showFlags = @('--json')
@@ -63,6 +64,21 @@ Register-ArgumentCompleter -CommandName ccs -ScriptBlock {
                 'ParameterValue',
                 $_
             )
+        }
+        return
+    }
+
+    # shell-completion flag completion
+    if ($words[1] -eq '--shell-completion') {
+        if ($position -eq 3) {
+            $shellCompletionFlags | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+                [System.Management.Automation.CompletionResult]::new(
+                    $_,
+                    $_,
+                    'ParameterValue',
+                    $_
+                )
+            }
         }
         return
     }
