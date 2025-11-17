@@ -18,7 +18,7 @@ zstyle ':completion:*:*:ccs:*:commands' list-colors '=(#b)(auth|doctor)([[:space
 zstyle ':completion:*:*:ccs:*:model-profiles' list-colors '=(#b)(default|glm|glmt|kimi|[^[:space:]]##)([[:space:]]#--[[:space:]]#*)=32=90'
 zstyle ':completion:*:*:ccs:*:account-profiles' list-colors '=(#b)([^[:space:]]##)([[:space:]]#--[[:space:]]#*)=33=90'
 zstyle ':completion:*:*:ccs:*' group-name ''
-zstyle ':completion:*:*:ccs:*:descriptions' format '%B%F{cyan}%d%f%b'
+zstyle ':completion:*:*:ccs:*:descriptions' format $'\n%B%F{yellow}── %d ──%f%b'
 zstyle ':completion:*:*:ccs:*' list-separator '  --  '
 zstyle ':completion:*:*:ccs:*' list-rows-first true
 zstyle ':completion:*:*:ccs:*' menu select
