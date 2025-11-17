@@ -19,6 +19,25 @@ function __fish_ccs_get_settings_profiles
     end
 end
 
+# Helper function to get custom/unknown settings profiles
+# (profiles not in the hardcoded known list)
+function __fish_ccs_get_custom_settings_profiles
+    set -l config_path ~/.ccs/config.json
+    set -l known_profiles default glm glmt kimi
+
+    # Get all settings profiles
+    if test -f $config_path
+        set -l all_profiles (jq -r '.profiles | keys[]' $config_path 2>/dev/null)
+
+        # Filter out known profiles
+        for profile in $all_profiles
+            if not contains $profile $known_profiles
+                echo $profile
+            end
+        end
+    end
+end
+
 # Helper function to get profiles with all types
 function __fish_ccs_get_profiles
     __fish_ccs_get_settings_profiles
@@ -57,12 +76,14 @@ complete -c ccs -l shell-completion -d 'Install shell completion'
 complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'auth' -d 'Manage multiple Claude accounts'
 complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'doctor' -d 'Run health check and diagnostics'
 
-# Top-level settings profiles (with specific descriptions)
+# Top-level known settings profiles (with specific descriptions)
 complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'default' -d 'Default Claude Sonnet 4.5'
 complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'glm' -d 'GLM-4.6 (cost-optimized)'
 complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'glmt' -d 'GLM-4.6 with thinking mode'
 complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'kimi' -d 'Kimi for Coding (long-context)'
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a 'max' -d 'Claude Opus (maximum capability)'
+
+# Top-level custom settings profiles (dynamic, with generic description)
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a '(__fish_ccs_get_custom_settings_profiles)' -d 'Settings-based profile'
 
 # Top-level account profiles (dynamic)
 complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor' -a '(__fish_ccs_get_account_profiles)' -d 'Account profile'

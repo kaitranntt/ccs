@@ -30,7 +30,6 @@ _ccs() {
     'glm' 'GLM-4.6 (cost-optimized)'
     'glmt' 'GLM-4.6 with thinking mode'
     'kimi' 'Kimi for Coding (long-context)'
-    'max' 'Claude Opus (maximum capability)'
   )
 
   # Load settings-based profiles from config.json
@@ -67,9 +66,9 @@ _ccs() {
     command)
       # Use _alternative to group commands and profiles separately
       _alternative \
-        'commands:commands:_describe -t commands "commands" commands' \
-        'settings-profiles:model profiles:_describe -t settings-profiles "model profiles" settings_profiles_described' \
-        'account-profiles:account profiles:_describe -t account-profiles "account profiles" account_profiles_described'
+        'commands:command:_describe "commands" commands' \
+        'settings-profiles:model profile:_describe "model profiles" settings_profiles_described' \
+        'account-profiles:account profile:_describe "account profiles" account_profiles_described'
       ;;
 
     args)
