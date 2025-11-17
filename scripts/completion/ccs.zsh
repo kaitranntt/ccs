@@ -64,11 +64,10 @@ _ccs() {
 
   case $state in
     command)
-      # Use _alternative to group commands and profiles separately
-      _alternative \
-        'commands:command:_describe "commands" commands' \
-        'settings-profiles:model profile:_describe "model profiles" settings_profiles_described' \
-        'account-profiles:account profile:_describe "account profiles" account_profiles_described'
+      # Describe commands and profiles (zsh will group them automatically)
+      _describe 'commands' commands
+      _describe 'model profiles' settings_profiles_described
+      _describe 'account profiles' account_profiles_described
       ;;
 
     args)
