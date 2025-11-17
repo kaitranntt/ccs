@@ -12,24 +12,35 @@
 #   Or install system-wide:
 #     sudo cp scripts/completion/ccs.zsh /usr/local/share/zsh/site-functions/_ccs
 
+# Set up completion styles for better formatting and colors
+# Color codes: 34=blue (commands), 32=green (model profiles), 33=yellow (account profiles), 90=gray (descriptions)
+zstyle ':completion:*:*:ccs:*:commands' list-colors '=(#b)(auth|doctor)([[:space:]]#-- *)=1;34=2;90'
+zstyle ':completion:*:*:ccs:*:model-profiles' list-colors '=(#b)(default|glm|glmt|kimi|[^[:space:]]##)([[:space:]]#-- *)=1;32=2;90'
+zstyle ':completion:*:*:ccs:*:account-profiles' list-colors '=(#b)([^[:space:]]##)([[:space:]]#-- *)=1;33=2;90'
+zstyle ':completion:*:*:ccs:*' group-name ''
+zstyle ':completion:*:*:ccs:*:descriptions' format '%B%F{cyan}%d%f%b'
+zstyle ':completion:*:*:ccs:*' list-separator '  --  '
+zstyle ':completion:*:*:ccs:*' list-rows-first true
+zstyle ':completion:*:*:ccs:*' menu select
+
 _ccs() {
   local -a commands settings_profiles_described account_profiles_described
   local curcontext="$curcontext" state line
   typeset -A opt_args
 
-  # Define top-level commands
+  # Define top-level commands (padded for alignment)
   commands=(
     'auth:Manage multiple Claude accounts'
     'doctor:Run health check and diagnostics'
   )
 
-  # Define known settings profiles with descriptions
+  # Define known settings profiles with descriptions (consistent padding)
   local -A profile_descriptions
   profile_descriptions=(
     'default' 'Default Claude Sonnet 4.5'
-    'glm' 'GLM-4.6 (cost-optimized)'
-    'glmt' 'GLM-4.6 with thinking mode'
-    'kimi' 'Kimi for Coding (long-context)'
+    'glm'     'GLM-4.6 (cost-optimized)'
+    'glmt'    'GLM-4.6 with thinking mode'
+    'kimi'    'Kimi for Coding (long-context)'
   )
 
   # Load settings-based profiles from config.json
@@ -64,10 +75,10 @@ _ccs() {
 
   case $state in
     command)
-      # Describe commands and profiles (zsh will group them automatically)
-      _describe 'commands' commands
-      _describe 'model profiles' settings_profiles_described
-      _describe 'account profiles' account_profiles_described
+      # Describe commands and profiles with proper tagging for colors
+      _describe -t commands 'commands' commands
+      _describe -t model-profiles 'model profiles' settings_profiles_described
+      _describe -t account-profiles 'account profiles' account_profiles_described
       ;;
 
     args)
