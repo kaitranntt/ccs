@@ -14,9 +14,9 @@
 
 # Set up completion styles for better formatting and colors
 # Color codes: 34=blue (commands), 32=green (model profiles), 33=yellow (account profiles), 90=gray (descriptions)
-zstyle ':completion:*:*:ccs:*:commands' list-colors '=(#b)(auth|doctor)([[:space:]]#-- *)=1;34=2;90'
-zstyle ':completion:*:*:ccs:*:model-profiles' list-colors '=(#b)(default|glm|glmt|kimi|[^[:space:]]##)([[:space:]]#-- *)=1;32=2;90'
-zstyle ':completion:*:*:ccs:*:account-profiles' list-colors '=(#b)([^[:space:]]##)([[:space:]]#-- *)=1;33=2;90'
+zstyle ':completion:*:*:ccs:*:commands' list-colors '=(#b)(auth|doctor)([[:space:]]#--[[:space:]]#*)=34=90'
+zstyle ':completion:*:*:ccs:*:model-profiles' list-colors '=(#b)(default|glm|glmt|kimi|[^[:space:]]##)([[:space:]]#--[[:space:]]#*)=32=90'
+zstyle ':completion:*:*:ccs:*:account-profiles' list-colors '=(#b)([^[:space:]]##)([[:space:]]#--[[:space:]]#*)=33=90'
 zstyle ':completion:*:*:ccs:*' group-name ''
 zstyle ':completion:*:*:ccs:*:descriptions' format '%B%F{cyan}%d%f%b'
 zstyle ':completion:*:*:ccs:*' list-separator '  --  '
