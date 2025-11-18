@@ -165,73 +165,82 @@ find_similar_strings() {
 show_help() {
   echo -e "${BOLD}CCS (Claude Code Switch) - Instant profile switching for Claude CLI${RESET}"
   echo ""
+
   echo -e "${CYAN}Usage:${RESET}"
   echo -e "  ${YELLOW}ccs${RESET} [profile] [claude-args...]"
-  echo -e "  ${YELLOW}ccs auth${RESET} <command> [options]"
   echo -e "  ${YELLOW}ccs${RESET} [flags]"
   echo ""
+
   echo -e "${CYAN}Description:${RESET}"
   echo -e "  Switch between multiple Claude accounts and alternative models"
   echo -e "  (GLM, Kimi) instantly. Run different Claude CLI sessions concurrently"
   echo -e "  with auto-recovery. Zero downtime."
   echo ""
+
   echo -e "${CYAN}Model Switching:${RESET}"
   echo -e "  ${YELLOW}ccs${RESET}                         Use default Claude account"
   echo -e "  ${YELLOW}ccs glm${RESET}                     Switch to GLM 4.6 model"
   echo -e "  ${YELLOW}ccs glmt${RESET}                    Switch to GLM with thinking mode"
+  echo -e "  ${YELLOW}ccs glmt --verbose${RESET}          Enable debug logging"
   echo -e "  ${YELLOW}ccs kimi${RESET}                    Switch to Kimi for Coding"
   echo -e "  ${YELLOW}ccs glm${RESET} \"debug this code\"   Use GLM and run command"
   echo ""
+
   echo -e "${CYAN}Account Management:${RESET}"
   echo -e "  ${YELLOW}ccs auth --help${RESET}             Run multiple Claude accounts concurrently"
-  echo -e "  ${YELLOW}ccs work${RESET}                    Switch to work account"
-  echo -e "  ${YELLOW}ccs personal${RESET}                Switch to personal account"
   echo ""
+
   echo -e "${CYAN}Delegation (inside Claude Code CLI):${RESET}"
   echo -e "  ${YELLOW}/ccs:glm \"task\"${RESET}             Delegate to GLM-4.6 for simple tasks"
   echo -e "  ${YELLOW}/ccs:kimi \"task\"${RESET}            Delegate to Kimi for long context"
   echo -e "  Save tokens by delegating simple tasks to cost-optimized models"
   echo ""
+
   echo -e "${CYAN}Diagnostics:${RESET}"
   echo -e "  ${YELLOW}ccs doctor${RESET}                  Run health check and diagnostics"
   echo -e "  ${YELLOW}ccs sync${RESET}                    Sync delegation commands and skills"
   echo ""
+
   echo -e "${CYAN}Flags:${RESET}"
   echo -e "  ${YELLOW}-h, --help${RESET}                  Show this help message"
   echo -e "  ${YELLOW}-v, --version${RESET}               Show version and installation info"
   echo -e "  ${YELLOW}-sc, --shell-completion${RESET}     Install shell auto-completion"
   echo ""
+
   echo -e "${CYAN}Configuration:${RESET}"
-  echo -e "  Config:    ~/.ccs/config.json"
-  echo -e "  Profiles:  ~/.ccs/profiles.json"
-  echo -e "  Instances: ~/.ccs/instances/"
-  echo -e "  Settings:  ~/.ccs/*.settings.json"
+  echo -e "  Config File: ~/.ccs/config.json"
+  echo -e "  Profiles:    ~/.ccs/profiles.json"
+  echo -e "  Instances:   ~/.ccs/instances/"
+  echo -e "  Settings:    ~/.ccs/*.settings.json"
+  echo -e "  Environment: CCS_CONFIG (override config path)"
   echo ""
+
   echo -e "${CYAN}Shared Data:${RESET}"
-  echo -e "  Commands:  ~/.ccs/shared/commands/"
-  echo -e "  Skills:    ~/.ccs/shared/skills/"
+  echo -e "  Commands:    ~/.ccs/shared/commands/"
+  echo -e "  Skills:      ~/.ccs/shared/skills/"
+  echo -e "  Agents:      ~/.ccs/shared/agents/"
   echo -e "  Note: Commands, skills, and agents are symlinked across all profiles"
   echo ""
+
   echo -e "${CYAN}Examples:${RESET}"
-  echo -e "  Quick start:"
-  echo -e "    ${YELLOW}\$ ccs${RESET}                        # Use default account"
-  echo -e "    ${YELLOW}\$ ccs glm \"implement API\"${RESET}    # Cost-optimized model"
-  echo ""
-  echo -e "  Multi-account workflow:"
-  echo -e "    ${YELLOW}\$ ccs auth create work${RESET}       # Create work profile"
-  echo -e "    ${YELLOW}\$ ccs work \"review PR\"${RESET}       # Use work account"
+  echo -e "  ${YELLOW}\$ ccs${RESET}                        # Use default account"
+  echo -e "  ${YELLOW}\$ ccs glm \"implement API\"${RESET}    # Cost-optimized model"
   echo ""
   echo -e "  For more: ${CYAN}https://github.com/kaitranntt/ccs/blob/main/README.md${RESET}"
   echo ""
+
   echo -e "${YELLOW}Uninstall:${RESET}"
-  echo "  npm:          npm uninstall -g @kaitranntt/ccs"
-  echo "  macOS/Linux:  curl -fsSL ccs.kaitran.ca/uninstall | bash"
-  echo "  Windows:      irm ccs.kaitran.ca/uninstall | iex"
+  echo -e "  npm:          npm uninstall -g @kaitranntt/ccs"
+  echo -e "  macOS/Linux:  curl -fsSL ccs.kaitran.ca/uninstall | bash"
+  echo -e "  Windows:      irm ccs.kaitran.ca/uninstall | iex"
   echo ""
+
   echo -e "${CYAN}Documentation:${RESET}"
   echo -e "  GitHub:  ${CYAN}https://github.com/kaitranntt/ccs${RESET}"
   echo -e "  Docs:    https://github.com/kaitranntt/ccs/blob/main/README.md"
+  echo -e "  Issues:  https://github.com/kaitranntt/ccs/issues"
   echo ""
+
   echo -e "${CYAN}License:${RESET} MIT"
 }
 
@@ -611,49 +620,81 @@ Restart your terminal after installation."
 }
 
 show_version() {
+  # Title
   echo -e "${BOLD}CCS (Claude Code Switch) v${CCS_VERSION}${RESET}"
   echo ""
+
+  # Installation section with table-like formatting
   echo -e "${CYAN}Installation:${RESET}"
 
-  # Simple location - just show what 'command -v' returns
-  local location=$(command -v ccs 2>/dev/null || echo "(not installed)")
-  echo -e "  ${CYAN}Location:${RESET} ${location}"
+  # Location - prioritize script location over command location
+  local script_location="$(readlink -f "${BASH_SOURCE[0]}")"
+  local command_location=$(command -v ccs 2>/dev/null || echo "(not found)")
 
-  # Simple config display
-  local config="${CCS_CONFIG:-$HOME/.ccs/config.json}"
-  echo -e "  ${CYAN}Config:${RESET} ${config}"
-
-  # Delegation status
-  local delegation_rules="$HOME/.ccs/delegation-rules.json"
-  if [[ -f "$delegation_rules" ]]; then
-    echo -e "  ${CYAN}Delegation:${RESET} Enabled"
-
-    # Check which profiles are delegation-ready
-    local ready_profiles=()
-    for profile in glm kimi; do
-      local settings_file="$HOME/.ccs/profiles/$profile/settings.json"
-      if [[ -f "$settings_file" ]]; then
-        # Check if API key is configured (not a placeholder)
-        local api_key=$(jq -r '.env.ANTHROPIC_AUTH_TOKEN // empty' "$settings_file" 2>/dev/null)
-        if [[ -n "$api_key" ]] && [[ ! "$api_key" =~ YOUR_.*_API_KEY_HERE ]]; then
-          ready_profiles+=("$profile")
-        fi
-      fi
-    done
-
-    if [[ ${#ready_profiles[@]} -gt 0 ]]; then
-      echo -e "  ${CYAN}Ready:${RESET} ${ready_profiles[*]}"
-    else
-      echo -e "  ${CYAN}Ready:${RESET} None (configure profiles first)"
-    fi
+  # Show script location if running from source
+  if [[ "$script_location" == *"ccs"* ]]; then
+    printf "  ${CYAN}%-16s${RESET} %s\n" "Location:" "${script_location}"
   else
-    echo -e "  ${CYAN}Delegation:${RESET} Not configured"
+    printf "  ${CYAN}%-16s${RESET} %s\n" "Location:" "${command_location}"
   fi
+
+  # .ccs/ directory location
+  printf "  ${CYAN}%-16s${RESET} %s\n" "CCS Directory:" "$HOME/.ccs/"
+
+  # Config path
+  printf "  ${CYAN}%-16s${RESET} %s\n" "Config:" "${CONFIG_FILE}"
+
+  # Profiles.json location
+  printf "  ${CYAN}%-16s${RESET} %s\n" "Profiles:" "${PROFILES_JSON}"
+
+  # Delegation status - check multiple indicators
+  local delegation_configured=false
+  local ready_profiles=()
+
+  # Check for delegation-sessions.json (primary indicator)
+  local delegation_sessions="$HOME/.ccs/delegation-sessions.json"
+  if [[ -f "$delegation_sessions" ]]; then
+    delegation_configured=true
+  fi
+
+  # Check for profiles with valid API keys (secondary indicator)
+  for profile in glm kimi; do
+    local settings_file="$HOME/.ccs/$profile.settings.json"
+    if [[ -f "$settings_file" ]]; then
+      # Check if API key is configured (not a placeholder)
+      local api_key=$(jq -r '.env.ANTHROPIC_AUTH_TOKEN // empty' "$settings_file" 2>/dev/null)
+      if [[ -n "$api_key" ]] && [[ ! "$api_key" =~ YOUR_.*_API_KEY_HERE ]] && [[ ! "$api_key" =~ sk-test.* ]]; then
+        ready_profiles+=("$profile")
+        delegation_configured=true
+      fi
+    fi
+  done
+
+  if $delegation_configured; then
+    printf "  ${CYAN}%-16s${RESET} %s\n" "Delegation:" "Enabled"
+  else
+    printf "  ${CYAN}%-16s${RESET} %s\n" "Delegation:" "Not configured"
+  fi
+
   echo ""
 
+  # Ready Profiles section - make it more prominent
+  if [[ ${#ready_profiles[@]} -gt 0 ]]; then
+    echo -e "${CYAN}Delegation Ready:${RESET}"
+    echo "  ${YELLOW}✓${RESET} ${ready_profiles[*]} profiles are ready for delegation"
+    echo ""
+  elif $delegation_configured; then
+    echo -e "${CYAN}Delegation Ready:${RESET}"
+    echo "  ${YELLOW}!${RESET} Delegation configured but no valid API keys found"
+    echo ""
+  fi
+
+  # Documentation
   echo -e "${CYAN}Documentation:${RESET} https://github.com/kaitranntt/ccs"
   echo -e "${CYAN}License:${RESET} MIT"
   echo ""
+
+  # Help hint
   echo -e "${YELLOW}Run 'ccs --help' for usage information${RESET}"
 }
 

@@ -63,44 +63,68 @@ function handleVersionCommand() {
   console.log(colored(`CCS (Claude Code Switch) v${CCS_VERSION}`, 'bold'));
   console.log('');
 
-  // Installation section
+  // Installation section with table-like formatting
   console.log(colored('Installation:', 'cyan'));
 
   // Location
   const installLocation = process.argv[1] || '(not found)';
-  console.log(`  ${colored('Location:', 'cyan')} ${installLocation}`);
+  console.log(`  ${colored('Location:'.padEnd(17), 'cyan')} ${installLocation}`);
+
+  // .ccs/ directory location
+  const ccsDir = path.join(os.homedir(), '.ccs');
+  console.log(`  ${colored('CCS Directory:'.padEnd(17), 'cyan')} ${ccsDir}`);
 
   // Config path
   const configPath = getConfigPath();
-  console.log(`  ${colored('Config:', 'cyan')} ${configPath}`);
+  console.log(`  ${colored('Config:'.padEnd(17), 'cyan')} ${configPath}`);
 
-  // Delegation status
-  const delegationRulesPath = path.join(os.homedir(), '.ccs', 'delegation-rules.json');
-  const delegationEnabled = fs.existsSync(delegationRulesPath);
+  // Profiles.json location
+  const profilesJson = path.join(os.homedir(), '.ccs', 'profiles.json');
+  console.log(`  ${colored('Profiles:'.padEnd(17), 'cyan')} ${profilesJson}`);
 
-  if (delegationEnabled) {
-    console.log(`  ${colored('Delegation:', 'cyan')} Enabled`);
+  // Delegation status - check multiple indicators
+  const delegationSessionsPath = path.join(os.homedir(), '.ccs', 'delegation-sessions.json');
+  const delegationConfigured = fs.existsSync(delegationSessionsPath);
 
-    // Check which profiles are delegation-ready
-    const readyProfiles = [];
-    const { DelegationValidator } = require('./utils/delegation-validator');
+  let readyProfiles = [];
 
-    for (const profile of ['glm', 'kimi']) {
-      const validation = DelegationValidator.validate(profile);
-      if (validation.valid) {
-        readyProfiles.push(profile);
+  // Check for profiles with valid API keys
+  for (const profile of ['glm', 'kimi']) {
+    const settingsPath = path.join(os.homedir(), '.ccs', `${profile}.settings.json`);
+    if (fs.existsSync(settingsPath)) {
+      try {
+        const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+        const apiKey = settings.env?.ANTHROPIC_AUTH_TOKEN;
+        if (apiKey && !apiKey.match(/YOUR_.*_API_KEY_HERE/) && !apiKey.match(/sk-test.*/)) {
+          readyProfiles.push(profile);
+        }
+      } catch (error) {
+        // Invalid JSON, skip
       }
     }
-
-    if (readyProfiles.length > 0) {
-      console.log(`  ${colored('Ready:', 'cyan')} ${readyProfiles.join(', ')}`);
-    } else {
-      console.log(`  ${colored('Ready:', 'cyan')} None (configure profiles first)`);
-    }
-  } else {
-    console.log(`  ${colored('Delegation:', 'cyan')} Not configured`);
   }
+
+  const hasValidApiKeys = readyProfiles.length > 0;
+  const delegationEnabled = delegationConfigured || hasValidApiKeys;
+
+  if (delegationEnabled) {
+    console.log(`  ${colored('Delegation:'.padEnd(17), 'cyan')} Enabled`);
+  } else {
+    console.log(`  ${colored('Delegation:'.padEnd(17), 'cyan')} Not configured`);
+  }
+
   console.log('');
+
+  // Ready Profiles section - make it more prominent
+  if (readyProfiles.length > 0) {
+    console.log(colored('Delegation Ready:', 'cyan'));
+    console.log(`  ${colored('✓', 'yellow')} ${readyProfiles.join(', ')} profiles are ready for delegation`);
+    console.log('');
+  } else if (delegationEnabled) {
+    console.log(colored('Delegation Ready:', 'cyan'));
+    console.log(`  ${colored('!', 'yellow')} Delegation configured but no valid API keys found`);
+    console.log('');
+  }
 
   // Documentation
   console.log(`${colored('Documentation:', 'cyan')} https://github.com/kaitranntt/ccs`);

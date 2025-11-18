@@ -212,75 +212,104 @@ function Show-Help {
 
     Write-ColorLine "CCS (Claude Code Switch) - Instant profile switching for Claude CLI" "White"
     Write-Host ""
+
     Write-ColorLine "Usage:" "Cyan"
     Write-ColorLine "  ccs [profile] [claude-args...]" "Yellow"
-    Write-ColorLine "  ccs auth <command> [options]" "Yellow"
     Write-ColorLine "  ccs [flags]" "Yellow"
     Write-Host ""
+
     Write-ColorLine "Description:" "Cyan"
     Write-Host "  Switch between multiple Claude accounts and alternative models"
     Write-Host "  (GLM, Kimi) instantly. Run different Claude CLI sessions concurrently"
     Write-Host "  with auto-recovery. Zero downtime."
     Write-Host ""
+
     Write-ColorLine "Model Switching:" "Cyan"
     Write-ColorLine "  ccs                         Use default Claude account" "Yellow"
     Write-ColorLine "  ccs glm                     Switch to GLM 4.6 model" "Yellow"
     Write-ColorLine "  ccs glmt                    Switch to GLM with thinking mode" "Yellow"
+    Write-ColorLine "  ccs glmt --verbose          Enable debug logging" "Yellow"
     Write-ColorLine "  ccs kimi                    Switch to Kimi for Coding" "Yellow"
     Write-ColorLine "  ccs glm 'debug this code'   Use GLM and run command" "Yellow"
     Write-Host ""
-    Write-ColorLine "Examples:" "Cyan"
-    Write-Host "  Quick start:"
-    Write-ColorLine "    `$ ccs" "Yellow" -NoNewline
-    Write-Host "                        # Use default account"
-    Write-ColorLine "    `$ ccs glm `"implement API`"" "Yellow" -NoNewline
-    Write-Host "    # Cost-optimized model"
-    Write-Host ""
-    Write-Host "  Profile usage:"
-    Write-ColorLine "    `$ ccs work `"debug code`"" "Yellow" -NoNewline
-    Write-Host "      # Switch to work profile"
-    Write-ColorLine "    `$ ccs personal" "Yellow" -NoNewline
-    Write-Host "                # Open personal account"
-    Write-Host ""
+
     Write-ColorLine "Account Management:" "Cyan"
     Write-ColorLine "  ccs auth --help             Run multiple Claude accounts concurrently" "Yellow"
-    Write-ColorLine "  ccs work                    Switch to work account" "Yellow"
-    Write-ColorLine "  ccs personal                Switch to personal account" "Yellow"
     Write-Host ""
+
     Write-ColorLine "Delegation (inside Claude Code CLI):" "Cyan"
     Write-ColorLine "  /ccs:glm `"task`"             Delegate to GLM-4.6 for simple tasks" "Yellow"
     Write-ColorLine "  /ccs:kimi `"task`"            Delegate to Kimi for long context" "Yellow"
     Write-Host "  Save tokens by delegating simple tasks to cost-optimized models"
     Write-Host ""
+
     Write-ColorLine "Diagnostics:" "Cyan"
     Write-ColorLine "  ccs doctor                  Run health check and diagnostics" "Yellow"
     Write-ColorLine "  ccs sync                    Sync delegation commands and skills" "Yellow"
     Write-Host ""
+
     Write-ColorLine "Flags:" "Cyan"
     Write-ColorLine "  -h, --help                  Show this help message" "Yellow"
     Write-ColorLine "  -v, --version               Show version and installation info" "Yellow"
     Write-ColorLine "  -sc, --shell-completion     Install shell auto-completion" "Yellow"
     Write-Host ""
+
     Write-ColorLine "Configuration:" "Cyan"
-    Write-Host "  Config:    ~/.ccs/config.json"
-    Write-Host "  Profiles:  ~/.ccs/profiles.json"
-    Write-Host "  Instances: ~/.ccs/instances/"
-    Write-Host "  Settings:  ~/.ccs/*.settings.json"
+    Write-Host "  Config File: ~/.ccs/config.json"
+    Write-Host "  Profiles:    ~/.ccs/profiles.json"
+    Write-Host "  Instances:   ~/.ccs/instances/"
+    Write-Host "  Settings:    ~/.ccs/*.settings.json"
+    Write-Host "  Environment: CCS_CONFIG (override config path)"
     Write-Host ""
+
     Write-ColorLine "Shared Data:" "Cyan"
-    Write-Host "  Commands:  ~/.ccs/shared/commands/"
-    Write-Host "  Skills:    ~/.ccs/shared/skills/"
+    Write-Host "  Commands:    ~/.ccs/shared/commands/"
+    Write-Host "  Skills:      ~/.ccs/shared/skills/"
+    Write-Host "  Agents:      ~/.ccs/shared/agents/"
     Write-Host "  Note: Commands, skills, and agents are symlinked across all profiles"
     Write-Host ""
+
+    Write-ColorLine "Examples:" "Cyan"
+    Write-ColorLine "  `$ ccs                        # Use default account" "Yellow"
+    Write-ColorLine "  `$ ccs glm `"implement API`"    # Cost-optimized model" "Yellow"
+    Write-Host ""
+    Write-ColorLine "  For more: https://github.com/kaitranntt/ccs/blob/main/README.md" "Cyan"
+    Write-Host ""
+
+    Write-ColorLine "Uninstall:" "Yellow"
+    Write-Host "  npm:          npm uninstall -g @kaitranntt/ccs"
+    Write-Host "  macOS/Linux:  curl -fsSL ccs.kaitran.ca/uninstall | bash"
+    Write-Host "  Windows:      irm ccs.kaitran.ca/uninstall | iex"
+    Write-Host ""
+
     Write-ColorLine "Documentation:" "Cyan"
     Write-Host "  GitHub:  https://github.com/kaitranntt/ccs"
     Write-Host "  Docs:    https://github.com/kaitranntt/ccs/blob/main/README.md"
+    Write-Host "  Issues:  https://github.com/kaitranntt/ccs/issues"
     Write-Host ""
+
     Write-ColorLine "License: MIT" "Cyan"
 }
 
 function Show-Version {
     $UseColors = $env:FORCE_COLOR -or ([Console]::IsOutputRedirected -eq $false -and -not $env:NO_COLOR)
+
+    # Helper for aligned output
+    function Write-TableLine {
+        param(
+            [string]$Label,
+            [string]$Value,
+            [string]$Color = "Cyan"
+        )
+        if ($UseColors) {
+            $PaddedLabel = $Label.PadRight(17)
+            Write-Host "  $PaddedLabel " -ForegroundColor $Color -NoNewline
+            Write-Host $Value
+        } else {
+            $PaddedLabel = $Label.PadRight(17)
+            Write-Host "  $PaddedLabel $Value"
+        }
+    }
 
     # Title
     if ($UseColors) {
@@ -290,37 +319,90 @@ function Show-Version {
     }
     Write-Host ""
 
-    # Installation
+    # Installation section with table-like formatting
     if ($UseColors) { Write-Host "Installation:" -ForegroundColor Cyan }
     else { Write-Host "Installation:" }
 
-    # Location
+    # Location - prioritize script location over command location
+    $ScriptLocation = $MyInvocation.MyCommand.Path
     $InstallLocation = (Get-Command ccs -ErrorAction SilentlyContinue).Source
-    if ($InstallLocation) {
-        if ($UseColors) {
-            Write-Host "  Location: " -ForegroundColor Cyan -NoNewline
-            Write-Host $InstallLocation
-        } else {
-            Write-Host "  Location: $InstallLocation"
-        }
+
+    # Show script location if running from source
+    if ($ScriptLocation -and (Test-Path $ScriptLocation)) {
+        Write-TableLine "Location:" $ScriptLocation
+    } elseif ($InstallLocation) {
+        Write-TableLine "Location:" $InstallLocation
     } else {
-        if ($UseColors) {
-            Write-Host "  Location: " -ForegroundColor Cyan -NoNewline
-            Write-Host "(not found - run from current directory)" -ForegroundColor Gray
-        } else {
-            Write-Host "  Location: (not found - run from current directory)"
+        Write-TableLine "Location:" "(not found - run from current directory)"
+    }
+
+    # .ccs/ directory location
+    Write-TableLine "CCS Directory:" "$env:USERPROFILE\.ccs\"
+
+    # Config path
+    Write-TableLine "Config:" $ConfigFile
+
+    # Profiles.json location
+    Write-TableLine "Profiles:" $ProfilesJson
+
+    # Delegation status - check multiple indicators
+    $DelegationConfigured = $false
+    $ReadyProfiles = @()
+
+    # Check for delegation-sessions.json (primary indicator)
+    $DelegationSessions = "$env:USERPROFILE\.ccs\delegation-sessions.json"
+    if (Test-Path $DelegationSessions) {
+        $DelegationConfigured = $true
+    }
+
+    # Check for profiles with valid API keys (secondary indicator)
+    foreach ($profile in @("glm", "kimi")) {
+        $SettingsFile = "$env:USERPROFILE\.ccs\$profile.settings.json"
+        if (Test-Path $SettingsFile) {
+            try {
+                $Settings = Get-Content $SettingsFile -Raw | ConvertFrom-Json
+                $ApiKey = $Settings.env.ANTHROPIC_AUTH_TOKEN
+                if ($ApiKey -and $ApiKey -notmatch "YOUR_.*_API_KEY_HERE" -and $ApiKey -notmatch "sk-test.*") {
+                    $ReadyProfiles += $profile
+                    $DelegationConfigured = $true
+                }
+            } catch { }
         }
     }
 
-    # Config
-    if ($UseColors) {
-        Write-Host "  Config: " -ForegroundColor Cyan -NoNewline
-        Write-Host $ConfigFile
+    if ($DelegationConfigured) {
+        Write-TableLine "Delegation:" "Enabled"
     } else {
-        Write-Host "  Config: $ConfigFile"
+        Write-TableLine "Delegation:" "Not configured"
     }
 
     Write-Host ""
+
+    # Ready Profiles section - make it more prominent
+    if ($ReadyProfiles.Count -gt 0) {
+        if ($UseColors) { Write-Host "Delegation Ready:" -ForegroundColor Cyan }
+        else { Write-Host "Delegation Ready:" }
+
+        $ReadyProfilesStr = $ReadyProfiles -join ", "
+        if ($UseColors) {
+            Write-Host "  ✓ " -ForegroundColor Yellow -NoNewline
+            Write-Host "$ReadyProfilesStr profiles are ready for delegation"
+        } else {
+            Write-Host "  ! $ReadyProfilesStr profiles are ready for delegation"
+        }
+        Write-Host ""
+    } elseif ($DelegationConfigured) {
+        if ($UseColors) { Write-Host "Delegation Ready:" -ForegroundColor Cyan }
+        else { Write-Host "Delegation Ready:" }
+
+        if ($UseColors) {
+            Write-Host "  ! " -ForegroundColor Yellow -NoNewline
+            Write-Host "Delegation configured but no valid API keys found"
+        } else {
+            Write-Host "  ! Delegation configured but no valid API keys found"
+        }
+        Write-Host ""
+    }
 
     # Documentation
     if ($UseColors) {
