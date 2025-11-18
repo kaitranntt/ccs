@@ -126,9 +126,9 @@ function handleHelpCommand() {
 
   // Description
   console.log(colored('Description:', 'cyan'));
-  console.log('  Switch between multiple Claude accounts (work, personal, team) and');
-  console.log('  alternative models (GLM, Kimi) instantly. Concurrent sessions with');
-  console.log('  auto-recovery. Zero downtime.');
+  console.log('  Switch between multiple Claude accounts and alternative models');
+  console.log('  (GLM, Kimi) instantly. Run different Claude CLI sessions concurrently');
+  console.log('  with auto-recovery. Zero downtime.');
   console.log('');
 
   // Model Switching
@@ -144,8 +144,6 @@ function handleHelpCommand() {
   // Account Management
   console.log(colored('Account Management:', 'cyan'));
   console.log(`  ${colored('ccs auth --help', 'yellow')}             Manage multiple Claude accounts`);
-  console.log(`  ${colored('ccs work', 'yellow')}                    Switch to work account`);
-  console.log(`  ${colored('ccs personal', 'yellow')}                Switch to personal account`);
   console.log('');
 
   // Delegation (NEW)
@@ -189,13 +187,8 @@ function handleHelpCommand() {
 
   // Examples
   console.log(colored('Examples:', 'cyan'));
-  console.log('  Quick start:');
-  console.log(`    ${colored('$ ccs', 'yellow')}                        # Use default account`);
-  console.log(`    ${colored('$ ccs glm "implement API"', 'yellow')}    # Cost-optimized model`);
-  console.log('');
-  console.log('  Multi-account workflow:');
-  console.log(`    ${colored('$ ccs auth create work', 'yellow')}       # Create work profile`);
-  console.log(`    ${colored('$ ccs work "review PR"', 'yellow')}       # Use work account`);
+  console.log(`  ${colored('$ ccs', 'yellow')}                        # Use default account`);
+  console.log(`  ${colored('$ ccs glm "implement API"', 'yellow')}    # Cost-optimized model`);
   console.log('');
   console.log(`  For more: ${colored('https://github.com/kaitranntt/ccs#usage', 'cyan')}`);
   console.log('');
