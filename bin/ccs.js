@@ -146,13 +146,11 @@ function handleHelpCommand() {
   console.log(`  ${colored('ccs auth --help', 'yellow')}             Manage multiple Claude accounts`);
   console.log('');
 
-  // Delegation (NEW)
-  console.log(colored('Delegation (Token Optimization):', 'cyan'));
-  console.log(`  ${colored('/ccs:glm "task"', 'yellow')}             Delegate to GLM-4.6 within Claude session`);
+  // Delegation (inside Claude Code CLI)
+  console.log(colored('Delegation (inside Claude Code CLI):', 'cyan'));
+  console.log(`  ${colored('/ccs:glm "task"', 'yellow')}             Delegate to GLM-4.6 for simple tasks`);
   console.log(`  ${colored('/ccs:kimi "task"', 'yellow')}            Delegate to Kimi for long context`);
-  console.log(`  ${colored('/ccs:create m2', 'yellow')}              Create custom delegation command`);
-  console.log('  Use delegation to save tokens on simple tasks');
-  console.log('  Commands work inside Claude Code sessions only');
+  console.log('  Save tokens by delegating simple tasks to cost-optimized models');
   console.log('');
 
   // Diagnostics
