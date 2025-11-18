@@ -9,6 +9,7 @@ const { colored } = require('./helpers');
 const UPDATE_CHECK_FILE = path.join(os.homedir(), '.ccs', 'update-check.json');
 const CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
 const GITHUB_API_URL = 'https://api.github.com/repos/kaitranntt/ccs/releases/latest';
+const NPM_REGISTRY_URL = 'https://registry.npmjs.org/@kaitranntt/ccs/latest';
 const REQUEST_TIMEOUT = 5000; // 5 seconds
 
 /**
@@ -31,10 +32,10 @@ function compareVersions(v1, v2) {
 }
 
 /**
- * Fetch latest version from GitHub
+ * Fetch latest version from GitHub releases
  * @returns {Promise<string|null>} - Latest version or null on error
  */
-function fetchLatestVersion() {
+function fetchLatestVersionFromGitHub() {
   return new Promise((resolve) => {
     const req = https.get(GITHUB_API_URL, {
       headers: { 'User-Agent': 'CCS-Update-Checker' },
@@ -55,6 +56,46 @@ function fetchLatestVersion() {
 
           const release = JSON.parse(data);
           const version = release.tag_name?.replace(/^v/, '') || null;
+          resolve(version);
+        } catch (err) {
+          resolve(null);
+        }
+      });
+    });
+
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(null);
+    });
+  });
+}
+
+/**
+ * Fetch latest version from npm registry
+ * @returns {Promise<string|null>} - Latest version or null on error
+ */
+function fetchLatestVersionFromNpm() {
+  return new Promise((resolve) => {
+    const req = https.get(NPM_REGISTRY_URL, {
+      headers: { 'User-Agent': 'CCS-Update-Checker' },
+      timeout: REQUEST_TIMEOUT
+    }, (res) => {
+      let data = '';
+
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+
+      res.on('end', () => {
+        try {
+          if (res.statusCode !== 200) {
+            resolve(null);
+            return;
+          }
+
+          const packageData = JSON.parse(data);
+          const version = packageData.version || null;
           resolve(version);
         } catch (err) {
           resolve(null);
@@ -108,9 +149,10 @@ function writeCache(cache) {
  * Check for updates (async, non-blocking)
  * @param {string} currentVersion - Current CCS version
  * @param {boolean} force - Force check even if within interval
+ * @param {string} installMethod - Installation method ('npm' or 'direct')
  * @returns {Promise<Object|null>} - Update info or null
  */
-async function checkForUpdates(currentVersion, force = false) {
+async function checkForUpdates(currentVersion, force = false, installMethod = 'direct') {
   const cache = readCache();
   const now = Date.now();
 
@@ -127,8 +169,13 @@ async function checkForUpdates(currentVersion, force = false) {
     return null;
   }
 
-  // Fetch latest version
-  const latestVersion = await fetchLatestVersion();
+  // Fetch latest version from appropriate source
+  let latestVersion;
+  if (installMethod === 'npm') {
+    latestVersion = await fetchLatestVersionFromNpm();
+  } else {
+    latestVersion = await fetchLatestVersionFromGitHub();
+  }
 
   // Update cache
   cache.last_check = now;

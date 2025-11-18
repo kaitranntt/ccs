@@ -1050,11 +1050,18 @@ function Update-Run {
         # npm not available or not installed via npm
     }
 
-    # Fetch latest version from GitHub
+    # Fetch latest version from appropriate source
     $LatestVersion = ""
     try {
-        $Response = Invoke-RestMethod -Uri "https://api.github.com/repos/kaitranntt/ccs/releases/latest" -TimeoutSec 5
-        $LatestVersion = $Response.tag_name -replace '^v', ''
+        if ($InstallMethod -eq "npm") {
+            # Check npm registry for npm installations
+            $Response = Invoke-RestMethod -Uri "https://registry.npmjs.org/@kaitranntt/ccs/latest" -TimeoutSec 5
+            $LatestVersion = $Response.version
+        } else {
+            # Check GitHub releases for direct installations
+            $Response = Invoke-RestMethod -Uri "https://api.github.com/repos/kaitranntt/ccs/releases/latest" -TimeoutSec 5
+            $LatestVersion = $Response.tag_name -replace '^v', ''
+        }
     } catch {
         Write-Host "[!] Unable to check for updates" -ForegroundColor Yellow
         Write-Host ""

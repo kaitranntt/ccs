@@ -605,11 +605,18 @@ update_run() {
     install_method="npm"
   fi
 
-  # Fetch latest version from GitHub
+  # Fetch latest version from appropriate source
   local latest_version=""
   if command -v curl &>/dev/null; then
-    latest_version=$(curl -fsSL https://api.github.com/repos/kaitranntt/ccs/releases/latest 2>/dev/null | \
-      grep '"tag_name"' | sed -E 's/.*"v?([0-9.]+)".*/\1/')
+    if [[ "$install_method" == "npm" ]]; then
+      # Check npm registry for npm installations
+      latest_version=$(curl -fsSL https://registry.npmjs.org/@kaitranntt/ccs/latest 2>/dev/null | \
+        grep '"version"' | head -1 | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([0-9.]+)".*/\1/')
+    else
+      # Check GitHub releases for direct installations
+      latest_version=$(curl -fsSL https://api.github.com/repos/kaitranntt/ccs/releases/latest 2>/dev/null | \
+        grep '"tag_name"' | sed -E 's/.*"v?([0-9.]+)".*/\1/')
+    fi
   fi
 
   if [[ -z "$latest_version" ]]; then
