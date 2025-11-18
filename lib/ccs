@@ -196,7 +196,7 @@ show_help() {
   echo ""
   echo -e "${CYAN}Diagnostics:${RESET}"
   echo -e "  ${YELLOW}ccs doctor${RESET}                  Run health check and diagnostics"
-  echo -e "  ${YELLOW}ccs update${RESET}                  Update delegation commands and skills"
+  echo -e "  ${YELLOW}ccs sync${RESET}                    Sync delegation commands and skills"
   echo ""
   echo -e "${CYAN}Flags:${RESET}"
   echo -e "  ${YELLOW}-h, --help${RESET}                  Show this help message"
@@ -490,13 +490,13 @@ doctor_run() {
   $has_errors && exit 1 || exit 0
 }
 
-# --- Update Command ---
+# --- Sync Command ---
 
-update_run() {
+sync_run() {
   local ccs_claude_dir="$HOME/.ccs/.claude"
   local user_claude_dir="$HOME/.claude"
 
-  echo -e "${CYAN}Updating delegation commands and skills in ~/.claude/...${RESET}"
+  echo -e "${CYAN}Syncing delegation commands and skills to ~/.claude/...${RESET}"
   echo ""
 
   # Check if source directory exists
@@ -1624,9 +1624,9 @@ if [[ $# -gt 0 ]] && [[ "${1}" == "doctor" || "${1}" == "--doctor" ]]; then
   exit $?
 fi
 
-# Special case: update command
-if [[ $# -gt 0 ]] && [[ "${1}" == "update" || "${1}" == "--update" ]]; then
-  update_run
+# Special case: sync command
+if [[ $# -gt 0 ]] && [[ "${1}" == "sync" || "${1}" == "--sync" ]]; then
+  sync_run
   exit $?
 fi
 

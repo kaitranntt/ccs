@@ -249,7 +249,7 @@ function Show-Help {
     Write-Host ""
     Write-ColorLine "Diagnostics:" "Cyan"
     Write-ColorLine "  ccs doctor                  Run health check and diagnostics" "Yellow"
-    Write-ColorLine "  ccs update                  Update delegation commands and skills" "Yellow"
+    Write-ColorLine "  ccs sync                    Sync delegation commands and skills" "Yellow"
     Write-Host ""
     Write-ColorLine "Flags:" "Cyan"
     Write-ColorLine "  -h, --help                  Show this help message" "Yellow"
@@ -850,13 +850,13 @@ function Get-ProfileType {
     }
 }
 
-# --- Update Command ---
+# --- Sync Command ---
 
-function Update-Run {
+function Sync-Run {
     $CcsClaudeDir = "$env:USERPROFILE\.ccs\.claude"
     $UserClaudeDir = "$env:USERPROFILE\.claude"
 
-    Write-Host "Updating delegation commands and skills in ~/.claude/..." -ForegroundColor Cyan
+    Write-Host "Syncing delegation commands and skills to ~/.claude/..." -ForegroundColor Cyan
     Write-Host ""
 
     # Check if source directory exists
@@ -1426,9 +1426,9 @@ if ($RemainingArgs.Count -gt 0 -and $RemainingArgs[0] -eq "auth") {
     exit $LASTEXITCODE
 }
 
-# Special case: update command
-if ($RemainingArgs.Count -gt 0 -and ($RemainingArgs[0] -eq "update" -or $RemainingArgs[0] -eq "--update")) {
-    Update-Run
+# Special case: sync command
+if ($RemainingArgs.Count -gt 0 -and ($RemainingArgs[0] -eq "sync" -or $RemainingArgs[0] -eq "--sync")) {
+    Sync-Run
     exit 0
 }
 

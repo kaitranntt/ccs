@@ -156,7 +156,7 @@ function handleHelpCommand() {
   // Diagnostics
   console.log(colored('Diagnostics:', 'cyan'));
   console.log(`  ${colored('ccs doctor', 'yellow')}                  Run health check and diagnostics`);
-  console.log(`  ${colored('ccs update', 'yellow')}                  Update delegation commands and skills`);
+  console.log(`  ${colored('ccs sync', 'yellow')}                    Sync delegation commands and skills`);
   console.log('');
 
   // Flags
@@ -245,7 +245,7 @@ async function handleDoctorCommand() {
   process.exit(doctor.results.isHealthy() ? 0 : 1);
 }
 
-async function handleUpdateCommand() {
+async function handleSyncCommand() {
   // First, copy .claude/ directory from package to ~/.ccs/.claude/
   const ClaudeDirInstaller = require('./utils/claude-dir-installer');
   const installer = new ClaudeDirInstaller();
@@ -255,8 +255,8 @@ async function handleUpdateCommand() {
   const ClaudeSymlinkManager = require('./utils/claude-symlink-manager');
   const manager = new ClaudeSymlinkManager();
 
-  console.log('[i] Updating delegation commands and skills in ~/.claude/...');
-  manager.update();
+  console.log('[i] Syncing delegation commands and skills to ~/.claude/...');
+  manager.sync();
 
   process.exit(0);
 }
@@ -498,9 +498,9 @@ async function main() {
     return;
   }
 
-  // Special case: update command (re-install CCS symlinks)
-  if (firstArg === 'update' || firstArg === '--update') {
-    await handleUpdateCommand();
+  // Special case: sync command (sync delegation commands and skills to ~/.claude/)
+  if (firstArg === 'sync' || firstArg === '--sync') {
+    await handleSyncCommand();
     return;
   }
 

@@ -226,11 +226,11 @@ class ClaudeSymlinkManager {
   }
 
   /**
-   * Re-install symlinks (used by 'ccs update' command)
-   * Same as install() but with explicit re-installation message
+   * Sync delegation commands and skills to ~/.claude/ (used by 'ccs sync' command)
+   * Same as install() but with explicit sync message
    */
-  update() {
-    console.log('[i] Updating delegation commands and skills in ~/.claude/...');
+  sync() {
+    console.log('[i] Syncing delegation commands and skills to ~/.claude/...');
     this.install();
   }
 }
