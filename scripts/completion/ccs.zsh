@@ -13,10 +13,10 @@
 #     sudo cp scripts/completion/ccs.zsh /usr/local/share/zsh/site-functions/_ccs
 
 # Set up completion styles for better formatting and colors
-# Color codes: 34=blue (commands), 32=green (model profiles), 33=yellow (account profiles), 90=gray (descriptions)
-zstyle ':completion:*:*:ccs:*:commands' list-colors '=(#b)(auth|doctor)([[:space:]]#--[[:space:]]#*)=34=90'
-zstyle ':completion:*:*:ccs:*:model-profiles' list-colors '=(#b)(default|glm|glmt|kimi|[^[:space:]]##)([[:space:]]#--[[:space:]]#*)=32=90'
-zstyle ':completion:*:*:ccs:*:account-profiles' list-colors '=(#b)([^[:space:]]##)([[:space:]]#--[[:space:]]#*)=33=90'
+# Color codes: 0;34=blue, 0;32=green, 0;33=yellow, 2;37=dim white (for descriptions)
+zstyle ':completion:*:*:ccs:*:commands' list-colors '=(#b)(auth|doctor)([[:space:]]#--[[:space:]]#*)=0\;34=2\;37'
+zstyle ':completion:*:*:ccs:*:model-profiles' list-colors '=(#b)(default|glm|glmt|kimi|[^[:space:]]##)([[:space:]]#--[[:space:]]#*)=0\;32=2\;37'
+zstyle ':completion:*:*:ccs:*:account-profiles' list-colors '=(#b)([^[:space:]]##)([[:space:]]#--[[:space:]]#*)=0\;33=2\;37'
 zstyle ':completion:*:*:ccs:*' group-name ''
 zstyle ':completion:*:*:ccs:*:descriptions' format $'\n%B%F{yellow}── %d ──%f%b'
 zstyle ':completion:*:*:ccs:*' list-separator '  --  '
