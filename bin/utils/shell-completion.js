@@ -53,6 +53,34 @@ class ShellCompletionInstaller {
   }
 
   /**
+   * Safely create directory, checking for file conflicts
+   * @param {string} dirPath - Path to create
+   * @throws {Error} If path exists but is a file
+   */
+  ensureDirectory(dirPath) {
+    if (fs.existsSync(dirPath)) {
+      const stat = fs.statSync(dirPath);
+      if (!stat.isDirectory()) {
+        throw new Error(
+          `Cannot create directory: ${dirPath} exists but is a file.\n` +
+          `Please remove or rename this file and try again.`
+        );
+      }
+      // Directory exists, nothing to do
+      return;
+    }
+
+    // Check parent directories recursively
+    const parentDir = path.dirname(dirPath);
+    if (parentDir !== dirPath) {
+      this.ensureDirectory(parentDir);
+    }
+
+    // Create the directory
+    fs.mkdirSync(dirPath);
+  }
+
+  /**
    * Install bash completion
    */
   installBash() {
@@ -97,10 +125,8 @@ class ShellCompletionInstaller {
       throw new Error('Completion file not found. Please reinstall CCS.');
     }
 
-    // Create zsh completion directory
-    if (!fs.existsSync(zshCompDir)) {
-      fs.mkdirSync(zshCompDir, { recursive: true });
-    }
+    // Create zsh completion directory (with file conflict checking)
+    this.ensureDirectory(zshCompDir);
 
     // Copy to zsh completion directory
     const destFile = path.join(zshCompDir, '_ccs');
@@ -142,10 +168,8 @@ class ShellCompletionInstaller {
       throw new Error('Completion file not found. Please reinstall CCS.');
     }
 
-    // Create fish completion directory
-    if (!fs.existsSync(fishCompDir)) {
-      fs.mkdirSync(fishCompDir, { recursive: true });
-    }
+    // Create fish completion directory (with file conflict checking)
+    this.ensureDirectory(fishCompDir);
 
     // Copy to fish completion directory (fish auto-loads from here)
     const destFile = path.join(fishCompDir, 'ccs.fish');
@@ -178,11 +202,9 @@ class ShellCompletionInstaller {
     const sourceCmd = `. "${completionPath.replace(/\\/g, '\\\\')}"`;
     const block = `\n${marker}\n${sourceCmd}\n`;
 
-    // Create profile directory if needed
+    // Create profile directory if needed (with file conflict checking)
     const profileDir = path.dirname(profilePath);
-    if (!fs.existsSync(profileDir)) {
-      fs.mkdirSync(profileDir, { recursive: true });
-    }
+    this.ensureDirectory(profileDir);
 
     // Check if already installed
     if (fs.existsSync(profilePath)) {

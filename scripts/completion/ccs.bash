@@ -19,7 +19,7 @@ _ccs_completion() {
   # Top-level completion (first argument)
   if [[ ${COMP_CWORD} -eq 1 ]]; then
     local commands="auth doctor"
-    local flags="--help --version -h -v"
+    local flags="--help --version --shell-completion -h -v"
     local profiles=""
 
     # Add profiles from config.json (settings-based profiles)
@@ -71,6 +71,12 @@ _ccs_completion() {
   # Flags for doctor command
   if [[ ${COMP_WORDS[1]} == "doctor" ]]; then
     COMPREPLY=( $(compgen -W "--help -h" -- ${cur}) )
+    return 0
+  fi
+
+  # Flags for shell-completion command
+  if [[ ${prev} == "--shell-completion" ]]; then
+    COMPREPLY=( $(compgen -W "--bash --zsh --fish --powershell" -- ${cur}) )
     return 0
   fi
 
