@@ -243,7 +243,7 @@ function Show-Help {
     Write-Host "                # Open personal account"
     Write-Host ""
     Write-ColorLine "Account Management:" "Cyan"
-    Write-ColorLine "  ccs auth --help             Manage multiple Claude accounts" "Yellow"
+    Write-ColorLine "  ccs auth --help             Run multiple Claude accounts concurrently" "Yellow"
     Write-ColorLine "  ccs work                    Switch to work account" "Yellow"
     Write-ColorLine "  ccs personal                Switch to personal account" "Yellow"
     Write-Host ""
@@ -853,7 +853,7 @@ function Get-ProfileType {
 
 function Show-AuthHelp {
     Write-Host ""
-    Write-Host "CCS Account Management" -ForegroundColor White
+    Write-Host "CCS Concurrent Account Management" -ForegroundColor White
     Write-Host ""
     Write-Host "Usage:" -ForegroundColor Cyan
     Write-Host "  ccs auth <command> [options]" -ForegroundColor Yellow

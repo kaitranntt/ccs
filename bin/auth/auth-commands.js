@@ -29,7 +29,7 @@ class AuthCommands {
    * Show help for auth commands
    */
   showHelp() {
-    console.log(colored('CCS Account Management', 'bold'));
+    console.log(colored('CCS Concurrent Account Management', 'bold'));
     console.log('');
     console.log(colored('Usage:', 'cyan'));
     console.log(`  ${colored('ccs auth', 'yellow')} <command> [options]`);

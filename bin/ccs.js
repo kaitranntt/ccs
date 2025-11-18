@@ -143,7 +143,7 @@ function handleHelpCommand() {
 
   // Account Management
   console.log(colored('Account Management:', 'cyan'));
-  console.log(`  ${colored('ccs auth --help', 'yellow')}             Manage multiple Claude accounts`);
+  console.log(`  ${colored('ccs auth --help', 'yellow')}             Run multiple Claude accounts concurrently`);
   console.log('');
 
   // Delegation (inside Claude Code CLI)

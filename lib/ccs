@@ -183,7 +183,7 @@ show_help() {
   echo -e "  ${YELLOW}ccs glm${RESET} \"debug this code\"   Use GLM and run command"
   echo ""
   echo -e "${CYAN}Account Management:${RESET}"
-  echo -e "  ${YELLOW}ccs auth --help${RESET}             Manage multiple Claude accounts"
+  echo -e "  ${YELLOW}ccs auth --help${RESET}             Run multiple Claude accounts concurrently"
   echo -e "  ${YELLOW}ccs work${RESET}                    Switch to work account"
   echo -e "  ${YELLOW}ccs personal${RESET}                Switch to personal account"
   echo ""
@@ -966,7 +966,7 @@ detect_profile_type() {
 # --- Auth Commands (Phase 3) ---
 
 auth_help() {
-  echo -e "${BOLD}CCS Account Management${RESET}"
+  echo -e "${BOLD}CCS Concurrent Account Management${RESET}"
   echo ""
   echo -e "${CYAN}Usage:${RESET}"
   echo -e "  ${YELLOW}ccs auth${RESET} <command> [options]"
