@@ -16,7 +16,7 @@
 # Color codes: 0;34=blue, 0;32=green, 0;33=yellow, 2;37=dim white
 # Pattern format: =(#b)(group1)(group2)==color_for_group1=color_for_group2
 # The leading '=' means no color for whole match, then each '=' assigns to each group
-zstyle ':completion:*:*:ccs:*:commands' list-colors '=(#b)(auth|doctor)([[:space:]]#--[[:space:]]#*)==0\;34=2\;37'
+zstyle ':completion:*:*:ccs:*:commands' list-colors '=(#b)(auth|doctor|sync)([[:space:]]#--[[:space:]]#*)==0\;34=2\;37'
 zstyle ':completion:*:*:ccs:*:model-profiles' list-colors '=(#b)(default|glm|glmt|kimi|[^[:space:]]##)([[:space:]]#--[[:space:]]#*)==0\;32=2\;37'
 zstyle ':completion:*:*:ccs:*:account-profiles' list-colors '=(#b)([^[:space:]]##)([[:space:]]#--[[:space:]]#*)==0\;33=2\;37'
 zstyle ':completion:*:*:ccs:*' group-name ''
@@ -34,6 +34,7 @@ _ccs() {
   commands=(
     'auth:Manage multiple Claude accounts'
     'doctor:Run health check and diagnostics'
+    'sync:Sync delegation commands and skills'
   )
 
   # Define known settings profiles with descriptions (consistent padding)
@@ -71,7 +72,7 @@ _ccs() {
   _arguments -C \
     '(- *)'{-h,--help}'[Show help message]' \
     '(- *)'{-v,--version}'[Show version information]' \
-    '(- *)--shell-completion[Install shell completion]' \
+    '(- *)'{-sc,--shell-completion}'[Install shell completion]' \
     '1: :->command' \
     '*:: :->args'
 

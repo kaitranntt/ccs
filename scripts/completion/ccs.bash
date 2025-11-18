@@ -18,8 +18,8 @@ _ccs_completion() {
 
   # Top-level completion (first argument)
   if [[ ${COMP_CWORD} -eq 1 ]]; then
-    local commands="auth doctor"
-    local flags="--help --version --shell-completion -h -v"
+    local commands="auth doctor sync"
+    local flags="--help --version --shell-completion -h -v -sc"
     local profiles=""
 
     # Add profiles from config.json (settings-based profiles)
