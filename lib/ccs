@@ -223,7 +223,7 @@ show_help() {
   echo -e "    ${YELLOW}\$ ccs auth create work${RESET}       # Create work profile"
   echo -e "    ${YELLOW}\$ ccs work \"review PR\"${RESET}       # Use work account"
   echo ""
-  echo -e "  For more: ${CYAN}https://github.com/kaitranntt/ccs#usage${RESET}"
+  echo -e "  For more: ${CYAN}https://github.com/kaitranntt/ccs/blob/main/README.md${RESET}"
   echo ""
   echo -e "${YELLOW}Uninstall:${RESET}"
   echo "  npm:          npm uninstall -g @kaitranntt/ccs"

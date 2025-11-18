@@ -188,7 +188,7 @@ function handleHelpCommand() {
   console.log(`  ${colored('$ ccs', 'yellow')}                        # Use default account`);
   console.log(`  ${colored('$ ccs glm "implement API"', 'yellow')}    # Cost-optimized model`);
   console.log('');
-  console.log(`  For more: ${colored('https://github.com/kaitranntt/ccs#usage', 'cyan')}`);
+  console.log(`  For more: ${colored('https://github.com/kaitranntt/ccs/blob/main/README.md', 'cyan')}`);
   console.log('');
 
   // Uninstall
