@@ -1,6 +1,11 @@
 # Fish completion for CCS (Claude Code Switch)
 # Compatible with fish 3.0+
 #
+# Features:
+#   - Categorized completions with [cmd], [model], and [account] prefixes
+#   - Dynamic profile loading from config.json and profiles.json
+#   - Context-aware subcommand completion
+#
 # Installation:
 #   Copy to ~/.config/fish/completions/:
 #     mkdir -p ~/.config/fish/completions
@@ -72,23 +77,23 @@ complete -c ccs -s h -l help -d 'Show help message'
 complete -c ccs -s v -l version -d 'Show version information'
 complete -c ccs -s sc -l shell-completion -d 'Install shell completion'
 
-# Top-level commands (blue color for commands)
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a 'auth' -d (set_color blue)'Manage multiple Claude accounts'(set_color normal)
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a 'doctor' -d (set_color blue)'Run health check and diagnostics'(set_color normal)
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a 'sync' -d (set_color blue)'Sync delegation commands and skills'(set_color normal)
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a 'update' -d (set_color blue)'Update CCS to latest version'(set_color normal)
+# Commands - grouped with [cmd] prefix for visual distinction
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a 'auth' -d '[cmd] Manage multiple Claude accounts'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a 'doctor' -d '[cmd] Run health check and diagnostics'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a 'sync' -d '[cmd] Sync delegation commands and skills'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a 'update' -d '[cmd] Update CCS to latest version'
 
-# Top-level known settings profiles (green color for model profiles)
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a 'default' -d (set_color green)'Default Claude Sonnet 4.5'(set_color normal)
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a 'glm' -d (set_color green)'GLM-4.6 (cost-optimized)'(set_color normal)
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a 'glmt' -d (set_color green)'GLM-4.6 with thinking mode'(set_color normal)
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a 'kimi' -d (set_color green)'Kimi for Coding (long-context)'(set_color normal)
+# Model profiles - grouped with [model] prefix for visual distinction
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a 'default' -d '[model] Default Claude Sonnet 4.5'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a 'glm' -d '[model] GLM-4.6 (cost-optimized)'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a 'glmt' -d '[model] GLM-4.6 with thinking mode'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a 'kimi' -d '[model] Kimi for Coding (long-context)'
 
-# Top-level custom settings profiles (dynamic, with generic description in green)
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a '(__fish_ccs_get_custom_settings_profiles)' -d (set_color green)'Settings-based profile'(set_color normal)
+# Custom model profiles - dynamic with [model] prefix
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a '(__fish_ccs_get_custom_settings_profiles)' -d '[model] Settings-based profile'
 
-# Top-level account profiles (dynamic, yellow color for account profiles)
-complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a '(__fish_ccs_get_account_profiles)' -d (set_color yellow)'Account profile'(set_color normal)
+# Account profiles - dynamic with [account] prefix
+complete -c ccs -n 'not __fish_seen_subcommand_from auth doctor sync update' -a '(__fish_ccs_get_account_profiles)' -d '[account] Account-based profile'
 
 # shell-completion subflags
 complete -c ccs -n '__fish_seen_argument -l shell-completion; or __fish_seen_argument -s sc' -l bash -d 'Install for bash'
