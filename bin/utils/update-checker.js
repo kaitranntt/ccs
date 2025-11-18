@@ -150,7 +150,7 @@ function writeCache(cache) {
  * @param {string} currentVersion - Current CCS version
  * @param {boolean} force - Force check even if within interval
  * @param {string} installMethod - Installation method ('npm' or 'direct')
- * @returns {Promise<Object|null>} - Update info or null
+ * @returns {Promise<Object>} - Update result object with status and data
  */
 async function checkForUpdates(currentVersion, force = false, installMethod = 'direct') {
   const cache = readCache();
@@ -162,19 +162,23 @@ async function checkForUpdates(currentVersion, force = false, installMethod = 'd
     if (cache.latest_version && compareVersions(cache.latest_version, currentVersion) > 0) {
       // Don't show if user dismissed this version
       if (cache.dismissed_version === cache.latest_version) {
-        return null;
+        return { status: 'no_update', reason: 'dismissed' };
       }
-      return { latest: cache.latest_version, current: currentVersion };
+      return { status: 'update_available', latest: cache.latest_version, current: currentVersion };
     }
-    return null;
+    return { status: 'no_update', reason: 'cached' };
   }
 
   // Fetch latest version from appropriate source
   let latestVersion;
+  let fetchError = null;
+
   if (installMethod === 'npm') {
     latestVersion = await fetchLatestVersionFromNpm();
+    if (!latestVersion) fetchError = 'npm_registry_error';
   } else {
     latestVersion = await fetchLatestVersionFromGitHub();
+    if (!latestVersion) fetchError = 'github_api_error';
   }
 
   // Update cache
@@ -184,16 +188,25 @@ async function checkForUpdates(currentVersion, force = false, installMethod = 'd
   }
   writeCache(cache);
 
+  // Handle fetch errors
+  if (fetchError) {
+    return {
+      status: 'check_failed',
+      reason: fetchError,
+      message: `Failed to check for updates: ${fetchError.replace(/_/g, ' ')}`
+    };
+  }
+
   // Check if update available
   if (latestVersion && compareVersions(latestVersion, currentVersion) > 0) {
     // Don't show if user dismissed this version
     if (cache.dismissed_version === latestVersion) {
-      return null;
+      return { status: 'no_update', reason: 'dismissed' };
     }
-    return { latest: latestVersion, current: currentVersion };
+    return { status: 'update_available', latest: latestVersion, current: currentVersion };
   }
 
-  return null;
+  return { status: 'no_update', reason: 'latest' };
 }
 
 /**

@@ -294,20 +294,59 @@ async function handleUpdateCommand() {
   console.log(colored('Checking for updates...', 'cyan'));
   console.log('');
 
-  // Check for updates (force check)
-  const updateInfo = await checkForUpdates(CCS_VERSION, true);
+  // Detect installation method for proper update source
+  const isNpmInstall = process.argv[1].includes('node_modules');
+  const installMethod = isNpmInstall ? 'npm' : 'direct';
 
-  if (!updateInfo) {
-    console.log(colored(`[OK] You are already on the latest version (${CCS_VERSION})`, 'green'));
+  // Check for updates (force check)
+  const updateResult = await checkForUpdates(CCS_VERSION, true, installMethod);
+
+  if (updateResult.status === 'check_failed') {
+    console.log(colored(`[X] ${updateResult.message}`, 'red'));
+    console.log('');
+    console.log(colored('[i] Possible causes:', 'yellow'));
+    console.log('  • Network connection issues');
+    console.log('  • Firewall blocking requests');
+    console.log('  • GitHub/npm API temporarily unavailable');
+    console.log('');
+    console.log('Try again later or update manually:');
+    if (isNpmInstall) {
+      console.log(colored('  npm install -g @kaitranntt/ccs@latest', 'yellow'));
+    } else {
+      const isWindows = process.platform === 'win32';
+      if (isWindows) {
+        console.log(colored('  irm ccs.kaitran.ca/install | iex', 'yellow'));
+      } else {
+        console.log(colored('  curl -fsSL ccs.kaitran.ca/install | bash', 'yellow'));
+      }
+    }
+    console.log('');
+    process.exit(1);
+  }
+
+  if (updateResult.status === 'no_update') {
+    let message = `You are already on the latest version (${CCS_VERSION})`;
+
+    // Add context for why no update is shown
+    switch (updateResult.reason) {
+      case 'dismissed':
+        message = `Update dismissed. You are on version ${CCS_VERSION}`;
+        console.log(colored(`[i] ${message}`, 'yellow'));
+        break;
+      case 'cached':
+        message = `No updates available (cached result). You are on version ${CCS_VERSION}`;
+        console.log(colored(`[i] ${message}`, 'cyan'));
+        break;
+      default:
+        console.log(colored(`[OK] ${message}`, 'green'));
+    }
     console.log('');
     process.exit(0);
   }
 
-  console.log(colored(`[i] Update available: ${updateInfo.current} → ${updateInfo.latest}`, 'yellow'));
+  // Update available
+  console.log(colored(`[i] Update available: ${updateResult.current} → ${updateResult.latest}`, 'yellow'));
   console.log('');
-
-  // Detect installation method
-  const isNpmInstall = process.argv[1].includes('node_modules');
 
   if (isNpmInstall) {
     // npm installation - use npm update
