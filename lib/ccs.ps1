@@ -246,6 +246,7 @@ function Show-Help {
     Write-ColorLine "Diagnostics:" "Cyan"
     Write-ColorLine "  ccs doctor                  Run health check and diagnostics" "Yellow"
     Write-ColorLine "  ccs sync                    Sync delegation commands and skills" "Yellow"
+    Write-ColorLine "  ccs update                  Update CCS to latest version" "Yellow"
     Write-Host ""
 
     Write-ColorLine "Flags:" "Cyan"
@@ -1031,6 +1032,125 @@ function Sync-Run {
     Write-Host ""
 }
 
+# --- Update Command ---
+
+function Update-Run {
+    Write-Host ""
+    Write-Host "Checking for updates..." -ForegroundColor Cyan
+    Write-Host ""
+
+    # Detect installation method
+    $InstallMethod = "direct"
+    try {
+        $NpmList = npm list -g @kaitranntt/ccs 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $InstallMethod = "npm"
+        }
+    } catch {
+        # npm not available or not installed via npm
+    }
+
+    # Fetch latest version from GitHub
+    $LatestVersion = ""
+    try {
+        $Response = Invoke-RestMethod -Uri "https://api.github.com/repos/kaitranntt/ccs/releases/latest" -TimeoutSec 5
+        $LatestVersion = $Response.tag_name -replace '^v', ''
+    } catch {
+        Write-Host "[!] Unable to check for updates" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Try manually:"
+        if ($InstallMethod -eq "npm") {
+            Write-Host "  npm install -g @kaitranntt/ccs@latest" -ForegroundColor Yellow
+        } else {
+            Write-Host "  irm ccs.kaitran.ca/install | iex" -ForegroundColor Yellow
+        }
+        Write-Host ""
+        exit 1
+    }
+
+    # Compare versions
+    if ($LatestVersion -eq $CcsVersion) {
+        Write-Host "[OK] You are already on the latest version ($CcsVersion)" -ForegroundColor Green
+        Write-Host ""
+        exit 0
+    }
+
+    # Check if update available
+    $CurrentParts = $CcsVersion.Split('.')
+    $LatestParts = $LatestVersion.Split('.')
+
+    $IsNewer = $false
+    for ($i = 0; $i -lt 3; $i++) {
+        $Current = [int]$CurrentParts[$i]
+        $Latest = [int]$LatestParts[$i]
+
+        if ($Latest -gt $Current) {
+            $IsNewer = $true
+            break
+        } elseif ($Latest -lt $Current) {
+            break
+        }
+    }
+
+    if (-not $IsNewer) {
+        Write-Host "[OK] You are on version $CcsVersion (latest is $LatestVersion)" -ForegroundColor Green
+        Write-Host ""
+        exit 0
+    }
+
+    Write-Host "[i] Update available: $CcsVersion → $LatestVersion" -ForegroundColor Yellow
+    Write-Host ""
+
+    # Perform update based on installation method
+    if ($InstallMethod -eq "npm") {
+        Write-Host "Updating via npm..." -ForegroundColor Cyan
+        Write-Host ""
+
+        try {
+            npm install -g @kaitranntt/ccs@latest
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host ""
+                Write-Host "[OK] Update successful!" -ForegroundColor Green
+                Write-Host ""
+                Write-Host "Run ccs --version to verify" -ForegroundColor Yellow
+                Write-Host ""
+                exit 0
+            } else {
+                throw "npm install failed"
+            }
+        } catch {
+            Write-Host ""
+            Write-Host "[X] Update failed" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Try manually:"
+            Write-Host "  npm install -g @kaitranntt/ccs@latest" -ForegroundColor Yellow
+            Write-Host ""
+            exit 1
+        }
+    } else {
+        Write-Host "Updating via installer..." -ForegroundColor Cyan
+        Write-Host ""
+
+        try {
+            irm ccs.kaitran.ca/install | iex
+            Write-Host ""
+            Write-Host "[OK] Update successful!" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "Run ccs --version to verify" -ForegroundColor Yellow
+            Write-Host ""
+            exit 0
+        } catch {
+            Write-Host ""
+            Write-Host "[X] Update failed" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Try manually:"
+            Write-Host "  irm ccs.kaitran.ca/install | iex" -ForegroundColor Yellow
+            Write-Host ""
+            exit 1
+        }
+    }
+}
+
 # --- Auth Commands (Phase 3) ---
 
 function Show-AuthHelp {
@@ -1516,6 +1636,12 @@ if ($RemainingArgs.Count -gt 0 -and $RemainingArgs[0] -eq "auth") {
 # Special case: sync command
 if ($RemainingArgs.Count -gt 0 -and ($RemainingArgs[0] -eq "sync" -or $RemainingArgs[0] -eq "--sync")) {
     Sync-Run
+    exit 0
+}
+
+# Special case: update command
+if ($RemainingArgs.Count -gt 0 -and ($RemainingArgs[0] -eq "update" -or $RemainingArgs[0] -eq "--update")) {
+    Update-Run
     exit 0
 }
 

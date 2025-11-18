@@ -18,7 +18,7 @@ _ccs_completion() {
 
   # Top-level completion (first argument)
   if [[ ${COMP_CWORD} -eq 1 ]]; then
-    local commands="auth doctor sync"
+    local commands="auth doctor sync update"
     local flags="--help --version --shell-completion -h -v -sc"
     local profiles=""
 

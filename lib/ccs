@@ -199,6 +199,7 @@ show_help() {
   echo -e "${CYAN}Diagnostics:${RESET}"
   echo -e "  ${YELLOW}ccs doctor${RESET}                  Run health check and diagnostics"
   echo -e "  ${YELLOW}ccs sync${RESET}                    Sync delegation commands and skills"
+  echo -e "  ${YELLOW}ccs update${RESET}                  Update CCS to latest version"
   echo ""
 
   echo -e "${CYAN}Flags:${RESET}"
@@ -589,6 +590,117 @@ sync_run() {
   echo "  Installed: $installed"
   echo "  Already up-to-date: $skipped"
   echo ""
+}
+
+# --- Update Command ---
+
+update_run() {
+  echo ""
+  echo -e "${CYAN}Checking for updates...${RESET}"
+  echo ""
+
+  # Detect installation method
+  local install_method="direct"
+  if command -v npm &>/dev/null && npm list -g @kaitranntt/ccs &>/dev/null 2>&1; then
+    install_method="npm"
+  fi
+
+  # Fetch latest version from GitHub
+  local latest_version=""
+  if command -v curl &>/dev/null; then
+    latest_version=$(curl -fsSL https://api.github.com/repos/kaitranntt/ccs/releases/latest 2>/dev/null | \
+      grep '"tag_name"' | sed -E 's/.*"v?([0-9.]+)".*/\1/')
+  fi
+
+  if [[ -z "$latest_version" ]]; then
+    echo -e "${YELLOW}[!] Unable to check for updates${RESET}"
+    echo ""
+    echo "Try manually:"
+    if [[ "$install_method" == "npm" ]]; then
+      echo -e "  ${YELLOW}npm install -g @kaitranntt/ccs@latest${RESET}"
+    else
+      echo -e "  ${YELLOW}curl -fsSL ccs.kaitran.ca/install | bash${RESET}"
+    fi
+    echo ""
+    exit 1
+  fi
+
+  # Compare versions
+  if [[ "$latest_version" == "$CCS_VERSION" ]]; then
+    echo -e "${GREEN}[OK] You are already on the latest version (${CCS_VERSION})${RESET}"
+    echo ""
+    exit 0
+  fi
+
+  # Check if update available
+  local current_major=$(echo "$CCS_VERSION" | cut -d. -f1)
+  local current_minor=$(echo "$CCS_VERSION" | cut -d. -f2)
+  local current_patch=$(echo "$CCS_VERSION" | cut -d. -f3)
+
+  local latest_major=$(echo "$latest_version" | cut -d. -f1)
+  local latest_minor=$(echo "$latest_version" | cut -d. -f2)
+  local latest_patch=$(echo "$latest_version" | cut -d. -f3)
+
+  local is_newer=0
+  if [[ $latest_major -gt $current_major ]]; then
+    is_newer=1
+  elif [[ $latest_major -eq $current_major ]] && [[ $latest_minor -gt $current_minor ]]; then
+    is_newer=1
+  elif [[ $latest_major -eq $current_major ]] && [[ $latest_minor -eq $current_minor ]] && [[ $latest_patch -gt $current_patch ]]; then
+    is_newer=1
+  fi
+
+  if [[ $is_newer -eq 0 ]]; then
+    echo -e "${GREEN}[OK] You are on version ${CCS_VERSION} (latest is ${latest_version})${RESET}"
+    echo ""
+    exit 0
+  fi
+
+  echo -e "${YELLOW}[i] Update available: ${CCS_VERSION} → ${latest_version}${RESET}"
+  echo ""
+
+  # Perform update based on installation method
+  if [[ "$install_method" == "npm" ]]; then
+    echo -e "${CYAN}Updating via npm...${RESET}"
+    echo ""
+
+    if npm install -g @kaitranntt/ccs@latest; then
+      echo ""
+      echo -e "${GREEN}[OK] Update successful!${RESET}"
+      echo ""
+      echo -e "Run ${YELLOW}ccs --version${RESET} to verify"
+      echo ""
+      exit 0
+    else
+      echo ""
+      echo -e "${RED}[X] Update failed${RESET}"
+      echo ""
+      echo "Try manually:"
+      echo -e "  ${YELLOW}npm install -g @kaitranntt/ccs@latest${RESET}"
+      echo ""
+      exit 1
+    fi
+  else
+    echo -e "${CYAN}Updating via installer...${RESET}"
+    echo ""
+
+    if curl -fsSL ccs.kaitran.ca/install | bash; then
+      echo ""
+      echo -e "${GREEN}[OK] Update successful!${RESET}"
+      echo ""
+      echo -e "Run ${YELLOW}ccs --version${RESET} to verify"
+      echo ""
+      exit 0
+    else
+      echo ""
+      echo -e "${RED}[X] Update failed${RESET}"
+      echo ""
+      echo "Try manually:"
+      echo -e "  ${YELLOW}curl -fsSL ccs.kaitran.ca/install | bash${RESET}"
+      echo ""
+      exit 1
+    fi
+  fi
 }
 
 # --- Claude CLI Detection Logic ---
@@ -1666,6 +1778,12 @@ fi
 # Special case: sync command
 if [[ $# -gt 0 ]] && [[ "${1}" == "sync" || "${1}" == "--sync" ]]; then
   sync_run
+  exit $?
+fi
+
+# Special case: update command
+if [[ $# -gt 0 ]] && [[ "${1}" == "update" || "${1}" == "--update" ]]; then
+  update_run
   exit $?
 fi
 

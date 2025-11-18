@@ -12,7 +12,7 @@
 Register-ArgumentCompleter -CommandName ccs -ScriptBlock {
     param($commandName, $wordToComplete, $commandAst, $fakeBoundParameters)
 
-    $commands = @('auth', 'doctor', 'sync', '--help', '--version', '--shell-completion', '-h', '-v', '-sc')
+    $commands = @('auth', 'doctor', 'sync', 'update', '--help', '--version', '--shell-completion', '-h', '-v', '-sc')
     $authCommands = @('create', 'list', 'show', 'remove', 'default', '--help', '-h')
     $shellCompletionFlags = @('--bash', '--zsh', '--fish', '--powershell')
     $listFlags = @('--verbose', '--json')
