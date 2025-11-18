@@ -449,9 +449,15 @@ class Doctor {
    */
   showReport() {
     console.log('');
-    console.log(colored('═══════════════════════════════════════════════════════════════', 'cyan'));
+
+    // Calculate exact table width to match header bars
+    // colWidths: [20, 10, 35] = 65 + borders (4) = 69 total
+    const tableWidth = 69;
+    const headerBar = '═'.repeat(tableWidth);
+
+    console.log(colored(headerBar, 'cyan'));
     console.log(colored('                     Health Check Summary', 'bold'));
-    console.log(colored('═══════════════════════════════════════════════════════════════', 'cyan'));
+    console.log(colored(headerBar, 'cyan'));
 
     // Create summary table with detailed information
     const table = new Table({
