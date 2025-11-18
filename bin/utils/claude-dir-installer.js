@@ -4,6 +4,8 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const ora = require('ora');
+const { colored } = require('./helpers');
 
 /**
  * ClaudeDirInstaller - Manages copying .claude/ directory from package to ~/.ccs/.claude/
@@ -18,8 +20,11 @@ class ClaudeDirInstaller {
   /**
    * Copy .claude/ directory from package to ~/.ccs/.claude/
    * @param {string} packageDir - Package installation directory (default: auto-detect)
+   * @param {boolean} silent - Suppress spinner output
    */
-  install(packageDir) {
+  install(packageDir, silent = false) {
+    const spinner = silent ? null : ora('Copying .claude/ items to ~/.ccs/.claude/').start();
+
     try {
       // Auto-detect package directory if not provided
       if (!packageDir) {
@@ -30,21 +35,29 @@ class ClaudeDirInstaller {
       const packageClaudeDir = path.join(packageDir, '.claude');
 
       if (!fs.existsSync(packageClaudeDir)) {
-        console.log('[!] Package .claude/ directory not found');
-        console.log(`    Searched in: ${packageClaudeDir}`);
-        console.log('    This may be a development installation');
+        const msg = 'Package .claude/ directory not found';
+        if (spinner) {
+          spinner.warn(`[!] ${msg}`);
+          console.log(`    Searched in: ${packageClaudeDir}`);
+          console.log('    This may be a development installation');
+        } else {
+          console.log(`[!] ${msg}`);
+          console.log(`    Searched in: ${packageClaudeDir}`);
+          console.log('    This may be a development installation');
+        }
         return false;
       }
 
-      console.log('[i] Installing CCS .claude/ items...');
-
       // Remove old version before copying new one
       if (fs.existsSync(this.ccsClaudeDir)) {
+        if (spinner) spinner.text = 'Removing old .claude/ items...';
         fs.rmSync(this.ccsClaudeDir, { recursive: true, force: true });
       }
 
       // Use fs.cpSync for recursive copy (Node.js 16.7.0+)
       // Fallback to manual copy for older Node.js versions
+      if (spinner) spinner.text = 'Copying .claude/ items...';
+
       if (fs.cpSync) {
         fs.cpSync(packageClaudeDir, this.ccsClaudeDir, { recursive: true });
       } else {
@@ -52,11 +65,25 @@ class ClaudeDirInstaller {
         this._copyDirRecursive(packageClaudeDir, this.ccsClaudeDir);
       }
 
-      console.log('[OK] Copied .claude/ items to ~/.ccs/.claude/');
+      // Count files and directories
+      const itemCount = this._countItems(this.ccsClaudeDir);
+      const msg = `Copied .claude/ items (${itemCount.files} files, ${itemCount.dirs} directories)`;
+
+      if (spinner) {
+        spinner.succeed(colored('[OK]', 'green') + ` ${msg}`);
+      } else {
+        console.log(`[OK] ${msg}`);
+      }
       return true;
     } catch (err) {
-      console.warn('[!] Failed to copy .claude/ directory:', err.message);
-      console.warn('    CCS items may not be available');
+      const msg = `Failed to copy .claude/ directory: ${err.message}`;
+      if (spinner) {
+        spinner.fail(colored('[!]', 'yellow') + ` ${msg}`);
+        console.warn('    CCS items may not be available');
+      } else {
+        console.warn(`[!] ${msg}`);
+        console.warn('    CCS items may not be available');
+      }
       return false;
     }
   }
@@ -88,6 +115,37 @@ class ClaudeDirInstaller {
         fs.copyFileSync(srcPath, destPath);
       }
     }
+  }
+
+  /**
+   * Count files and directories in a path
+   * @param {string} dirPath - Directory to count
+   * @returns {Object} { files: number, dirs: number }
+   * @private
+   */
+  _countItems(dirPath) {
+    let files = 0;
+    let dirs = 0;
+
+    const countRecursive = (p) => {
+      const entries = fs.readdirSync(p, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          dirs++;
+          countRecursive(path.join(p, entry.name));
+        } else {
+          files++;
+        }
+      }
+    };
+
+    try {
+      countRecursive(dirPath);
+    } catch (e) {
+      // Ignore errors
+    }
+
+    return { files, dirs };
   }
 
   /**

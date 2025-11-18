@@ -6,6 +6,8 @@ const os = require('os');
 const { spawn } = require('child_process');
 const { colored } = require('../utils/helpers');
 const { detectClaudeCli } = require('../utils/claude-detector');
+const ora = require('ora');
+const Table = require('cli-table3');
 
 /**
  * Health check results
@@ -15,13 +17,19 @@ class HealthCheck {
     this.checks = [];
     this.warnings = [];
     this.errors = [];
+    this.details = {}; // Store detailed information for summary table
   }
 
-  addCheck(name, status, message = '', fix = null) {
+  addCheck(name, status, message = '', fix = null, details = null) {
     this.checks.push({ name, status, message, fix });
 
     if (status === 'error') this.errors.push({ name, message, fix });
     if (status === 'warning') this.warnings.push({ name, message, fix });
+
+    // Store details for summary table
+    if (details) {
+      this.details[name] = details;
+    }
   }
 
   hasErrors() {
@@ -46,6 +54,13 @@ class Doctor {
     this.ccsDir = path.join(this.homedir, '.ccs');
     this.claudeDir = path.join(this.homedir, '.claude');
     this.results = new HealthCheck();
+
+    // Get CCS version
+    try {
+      this.ccsVersion = require('../../package.json').version;
+    } catch (e) {
+      this.ccsVersion = 'unknown';
+    }
   }
 
   /**
@@ -54,6 +69,9 @@ class Doctor {
   async runAllChecks() {
     console.log(colored('Running CCS Health Check...', 'cyan'));
     console.log('');
+
+    // Store CCS version in details
+    this.results.details['CCS Version'] = { status: 'OK', info: `v${this.ccsVersion}` };
 
     await this.checkClaudeCli();
     this.checkCcsDirectory();
@@ -73,7 +91,7 @@ class Doctor {
    * Check 1: Claude CLI availability
    */
   async checkClaudeCli() {
-    process.stdout.write('[?] Checking Claude CLI... ');
+    const spinner = ora('Checking Claude CLI').start();
 
     const claudeCli = detectClaudeCli();
 
@@ -97,15 +115,23 @@ class Doctor {
         child.on('error', reject);
       });
 
-      console.log(colored('[OK]', 'green'));
-      this.results.addCheck('Claude CLI', 'success', `Found: ${claudeCli}`);
+      // Extract version from output
+      const versionMatch = result.match(/(\d+\.\d+\.\d+)/);
+      const version = versionMatch ? versionMatch[1] : 'unknown';
+
+      spinner.succeed(`Claude CLI ${colored('[OK]', 'green')}  Found: ${claudeCli} (v${version})`);
+      this.results.addCheck('Claude CLI', 'success', `Found: ${claudeCli}`, null, {
+        status: 'OK',
+        info: `v${version} (${claudeCli})`
+      });
     } catch (err) {
-      console.log(colored('[X]', 'red'));
+      spinner.fail(`Claude CLI ${colored('[X]', 'red')}  Not found or not working`);
       this.results.addCheck(
         'Claude CLI',
         'error',
         'Claude CLI not found or not working',
-        'Install from: https://docs.claude.com/en/docs/claude-code/installation'
+        'Install from: https://docs.claude.com/en/docs/claude-code/installation',
+        { status: 'ERROR', info: 'Not installed' }
       );
     }
   }
@@ -114,18 +140,22 @@ class Doctor {
    * Check 2: ~/.ccs/ directory
    */
   checkCcsDirectory() {
-    process.stdout.write('[?] Checking ~/.ccs/ directory... ');
+    const spinner = ora('Checking ~/.ccs/ directory').start();
 
     if (fs.existsSync(this.ccsDir)) {
-      console.log(colored('[OK]', 'green'));
-      this.results.addCheck('CCS Directory', 'success');
+      spinner.succeed(`CCS Directory ${colored('[OK]', 'green')}  ~/.ccs/`);
+      this.results.addCheck('CCS Directory', 'success', null, null, {
+        status: 'OK',
+        info: '~/.ccs/'
+      });
     } else {
-      console.log(colored('[X]', 'red'));
+      spinner.fail(`CCS Directory ${colored('[X]', 'red')}  Not found`);
       this.results.addCheck(
         'CCS Directory',
         'error',
         '~/.ccs/ directory not found',
-        'Run: npm install -g @kaitranntt/ccs --force'
+        'Run: npm install -g @kaitranntt/ccs --force',
+        { status: 'ERROR', info: 'Not found' }
       );
     }
   }
@@ -135,21 +165,22 @@ class Doctor {
    */
   checkConfigFiles() {
     const files = [
-      { path: path.join(this.ccsDir, 'config.json'), name: 'config.json' },
-      { path: path.join(this.ccsDir, 'glm.settings.json'), name: 'glm.settings.json' },
-      { path: path.join(this.ccsDir, 'kimi.settings.json'), name: 'kimi.settings.json' }
+      { path: path.join(this.ccsDir, 'config.json'), name: 'config.json', key: 'config.json' },
+      { path: path.join(this.ccsDir, 'glm.settings.json'), name: 'glm.settings.json', key: 'GLM Settings' },
+      { path: path.join(this.ccsDir, 'kimi.settings.json'), name: 'kimi.settings.json', key: 'Kimi Settings' }
     ];
 
     for (const file of files) {
-      process.stdout.write(`[?] Checking ${file.name}... `);
+      const spinner = ora(`Checking ${file.name}`).start();
 
       if (!fs.existsSync(file.path)) {
-        console.log(colored('[X]', 'red'));
+        spinner.fail(`${file.name} ${colored('[X]', 'red')}  Not found`);
         this.results.addCheck(
           file.name,
           'error',
           `${file.name} not found`,
-          'Run: npm install -g @kaitranntt/ccs --force'
+          'Run: npm install -g @kaitranntt/ccs --force',
+          { status: 'ERROR', info: 'Not found' }
         );
         continue;
       }
@@ -157,16 +188,28 @@ class Doctor {
       // Validate JSON
       try {
         const content = fs.readFileSync(file.path, 'utf8');
-        JSON.parse(content);
-        console.log(colored('[OK]', 'green'));
-        this.results.addCheck(file.name, 'success');
+        const config = JSON.parse(content);
+
+        // Extract useful info based on file type
+        let info = 'Valid';
+        if (file.name.includes('settings.json') && config.env && config.env.ANTHROPIC_BASE_URL) {
+          const url = new URL(config.env.ANTHROPIC_BASE_URL);
+          info = `Valid (API: ${url.hostname})`;
+        }
+
+        spinner.succeed(`${file.name} ${colored('[OK]', 'green')}  ${info}`);
+        this.results.addCheck(file.name, 'success', null, null, {
+          status: 'OK',
+          info: info
+        });
       } catch (e) {
-        console.log(colored('[X]', 'red'));
+        spinner.fail(`${file.name} ${colored('[X]', 'red')}  Invalid JSON`);
         this.results.addCheck(
           file.name,
           'error',
           `Invalid JSON: ${e.message}`,
-          `Backup and recreate: mv ${file.path} ${file.path}.backup && npm install -g @kaitranntt/ccs --force`
+          `Backup and recreate: mv ${file.path} ${file.path}.backup && npm install -g @kaitranntt/ccs --force`,
+          { status: 'ERROR', info: 'Invalid JSON' }
         );
       }
     }
@@ -176,12 +219,11 @@ class Doctor {
    * Check 4: Claude settings
    */
   checkClaudeSettings() {
-    process.stdout.write('[?] Checking ~/.claude/settings.json... ');
-
+    const spinner = ora('Checking ~/.claude/settings.json').start();
     const settingsPath = path.join(this.claudeDir, 'settings.json');
 
     if (!fs.existsSync(settingsPath)) {
-      console.log(colored('[!]', 'yellow'));
+      spinner.warn(`~/.claude/settings.json ${colored('[!]', 'yellow')}  Not found`);
       this.results.addCheck(
         'Claude Settings',
         'warning',
@@ -195,10 +237,10 @@ class Doctor {
     try {
       const content = fs.readFileSync(settingsPath, 'utf8');
       JSON.parse(content);
-      console.log(colored('[OK]', 'green'));
+      spinner.succeed(`~/.claude/settings.json ${colored('[OK]', 'green')}`);
       this.results.addCheck('Claude Settings', 'success');
     } catch (e) {
-      console.log(colored('[!]', 'yellow'));
+      spinner.warn(`~/.claude/settings.json ${colored('[!]', 'yellow')}  Invalid JSON`);
       this.results.addCheck(
         'Claude Settings',
         'warning',
@@ -212,11 +254,11 @@ class Doctor {
    * Check 5: Profile configurations
    */
   checkProfiles() {
-    process.stdout.write('[?] Checking profiles... ');
-
+    const spinner = ora('Checking profiles').start();
     const configPath = path.join(this.ccsDir, 'config.json');
+
     if (!fs.existsSync(configPath)) {
-      console.log(colored('[SKIP]', 'yellow'));
+      spinner.info('Profiles [SKIP]  config.json not found');
       return;
     }
 
@@ -224,22 +266,31 @@ class Doctor {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
       if (!config.profiles || typeof config.profiles !== 'object') {
-        console.log(colored('[X]', 'red'));
+        spinner.fail(`Profiles ${colored('[X]', 'red')}  Missing profiles object`);
         this.results.addCheck(
           'Profiles',
           'error',
           'config.json missing profiles object',
-          'Run: npm install -g @kaitranntt/ccs --force'
+          'Run: npm install -g @kaitranntt/ccs --force',
+          { status: 'ERROR', info: 'Missing profiles object' }
         );
         return;
       }
 
       const profileCount = Object.keys(config.profiles).length;
-      console.log(colored('[OK]', 'green'), `(${profileCount} profiles)`);
-      this.results.addCheck('Profiles', 'success', `${profileCount} profiles configured`);
+      const profileNames = Object.keys(config.profiles).join(', ');
+
+      spinner.succeed(`Profiles ${colored('[OK]', 'green')}  ${profileCount} configured (${profileNames})`);
+      this.results.addCheck('Profiles', 'success', `${profileCount} profiles configured`, null, {
+        status: 'OK',
+        info: `${profileCount} configured (${profileNames.length > 30 ? profileNames.substring(0, 27) + '...' : profileNames})`
+      });
     } catch (e) {
-      console.log(colored('[X]', 'red'));
-      this.results.addCheck('Profiles', 'error', e.message);
+      spinner.fail(`Profiles ${colored('[X]', 'red')}  ${e.message}`);
+      this.results.addCheck('Profiles', 'error', e.message, null, {
+        status: 'ERROR',
+        info: e.message
+      });
     }
   }
 
@@ -247,11 +298,11 @@ class Doctor {
    * Check 6: Instance directories (account-based profiles)
    */
   checkInstances() {
-    process.stdout.write('[?] Checking instances... ');
-
+    const spinner = ora('Checking instances').start();
     const instancesDir = path.join(this.ccsDir, 'instances');
+
     if (!fs.existsSync(instancesDir)) {
-      console.log(colored('[i]', 'cyan'), '(no account profiles)');
+      spinner.info(`Instances ${colored('[i]', 'cyan')}  No account profiles`);
       this.results.addCheck('Instances', 'success', 'No account profiles configured');
       return;
     }
@@ -261,12 +312,12 @@ class Doctor {
     });
 
     if (instances.length === 0) {
-      console.log(colored('[i]', 'cyan'), '(no account profiles)');
+      spinner.info(`Instances ${colored('[i]', 'cyan')}  No account profiles`);
       this.results.addCheck('Instances', 'success', 'No account profiles');
       return;
     }
 
-    console.log(colored('[OK]', 'green'), `(${instances.length} instances)`);
+    spinner.succeed(`Instances ${colored('[OK]', 'green')}  ${instances.length} account profiles`);
     this.results.addCheck('Instances', 'success', `${instances.length} account profiles`);
   }
 
@@ -274,7 +325,7 @@ class Doctor {
    * Check 7: Delegation system
    */
   checkDelegation() {
-    process.stdout.write('[?] Checking delegation... ');
+    const spinner = ora('Checking delegation').start();
 
     // Check if delegation commands exist in ~/.ccs/.claude/commands/ccs/
     const ccsClaudeCommandsDir = path.join(this.ccsDir, '.claude', 'commands', 'ccs');
@@ -282,12 +333,13 @@ class Doctor {
     const hasKimiCommand = fs.existsSync(path.join(ccsClaudeCommandsDir, 'kimi.md'));
 
     if (!hasGlmCommand || !hasKimiCommand) {
-      console.log(colored('[!]', 'yellow'), '(not installed)');
+      spinner.warn(`Delegation ${colored('[!]', 'yellow')}  Not installed`);
       this.results.addCheck(
         'Delegation',
         'warning',
         'Delegation commands not found',
-        'Install with: npm install -g @kaitranntt/ccs --force'
+        'Install with: npm install -g @kaitranntt/ccs --force',
+        { status: 'WARN', info: 'Not installed' }
       );
       return;
     }
@@ -304,21 +356,24 @@ class Doctor {
     }
 
     if (readyProfiles.length === 0) {
-      console.log(colored('[!]', 'yellow'), '(no profiles ready)');
+      spinner.warn(`Delegation ${colored('[!]', 'yellow')}  No profiles ready`);
       this.results.addCheck(
         'Delegation',
         'warning',
         'Delegation installed but no profiles configured',
-        'Configure profiles with valid API keys (not placeholders)'
+        'Configure profiles with valid API keys (not placeholders)',
+        { status: 'WARN', info: 'No profiles ready' }
       );
       return;
     }
 
-    console.log(colored('[OK]', 'green'), `(${readyProfiles.join(', ')} ready)`);
+    spinner.succeed(`Delegation ${colored('[OK]', 'green')}  ${readyProfiles.length} profiles ready (${readyProfiles.join(', ')})`);
     this.results.addCheck(
       'Delegation',
       'success',
-      `${readyProfiles.length} profile(s) ready: ${readyProfiles.join(', ')}`
+      `${readyProfiles.length} profile(s) ready: ${readyProfiles.join(', ')}`,
+      null,
+      { status: 'OK', info: `${readyProfiles.length} profiles ready` }
     );
   }
 
@@ -326,22 +381,25 @@ class Doctor {
    * Check 8: File permissions
    */
   checkPermissions() {
-    process.stdout.write('[?] Checking permissions... ');
-
+    const spinner = ora('Checking permissions').start();
     const testFile = path.join(this.ccsDir, '.permission-test');
 
     try {
       fs.writeFileSync(testFile, 'test', 'utf8');
       fs.unlinkSync(testFile);
-      console.log(colored('[OK]', 'green'));
-      this.results.addCheck('Permissions', 'success');
+      spinner.succeed(`Permissions ${colored('[OK]', 'green')}  Write access verified`);
+      this.results.addCheck('Permissions', 'success', null, null, {
+        status: 'OK',
+        info: 'Write access verified'
+      });
     } catch (e) {
-      console.log(colored('[X]', 'red'));
+      spinner.fail(`Permissions ${colored('[X]', 'red')}  Cannot write to ~/.ccs/`);
       this.results.addCheck(
         'Permissions',
         'error',
         'Cannot write to ~/.ccs/',
-        'Fix: sudo chown -R $USER ~/.ccs ~/.claude && chmod 755 ~/.ccs ~/.claude'
+        'Fix: sudo chown -R $USER ~/.ccs ~/.claude && chmod 755 ~/.ccs ~/.claude',
+        { status: 'ERROR', info: 'Cannot write to ~/.ccs/' }
       );
     }
   }
@@ -350,7 +408,7 @@ class Doctor {
    * Check 9: CCS symlinks to ~/.claude/
    */
   checkCcsSymlinks() {
-    process.stdout.write('[?] Checking CCS symlinks... ');
+    const spinner = ora('Checking CCS symlinks').start();
 
     try {
       const ClaudeSymlinkManager = require('../utils/claude-symlink-manager');
@@ -358,24 +416,30 @@ class Doctor {
       const health = manager.checkHealth();
 
       if (health.healthy) {
-        console.log(colored('[OK]', 'green'));
-        this.results.addCheck('CCS Symlinks', 'success', 'All CCS items properly symlinked');
+        const itemCount = manager.ccsItems.length;
+        spinner.succeed(`CCS Symlinks ${colored('[OK]', 'green')}  ${itemCount}/${itemCount} items linked`);
+        this.results.addCheck('CCS Symlinks', 'success', 'All CCS items properly symlinked', null, {
+          status: 'OK',
+          info: `${itemCount}/${itemCount} items synced`
+        });
       } else {
-        console.log(colored('[!]', 'yellow'));
+        spinner.warn(`CCS Symlinks ${colored('[!]', 'yellow')}  ${health.issues.length} issues found`);
         this.results.addCheck(
           'CCS Symlinks',
           'warning',
           health.issues.join(', '),
-          'Run: ccs sync'
+          'Run: ccs sync',
+          { status: 'WARN', info: `${health.issues.length} issues` }
         );
       }
     } catch (e) {
-      console.log(colored('[!]', 'yellow'));
+      spinner.warn(`CCS Symlinks ${colored('[!]', 'yellow')}  Could not check`);
       this.results.addCheck(
         'CCS Symlinks',
         'warning',
         'Could not check CCS symlinks: ' + e.message,
-        'Run: ccs sync'
+        'Run: ccs sync',
+        { status: 'WARN', info: 'Could not check' }
       );
     }
   }
@@ -385,20 +449,37 @@ class Doctor {
    */
   showReport() {
     console.log('');
-    console.log(colored('═══════════════════════════════════════════', 'cyan'));
-    console.log(colored('Health Check Report', 'bold'));
-    console.log(colored('═══════════════════════════════════════════', 'cyan'));
-    console.log('');
+    console.log(colored('═══════════════════════════════════════════════════════════════', 'cyan'));
+    console.log(colored('                     Health Check Summary', 'bold'));
+    console.log(colored('═══════════════════════════════════════════════════════════════', 'cyan'));
 
-    if (this.results.isHealthy() && !this.results.hasWarnings()) {
-      console.log(colored('✓ All checks passed!', 'green'));
-      console.log('');
-      console.log('Your CCS installation is healthy.');
-      console.log('');
-      return;
+    // Create summary table with detailed information
+    const table = new Table({
+      head: [colored('Component', 'cyan'), colored('Status', 'cyan'), colored('Details', 'cyan')],
+      colWidths: [20, 10, 35],
+      wordWrap: true,
+      chars: {
+        'top': '═', 'top-mid': '╤', 'top-left': '╔', 'top-right': '╗',
+        'bottom': '═', 'bottom-mid': '╧', 'bottom-left': '╚', 'bottom-right': '╝',
+        'left': '║', 'left-mid': '╟', 'mid': '─', 'mid-mid': '┼',
+        'right': '║', 'right-mid': '╢', 'middle': '│'
+      }
+    });
+
+    // Populate table with collected details
+    for (const [component, detail] of Object.entries(this.results.details)) {
+      const statusColor = detail.status === 'OK' ? 'green' : detail.status === 'ERROR' ? 'red' : 'yellow';
+      table.push([
+        component,
+        colored(detail.status, statusColor),
+        detail.info || ''
+      ]);
     }
 
-    // Show errors
+    console.log(table.toString());
+    console.log('');
+
+    // Show errors and warnings if present
     if (this.results.hasErrors()) {
       console.log(colored('Errors:', 'red'));
       this.results.errors.forEach(err => {
@@ -410,7 +491,6 @@ class Doctor {
       console.log('');
     }
 
-    // Show warnings
     if (this.results.hasWarnings()) {
       console.log(colored('Warnings:', 'yellow'));
       this.results.warnings.forEach(warn => {
@@ -422,12 +502,14 @@ class Doctor {
       console.log('');
     }
 
-    // Summary
-    if (this.results.hasErrors()) {
-      console.log(colored('Status: Installation has errors', 'red'));
+    // Final status
+    if (this.results.isHealthy() && !this.results.hasWarnings()) {
+      console.log(colored('[OK] All checks passed! Your CCS installation is healthy.', 'green'));
+    } else if (this.results.hasErrors()) {
+      console.log(colored('[X] Status: Installation has errors', 'red'));
       console.log('Run suggested fixes above to resolve issues.');
     } else {
-      console.log(colored('Status: Installation healthy (warnings only)', 'green'));
+      console.log(colored('[OK] Status: Installation healthy (warnings only)', 'green'));
     }
 
     console.log('');

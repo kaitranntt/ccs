@@ -3,6 +3,8 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const ora = require('ora');
+const { colored } = require('./helpers');
 
 /**
  * ClaudeSymlinkManager - Manages selective symlinks from ~/.ccs/.claude/ to ~/.claude/
@@ -35,41 +37,62 @@ class ClaudeSymlinkManager {
    * Install CCS items to user's ~/.claude/ via selective symlinks
    * Safe: backs up existing files before creating symlinks
    */
-  install() {
+  install(silent = false) {
+    const spinner = silent ? null : ora('Installing CCS items to ~/.claude/').start();
+
     // Ensure ~/.ccs/.claude/ exists (should be shipped with package)
     if (!fs.existsSync(this.ccsClaudeDir)) {
-      console.log('[!] CCS .claude/ directory not found, skipping symlink installation');
+      const msg = 'CCS .claude/ directory not found, skipping symlink installation';
+      if (spinner) {
+        spinner.warn(`[!] ${msg}`);
+      } else {
+        console.log(`[!] ${msg}`);
+      }
       return;
     }
 
     // Create ~/.claude/ if missing
     if (!fs.existsSync(this.userClaudeDir)) {
-      console.log('[i] Creating ~/.claude/ directory');
+      if (!silent) {
+        if (spinner) spinner.text = 'Creating ~/.claude/ directory';
+      }
       fs.mkdirSync(this.userClaudeDir, { recursive: true, mode: 0o700 });
     }
 
     // Install each CCS item
+    let installed = 0;
     for (const item of this.ccsItems) {
-      this._installItem(item);
+      if (!silent && spinner) {
+        spinner.text = `Installing ${item.target}...`;
+      }
+      const result = this._installItem(item, silent);
+      if (result) installed++;
     }
 
-    console.log('[OK] Delegation commands and skills installed to ~/.claude/');
+    const msg = `${installed}/${this.ccsItems.length} items installed to ~/.claude/`;
+    if (spinner) {
+      spinner.succeed(colored('[OK]', 'green') + ` ${msg}`);
+    } else {
+      console.log(`[OK] ${msg}`);
+    }
   }
 
   /**
    * Install a single CCS item with conflict handling
    * @param {Object} item - Item descriptor {source, target, type}
+   * @param {boolean} silent - Suppress individual item messages
+   * @returns {boolean} True if installed successfully
    * @private
    */
-  _installItem(item) {
+  _installItem(item, silent = false) {
     const sourcePath = path.join(this.ccsClaudeDir, item.source);
     const targetPath = path.join(this.userClaudeDir, item.target);
     const targetDir = path.dirname(targetPath);
 
     // Ensure source exists
     if (!fs.existsSync(sourcePath)) {
-      console.log(`[!] Source not found: ${item.source}, skipping`);
-      return;
+      if (!silent) console.log(`[!] Source not found: ${item.source}, skipping`);
+      return false;
     }
 
     // Create target parent directory if needed
@@ -81,26 +104,30 @@ class ClaudeSymlinkManager {
     if (fs.existsSync(targetPath)) {
       // Check if it's already the correct symlink
       if (this._isOurSymlink(targetPath, sourcePath)) {
-        return; // Already correct, skip
+        return true; // Already correct, counts as success
       }
 
       // Backup existing file/directory
-      this._backupItem(targetPath);
+      this._backupItem(targetPath, silent);
     }
 
     // Create symlink
     try {
       const symlinkType = item.type === 'directory' ? 'dir' : 'file';
       fs.symlinkSync(sourcePath, targetPath, symlinkType);
-      console.log(`[OK] Symlinked ${item.target}`);
+      if (!silent) console.log(`[OK] Symlinked ${item.target}`);
+      return true;
     } catch (err) {
       // Windows fallback: stub for now, full implementation in v4.2
       if (process.platform === 'win32') {
-        console.log(`[!] Symlink failed for ${item.target} (Windows fallback deferred to v4.2)`);
-        console.log(`[i] Enable Developer Mode or wait for next update`);
+        if (!silent) {
+          console.log(`[!] Symlink failed for ${item.target} (Windows fallback deferred to v4.2)`);
+          console.log(`[i] Enable Developer Mode or wait for next update`);
+        }
       } else {
-        console.log(`[!] Failed to symlink ${item.target}: ${err.message}`);
+        if (!silent) console.log(`[!] Failed to symlink ${item.target}: ${err.message}`);
       }
+      return false;
     }
   }
 
@@ -131,9 +158,10 @@ class ClaudeSymlinkManager {
   /**
    * Backup existing item before replacing with symlink
    * @param {string} itemPath - Path to item to backup
+   * @param {boolean} silent - Suppress backup messages
    * @private
    */
-  _backupItem(itemPath) {
+  _backupItem(itemPath, silent = false) {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
     const backupPath = `${itemPath}.backup-${timestamp}`;
 
@@ -147,9 +175,9 @@ class ClaudeSymlinkManager {
       }
 
       fs.renameSync(itemPath, finalBackupPath);
-      console.log(`[i] Backed up existing item to ${path.basename(finalBackupPath)}`);
+      if (!silent) console.log(`[i] Backed up existing item to ${path.basename(finalBackupPath)}`);
     } catch (err) {
-      console.log(`[!] Failed to backup ${itemPath}: ${err.message}`);
+      if (!silent) console.log(`[!] Failed to backup ${itemPath}: ${err.message}`);
       throw err; // Don't proceed if backup fails
     }
   }
@@ -230,8 +258,10 @@ class ClaudeSymlinkManager {
    * Same as install() but with explicit sync message
    */
   sync() {
-    console.log('[i] Syncing delegation commands and skills to ~/.claude/...');
-    this.install();
+    console.log('');
+    console.log(colored('Syncing CCS Components...', 'cyan'));
+    console.log('');
+    this.install(false);
   }
 }
 

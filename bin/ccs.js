@@ -271,17 +271,27 @@ async function handleDoctorCommand() {
 }
 
 async function handleSyncCommand() {
+  const { colored } = require('./utils/helpers');
+
+  console.log('');
+  console.log(colored('Syncing CCS Components...', 'cyan'));
+  console.log('');
+
   // First, copy .claude/ directory from package to ~/.ccs/.claude/
   const ClaudeDirInstaller = require('./utils/claude-dir-installer');
   const installer = new ClaudeDirInstaller();
   installer.install();
 
+  console.log('');
+
   // Then, create symlinks from ~/.ccs/.claude/ to ~/.claude/
   const ClaudeSymlinkManager = require('./utils/claude-symlink-manager');
   const manager = new ClaudeSymlinkManager();
+  manager.install(false);
 
-  console.log('[i] Syncing delegation commands and skills to ~/.claude/...');
-  manager.sync();
+  console.log('');
+  console.log(colored('[OK] Sync complete!', 'green'));
+  console.log('');
 
   process.exit(0);
 }

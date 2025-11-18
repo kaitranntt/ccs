@@ -1,6 +1,6 @@
 {
   "name": "@kaitranntt/ccs",
-  "version": "4.2.0",
+  "version": "4.3.0",
   "description": "Claude Code Switch - Instant profile switching between Claude Sonnet 4.5 and GLM 4.6",
   "keywords": [
     "cli",
@@ -56,6 +56,10 @@
     "prepack": "node scripts/sync-version.js",
     "prepare": "node scripts/check-executables.js",
     "postinstall": "node scripts/postinstall.js"
+  },
+  "dependencies": {
+    "cli-table3": "^0.6.5",
+    "ora": "^5.4.1"
   },
   "devDependencies": {
     "mocha": "^11.7.5"

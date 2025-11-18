@@ -12,7 +12,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 # Version (updated by scripts/bump-version.sh)
-$CcsVersion = "4.2.0"
+$CcsVersion = "4.3.0"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigFile = if ($env:CCS_CONFIG) { $env:CCS_CONFIG } else { "$env:USERPROFILE\.ccs\config.json" }
 $ProfilesJson = "$env:USERPROFILE\.ccs\profiles.json"
