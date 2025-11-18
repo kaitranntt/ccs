@@ -166,9 +166,11 @@ class Doctor {
   checkConfigFiles() {
     const files = [
       { path: path.join(this.ccsDir, 'config.json'), name: 'config.json', key: 'config.json' },
-      { path: path.join(this.ccsDir, 'glm.settings.json'), name: 'glm.settings.json', key: 'GLM Settings' },
-      { path: path.join(this.ccsDir, 'kimi.settings.json'), name: 'kimi.settings.json', key: 'Kimi Settings' }
+      { path: path.join(this.ccsDir, 'glm.settings.json'), name: 'glm.settings.json', key: 'GLM Settings', profile: 'glm' },
+      { path: path.join(this.ccsDir, 'kimi.settings.json'), name: 'kimi.settings.json', key: 'Kimi Settings', profile: 'kimi' }
     ];
+
+    const { DelegationValidator } = require('../utils/delegation-validator');
 
     for (const file of files) {
       const spinner = ora(`Checking ${file.name}`).start();
@@ -192,14 +194,34 @@ class Doctor {
 
         // Extract useful info based on file type
         let info = 'Valid';
-        if (file.name.includes('settings.json') && config.env && config.env.ANTHROPIC_BASE_URL) {
-          const url = new URL(config.env.ANTHROPIC_BASE_URL);
-          info = `Valid (API: ${url.hostname})`;
+        let status = 'OK';
+
+        if (file.profile) {
+          // For settings files, check if API key is configured
+          const validation = DelegationValidator.validate(file.profile);
+
+          if (validation.valid) {
+            info = 'Key configured';
+            status = 'OK';
+          } else if (validation.error && validation.error.includes('placeholder')) {
+            info = 'Placeholder key (not configured)';
+            status = 'WARN';
+          } else {
+            info = 'Valid JSON';
+            status = 'OK';
+          }
         }
 
-        spinner.succeed(`${file.name} ${colored('[OK]', 'green')}  ${info}`);
-        this.results.addCheck(file.name, 'success', null, null, {
-          status: 'OK',
+        const statusIcon = status === 'OK' ? colored('[OK]', 'green') : colored('[!]', 'yellow');
+
+        if (status === 'WARN') {
+          spinner.warn(`${file.name} ${statusIcon}  ${info}`);
+        } else {
+          spinner.succeed(`${file.name} ${statusIcon}  ${info}`);
+        }
+
+        this.results.addCheck(file.name, status === 'OK' ? 'success' : 'warning', null, null, {
+          status: status,
           info: info
         });
       } catch (e) {
