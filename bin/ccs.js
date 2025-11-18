@@ -167,7 +167,7 @@ function handleHelpCommand() {
   console.log(colored('Flags:', 'cyan'));
   console.log(`  ${colored('-h, --help', 'yellow')}                  Show this help message`);
   console.log(`  ${colored('-v, --version', 'yellow')}               Show version and installation info`);
-  console.log(`  ${colored('--shell-completion', 'yellow')}          Install shell auto-completion`);
+  console.log(`  ${colored('-sc, --shell-completion', 'yellow')}     Install shell auto-completion`);
   console.log('');
 
   // Configuration
@@ -496,7 +496,7 @@ async function main() {
   }
 
   // Special case: shell completion installer
-  if (firstArg === '--shell-completion') {
+  if (firstArg === '--shell-completion' || firstArg === '-sc') {
     await handleShellCompletionCommand(args.slice(1));
     return;
   }

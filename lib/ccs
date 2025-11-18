@@ -200,7 +200,7 @@ show_help() {
   echo -e "${CYAN}Flags:${RESET}"
   echo -e "  ${YELLOW}-h, --help${RESET}                  Show this help message"
   echo -e "  ${YELLOW}-v, --version${RESET}               Show version and installation info"
-  echo -e "  ${YELLOW}--shell-completion${RESET}          Install shell auto-completion"
+  echo -e "  ${YELLOW}-sc, --shell-completion${RESET}     Install shell auto-completion"
   echo ""
   echo -e "${CYAN}Configuration:${RESET}"
   echo -e "  Config:    ~/.ccs/config.json"
@@ -1518,7 +1518,7 @@ if [[ $# -gt 0 ]] && [[ "${1}" == "auth" ]]; then
 fi
 
 # Special case: shell completion installer
-if [[ $# -gt 0 ]] && [[ "${1}" == "--shell-completion" ]]; then
+if [[ $# -gt 0 ]] && [[ "${1}" == "--shell-completion" || "${1}" == "-sc" ]]; then
   install_shell_completion "$@"
   exit $?
 fi

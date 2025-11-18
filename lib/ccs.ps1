@@ -253,7 +253,7 @@ function Show-Help {
     Write-ColorLine "Flags:" "Cyan"
     Write-ColorLine "  -h, --help                  Show this help message" "Yellow"
     Write-ColorLine "  -v, --version               Show version and installation info" "Yellow"
-    Write-ColorLine "  --shell-completion          Install shell auto-completion" "Yellow"
+    Write-ColorLine "  -sc, --shell-completion     Install shell auto-completion" "Yellow"
     Write-Host ""
     Write-ColorLine "Configuration:" "Cyan"
     Write-Host "  Config:    ~/.ccs/config.json"
@@ -1318,7 +1318,7 @@ if ($Help) {
 }
 
 # Special case: shell completion installer
-if ($RemainingArgs.Count -gt 0 -and $RemainingArgs[0] -eq "--shell-completion") {
+if ($RemainingArgs.Count -gt 0 -and ($RemainingArgs[0] -eq "--shell-completion" -or $RemainingArgs[0] -eq "-sc")) {
     $CompletionArgs = if ($RemainingArgs.Count -gt 1) { $RemainingArgs[1..($RemainingArgs.Count-1)] } else { @() }
     $Result = Install-ShellCompletion $CompletionArgs
     exit $Result
