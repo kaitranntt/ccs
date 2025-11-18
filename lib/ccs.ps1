@@ -249,6 +249,7 @@ function Show-Help {
     Write-Host ""
     Write-ColorLine "Diagnostics:" "Cyan"
     Write-ColorLine "  ccs doctor                  Run health check and diagnostics" "Yellow"
+    Write-ColorLine "  ccs update                  Update delegation commands and skills" "Yellow"
     Write-Host ""
     Write-ColorLine "Flags:" "Cyan"
     Write-ColorLine "  -h, --help                  Show this help message" "Yellow"
@@ -849,6 +850,100 @@ function Get-ProfileType {
     }
 }
 
+# --- Update Command ---
+
+function Update-Run {
+    $CcsClaudeDir = "$env:USERPROFILE\.ccs\.claude"
+    $UserClaudeDir = "$env:USERPROFILE\.claude"
+
+    Write-Host "Updating delegation commands and skills in ~/.claude/..." -ForegroundColor Cyan
+    Write-Host ""
+
+    # Check if source directory exists
+    if (-not (Test-Path $CcsClaudeDir)) {
+        Write-Host "[X] CCS .claude/ directory not found at $CcsClaudeDir" -ForegroundColor Red
+        Write-Host "Reinstall CCS: npm install -g @kaitranntt/ccs --force"
+        exit 1
+    }
+
+    # Create ~/.claude/ if missing
+    if (-not (Test-Path $UserClaudeDir)) {
+        Write-Host "[i] Creating ~/.claude/ directory" -ForegroundColor Cyan
+        New-Item -ItemType Directory -Path $UserClaudeDir -Force | Out-Null
+    }
+
+    # Items to symlink
+    $Items = @(
+        @{ Source = "commands\ccs"; Target = "commands\ccs"; Type = "Directory" }
+        @{ Source = "skills\ccs-delegation"; Target = "skills\ccs-delegation"; Type = "Directory" }
+        @{ Source = "agents\ccs-delegator.md"; Target = "agents\ccs-delegator.md"; Type = "File" }
+    )
+
+    $Installed = 0
+    $Skipped = 0
+
+    foreach ($Item in $Items) {
+        $SourcePath = Join-Path $CcsClaudeDir $Item.Source
+        $TargetPath = Join-Path $UserClaudeDir $Item.Target
+        $TargetDir = Split-Path -Parent $TargetPath
+
+        # Check source exists
+        if (-not (Test-Path $SourcePath)) {
+            Write-Host "[!] Source not found: $($Item.Source), skipping" -ForegroundColor Yellow
+            continue
+        }
+
+        # Create parent directory if needed
+        if (-not (Test-Path $TargetDir)) {
+            New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null
+        }
+
+        # Check if already correct symlink
+        if (Test-Path $TargetPath) {
+            $ItemInfo = Get-Item $TargetPath -Force
+            if ($ItemInfo.LinkType -eq "SymbolicLink") {
+                $LinkTarget = $ItemInfo.Target
+                if ($LinkTarget -eq $SourcePath) {
+                    $Skipped++
+                    continue
+                }
+            }
+
+            # Backup existing file/directory
+            $Timestamp = Get-Date -Format "yyyy-MM-dd"
+            $BackupPath = "$TargetPath.backup-$Timestamp"
+            $Counter = 1
+
+            while (Test-Path $BackupPath) {
+                $BackupPath = "$TargetPath.backup-$Timestamp-$Counter"
+                $Counter++
+            }
+
+            Move-Item -Path $TargetPath -Destination $BackupPath -Force
+            Write-Host "[i] Backed up existing to $(Split-Path -Leaf $BackupPath)" -ForegroundColor Cyan
+        }
+
+        # Create symlink
+        try {
+            $SymlinkType = if ($Item.Type -eq "Directory") { "Junction" } else { "SymbolicLink" }
+            New-Item -ItemType $SymlinkType -Path $TargetPath -Target $SourcePath -Force -ErrorAction Stop | Out-Null
+            Write-Host "[OK] Installed $($Item.Target)" -ForegroundColor Green
+            $Installed++
+        } catch {
+            Write-Host "[X] Failed to install $($Item.Target): $($_.Exception.Message)" -ForegroundColor Red
+            if ($_.Exception.Message -match "privilege") {
+                Write-Host "[i] Run PowerShell as Administrator or enable Developer Mode" -ForegroundColor Yellow
+            }
+        }
+    }
+
+    Write-Host ""
+    Write-Host "✓ Update complete" -ForegroundColor Green
+    Write-Host "  Installed: $Installed"
+    Write-Host "  Already up-to-date: $Skipped"
+    Write-Host ""
+}
+
 # --- Auth Commands (Phase 3) ---
 
 function Show-AuthHelp {
@@ -1329,6 +1424,12 @@ if ($RemainingArgs.Count -gt 0 -and $RemainingArgs[0] -eq "auth") {
     $AuthArgs = if ($RemainingArgs.Count -gt 1) { $RemainingArgs[1..($RemainingArgs.Count-1)] } else { @() }
     Invoke-AuthCommands $AuthArgs
     exit $LASTEXITCODE
+}
+
+# Special case: update command
+if ($RemainingArgs.Count -gt 0 -and ($RemainingArgs[0] -eq "update" -or $RemainingArgs[0] -eq "--update")) {
+    Update-Run
+    exit 0
 }
 
 # Run auto-recovery before main logic

@@ -196,6 +196,7 @@ show_help() {
   echo ""
   echo -e "${CYAN}Diagnostics:${RESET}"
   echo -e "  ${YELLOW}ccs doctor${RESET}                  Run health check and diagnostics"
+  echo -e "  ${YELLOW}ccs update${RESET}                  Update delegation commands and skills"
   echo ""
   echo -e "${CYAN}Flags:${RESET}"
   echo -e "  ${YELLOW}-h, --help${RESET}                  Show this help message"
@@ -487,6 +488,100 @@ doctor_run() {
   echo ""
 
   $has_errors && exit 1 || exit 0
+}
+
+# --- Update Command ---
+
+update_run() {
+  local ccs_claude_dir="$HOME/.ccs/.claude"
+  local user_claude_dir="$HOME/.claude"
+
+  echo -e "${CYAN}Updating delegation commands and skills in ~/.claude/...${RESET}"
+  echo ""
+
+  # Check if source directory exists
+  if [[ ! -d "$ccs_claude_dir" ]]; then
+    msg_error "CCS .claude/ directory not found at $ccs_claude_dir"
+    echo "Reinstall CCS: npm install -g @kaitranntt/ccs --force"
+    exit 1
+  fi
+
+  # Create ~/.claude/ if missing
+  if [[ ! -d "$user_claude_dir" ]]; then
+    echo -e "${CYAN}[i]${RESET} Creating ~/.claude/ directory"
+    mkdir -p "$user_claude_dir"
+    chmod 700 "$user_claude_dir"
+  fi
+
+  # Items to symlink (source:target:type)
+  local items=(
+    "commands/ccs:commands/ccs:dir"
+    "skills/ccs-delegation:skills/ccs-delegation:dir"
+    "agents/ccs-delegator.md:agents/ccs-delegator.md:file"
+  )
+
+  local installed=0
+  local skipped=0
+
+  for item in "${items[@]}"; do
+    IFS=':' read -r source target type <<< "$item"
+    local source_path="$ccs_claude_dir/$source"
+    local target_path="$user_claude_dir/$target"
+    local target_dir="$(dirname "$target_path")"
+
+    # Check source exists
+    if [[ ! -e "$source_path" ]]; then
+      echo -e "${YELLOW}[!]${RESET} Source not found: $source, skipping"
+      continue
+    fi
+
+    # Create parent directory if needed
+    if [[ ! -d "$target_dir" ]]; then
+      mkdir -p "$target_dir"
+      chmod 700 "$target_dir"
+    fi
+
+    # Check if already correct symlink
+    if [[ -L "$target_path" ]]; then
+      local link_target="$(readlink "$target_path")"
+      local resolved_target="$(cd "$(dirname "$target_path")" && cd "$(dirname "$link_target")" && pwd)/$(basename "$link_target")"
+
+      if [[ "$resolved_target" == "$source_path" ]]; then
+        ((skipped++))
+        continue
+      fi
+    fi
+
+    # Backup existing file/directory
+    if [[ -e "$target_path" ]]; then
+      local timestamp="$(date +%Y-%m-%d)"
+      local backup_path="${target_path}.backup-${timestamp}"
+      local counter=1
+
+      while [[ -e "$backup_path" ]]; do
+        backup_path="${target_path}.backup-${timestamp}-${counter}"
+        ((counter++))
+      done
+
+      mv "$target_path" "$backup_path"
+      echo -e "${CYAN}[i]${RESET} Backed up existing to $(basename "$backup_path")"
+    fi
+
+    # Create symlink
+    ln -s "$source_path" "$target_path" 2>/dev/null
+    if [[ $? -eq 0 ]]; then
+      echo -e "${GREEN}[OK]${RESET} Installed $target"
+      ((installed++))
+    else
+      echo -e "${RED}[X]${RESET} Failed to install $target"
+    fi
+  done
+
+  echo ""
+  echo -e "${GREEN}✓ Update complete${RESET}"
+  echo "  Installed: $installed"
+  echo "  Already up-to-date: $skipped"
+  echo ""
 }
 
 # --- Claude CLI Detection Logic ---
@@ -1526,6 +1621,12 @@ fi
 # Special case: doctor command
 if [[ $# -gt 0 ]] && [[ "${1}" == "doctor" || "${1}" == "--doctor" ]]; then
   doctor_run
+  exit $?
+fi
+
+# Special case: update command
+if [[ $# -gt 0 ]] && [[ "${1}" == "update" || "${1}" == "--update" ]]; then
+  update_run
   exit $?
 fi
 

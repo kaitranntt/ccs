@@ -53,7 +53,7 @@ class ClaudeSymlinkManager {
       this._installItem(item);
     }
 
-    console.log('[OK] CCS items installed to ~/.claude/');
+    console.log('[OK] Delegation commands and skills installed to ~/.claude/');
   }
 
   /**
@@ -178,9 +178,9 @@ class ClaudeSymlinkManager {
     }
 
     if (removed > 0) {
-      console.log(`[OK] Removed ${removed} CCS items from ~/.claude/`);
+      console.log(`[OK] Removed ${removed} delegation commands and skills from ~/.claude/`);
     } else {
-      console.log('[i] No CCS items to remove');
+      console.log('[i] No delegation commands or skills to remove');
     }
   }
 
@@ -230,7 +230,7 @@ class ClaudeSymlinkManager {
    * Same as install() but with explicit re-installation message
    */
   update() {
-    console.log('[i] Updating CCS items in ~/.claude/...');
+    console.log('[i] Updating delegation commands and skills in ~/.claude/...');
     this.install();
   }
 }

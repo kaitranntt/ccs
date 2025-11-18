@@ -156,7 +156,7 @@ function handleHelpCommand() {
   // Diagnostics
   console.log(colored('Diagnostics:', 'cyan'));
   console.log(`  ${colored('ccs doctor', 'yellow')}                  Run health check and diagnostics`);
-  console.log(`  ${colored('ccs update', 'yellow')}                  Re-install CCS items to ~/.claude/`);
+  console.log(`  ${colored('ccs update', 'yellow')}                  Update delegation commands and skills`);
   console.log('');
 
   // Flags
@@ -255,7 +255,7 @@ async function handleUpdateCommand() {
   const ClaudeSymlinkManager = require('./utils/claude-symlink-manager');
   const manager = new ClaudeSymlinkManager();
 
-  console.log('[i] Updating CCS items in ~/.claude/...');
+  console.log('[i] Updating delegation commands and skills in ~/.claude/...');
   manager.update();
 
   process.exit(0);
