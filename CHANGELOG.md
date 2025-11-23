@@ -2,6 +2,14 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/)
 
+## [4.3.6] - 2025-11-23
+
+### Added
+- **Plugin Support**: Claude Code plugins now shared across all CCS profiles via `~/.ccs/shared/plugins/`
+- Symlink architecture: `~/.claude/plugins/` ← `~/.ccs/shared/plugins/` ← `instance/plugins/`
+- Install plugins once, use across GLM, GLMT, Kimi, and all Claude accounts
+- Cross-platform support with Windows fallback (copy mode)
+
 ## [4.3.5] - 2025-11-22
 
 ### Changed
