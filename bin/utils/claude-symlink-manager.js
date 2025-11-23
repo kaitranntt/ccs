@@ -5,11 +5,24 @@ const path = require('path');
 const os = require('os');
 
 // Make ora optional (might not be available during npm install postinstall)
+// ora v9+ is an ES module, need to use .default for CommonJS
 let ora = null;
 try {
-  ora = require('ora');
+  const oraModule = require('ora');
+  ora = oraModule.default || oraModule;
 } catch (e) {
-  // ora not available, will use console.log instead
+  // ora not available, create fallback spinner that uses console.log
+  ora = function(text) {
+    return {
+      start: () => ({
+        succeed: (msg) => console.log(msg || `[OK] ${text}`),
+        fail: (msg) => console.log(msg || `[X] ${text}`),
+        warn: (msg) => console.log(msg || `[!] ${text}`),
+        info: (msg) => console.log(msg || `[i] ${text}`),
+        text: ''
+      })
+    };
+  };
 }
 
 const { colored } = require('./helpers');
@@ -45,7 +58,7 @@ class ClaudeSymlinkManager {
    * Safe: backs up existing files before creating symlinks
    */
   install(silent = false) {
-    const spinner = (silent || !ora) ? null : ora('Installing CCS items to ~/.claude/').start();
+    const spinner = silent ? null : ora('Installing CCS items to ~/.claude/').start();
 
     // Ensure ~/.ccs/.claude/ exists (should be shipped with package)
     if (!fs.existsSync(this.ccsClaudeDir)) {

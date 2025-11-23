@@ -6,7 +6,28 @@ const os = require('os');
 const { spawn } = require('child_process');
 const { colored } = require('../utils/helpers');
 const { detectClaudeCli } = require('../utils/claude-detector');
-const ora = require('ora');
+
+// Make ora optional (might not be available during npm install postinstall)
+// ora v9+ is an ES module, need to use .default for CommonJS
+let ora = null;
+try {
+  const oraModule = require('ora');
+  ora = oraModule.default || oraModule;
+} catch (e) {
+  // ora not available, create fallback spinner that uses console.log
+  ora = function(text) {
+    return {
+      start: () => ({
+        succeed: (msg) => console.log(msg || `[OK] ${text}`),
+        fail: (msg) => console.log(msg || `[X] ${text}`),
+        warn: (msg) => console.log(msg || `[!] ${text}`),
+        info: (msg) => console.log(msg || `[i] ${text}`),
+        text: ''
+      })
+    };
+  };
+}
+
 const Table = require('cli-table3');
 
 /**
