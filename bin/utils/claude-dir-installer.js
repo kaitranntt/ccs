@@ -4,7 +4,15 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const ora = require('ora');
+
+// Make ora optional (might not be available during npm install postinstall)
+let ora = null;
+try {
+  ora = require('ora');
+} catch (e) {
+  // ora not available, will use console.log instead
+}
+
 const { colored } = require('./helpers');
 
 /**
@@ -23,7 +31,7 @@ class ClaudeDirInstaller {
    * @param {boolean} silent - Suppress spinner output
    */
   install(packageDir, silent = false) {
-    const spinner = silent ? null : ora('Copying .claude/ items to ~/.ccs/.claude/').start();
+    const spinner = (silent || !ora) ? null : ora('Copying .claude/ items to ~/.ccs/.claude/').start();
 
     try {
       // Auto-detect package directory if not provided

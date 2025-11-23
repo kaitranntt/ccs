@@ -3,7 +3,15 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const ora = require('ora');
+
+// Make ora optional (might not be available during npm install postinstall)
+let ora = null;
+try {
+  ora = require('ora');
+} catch (e) {
+  // ora not available, will use console.log instead
+}
+
 const { colored } = require('./helpers');
 
 /**
@@ -37,7 +45,7 @@ class ClaudeSymlinkManager {
    * Safe: backs up existing files before creating symlinks
    */
   install(silent = false) {
-    const spinner = silent ? null : ora('Installing CCS items to ~/.claude/').start();
+    const spinner = (silent || !ora) ? null : ora('Installing CCS items to ~/.claude/').start();
 
     // Ensure ~/.ccs/.claude/ exists (should be shipped with package)
     if (!fs.existsSync(this.ccsClaudeDir)) {
