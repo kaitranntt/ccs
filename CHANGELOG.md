@@ -2,6 +2,20 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/)
 
+## [4.3.8] - 2025-11-23
+
+### Fixed
+- **ora v9 Compatibility**: Fixed "ora is not a function" errors in `ccs doctor` and installer utilities
+- Properly handle ora v9+ ES module format when using CommonJS `require()`
+- All spinner-based operations now work correctly with ora v9.0.0
+
+### Technical Details
+- ora v9+ is an ES module, requiring `.default` property access in CommonJS
+- Updated import: `const oraModule = require('ora'); ora = oraModule.default || oraModule`
+- Fallback spinner implementation ensures graceful degradation when ora is unavailable
+- Affects: `bin/management/doctor.js`, `bin/utils/claude-dir-installer.js`, `bin/utils/claude-symlink-manager.js`
+- Impact: `ccs doctor` command and postinstall scripts now work correctly with latest ora version
+
 ## [4.3.7] - 2025-11-23
 
 ### Fixed
