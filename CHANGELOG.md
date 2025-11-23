@@ -2,6 +2,29 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/)
 
+## [4.3.10] - 2025-11-23
+
+### Fixed
+- **Update Cache Issue**: Fixed `ccs update` serving cached package versions instead of fresh downloads
+- Package manager cache is now automatically cleared before updating
+- Update now ensures users always receive the latest version from registry
+
+### Technical Details
+- **Node.js (bin/ccs.js)**: Added cache clearing for npm, yarn, pnpm before update
+  - npm: `npm cache clean --force`
+  - yarn: `yarn cache clean`
+  - pnpm: `pnpm store prune`
+  - bun: No explicit cache clearing needed
+- **Bash (lib/ccs)**: Added `npm cache clean --force` before npm update
+- **PowerShell (lib/ccs.ps1)**: Added `npm cache clean --force` before npm update
+- **Non-blocking**: Update continues even if cache clearing fails (with warning)
+- **Manual fallback commands**: Updated to include cache clearing step
+
+### Impact
+- Users no longer need to manually run `npm cache clean --force` before `ccs update`
+- Resolves issue where update reported success but installed cached/outdated version
+- Ensures fresh package downloads from npm registry on every update
+
 ## [4.3.8] - 2025-11-23
 
 ### Fixed
