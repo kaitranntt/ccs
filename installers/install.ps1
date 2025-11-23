@@ -31,7 +31,7 @@ $InstallMethod = if ($ScriptDir -and ((Test-Path "$ScriptDir\lib\ccs.ps1") -or (
 # IMPORTANT: Update this version when releasing new versions!
 # This hardcoded version is used for standalone installations (irm | iex)
 # For git installations, VERSION file is read if available
-$CcsVersion = "4.3.5"
+$CcsVersion = "4.3.6"
 
 # Try to read VERSION file for git installations
 if ($ScriptDir) {
