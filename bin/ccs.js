@@ -533,65 +533,102 @@ async function handleUpdateCommand() {
   if (isNpmInstall) {
     // npm installation - detect package manager and update
     const packageManager = detectPackageManager();
-    let updateCommand, updateArgs;
+    let updateCommand, updateArgs, cacheCommand, cacheArgs;
 
     switch (packageManager) {
       case 'npm':
         updateCommand = 'npm';
         updateArgs = ['install', '-g', '@kaitranntt/ccs@latest'];
+        cacheCommand = 'npm';
+        cacheArgs = ['cache', 'clean', '--force'];
         break;
       case 'yarn':
         updateCommand = 'yarn';
         updateArgs = ['global', 'add', '@kaitranntt/ccs@latest'];
+        cacheCommand = 'yarn';
+        cacheArgs = ['cache', 'clean'];
         break;
       case 'pnpm':
         updateCommand = 'pnpm';
         updateArgs = ['add', '-g', '@kaitranntt/ccs@latest'];
+        cacheCommand = 'pnpm';
+        cacheArgs = ['store', 'prune'];
         break;
       case 'bun':
         updateCommand = 'bun';
         updateArgs = ['add', '-g', '@kaitranntt/ccs@latest'];
+        cacheCommand = null; // bun doesn't need explicit cache clearing
+        cacheArgs = null;
         break;
       default:
         updateCommand = 'npm';
         updateArgs = ['install', '-g', '@kaitranntt/ccs@latest'];
+        cacheCommand = 'npm';
+        cacheArgs = ['cache', 'clean', '--force'];
     }
 
     console.log(colored(`Updating via ${packageManager}...`, 'cyan'));
     console.log('');
 
-    const child = spawn(updateCommand, updateArgs, {
-      stdio: 'inherit'
-      // No shell needed for direct commands
-    });
+    // Clear package manager cache first to ensure fresh download
+    if (cacheCommand) {
+      console.log(colored('Clearing package cache...', 'cyan'));
+      const cacheChild = spawn(cacheCommand, cacheArgs, {
+        stdio: 'inherit'
+      });
 
-    child.on('exit', (code) => {
-      if (code === 0) {
+      cacheChild.on('exit', (code) => {
+        if (code !== 0) {
+          console.log(colored('[!] Cache clearing failed, proceeding anyway...', 'yellow'));
+        }
+        // Continue with update regardless of cache clearing result
+        performUpdate();
+      });
+
+      cacheChild.on('error', (err) => {
+        console.log(colored('[!] Cache clearing failed, proceeding anyway...', 'yellow'));
+        // Continue with update regardless of cache clearing result
+        performUpdate();
+      });
+    } else {
+      // No cache clearing needed, proceed directly
+      performUpdate();
+    }
+
+    function performUpdate() {
+      const child = spawn(updateCommand, updateArgs, {
+        stdio: 'inherit'
+        // No shell needed for direct commands
+      });
+
+      child.on('exit', (code) => {
+        if (code === 0) {
+          console.log('');
+          console.log(colored('[OK] Update successful!', 'green'));
+          console.log('');
+          console.log(`Run ${colored('ccs --version', 'yellow')} to verify`);
+          console.log('');
+        } else {
+          console.log('');
+          console.log(colored('[X] Update failed', 'red'));
+          console.log('');
+          console.log('Try manually:');
+          console.log(colored(`  ${updateCommand} ${updateArgs.join(' ')}`, 'yellow'));
+          console.log('');
+        }
+        process.exit(code || 0);
+      });
+
+      child.on('error', (err) => {
         console.log('');
-        console.log(colored('[OK] Update successful!', 'green'));
-        console.log('');
-        console.log(`Run ${colored('ccs --version', 'yellow')} to verify`);
-        console.log('');
-      } else {
-        console.log('');
-        console.log(colored('[X] Update failed', 'red'));
+        console.log(colored(`[X] Failed to run ${packageManager} update`, 'red'));
         console.log('');
         console.log('Try manually:');
         console.log(colored(`  ${updateCommand} ${updateArgs.join(' ')}`, 'yellow'));
         console.log('');
-      }
-      process.exit(code || 0);
-    });
-
-    child.on('error', (err) => {
-      console.log('');
-      console.log(colored(`[X] Failed to run ${packageManager} update`, 'red'));
-      console.log('');
-      console.log('Try manually:');
-      console.log(colored(`  ${updateCommand} ${updateArgs.join(' ')}`, 'yellow'));
-      console.log('');
-      process.exit(1);
-    });
+        process.exit(1);
+      });
+    }
   } else {
     // Direct installation - re-run installer
     console.log(colored('Updating via installer...', 'cyan'));

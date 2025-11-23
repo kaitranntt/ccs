@@ -12,7 +12,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 # Version (updated by scripts/bump-version.sh)
-$CcsVersion = "4.3.9"
+$CcsVersion = "4.3.10"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigFile = if ($env:CCS_CONFIG) { $env:CCS_CONFIG } else { "$env:USERPROFILE\.ccs\config.json" }
 $ProfilesJson = "$env:USERPROFILE\.ccs\profiles.json"
@@ -1122,6 +1122,18 @@ function Update-Run {
         Write-Host "Updating via npm..." -ForegroundColor Cyan
         Write-Host ""
 
+        # Clear npm cache to ensure fresh download
+        Write-Host "Clearing package cache..." -ForegroundColor Cyan
+        try {
+            npm cache clean --force 2>$null
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "[!] Cache clearing failed, proceeding anyway..." -ForegroundColor Yellow
+            }
+        } catch {
+            Write-Host "[!] Cache clearing failed, proceeding anyway..." -ForegroundColor Yellow
+        }
+        Write-Host ""
+
         try {
             npm install -g @kaitranntt/ccs@latest
             if ($LASTEXITCODE -eq 0) {
@@ -1139,7 +1151,7 @@ function Update-Run {
             Write-Host "[X] Update failed" -ForegroundColor Red
             Write-Host ""
             Write-Host "Try manually:"
-            Write-Host "  npm install -g @kaitranntt/ccs@latest" -ForegroundColor Yellow
+            Write-Host "  npm cache clean --force; npm install -g @kaitranntt/ccs@latest" -ForegroundColor Yellow
             Write-Host ""
             exit 1
         }

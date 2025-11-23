@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Version (updated by scripts/bump-version.sh)
-CCS_VERSION="4.3.9"
+CCS_VERSION="4.3.10"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly CONFIG_FILE="${CCS_CONFIG:-$HOME/.ccs/config.json}"
 readonly PROFILES_JSON="$HOME/.ccs/profiles.json"
@@ -674,6 +674,13 @@ update_run() {
     echo -e "${CYAN}Updating via npm...${RESET}"
     echo ""
 
+    # Clear npm cache to ensure fresh download
+    echo -e "${CYAN}Clearing package cache...${RESET}"
+    if ! npm cache clean --force 2>/dev/null; then
+      echo -e "${YELLOW}[!] Cache clearing failed, proceeding anyway...${RESET}"
+    fi
+    echo ""
+
     if npm install -g @kaitranntt/ccs@latest; then
       echo ""
       echo -e "${GREEN}[OK] Update successful!${RESET}"
@@ -686,7 +693,7 @@ update_run() {
       echo -e "${RED}[X] Update failed${RESET}"
       echo ""
       echo "Try manually:"
-      echo -e "  ${YELLOW}npm install -g @kaitranntt/ccs@latest${RESET}"
+      echo -e "  ${YELLOW}npm cache clean --force && npm install -g @kaitranntt/ccs@latest${RESET}"
       echo ""
       exit 1
     fi
