@@ -2,6 +2,20 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/)
 
+## [4.3.7] - 2025-11-23
+
+### Fixed
+- **Postinstall Script**: Fixed missing `~/.ccs/.claude/` directory during `npm install`
+- Made `ora` dependency optional in `ClaudeDirInstaller` and `ClaudeSymlinkManager`
+- Postinstall script now gracefully handles missing `ora` module during installation
+- Ensures `.claude/` directory and symlinks are properly created even when `ora` is unavailable
+
+### Technical Details
+- Root cause: `ora` module not available during `npm install` postinstall execution
+- Solution: Optional require with fallback to `console.log` when `ora` is unavailable
+- Affects: `bin/utils/claude-dir-installer.js`, `bin/utils/claude-symlink-manager.js`
+- Impact: All npm installations now properly create `~/.ccs/.claude/` and CCS symlinks
+
 ## [4.3.6] - 2025-11-23
 
 ### Added
