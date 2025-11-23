@@ -17,7 +17,7 @@ class SharedManager {
     this.sharedDir = path.join(this.homeDir, '.ccs', 'shared');
     this.claudeDir = path.join(this.homeDir, '.claude');
     this.instancesDir = path.join(this.homeDir, '.ccs', 'instances');
-    this.sharedDirs = ['commands', 'skills', 'agents'];
+    this.sharedDirs = ['commands', 'skills', 'agents', 'plugins'];
   }
 
   /**

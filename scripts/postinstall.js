@@ -81,7 +81,7 @@ function createConfigFiles() {
     }
 
     // Create shared subdirectories
-    const sharedSubdirs = ['commands', 'skills', 'agents'];
+    const sharedSubdirs = ['commands', 'skills', 'agents', 'plugins'];
     for (const subdir of sharedSubdirs) {
       const subdirPath = path.join(sharedDir, subdir);
       if (!fs.existsSync(subdirPath)) {

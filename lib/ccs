@@ -222,7 +222,8 @@ show_help() {
   echo -e "  Commands:    ~/.ccs/shared/commands/"
   echo -e "  Skills:      ~/.ccs/shared/skills/"
   echo -e "  Agents:      ~/.ccs/shared/agents/"
-  echo -e "  Note: Commands, skills, and agents are symlinked across all profiles"
+  echo -e "  Plugins:     ~/.ccs/shared/plugins/"
+  echo -e "  Note: Commands, skills, agents, and plugins are symlinked across all profiles"
   echo ""
 
   echo -e "${CYAN}Examples:${RESET}"

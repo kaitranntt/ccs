@@ -207,7 +207,8 @@ function handleHelpCommand() {
   console.log('  Commands:    ~/.ccs/shared/commands/');
   console.log('  Skills:      ~/.ccs/shared/skills/');
   console.log('  Agents:      ~/.ccs/shared/agents/');
-  console.log('  Note: Commands, skills, and agents are symlinked across all profiles');
+  console.log('  Plugins:     ~/.ccs/shared/plugins/');
+  console.log('  Note: Commands, skills, agents, and plugins are symlinked across all profiles');
   console.log('');
 
   // Examples
