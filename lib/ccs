@@ -981,10 +981,10 @@ link_shared_directories() {
   local shared_dir="$HOME/.ccs/shared"
 
   # Ensure shared directories exist
-  mkdir -p "$shared_dir"/{commands,skills,agents}
+  mkdir -p "$shared_dir"/{commands,skills,agents,plugins}
 
   # Create symlinks (remove existing first if present)
-  for dir in commands skills agents; do
+  for dir in commands skills agents plugins; do
     local link_path="$instance_path/$dir"
     local target_path="$shared_dir/$dir"
 
@@ -1003,7 +1003,7 @@ migrate_to_shared_structure() {
   # Check if migration is needed (shared dirs exist but are empty)
   if [[ -d "$shared_dir" ]]; then
     local needs_migration=false
-    for dir in commands skills agents; do
+    for dir in commands skills agents plugins; do
       if [[ ! -d "$shared_dir/$dir" ]] || [[ -z "$(ls -A "$shared_dir/$dir" 2>/dev/null)" ]]; then
         needs_migration=true
         break
@@ -1014,7 +1014,7 @@ migrate_to_shared_structure() {
   fi
 
   # Create shared directory
-  mkdir -p "$shared_dir"/{commands,skills,agents}
+  mkdir -p "$shared_dir"/{commands,skills,agents,plugins}
 
   # Copy from ~/.claude/ (actual Claude CLI directory)
   local claude_dir="$HOME/.claude"
@@ -1031,6 +1031,10 @@ migrate_to_shared_structure() {
     # Copy agents to shared (if exists)
     [[ -d "$claude_dir/agents" ]] && \
       cp -r "$claude_dir/agents"/* "$shared_dir/agents/" 2>/dev/null || true
+
+    # Copy plugins to shared (if exists)
+    [[ -d "$claude_dir/plugins" ]] && \
+      cp -r "$claude_dir/plugins"/* "$shared_dir/plugins/" 2>/dev/null || true
   fi
 
   # Update all instances to use symlinks

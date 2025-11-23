@@ -659,7 +659,7 @@ function Link-SharedDirectories {
     $SharedDir = "$env:USERPROFILE\.ccs\shared"
 
     # Ensure shared directories exist
-    @('commands', 'skills', 'agents') | ForEach-Object {
+    @('commands', 'skills', 'agents', 'plugins') | ForEach-Object {
         $Dir = Join-Path $SharedDir $_
         if (-not (Test-Path $Dir)) {
             New-Item -ItemType Directory -Path $Dir -Force | Out-Null
@@ -667,7 +667,7 @@ function Link-SharedDirectories {
     }
 
     # Create symlinks (requires Windows Developer Mode or admin)
-    @('commands', 'skills', 'agents') | ForEach-Object {
+    @('commands', 'skills', 'agents', 'plugins') | ForEach-Object {
         $LinkPath = Join-Path $InstancePath $_
         $TargetPath = Join-Path $SharedDir $_
 
@@ -693,7 +693,7 @@ function Migrate-SharedStructure {
     # Check if migration is needed (shared dirs exist but are empty)
     if (Test-Path $SharedDir) {
         $NeedsMigration = $false
-        foreach ($Dir in @('commands', 'skills', 'agents')) {
+        foreach ($Dir in @('commands', 'skills', 'agents', 'plugins')) {
             $DirPath = Join-Path $SharedDir $Dir
             if (-not (Test-Path $DirPath) -or (Get-ChildItem $DirPath -ErrorAction SilentlyContinue).Count -eq 0) {
                 $NeedsMigration = $true
@@ -705,7 +705,7 @@ function Migrate-SharedStructure {
     }
 
     # Create shared directory
-    @('commands', 'skills', 'agents') | ForEach-Object {
+    @('commands', 'skills', 'agents', 'plugins') | ForEach-Object {
         $Dir = Join-Path $SharedDir $_
         New-Item -ItemType Directory -Path $Dir -Force | Out-Null
     }
@@ -730,6 +730,12 @@ function Migrate-SharedStructure {
         $AgentsPath = Join-Path $ClaudeDir "agents"
         if (Test-Path $AgentsPath) {
             Copy-Item "$AgentsPath\*" -Destination "$SharedDir\agents\" -Recurse -ErrorAction SilentlyContinue
+        }
+
+        # Copy plugins to shared (if exists)
+        $PluginsPath = Join-Path $ClaudeDir "plugins"
+        if (Test-Path $PluginsPath) {
+            Copy-Item "$PluginsPath\*" -Destination "$SharedDir\plugins\" -Recurse -ErrorAction SilentlyContinue
         }
     }
 
