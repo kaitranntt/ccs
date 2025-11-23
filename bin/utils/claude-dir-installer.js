@@ -44,7 +44,7 @@ class ClaudeDirInstaller {
    * @param {boolean} silent - Suppress spinner output
    */
   install(packageDir, silent = false) {
-    const spinner = silent ? null : ora('Copying .claude/ items to ~/.ccs/.claude/').start();
+    const spinner = (silent || !ora) ? null : ora('Copying .claude/ items to ~/.ccs/.claude/').start();
 
     try {
       // Auto-detect package directory if not provided

@@ -58,7 +58,7 @@ class ClaudeSymlinkManager {
    * Safe: backs up existing files before creating symlinks
    */
   install(silent = false) {
-    const spinner = silent ? null : ora('Installing CCS items to ~/.claude/').start();
+    const spinner = (silent || !ora) ? null : ora('Installing CCS items to ~/.claude/').start();
 
     // Ensure ~/.ccs/.claude/ exists (should be shipped with package)
     if (!fs.existsSync(this.ccsClaudeDir)) {
