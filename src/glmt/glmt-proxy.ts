@@ -208,12 +208,25 @@ export class GlmtProxy {
       const duration = Date.now() - startTime;
       this.log(`Request failed after ${duration}ms: ${err.message}`);
 
-      res.writeHead(500, { 'Content-Type': 'application/json' });
+      // Parse error to provide clearer messages
+      const errorInfo = this.parseUpstreamError(err);
+
+      // Check if headers already sent (streaming mode may have started)
+      if (res.headersSent) {
+        // Headers already sent, write error as SSE event and close
+        this.log('Headers already sent, writing error as SSE event');
+        res.write(`event: error\n`);
+        res.write(`data: ${JSON.stringify({ error: errorInfo })}\n\n`);
+        res.end();
+        return;
+      }
+
+      res.writeHead(errorInfo.statusCode, { 'Content-Type': 'application/json' });
       res.end(
         JSON.stringify({
           error: {
-            type: 'proxy_error',
-            message: err.message,
+            type: errorInfo.type,
+            message: errorInfo.message,
           },
         })
       );
@@ -525,6 +538,80 @@ export class GlmtProxy {
     if (this.verbose) {
       console.error(`[glmt-proxy] ${message}`);
     }
+  }
+
+  /**
+   * Parse upstream error and return user-friendly error info
+   */
+  private parseUpstreamError(err: Error): {
+    statusCode: number;
+    type: string;
+    message: string;
+  } {
+    const errorMessage = err.message;
+
+    // Check for 401 Unauthorized / auth token missing
+    if (
+      errorMessage.includes('401') ||
+      errorMessage.toLowerCase().includes('unauthorized') ||
+      errorMessage.toLowerCase().includes('authorization token missing') ||
+      errorMessage.toLowerCase().includes('invalid token')
+    ) {
+      return {
+        statusCode: 401,
+        type: 'authentication_error',
+        message:
+          'Authorization token missing or invalid. Please check your ANTHROPIC_AUTH_TOKEN environment variable in ~/.ccs/config.json or settings.json.',
+      };
+    }
+
+    // Check for 403 Forbidden
+    if (errorMessage.includes('403') || errorMessage.toLowerCase().includes('forbidden')) {
+      return {
+        statusCode: 403,
+        type: 'permission_error',
+        message: 'Access forbidden. Your token may not have permission to access this resource.',
+      };
+    }
+
+    // Check for 429 Rate limit
+    if (errorMessage.includes('429') || errorMessage.toLowerCase().includes('rate limit')) {
+      return {
+        statusCode: 429,
+        type: 'rate_limit_error',
+        message: 'Rate limit exceeded. Please wait before making more requests.',
+      };
+    }
+
+    // Check for timeout
+    if (errorMessage.toLowerCase().includes('timeout')) {
+      return {
+        statusCode: 504,
+        type: 'timeout_error',
+        message: 'Request timed out. The upstream server took too long to respond.',
+      };
+    }
+
+    // Check for connection errors
+    if (
+      errorMessage.toLowerCase().includes('econnrefused') ||
+      errorMessage.toLowerCase().includes('enotfound') ||
+      errorMessage.toLowerCase().includes('connection')
+    ) {
+      return {
+        statusCode: 502,
+        type: 'connection_error',
+        message:
+          'Failed to connect to upstream server. Please check your network and ANTHROPIC_BASE_URL configuration.',
+      };
+    }
+
+    // Default: proxy error
+    return {
+      statusCode: 500,
+      type: 'proxy_error',
+      message: errorMessage,
+    };
   }
 }
 
