@@ -754,7 +754,7 @@ class Doctor {
   }
 
   /**
-   * Check 11: CLIProxy health (OAuth profiles: gemini, codex, agy)
+   * Check 11: CLIProxy health (OAuth profiles: gemini, codex, agy, qwen)
    */
   private async checkCLIProxy(): Promise<void> {
     // 1. Binary installed?

@@ -17,8 +17,8 @@ export interface ProfilesConfig {
  * Example: "flash" → gemini provider with gemini-2.5-flash model
  */
 export interface CLIProxyVariantConfig {
-  /** CLIProxy provider to use (gemini, codex, agy) */
-  provider: 'gemini' | 'codex' | 'agy';
+  /** CLIProxy provider to use (gemini, codex, agy, qwen) */
+  provider: 'gemini' | 'codex' | 'agy' | 'qwen';
   /** Path to settings.json with custom model configuration */
   settings: string;
 }

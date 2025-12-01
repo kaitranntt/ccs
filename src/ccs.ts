@@ -295,7 +295,7 @@ async function main(): Promise<void> {
     const profileInfo = detector.detectProfileType(profile);
 
     if (profileInfo.type === 'cliproxy') {
-      // CLIPROXY FLOW: OAuth-based profiles (gemini, codex, agy) or user-defined variants
+      // CLIPROXY FLOW: OAuth-based profiles (gemini, codex, agy, qwen) or user-defined variants
       const provider = profileInfo.provider || (profileInfo.name as CLIProxyProvider);
       const customSettingsPath = profileInfo.settingsPath; // undefined for hardcoded profiles
       await execClaudeWithCLIProxy(claudeCli, provider, remainingArgs, { customSettingsPath });

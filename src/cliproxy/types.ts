@@ -110,8 +110,9 @@ export interface DownloadResult {
  * - gemini: Google Gemini via OAuth
  * - codex: OpenAI Codex via OAuth
  * - agy: Antigravity via OAuth (short name for easy usage)
+ * - qwen: Qwen Code via OAuth (qwen3-coder)
  */
-export type CLIProxyProvider = 'gemini' | 'codex' | 'agy';
+export type CLIProxyProvider = 'gemini' | 'codex' | 'agy' | 'qwen';
 
 /**
  * CLIProxy config.yaml structure (minimal)

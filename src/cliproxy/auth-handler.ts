@@ -100,6 +100,13 @@ const OAUTH_CONFIGS: Record<CLIProxyProvider, ProviderOAuthConfig> = {
     scopes: ['api'],
     authFlag: '--antigravity-login',
   },
+  qwen: {
+    provider: 'qwen',
+    displayName: 'Qwen Code',
+    authUrl: 'https://chat.qwen.ai/api/v1/oauth2/device/code',
+    scopes: ['openid', 'profile', 'email', 'model.completion'],
+    authFlag: '--qwen-login',
+  },
 };
 
 /**
@@ -129,6 +136,7 @@ const PROVIDER_AUTH_PREFIXES: Record<CLIProxyProvider, string[]> = {
   gemini: ['gemini-', 'google-'],
   codex: ['codex-', 'openai-'],
   agy: ['antigravity-', 'agy-'],
+  qwen: ['qwen-'],
 };
 
 /**
@@ -139,6 +147,7 @@ const PROVIDER_TYPE_VALUES: Record<CLIProxyProvider, string[]> = {
   gemini: ['gemini'],
   codex: ['codex'],
   agy: ['antigravity'],
+  qwen: ['qwen'],
 };
 
 /**
@@ -256,7 +265,7 @@ export function getAuthStatus(provider: CLIProxyProvider): AuthStatus {
  * Get auth status for all providers
  */
 export function getAllAuthStatus(): AuthStatus[] {
-  const providers: CLIProxyProvider[] = ['gemini', 'codex', 'agy'];
+  const providers: CLIProxyProvider[] = ['gemini', 'codex', 'agy', 'qwen'];
   return providers.map(getAuthStatus);
 }
 

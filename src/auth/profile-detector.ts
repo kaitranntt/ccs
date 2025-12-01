@@ -14,7 +14,7 @@ import { Config, Settings, ProfileMetadata } from '../types';
 export type ProfileType = 'settings' | 'account' | 'cliproxy' | 'default';
 
 /** CLIProxy profile names (OAuth-based, zero config) */
-export const CLIPROXY_PROFILES = ['gemini', 'codex', 'agy'] as const;
+export const CLIPROXY_PROFILES = ['gemini', 'codex', 'agy', 'qwen'] as const;
 export type CLIProxyProfileName = (typeof CLIPROXY_PROFILES)[number];
 
 export interface ProfileDetectionResult {
@@ -23,7 +23,7 @@ export interface ProfileDetectionResult {
   settingsPath?: string;
   profile?: Settings | ProfileMetadata;
   message?: string;
-  /** For cliproxy variants: the underlying provider (gemini, codex, agy) */
+  /** For cliproxy variants: the underlying provider (gemini, codex, agy, qwen) */
   provider?: CLIProxyProfileName;
 }
 
@@ -89,7 +89,7 @@ class ProfileDetector {
    * Detect profile type and return routing information
    *
    * Priority order:
-   * 0. Hardcoded CLIProxy profiles (gemini, codex, agy)
+   * 0. Hardcoded CLIProxy profiles (gemini, codex, agy, qwen)
    * 1. User-defined CLIProxy variants (config.cliproxy section)
    * 2. Settings-based profiles (config.profiles section)
    * 3. Account-based profiles (profiles.json)
@@ -100,7 +100,7 @@ class ProfileDetector {
       return this.resolveDefaultProfile();
     }
 
-    // Priority 0: Check CLIProxy profiles (gemini, codex, agy) - OAuth-based, zero config
+    // Priority 0: Check CLIProxy profiles (gemini, codex, agy, qwen) - OAuth-based, zero config
     if (CLIPROXY_PROFILES.includes(profileName as CLIProxyProfileName)) {
       return {
         type: 'cliproxy',

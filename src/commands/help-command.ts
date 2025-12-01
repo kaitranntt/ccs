@@ -54,6 +54,7 @@ export function handleHelpCommand(): void {
   console.log(
     `  ${colored('ccs agy', 'yellow')}                      Antigravity (gemini-3-pro-preview)`
   );
+  console.log(`  ${colored('ccs qwen', 'yellow')}                     Qwen Code (qwen3-coder)`);
   console.log('');
   console.log(`  ${colored('ccs <provider> --auth', 'yellow')}        Authenticate only`);
   console.log(`  ${colored('ccs <provider> --logout', 'yellow')}      Clear authentication`);
