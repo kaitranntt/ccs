@@ -73,7 +73,7 @@ function validateConfiguration() {
     { path: path.join(ccsDir, 'config.json'), name: 'config.json' },
     { path: path.join(ccsDir, 'glm.settings.json'), name: 'glm.settings.json' },
     { path: path.join(ccsDir, 'glmt.settings.json'), name: 'glmt.settings.json' },
-    { path: path.join(ccsDir, 'kimi.settings.json'), name: 'kimi.settings.json' }
+    { path: path.join(ccsDir, 'kimi.settings.json'), name: 'kimi.settings.json' },
   ];
 
   for (const file of requiredFiles) {
@@ -165,8 +165,8 @@ function createConfigFiles() {
         profiles: {
           glm: '~/.ccs/glm.settings.json',
           glmt: '~/.ccs/glmt.settings.json',
-          kimi: '~/.ccs/kimi.settings.json'
-        }
+          kimi: '~/.ccs/kimi.settings.json',
+        },
       };
 
       // Atomic write: temp file → rename
@@ -223,8 +223,8 @@ function createConfigFiles() {
           ANTHROPIC_MODEL: 'glm-4.6',
           ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-4.6',
           ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-4.6',
-          ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-4.6'
-        }
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-4.6',
+        },
       };
 
       // Atomic write
@@ -258,9 +258,9 @@ function createConfigFiles() {
           MAX_THINKING_TOKENS: '32768',
           ENABLE_STREAMING: 'true',
           ANTHROPIC_SAFE_MODE: 'false',
-          API_TIMEOUT_MS: '3000000'
+          API_TIMEOUT_MS: '3000000',
         },
-        alwaysThinkingEnabled: true
+        alwaysThinkingEnabled: true,
       };
 
       // Atomic write
@@ -299,7 +299,7 @@ function createConfigFiles() {
           MAX_THINKING_TOKENS: '32768',
           ENABLE_STREAMING: 'true',
           ANTHROPIC_SAFE_MODE: 'false',
-          API_TIMEOUT_MS: '3000000'
+          API_TIMEOUT_MS: '3000000',
         };
 
         for (const [key, value] of Object.entries(envDefaults)) {
@@ -321,7 +321,9 @@ function createConfigFiles() {
           fs.writeFileSync(tmpPath, JSON.stringify(existing, null, 2) + '\n', 'utf8');
           fs.renameSync(tmpPath, glmtSettingsPath);
           console.log('[OK] Migrated GLMT config with new defaults (v3.3.0)');
-          console.log('     Added: temperature, max_tokens, thinking settings, alwaysThinkingEnabled');
+          console.log(
+            '     Added: temperature, max_tokens, thinking settings, alwaysThinkingEnabled'
+          );
         }
       } catch (err) {
         console.warn('[!] GLMT config migration failed:', err.message);
@@ -336,9 +338,9 @@ function createConfigFiles() {
       const kimiSettings = {
         env: {
           ANTHROPIC_BASE_URL: 'https://api.kimi.com/coding/',
-          ANTHROPIC_AUTH_TOKEN: 'YOUR_KIMI_API_KEY_HERE'
+          ANTHROPIC_AUTH_TOKEN: 'YOUR_KIMI_API_KEY_HERE',
         },
-        alwaysThinkingEnabled: true
+        alwaysThinkingEnabled: true,
       };
 
       // Atomic write
@@ -357,6 +359,7 @@ function createConfigFiles() {
     }
 
     // NOTE: gemini.settings.json and codex.settings.json are NOT created during install
+    // iflow is a CLIProxy provider and doesn't need settings.json file
     // They are created on-demand when user runs `ccs gemini` or `ccs codex` for the first time
     // This prevents confusion - users need to run `--auth` first anyway
 
@@ -379,7 +382,7 @@ function createConfigFiles() {
           'ANTHROPIC_SMALL_FAST_MODEL',
           'ANTHROPIC_DEFAULT_OPUS_MODEL',
           'ANTHROPIC_DEFAULT_SONNET_MODEL',
-          'ANTHROPIC_DEFAULT_HAIKU_MODEL'
+          'ANTHROPIC_DEFAULT_HAIKU_MODEL',
         ];
 
         for (const field of deprecatedFields) {
@@ -425,7 +428,7 @@ function createConfigFiles() {
     }
 
     const completionFiles = ['ccs.bash', 'ccs.zsh', 'ccs.fish', 'ccs.ps1'];
-    completionFiles.forEach(file => {
+    completionFiles.forEach((file) => {
       const src = path.join(scriptsCompletionDir, file);
       const dest = path.join(completionsDir, file);
 
@@ -472,7 +475,7 @@ function createConfigFiles() {
     if (!validation.success) {
       console.error('');
       console.error('[X] Configuration validation failed:');
-      validation.errors.forEach(err => console.error(`    - ${err}`));
+      validation.errors.forEach((err) => console.error(`    - ${err}`));
       console.error('');
       throw new Error('Configuration incomplete');
     }
@@ -481,13 +484,12 @@ function createConfigFiles() {
     if (validation.warnings.length > 0) {
       console.warn('');
       console.warn('[!] Warnings:');
-      validation.warnings.forEach(warn => console.warn(`    - ${warn}`));
+      validation.warnings.forEach((warn) => console.warn(`    - ${warn}`));
     }
 
     console.log('');
     console.log('[OK] CCS configuration ready!');
     console.log('  Run: ccs --version');
-
   } catch (err) {
     // Show error details
     console.error('');

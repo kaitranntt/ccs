@@ -12,7 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getCcsDir } from '../utils/config-manager';
 import { CLIProxyProvider, ProviderConfig, ProviderModelMapping } from './types';
-import { getModelMappingFromConfig } from './base-config-loader';
+import { getModelMappingFromConfig, getEnvVarsFromConfig } from './base-config-loader';
 
 /** Settings file structure for user overrides */
 interface ProviderSettings {
@@ -31,6 +31,7 @@ const PROVIDER_DISPLAY_NAMES: Record<CLIProxyProvider, string> = {
   codex: 'Codex',
   agy: 'Antigravity',
   qwen: 'Qwen Code',
+  iflow: 'iFlow',
 };
 
 /**
@@ -197,7 +198,11 @@ export function getClaudeEnvVars(
 ): NodeJS.ProcessEnv {
   const models = getModelMapping(provider);
 
-  return {
+  // Base env vars from config file (includes ANTHROPIC_MAX_TOKENS, etc.)
+  const baseEnvVars = getEnvVarsFromConfig(provider);
+
+  // Core env vars that we always set dynamically
+  const coreEnvVars = {
     // Provider-specific endpoint - routes to correct provider via URL path
     ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}/api/provider/${provider}`,
     ANTHROPIC_AUTH_TOKEN: CCS_INTERNAL_API_KEY,
@@ -205,6 +210,23 @@ export function getClaudeEnvVars(
     ANTHROPIC_DEFAULT_OPUS_MODEL: models.opusModel || models.claudeModel,
     ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnetModel || models.claudeModel,
     ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haikuModel || models.claudeModel,
+  };
+
+  // Filter out core env vars from base config to avoid conflicts
+  const {
+    ANTHROPIC_BASE_URL: _baseUrl,
+    ANTHROPIC_AUTH_TOKEN: _authToken,
+    ANTHROPIC_MODEL: _model,
+    ANTHROPIC_DEFAULT_OPUS_MODEL: _opusModel,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: _sonnetModel,
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: _haikuModel,
+    ...additionalEnvVars
+  } = baseEnvVars;
+
+  // Merge core env vars with additional env vars from base config
+  return {
+    ...coreEnvVars,
+    ...additionalEnvVars, // Includes ANTHROPIC_MAX_TOKENS, etc.
   };
 }
 

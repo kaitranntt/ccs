@@ -159,6 +159,7 @@ Claude Code Profile & Model Switcher`.trim();
       ['ccs codex', 'OpenAI Codex (gpt-5.1-codex-max)'],
       ['ccs agy', 'Antigravity (gemini-3-pro-preview)'],
       ['ccs qwen', 'Qwen Code (qwen3-coder)'],
+      ['ccs iflow', 'iFlow (multiple models)'],
       ['', ''], // Spacer
       ['ccs <provider> --auth', 'Authenticate only'],
       ['ccs <provider> --logout', 'Clear authentication'],

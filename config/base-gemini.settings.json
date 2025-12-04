@@ -2,8 +2,8 @@
   "env": {
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:8317/api/provider/gemini",
     "ANTHROPIC_AUTH_TOKEN": "ccs-internal-managed",
-    "ANTHROPIC_MODEL": "gemini-2.5-pro",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "gemini-2.5-pro",
+    "ANTHROPIC_MODEL": "gemini-3-pro-preview",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "gemini-3-pro-preview",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "gemini-2.5-pro",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "gemini-2.5-flash"
   }

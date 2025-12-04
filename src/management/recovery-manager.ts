@@ -58,6 +58,7 @@ class RecoveryManager {
     const defaultConfig = {
       profiles: {
         glm: '~/.ccs/glm.settings.json',
+        glmt: '~/.ccs/glmt.settings.json',
         kimi: '~/.ccs/kimi.settings.json',
         default: '~/.claude/settings.json',
       },
