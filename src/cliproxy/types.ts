@@ -46,8 +46,6 @@ export interface BinaryManagerConfig {
   maxRetries: number;
   /** Enable verbose logging */
   verbose: boolean;
-  /** Force specific version (skip auto-upgrade to latest) */
-  forceVersion?: boolean;
 }
 
 /**
@@ -113,8 +111,9 @@ export interface DownloadResult {
  * - codex: OpenAI Codex via OAuth
  * - agy: Antigravity via OAuth (short name for easy usage)
  * - qwen: Qwen Code via OAuth (qwen3-coder)
+ * - iflow: iFlow via OAuth
  */
-export type CLIProxyProvider = 'gemini' | 'codex' | 'agy' | 'qwen';
+export type CLIProxyProvider = 'gemini' | 'codex' | 'agy' | 'qwen' | 'iflow';
 
 /**
  * CLIProxy config.yaml structure (minimal)

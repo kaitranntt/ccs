@@ -12,12 +12,12 @@
  * Each provider has its own directory to avoid conflicts.
  */
 
+import { execSync, spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { spawn, execSync } from 'child_process';
 import { ProgressIndicator } from '../utils/progress-indicator';
-import { getProviderAuthDir, generateConfig } from './config-generator';
 import { ensureCLIProxyBinary } from './binary-manager';
+import { generateConfig, getProviderAuthDir } from './config-generator';
 import { CLIProxyProvider } from './types';
 
 /**
@@ -169,6 +169,13 @@ const OAUTH_CONFIGS: Record<CLIProxyProvider, ProviderOAuthConfig> = {
     scopes: ['openid', 'profile', 'email', 'model.completion'],
     authFlag: '--qwen-login',
   },
+  iflow: {
+    provider: 'iflow',
+    displayName: 'iFlow',
+    authUrl: 'https://iflow.cn/oauth',
+    scopes: ['phone', 'profile', 'email'],
+    authFlag: '--iflow-login',
+  },
 };
 
 /**
@@ -199,6 +206,7 @@ const PROVIDER_AUTH_PREFIXES: Record<CLIProxyProvider, string[]> = {
   codex: ['codex-', 'openai-'],
   agy: ['antigravity-', 'agy-'],
   qwen: ['qwen-'],
+  iflow: ['iflow-'],
 };
 
 /**
@@ -210,6 +218,7 @@ const PROVIDER_TYPE_VALUES: Record<CLIProxyProvider, string[]> = {
   codex: ['codex'],
   agy: ['antigravity'],
   qwen: ['qwen'],
+  iflow: ['iflow'],
 };
 
 /**
@@ -327,7 +336,7 @@ export function getAuthStatus(provider: CLIProxyProvider): AuthStatus {
  * Get auth status for all providers
  */
 export function getAllAuthStatus(): AuthStatus[] {
-  const providers: CLIProxyProvider[] = ['gemini', 'codex', 'agy', 'qwen'];
+  const providers: CLIProxyProvider[] = ['gemini', 'codex', 'agy', 'qwen', 'iflow'];
   return providers.map(getAuthStatus);
 }
 

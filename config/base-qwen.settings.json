@@ -2,9 +2,9 @@
   "env": {
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:8317/api/provider/qwen",
     "ANTHROPIC_AUTH_TOKEN": "ccs-internal-managed",
-    "ANTHROPIC_MODEL": "qwen3-coder",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "qwen3-coder",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "qwen3-coder",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "qwen3-coder"
+    "ANTHROPIC_MODEL": "qwen3-coder-plus",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "qwen3-coder-plus",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "qwen3-coder-plus",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "qwen3-vl-plus"
   }
 }
