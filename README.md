@@ -2,6 +2,9 @@
 
 # CCS - Claude Code Switch
 
+[![Run in Smithery](https://smithery.ai/badge/skills/kaitranntt)](https://smithery.ai/skills?ns=kaitranntt&utm_source=github&utm_medium=badge)
+
+
 ![CCS Logo](assets/ccs-logo-medium.png)
 
 ### The universal AI profile manager for Claude Code.
