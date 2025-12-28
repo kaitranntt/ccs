@@ -227,6 +227,8 @@ export interface ProxyRemoteConfig {
   protocol: 'http' | 'https';
   /** Auth token for remote proxy (optional, sent as header) */
   auth_token: string;
+  /** Connection timeout in milliseconds (default: 2000) */
+  timeout?: number;
 }
 
 /**

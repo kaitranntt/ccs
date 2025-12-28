@@ -256,6 +256,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['--proxy-port <port>', 'Proxy port (default: 8317)'],
     ['--proxy-protocol <proto>', 'Protocol: http or https (default: http)'],
     ['--proxy-auth-token <token>', 'Auth token for remote proxy'],
+    ['--proxy-timeout <ms>', 'Connection timeout in ms (default: 2000)'],
     ['--local-proxy', 'Force local mode, ignore remote config'],
     ['--remote-only', 'Fail if remote unreachable (no fallback)'],
   ]);
@@ -266,6 +267,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['CCS_PROXY_PORT', 'Proxy port'],
     ['CCS_PROXY_PROTOCOL', 'Protocol (http/https)'],
     ['CCS_PROXY_AUTH_TOKEN', 'Auth token'],
+    ['CCS_PROXY_TIMEOUT', 'Connection timeout in ms'],
     ['CCS_PROXY_FALLBACK_ENABLED', 'Enable local fallback (1/0)'],
   ]);
 

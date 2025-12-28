@@ -16,6 +16,7 @@ export const PROXY_CLI_FLAGS = [
   '--proxy-port',
   '--proxy-protocol',
   '--proxy-auth-token',
+  '--proxy-timeout',
   '--local-proxy',
   '--remote-only',
 ] as const;
@@ -26,6 +27,7 @@ export const PROXY_ENV_VARS = {
   port: 'CCS_PROXY_PORT',
   protocol: 'CCS_PROXY_PROTOCOL',
   authToken: 'CCS_PROXY_AUTH_TOKEN',
+  timeout: 'CCS_PROXY_TIMEOUT',
   fallbackEnabled: 'CCS_PROXY_FALLBACK_ENABLED',
 } as const;
 
@@ -35,6 +37,7 @@ interface ParsedProxyFlags {
   port?: number;
   protocol?: 'http' | 'https';
   authToken?: string;
+  timeout?: number;
   localProxy: boolean;
   remoteOnly: boolean;
 }
@@ -45,6 +48,7 @@ interface EnvProxyConfig {
   port?: number;
   protocol?: 'http' | 'https';
   authToken?: string;
+  timeout?: number;
   fallbackEnabled?: boolean;
 }
 
@@ -92,6 +96,15 @@ export function parseProxyFlags(args: string[]): {
 
     if (arg === '--proxy-auth-token' && args[i + 1] && !args[i + 1].startsWith('-')) {
       flags.authToken = args[i + 1];
+      i += 2;
+      continue;
+    }
+
+    if (arg === '--proxy-timeout' && args[i + 1] && !args[i + 1].startsWith('-')) {
+      const timeout = parseInt(args[i + 1], 10);
+      if (!isNaN(timeout) && timeout >= 100 && timeout <= 60000) {
+        flags.timeout = timeout;
+      }
       i += 2;
       continue;
     }
@@ -148,6 +161,14 @@ export function getProxyEnvVars(): EnvProxyConfig {
     config.authToken = authToken;
   }
 
+  const timeout = process.env[PROXY_ENV_VARS.timeout];
+  if (timeout) {
+    const timeoutNum = parseInt(timeout, 10);
+    if (!isNaN(timeoutNum) && timeoutNum >= 100 && timeoutNum <= 60000) {
+      config.timeout = timeoutNum;
+    }
+  }
+
   const fallback = process.env[PROXY_ENV_VARS.fallbackEnabled];
   if (fallback !== undefined) {
     // Accept: '1', 'true', 'yes' as enabled; '0', 'false', 'no' as disabled
@@ -192,6 +213,7 @@ export function resolveProxyConfig(
       port?: number;
       protocol?: 'http' | 'https';
       auth_token?: string;
+      timeout?: number;
       fallback_enabled?: boolean;
     };
     local?: {
@@ -247,6 +269,9 @@ export function resolveProxyConfig(
   // Merge auth token: CLI > ENV > config.yaml
   resolved.authToken = cliFlags.authToken ?? envConfig.authToken ?? yamlConfig.remote?.auth_token;
 
+  // Merge timeout: CLI > ENV > config.yaml > default (2000ms in executor)
+  resolved.timeout = cliFlags.timeout ?? envConfig.timeout ?? yamlConfig.remote?.timeout;
+
   // Merge fallback enabled: ENV > config.yaml > default
   resolved.fallbackEnabled =
     envConfig.fallbackEnabled ?? yamlConfig.remote?.fallback_enabled ?? true;
@@ -276,6 +301,7 @@ export function hasProxyFlags(args: string[]): boolean {
       arg === '--proxy-port' ||
       arg === '--proxy-protocol' ||
       arg === '--proxy-auth-token' ||
+      arg === '--proxy-timeout' ||
       arg === '--local-proxy' ||
       arg === '--remote-only'
   );

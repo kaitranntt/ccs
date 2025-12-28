@@ -213,4 +213,6 @@ export interface ResolvedProxyConfig {
   remoteOnly: boolean;
   /** --local-proxy flag: force local mode, ignore remote config */
   forceLocal: boolean;
+  /** Remote proxy connection timeout in ms (default: 2000) */
+  timeout?: number;
 }

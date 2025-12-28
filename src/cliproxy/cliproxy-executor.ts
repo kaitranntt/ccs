@@ -142,6 +142,7 @@ export async function execClaudeWithCLIProxy(
           port: cliproxyServerConfig.remote.port,
           protocol: cliproxyServerConfig.remote.protocol,
           auth_token: cliproxyServerConfig.remote.auth_token,
+          timeout: cliproxyServerConfig.remote.timeout,
         }
       : undefined,
     local: cliproxyServerConfig?.local
@@ -188,7 +189,7 @@ export async function execClaudeWithCLIProxy(
       port: proxyConfig.port,
       protocol: proxyConfig.protocol,
       authToken: proxyConfig.authToken,
-      timeout: 2000,
+      timeout: proxyConfig.timeout ?? 2000,
       allowSelfSigned: proxyConfig.protocol === 'https',
     });
 
