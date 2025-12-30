@@ -19,6 +19,7 @@ export const PROXY_CLI_FLAGS = [
   '--proxy-timeout',
   '--local-proxy',
   '--remote-only',
+  '--allow-self-signed',
 ] as const;
 
 /** Environment variable names for proxy configuration */
@@ -29,6 +30,7 @@ export const PROXY_ENV_VARS = {
   authToken: 'CCS_PROXY_AUTH_TOKEN',
   timeout: 'CCS_PROXY_TIMEOUT',
   fallbackEnabled: 'CCS_PROXY_FALLBACK_ENABLED',
+  allowSelfSigned: 'CCS_ALLOW_SELF_SIGNED',
 } as const;
 
 /** Parsed CLI proxy flags */
@@ -40,6 +42,7 @@ interface ParsedProxyFlags {
   timeout?: number;
   localProxy: boolean;
   remoteOnly: boolean;
+  allowSelfSigned?: boolean;
 }
 
 /** Proxy config from environment variables */
@@ -50,6 +53,7 @@ interface EnvProxyConfig {
   authToken?: string;
   timeout?: number;
   fallbackEnabled?: boolean;
+  allowSelfSigned?: boolean;
 }
 
 /**
@@ -121,6 +125,12 @@ export function parseProxyFlags(args: string[]): {
       continue;
     }
 
+    if (arg === '--allow-self-signed') {
+      flags.allowSelfSigned = true;
+      i += 1;
+      continue;
+    }
+
     // Not a proxy flag - keep in remaining args
     remainingArgs.push(arg);
     i += 1;
@@ -177,6 +187,16 @@ export function getProxyEnvVars(): EnvProxyConfig {
       config.fallbackEnabled = true;
     } else if (lower === '0' || lower === 'false' || lower === 'no') {
       config.fallbackEnabled = false;
+    }
+  }
+
+  const allowSelfSigned = process.env[PROXY_ENV_VARS.allowSelfSigned];
+  if (allowSelfSigned !== undefined) {
+    const lower = allowSelfSigned.toLowerCase();
+    if (lower === '1' || lower === 'true' || lower === 'yes') {
+      config.allowSelfSigned = true;
+    } else if (lower === '0' || lower === 'false' || lower === 'no') {
+      config.allowSelfSigned = false;
     }
   }
 
@@ -272,6 +292,9 @@ export function resolveProxyConfig(
   // Merge timeout: CLI > ENV > config.yaml > default (2000ms in executor)
   resolved.timeout = cliFlags.timeout ?? envConfig.timeout ?? yamlConfig.remote?.timeout;
 
+  // Merge allowSelfSigned: CLI > ENV > default (true for backwards compatibility)
+  resolved.allowSelfSigned = cliFlags.allowSelfSigned ?? envConfig.allowSelfSigned ?? true;
+
   // Merge fallback enabled: ENV > config.yaml > default
   resolved.fallbackEnabled =
     envConfig.fallbackEnabled ?? yamlConfig.remote?.fallback_enabled ?? true;
@@ -303,6 +326,7 @@ export function hasProxyFlags(args: string[]): boolean {
       arg === '--proxy-auth-token' ||
       arg === '--proxy-timeout' ||
       arg === '--local-proxy' ||
-      arg === '--remote-only'
+      arg === '--remote-only' ||
+      arg === '--allow-self-signed'
   );
 }

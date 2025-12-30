@@ -259,6 +259,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['--proxy-timeout <ms>', 'Connection timeout in ms (default: 2000)'],
     ['--local-proxy', 'Force local mode, ignore remote config'],
     ['--remote-only', 'Fail if remote unreachable (no fallback)'],
+    ['--allow-self-signed', 'Allow self-signed certs (for dev proxies)'],
   ]);
 
   // CLI Proxy env vars
@@ -269,6 +270,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['CCS_PROXY_AUTH_TOKEN', 'Auth token'],
     ['CCS_PROXY_TIMEOUT', 'Connection timeout in ms'],
     ['CCS_PROXY_FALLBACK_ENABLED', 'Enable local fallback (1/0)'],
+    ['CCS_ALLOW_SELF_SIGNED', 'Allow self-signed certs (1/0)'],
   ]);
 
   // CLI Proxy paths

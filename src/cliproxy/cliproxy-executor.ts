@@ -190,7 +190,7 @@ export async function execClaudeWithCLIProxy(
       protocol: proxyConfig.protocol,
       authToken: proxyConfig.authToken,
       timeout: proxyConfig.timeout ?? 2000,
-      allowSelfSigned: proxyConfig.protocol === 'https',
+      allowSelfSigned: proxyConfig.allowSelfSigned ?? false,
     });
 
     if (status.reachable) {

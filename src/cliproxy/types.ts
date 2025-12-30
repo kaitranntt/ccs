@@ -215,4 +215,6 @@ export interface ResolvedProxyConfig {
   forceLocal: boolean;
   /** Remote proxy connection timeout in ms (default: 2000) */
   timeout?: number;
+  /** Allow self-signed certificates for HTTPS connections (default: true) */
+  allowSelfSigned?: boolean;
 }
