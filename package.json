@@ -72,6 +72,8 @@
     "test:npm": "bun test tests/npm/",
     "test:native": "bash tests/native/unix/edge-cases.sh",
     "dev": "bun run build:server && bun dist/ccs.js config --dev",
+    "dev:symlink": "bash scripts/dev-symlink.sh",
+    "dev:unlink": "bash scripts/dev-symlink.sh --restore",
     "ui:build": "cd ui && bun run build",
     "ui:preview": "cd ui && bun run preview",
     "ui:validate": "cd ui && bun run validate",
