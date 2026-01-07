@@ -9,7 +9,7 @@
 name: AI Code Review
 
 on:
-  pull_request:
+  pull_request_target:
     branches: [main, dev]
     types: [opened, synchronize, reopened]
   issue_comment:
@@ -36,7 +36,7 @@ jobs:
     # - PR event: always run
     # - Comment event: only if it's a PR and contains /review
     if: >
-      github.event_name == 'pull_request' ||
+      github.event_name == 'pull_request_target' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issue_comment' &&
        github.event.issue.pull_request &&
@@ -53,12 +53,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          # For pull_request_target, checkout PR head to review actual changes
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Determine PR Number
         id: pr
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          if [ "${{ github.event_name }}" = "pull_request_target" ]; then
             echo "number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "number=${{ github.event.inputs.pr_number }}" >> $GITHUB_OUTPUT
