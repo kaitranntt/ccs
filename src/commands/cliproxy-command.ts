@@ -20,7 +20,15 @@
 
 import * as path from 'path';
 import { getAllAuthStatus, getOAuthConfig, triggerOAuth } from '../cliproxy/auth-handler';
-import { getProviderAccounts } from '../cliproxy/account-manager';
+import {
+  getProviderAccounts,
+  setDefaultAccount,
+  pauseAccount,
+  resumeAccount,
+  findAccountByQuery,
+} from '../cliproxy/account-manager';
+import { fetchAllProviderQuotas } from '../cliproxy/quota-fetcher';
+import { isOnCooldown } from '../cliproxy/quota-manager';
 import { CLIPROXY_FALLBACK_VERSION } from '../cliproxy/platform-detector';
 import { CLIPROXY_PROFILES, CLIProxyProfileName } from '../auth/profile-detector';
 import { supportsModelConfig, getProviderCatalog, ModelEntry } from '../cliproxy/model-catalog';
@@ -544,10 +552,20 @@ async function showHelp(): Promise<void> {
       ],
     ],
     [
+      'Quota Management:',
+      [
+        ['default <account>', 'Set default account for rotation'],
+        ['pause <account>', 'Pause account (skip in rotation)'],
+        ['resume <account>', 'Resume paused account'],
+        ['quota', 'Show quota status for all accounts'],
+      ],
+    ],
+    [
       'Proxy Lifecycle:',
       [
         ['status', 'Show running CLIProxy status'],
         ['stop', 'Stop running CLIProxy instance'],
+        ['doctor', 'Quota diagnostics and shared project detection'],
       ],
     ],
     [
@@ -577,6 +595,312 @@ async function showHelp(): Promise<void> {
     `  Releases: ${color('https://github.com/router-for-me/CLIProxyAPIPlus/releases', 'path')}`
   );
   console.log('');
+}
+
+// ============================================================================
+// DOCTOR COMMAND - Quota diagnostics and shared project detection
+// ============================================================================
+
+async function handleDoctor(): Promise<void> {
+  await initUI();
+  console.log(header('CLIProxy Quota Diagnostics'));
+  console.log('');
+
+  // Check each OAuth provider (agy is the only one with quota)
+  const provider: CLIProxyProvider = 'agy';
+  const accounts = getProviderAccounts(provider);
+
+  if (accounts.length === 0) {
+    console.log(info('No Antigravity accounts configured'));
+    console.log(`    Run: ${color('ccs agy --auth', 'command')} to authenticate`);
+    return;
+  }
+
+  console.log(subheader(`Antigravity Accounts (${accounts.length})`));
+  console.log('');
+
+  // Fetch quota for all accounts
+  console.log(dim('Fetching quotas...'));
+  const quotaResult = await fetchAllProviderQuotas(provider);
+
+  // Display per-account quota status
+  for (const { account, quota } of quotaResult.accounts) {
+    const accountLabel = account.email || account.id || 'Unknown Account';
+    const defaultBadge = account.isDefault ? color(' (default)', 'info') : '';
+
+    if (!quota.success) {
+      console.log(`  ${fail(accountLabel)}${defaultBadge}`);
+      console.log(`    ${color(quota.error || 'Failed to fetch quota', 'error')}`);
+      if (quota.isUnprovisioned) {
+        console.log(
+          `    ${warn('Account not provisioned - open Gemini Code Assist in IDE first')}`
+        );
+      }
+      console.log('');
+      continue;
+    }
+
+    // Calculate overall quota health (guard against empty models array)
+    const avgQuota =
+      quota.models.length > 0
+        ? quota.models.reduce((sum, m) => sum + m.percentage, 0) / quota.models.length
+        : 0;
+    const statusIcon = avgQuota > 50 ? ok('') : avgQuota > 10 ? warn('') : fail('');
+
+    console.log(`  ${statusIcon}${accountLabel}${defaultBadge}`);
+    if (quota.projectId) {
+      console.log(`    Project: ${dim(quota.projectId)}`);
+    }
+
+    // Show model quotas
+    for (const model of quota.models) {
+      const bar = formatQuotaBar(model.percentage);
+      console.log(`    ${model.name.padEnd(20)} ${bar} ${model.percentage.toFixed(0)}%`);
+    }
+    console.log('');
+  }
+
+  // Check for shared GCP projects (critical warning)
+  const sharedProjects = Object.entries(quotaResult.projectGroups).filter(
+    ([, accountIds]) => accountIds.length > 1
+  );
+
+  if (sharedProjects.length > 0) {
+    console.log('');
+    console.log(subheader('Shared Project Warning'));
+    console.log('');
+    for (const [projectId, accountIds] of sharedProjects) {
+      console.log(
+        fail(`Project ${projectId.substring(0, 20)}... shared by ${accountIds.length} accounts:`)
+      );
+      for (const accountId of accountIds) {
+        console.log(`    - ${accountId}`);
+      }
+      console.log('');
+      console.log(warn('These accounts share the same quota pool!'));
+      console.log(warn('Failover between them will NOT help when quota is exhausted.'));
+      console.log(info('Solution: Use accounts from different GCP projects.'));
+    }
+  }
+
+  // Summary
+  console.log('');
+  console.log(subheader('Summary'));
+  const healthyAccounts = quotaResult.accounts.filter(
+    ({ quota }) => quota.success && quota.models.some((m) => m.percentage > 5)
+  );
+  console.log(`  Accounts with quota: ${healthyAccounts.length}/${accounts.length}`);
+  if (sharedProjects.length > 0) {
+    console.log(`  ${fail(`Shared projects: ${sharedProjects.length} (failover limited)`)}`);
+  } else if (accounts.length > 1) {
+    console.log(`  ${ok('No shared projects (failover fully operational)')}`);
+  }
+  console.log('');
+}
+
+function formatQuotaBar(percentage: number): string {
+  const width = 20;
+  const clampedPct = Math.max(0, Math.min(100, percentage));
+  const filled = Math.round((clampedPct / 100) * width);
+  const empty = width - filled;
+  const filledChar = clampedPct > 50 ? '█' : clampedPct > 10 ? '▓' : '░';
+  return `[${filledChar.repeat(filled)}${' '.repeat(empty)}]`;
+}
+
+// ============================================================================
+// QUOTA MANAGEMENT COMMANDS
+// ============================================================================
+
+async function handleSetDefault(args: string[]): Promise<void> {
+  await initUI();
+  const parsed = parseProfileArgs(args);
+
+  if (!parsed.name) {
+    console.log(fail('Usage: ccs cliproxy default <account> [--provider <provider>]'));
+    console.log('');
+    console.log('Examples:');
+    console.log('  ccs cliproxy default ultra@gmail.com');
+    console.log('  ccs cliproxy default john --provider agy');
+    process.exit(1);
+  }
+
+  const provider = (parsed.provider || 'agy') as CLIProxyProvider;
+  const account = findAccountByQuery(provider, parsed.name);
+
+  if (!account) {
+    console.log(fail(`Account not found: ${parsed.name}`));
+    console.log('');
+    const accounts = getProviderAccounts(provider);
+    if (accounts.length > 0) {
+      console.log('Available accounts:');
+      for (const acc of accounts) {
+        const badge = acc.isDefault ? color(' (current default)', 'info') : '';
+        console.log(`  - ${acc.email || acc.id}${badge}`);
+      }
+    } else {
+      console.log(`No accounts found for provider: ${provider}`);
+      console.log(`Run: ccs ${provider} --auth`);
+    }
+    process.exit(1);
+  }
+
+  const success = setDefaultAccount(provider, account.id);
+
+  if (success) {
+    console.log(ok(`Default account set to: ${account.email || account.id}`));
+    console.log(info(`Provider: ${provider}`));
+  } else {
+    console.log(fail('Failed to set default account'));
+    process.exit(1);
+  }
+}
+
+async function handlePauseAccount(args: string[]): Promise<void> {
+  await initUI();
+  const parsed = parseProfileArgs(args);
+
+  if (!parsed.name) {
+    console.log(fail('Usage: ccs cliproxy pause <account> [--provider <provider>]'));
+    console.log('');
+    console.log('Pauses an account so it will be skipped in quota rotation.');
+    process.exit(1);
+  }
+
+  const provider = (parsed.provider || 'agy') as CLIProxyProvider;
+  const account = findAccountByQuery(provider, parsed.name);
+
+  if (!account) {
+    console.log(fail(`Account not found: ${parsed.name}`));
+    process.exit(1);
+  }
+
+  if (account.paused) {
+    console.log(warn(`Account already paused: ${account.email || account.id}`));
+    console.log(info(`Paused at: ${account.pausedAt || 'unknown'}`));
+    return;
+  }
+
+  const success = pauseAccount(provider, account.id);
+
+  if (success) {
+    console.log(ok(`Account paused: ${account.email || account.id}`));
+    console.log(info('Account will be skipped in quota rotation'));
+  } else {
+    console.log(fail('Failed to pause account'));
+    process.exit(1);
+  }
+}
+
+async function handleResumeAccount(args: string[]): Promise<void> {
+  await initUI();
+  const parsed = parseProfileArgs(args);
+
+  if (!parsed.name) {
+    console.log(fail('Usage: ccs cliproxy resume <account> [--provider <provider>]'));
+    console.log('');
+    console.log('Resumes a paused account for quota rotation.');
+    process.exit(1);
+  }
+
+  const provider = (parsed.provider || 'agy') as CLIProxyProvider;
+  const account = findAccountByQuery(provider, parsed.name);
+
+  if (!account) {
+    console.log(fail(`Account not found: ${parsed.name}`));
+    process.exit(1);
+  }
+
+  if (!account.paused) {
+    console.log(warn(`Account is not paused: ${account.email || account.id}`));
+    return;
+  }
+
+  const success = resumeAccount(provider, account.id);
+
+  if (success) {
+    console.log(ok(`Account resumed: ${account.email || account.id}`));
+    console.log(info('Account is now active in quota rotation'));
+  } else {
+    console.log(fail('Failed to resume account'));
+    process.exit(1);
+  }
+}
+
+async function handleQuotaStatus(): Promise<void> {
+  await initUI();
+  console.log(header('Quota Status'));
+  console.log('');
+
+  const provider: CLIProxyProvider = 'agy';
+  const accounts = getProviderAccounts(provider);
+
+  if (accounts.length === 0) {
+    console.log(info('No Antigravity accounts configured'));
+    console.log(`    Run: ${color('ccs agy --auth', 'command')} to authenticate`);
+    return;
+  }
+
+  console.log(dim('Fetching quotas...'));
+  const quotaResult = await fetchAllProviderQuotas(provider);
+
+  // Build table rows
+  const rows: string[][] = [];
+  for (const account of accounts) {
+    const quotaData = quotaResult.accounts.find((q) => q.account.id === account.id);
+    const quota = quotaData?.quota;
+
+    // Calculate average quota
+    let avgQuota = 'N/A';
+    if (quota?.success && quota.models.length > 0) {
+      const avg = Math.round(
+        quota.models.reduce((sum, m) => sum + m.percentage, 0) / quota.models.length
+      );
+      avgQuota = `${avg}%`;
+    }
+
+    // Build status badges
+    const statusParts: string[] = [];
+    if (account.paused) statusParts.push(color('PAUSED', 'warning'));
+    if (isOnCooldown(provider, account.id)) statusParts.push(color('COOLDOWN', 'warning'));
+
+    const defaultMark = account.isDefault ? color('*', 'success') : ' ';
+    const tier = account.tier || 'unknown';
+    const status = statusParts.join(', ');
+
+    rows.push([
+      defaultMark,
+      account.nickname || account.email || account.id,
+      tier,
+      avgQuota,
+      status,
+    ]);
+  }
+
+  console.log('');
+  console.log(
+    table(rows, {
+      head: ['', 'Account', 'Tier', 'Quota', 'Status'],
+      colWidths: [3, 30, 10, 10, 20],
+    })
+  );
+  console.log('');
+  console.log(info(`Default account marked with ${color('*', 'success')}`));
+  console.log('');
+
+  // Show summary of paused/cooldown accounts
+  const pausedCount = accounts.filter((a) => a.paused).length;
+  const cooldownCount = accounts.filter((a) => isOnCooldown(provider, a.id)).length;
+  if (pausedCount > 0) {
+    console.log(
+      warn(`${pausedCount} account(s) paused - use 'ccs cliproxy resume <account>' to re-enable`)
+    );
+  }
+  if (cooldownCount > 0) {
+    console.log(info(`${cooldownCount} account(s) on cooldown (exhausted recently)`));
+  }
+  if (pausedCount > 0 || cooldownCount > 0) {
+    console.log('');
+  }
 }
 
 // ============================================================================
@@ -617,15 +941,43 @@ export async function handleCliproxyCommand(args: string[]): Promise<void> {
     return;
   }
 
+  if (command === 'doctor' || command === 'diag') {
+    await handleDoctor();
+    return;
+  }
+
+  // Quota management commands
+  if (command === 'default') {
+    await handleSetDefault(args.slice(1));
+    return;
+  }
+
+  if (command === 'pause') {
+    await handlePauseAccount(args.slice(1));
+    return;
+  }
+
+  if (command === 'resume') {
+    await handleResumeAccount(args.slice(1));
+    return;
+  }
+
+  if (command === 'quota') {
+    await handleQuotaStatus();
+    return;
+  }
+
   const installIdx = args.indexOf('--install');
   if (installIdx !== -1) {
-    const version = args[installIdx + 1];
+    let version = args[installIdx + 1];
     if (!version || version.startsWith('-')) {
       console.error(fail('Missing version argument for --install'));
       console.error('    Usage: ccs cliproxy --install <version>');
-      console.error('    Example: ccs cliproxy --install 6.5.53');
+      console.error('    Example: ccs cliproxy --install 6.6.80-0');
       process.exit(1);
     }
+    // Strip leading 'v' prefix and whitespace (user may type " v6.6.80-0 ")
+    version = version.trim().replace(/^v/, '');
     await handleInstallVersion(version, verbose);
     return;
   }

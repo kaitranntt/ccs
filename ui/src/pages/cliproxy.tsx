@@ -21,6 +21,8 @@ import {
   useCliproxyAuth,
   useSetDefaultAccount,
   useRemoveAccount,
+  usePauseAccount,
+  useResumeAccount,
   useDeleteVariant,
 } from '@/hooks/use-cliproxy';
 import type { AuthStatus, Variant } from '@/lib/api-client';
@@ -179,6 +181,8 @@ export function CliproxyPage() {
   const { data: variantsData, isFetching } = useCliproxy();
   const setDefaultMutation = useSetDefaultAccount();
   const removeMutation = useRemoveAccount();
+  const pauseMutation = usePauseAccount();
+  const resumeMutation = useResumeAccount();
   const deleteMutation = useDeleteVariant();
 
   // Selection state: either a provider or a variant
@@ -214,6 +218,16 @@ export function CliproxyPage() {
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['cliproxy'] });
     queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+  };
+
+  const handlePauseToggle = (provider: string, accountId: string, paused: boolean) => {
+    // Prevent rapid clicks while mutation is pending
+    if (pauseMutation.isPending || resumeMutation.isPending) return;
+    if (paused) {
+      pauseMutation.mutate({ provider, accountId });
+    } else {
+      resumeMutation.mutate({ provider, accountId });
+    }
   };
 
   const handleSelectProvider = (provider: string) => {
@@ -361,7 +375,11 @@ export function CliproxyPage() {
                 accountId,
               })
             }
+            onPauseToggle={(accountId, paused) =>
+              handlePauseToggle(selectedVariantData.provider, accountId, paused)
+            }
             isRemovingAccount={removeMutation.isPending}
+            isPausingAccount={pauseMutation.isPending || resumeMutation.isPending}
           />
         ) : selectedStatus ? (
           <ProviderEditor
@@ -389,7 +407,11 @@ export function CliproxyPage() {
                 accountId,
               })
             }
+            onPauseToggle={(accountId, paused) =>
+              handlePauseToggle(selectedStatus.provider, accountId, paused)
+            }
             isRemovingAccount={removeMutation.isPending}
+            isPausingAccount={pauseMutation.isPending || resumeMutation.isPending}
           />
         ) : (
           <EmptyProviderState onSetup={() => setWizardOpen(true)} />

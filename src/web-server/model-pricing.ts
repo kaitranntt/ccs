@@ -538,6 +538,28 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
   },
 
   // ---------------------------------------------------------------------------
+  // MiniMax Models - Source: https://platform.minimax.io/docs/pricing/pay-as-you-go
+  // ---------------------------------------------------------------------------
+  'MiniMax-M2.1': {
+    inputPerMillion: 0.3,
+    outputPerMillion: 1.2,
+    cacheCreationPerMillion: 0.375,
+    cacheReadPerMillion: 0.03,
+  },
+  'MiniMax-M2.1-lightning': {
+    inputPerMillion: 0.3,
+    outputPerMillion: 2.4,
+    cacheCreationPerMillion: 0.375,
+    cacheReadPerMillion: 0.03,
+  },
+  'MiniMax-M2': {
+    inputPerMillion: 0.3,
+    outputPerMillion: 1.2,
+    cacheCreationPerMillion: 0.375,
+    cacheReadPerMillion: 0.03,
+  },
+
+  // ---------------------------------------------------------------------------
   // DeepSeek Models - Source: better-ccusage
   // ---------------------------------------------------------------------------
   'deepseek-chat': {

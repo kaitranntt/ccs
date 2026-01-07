@@ -32,8 +32,22 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
   const server = http.createServer(app);
   const wss = new WebSocketServer({ server });
 
-  // JSON body parsing
+  // JSON body parsing with error handler for malformed JSON
   app.use(express.json());
+  app.use(
+    (
+      err: Error & { status?: number; body?: string },
+      _req: express.Request,
+      res: express.Response,
+      next: express.NextFunction
+    ) => {
+      if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+        res.status(400).json({ error: 'Invalid JSON in request body' });
+        return;
+      }
+      next(err);
+    }
+  );
 
   // REST API routes (modularized)
   const { apiRoutes } = await import('./routes/index');

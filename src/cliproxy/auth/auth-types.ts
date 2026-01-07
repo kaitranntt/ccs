@@ -15,17 +15,20 @@ import { AccountInfo } from '../account-manager';
  * - Gemini: Authorization Code Flow with local callback server on port 8085
  * - Codex:  Authorization Code Flow with local callback server on port 1455
  * - Agy:    Authorization Code Flow with local callback server on port 51121
- * - Qwen:   Device Code Flow (polling-based, NO callback port needed)
  * - Kiro:   Authorization Code Flow with local callback server on port 9876
+ * - iFlow:  Authorization Code Flow with local callback server on port 11451
+ * - Claude: Authorization Code Flow with local callback server on port 54545 (Anthropic OAuth)
+ * - Qwen:   Device Code Flow (polling-based, NO callback port needed)
  * - GHCP:   Device Code Flow (polling-based, NO callback port needed)
  */
 export const OAUTH_CALLBACK_PORTS: Partial<Record<CLIProxyProvider, number>> = {
   gemini: 8085,
   kiro: 9876,
-  // codex uses 1455
-  // agy uses 51121
-  // qwen uses Device Code Flow - no callback port needed
-  // ghcp uses Device Code Flow - no callback port needed
+  codex: 1455,
+  agy: 51121,
+  iflow: 11451,
+  // qwen: Device Code Flow - no callback port
+  // ghcp: Device Code Flow - no callback port
 };
 
 /**

@@ -23,12 +23,15 @@ interface RemoteProxyCardProps {
   displayHost: string;
   displayPort: string;
   displayAuthToken: string;
+  displayManagementKey: string;
   setEditedHost: (value: string | null) => void;
   setEditedPort: (value: string | null) => void;
   setEditedAuthToken: (value: string | null) => void;
+  setEditedManagementKey: (value: string | null) => void;
   onSaveHost: () => void;
   onSavePort: () => void;
   onSaveAuthToken: () => void;
+  onSaveManagementKey: () => void;
   onSaveConfig: (updates: Partial<CliproxyServerConfig>) => void;
   onTestConnection: () => void;
 }
@@ -41,12 +44,15 @@ export function RemoteProxyCard({
   displayHost,
   displayPort,
   displayAuthToken,
+  displayManagementKey,
   setEditedHost,
   setEditedPort,
   setEditedAuthToken,
+  setEditedManagementKey,
   onSaveHost,
   onSavePort,
   onSaveAuthToken,
+  onSaveManagementKey,
   onSaveConfig,
   onTestConnection,
 }: RemoteProxyCardProps) {
@@ -115,18 +121,38 @@ export function RemoteProxyCard({
         </div>
       </div>
 
-      {/* Auth Token */}
+      {/* Auth Token (API Key) */}
       <div className="space-y-1">
-        <label className="text-sm text-muted-foreground">Auth Token (optional)</label>
+        <label className="text-sm text-muted-foreground">API Key (optional)</label>
         <Input
           type="password"
           value={displayAuthToken}
           onChange={(e) => setEditedAuthToken(e.target.value)}
           onBlur={onSaveAuthToken}
-          placeholder="Bearer token for authentication"
+          placeholder="For /v1/* API endpoints"
           className="font-mono"
           disabled={saving}
         />
+        <p className="text-xs text-muted-foreground">
+          Used for API requests to /v1/chat/completions
+        </p>
+      </div>
+
+      {/* Management Key */}
+      <div className="space-y-1">
+        <label className="text-sm text-muted-foreground">Management Key (optional)</label>
+        <Input
+          type="password"
+          value={displayManagementKey}
+          onChange={(e) => setEditedManagementKey(e.target.value)}
+          onBlur={onSaveManagementKey}
+          placeholder="For /v0/management/* endpoints"
+          className="font-mono"
+          disabled={saving}
+        />
+        <p className="text-xs text-muted-foreground">
+          Used for dashboard management APIs. Falls back to API Key if not set.
+        </p>
       </div>
 
       {/* Test Connection */}

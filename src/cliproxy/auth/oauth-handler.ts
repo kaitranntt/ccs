@@ -20,6 +20,8 @@ import {
   getProviderAccounts,
   getDefaultAccount,
   touchAccount,
+  PROVIDERS_WITHOUT_EMAIL,
+  validateNickname,
 } from '../account-manager';
 import {
   enhancedPreflightOAuthCheck,
@@ -46,6 +48,74 @@ async function promptAddAccount(): Promise<boolean> {
       rl.close();
       resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
     });
+  });
+}
+
+/**
+ * Prompt user for account nickname (required for kiro/ghcp)
+ * Returns null if user cancels
+ */
+async function promptNickname(
+  provider: CLIProxyProvider,
+  existingAccounts: AccountInfo[]
+): Promise<string | null> {
+  const readline = await import('readline');
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  const existingNicknames = existingAccounts.map(
+    (a) => a.nickname?.toLowerCase() || a.id.toLowerCase()
+  );
+
+  console.log('');
+  console.log(info(`${provider} accounts require a unique nickname to distinguish them.`));
+  if (existingNicknames.length > 0) {
+    console.log(`    Existing: ${existingNicknames.join(', ')}`);
+  }
+
+  return new Promise<string | null>((resolve) => {
+    let resolved = false;
+
+    // Handle Ctrl+C gracefully (only if not already resolved)
+    rl.on('close', () => {
+      if (!resolved) {
+        resolved = true;
+        resolve(null);
+      }
+    });
+
+    const askForNickname = () => {
+      rl.question('[?] Enter a nickname for this account: ', (answer) => {
+        const nickname = answer.trim();
+
+        if (!nickname) {
+          console.log(fail('Nickname cannot be empty'));
+          askForNickname();
+          return;
+        }
+
+        const validationError = validateNickname(nickname);
+        if (validationError) {
+          console.log(fail(validationError));
+          askForNickname();
+          return;
+        }
+
+        if (existingNicknames.includes(nickname.toLowerCase())) {
+          console.log(fail(`Nickname "${nickname}" is already in use. Choose a different one.`));
+          askForNickname();
+          return;
+        }
+
+        resolved = true;
+        rl.close();
+        resolve(nickname);
+      });
+    };
+
+    askForNickname();
   });
 }
 
@@ -127,7 +197,21 @@ export async function triggerOAuth(
   options: OAuthOptions = {}
 ): Promise<AccountInfo | null> {
   const oauthConfig = getOAuthConfig(provider);
-  const { verbose = false, add = false, nickname, fromUI = false, noIncognito = true } = options;
+  const { verbose = false, add = false, fromUI = false, noIncognito = true } = options;
+  let { nickname } = options;
+
+  // Check for existing accounts
+  const existingAccounts = getProviderAccounts(provider);
+
+  // For kiro/ghcp: require nickname if not provided (CLI only, not fromUI)
+  if (PROVIDERS_WITHOUT_EMAIL.includes(provider) && !nickname && !fromUI) {
+    const promptedNickname = await promptNickname(provider, existingAccounts);
+    if (!promptedNickname) {
+      console.log(info('Cancelled'));
+      return null;
+    }
+    nickname = promptedNickname;
+  }
 
   // Handle --import flag: skip OAuth and import from Kiro IDE directly
   if (options.import && provider === 'kiro') {
@@ -144,8 +228,6 @@ export async function triggerOAuth(
   const headless = options.headless ?? isHeadlessEnvironment();
   const isDeviceCodeFlow = callbackPort === null;
 
-  // Check for existing accounts
-  const existingAccounts = getProviderAccounts(provider);
   if (existingAccounts.length > 0 && !add) {
     console.log('');
     console.log(

@@ -118,6 +118,40 @@ export function useRemoveAccount() {
   });
 }
 
+export function usePauseAccount() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ provider, accountId }: { provider: string; accountId: string }) =>
+      api.cliproxy.accounts.pause(provider, accountId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+      toast.success('Account paused');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+export function useResumeAccount() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ provider, accountId }: { provider: string; accountId: string }) =>
+      api.cliproxy.accounts.resume(provider, accountId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+      toast.success('Account resumed');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
 // OAuth flow hook
 export function useStartAuth() {
   const queryClient = useQueryClient();
@@ -302,5 +336,61 @@ export function useCliproxyUpdateCheck() {
     staleTime: 60 * 60 * 1000, // 1 hour (matches backend cache)
     refetchInterval: 60 * 60 * 1000, // Refresh every hour
     refetchOnWindowFocus: false, // Don't refresh on window focus (save API calls)
+  });
+}
+
+// ==================== Version Management ====================
+
+export function useCliproxyVersions() {
+  return useQuery({
+    queryKey: ['cliproxy-versions'],
+    queryFn: () => api.cliproxy.versions(),
+    staleTime: 60 * 60 * 1000, // 1 hour (matches backend cache)
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useInstallVersion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ version, force }: { version: string; force?: boolean }) =>
+      api.cliproxy.install(version, force),
+    onSuccess: (data) => {
+      if (data.requiresConfirmation) {
+        // Don't show toast - let caller handle confirmation dialog
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-versions'] });
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-update-check'] });
+      queryClient.invalidateQueries({ queryKey: ['proxy-status'] });
+      if (data.success) {
+        toast.success(data.message || `Installed v${data.version}`);
+      } else {
+        toast.error(data.error || 'Installation failed');
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+export function useRestartProxy() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.cliproxy.restart(),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['proxy-status'] });
+      if (data.success) {
+        toast.success(`Proxy restarted on port ${data.port}`);
+      } else {
+        toast.error(data.error || 'Restart failed');
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
   });
 }

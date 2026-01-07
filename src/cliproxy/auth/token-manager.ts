@@ -258,3 +258,27 @@ export function displayAuthStatus(): void {
   console.log('To authenticate: ccs <provider> --auth');
   console.log('To logout:       ccs <provider> --logout');
 }
+
+/**
+ * Ensure OAuth token is valid for provider, refreshing if expired or expiring soon.
+ * This prevents UND_ERR_SOCKET errors caused by expired tokens during API calls.
+ *
+ * @param provider The CLIProxy provider
+ * @param verbose Log progress if true
+ * @returns Object with valid status and whether refresh occurred
+ */
+export async function ensureTokenValid(
+  provider: CLIProxyProvider,
+  verbose = false
+): Promise<{ valid: boolean; refreshed: boolean; error?: string }> {
+  // Currently only Gemini uses oauth_creds.json with expiry_date
+  // Other providers (agy, codex) use CLIProxyAPI's internal auth management
+  if (provider === 'gemini') {
+    const { ensureGeminiTokenValid } = await import('./gemini-token-refresh');
+    return ensureGeminiTokenValid(verbose);
+  }
+
+  // For other providers, assume token is valid if authenticated
+  // CLIProxyAPI handles token refresh internally for antigravity/codex
+  return { valid: isAuthenticated(provider), refreshed: false };
+}

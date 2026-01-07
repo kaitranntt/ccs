@@ -8,6 +8,9 @@
 import { EventEmitter } from 'events';
 import { ChildProcess } from 'child_process';
 
+// H8: TTL for stale session cleanup (10 minutes - generous for OAuth flows)
+const SESSION_TTL_MS = 10 * 60 * 1000;
+
 export interface ActiveAuthSession {
   sessionId: string;
   provider: string;
@@ -18,6 +21,31 @@ export interface ActiveAuthSession {
 export const authSessionEvents = new EventEmitter();
 
 const activeSessions = new Map<string, ActiveAuthSession>();
+
+// H8: Periodic cleanup of stale sessions (prevents memory leak from orphaned sessions)
+let cleanupInterval: ReturnType<typeof setInterval> | null = null;
+
+function startCleanupInterval(): void {
+  if (cleanupInterval) return;
+  cleanupInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [sessionId, session] of activeSessions.entries()) {
+      if (now - session.startedAt > SESSION_TTL_MS) {
+        // Stale session - kill process if still running, then remove
+        if (session.process && !session.process.killed) {
+          session.process.kill('SIGTERM');
+        }
+        activeSessions.delete(sessionId);
+        authSessionEvents.emit('session:expired', sessionId);
+      }
+    }
+    // Stop interval if no active sessions
+    if (activeSessions.size === 0 && cleanupInterval) {
+      clearInterval(cleanupInterval);
+      cleanupInterval = null;
+    }
+  }, 60000); // Check every minute
+}
 
 /**
  * Register an active OAuth session
@@ -33,6 +61,8 @@ export function registerAuthSession(
     startedAt: Date.now(),
     process,
   });
+  // H8: Start TTL cleanup when first session registered
+  startCleanupInterval();
   authSessionEvents.emit('session:started', sessionId, provider);
 }
 

@@ -22,8 +22,10 @@ export interface ProxyTarget {
   port: number;
   /** Protocol (http/https) */
   protocol: 'http' | 'https';
-  /** Optional auth token - only send header if defined and non-empty */
+  /** Optional auth token for API endpoints - only send header if defined and non-empty */
   authToken?: string;
+  /** Optional management key for management API endpoints (/v0/management/*) */
+  managementKey?: string;
   /** True if targeting remote server, false if local */
   isRemote: boolean;
 }
@@ -56,6 +58,7 @@ export function getProxyTarget(): ProxyTarget {
       port,
       protocol,
       authToken: config.remote.auth_token || undefined, // Empty string -> undefined
+      managementKey: config.remote.management_key || undefined, // Empty string -> undefined
       isRemote: true,
     };
   }
@@ -98,6 +101,32 @@ export function buildProxyHeaders(
   // Only add auth header if token is configured
   if (target.authToken) {
     headers['Authorization'] = `Bearer ${target.authToken}`;
+  }
+
+  return headers;
+}
+
+/**
+ * Build request headers for management API endpoints (/v0/management/*).
+ * Uses management_key if configured, otherwise falls back to authToken.
+ *
+ * @param target Resolved proxy target
+ * @param additionalHeaders Extra headers to merge
+ */
+export function buildManagementHeaders(
+  target: ProxyTarget,
+  additionalHeaders: Record<string, string> = {}
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    ...additionalHeaders,
+  };
+
+  // Use management key for management API, fallback to authToken
+  const authKey = target.managementKey ?? target.authToken;
+
+  if (authKey) {
+    headers['Authorization'] = `Bearer ${authKey}`;
   }
 
   return headers;

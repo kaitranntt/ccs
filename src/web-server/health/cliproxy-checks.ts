@@ -15,6 +15,8 @@ import {
 } from '../../cliproxy';
 import { getPortProcess, isCLIProxyProcess } from '../../utils/port-utils';
 import type { HealthCheck } from './types';
+import { CLIPROXY_MAX_STABLE_VERSION } from '../../cliproxy/platform-detector';
+import { isNewerVersion, isVersionFaulty } from '../../cliproxy/binary/version-checker';
 
 /**
  * Check CLIProxy binary installation
@@ -23,6 +25,34 @@ export function checkCliproxyBinary(): HealthCheck {
   if (isCLIProxyInstalled()) {
     const version = getInstalledCliproxyVersion();
     const binaryPath = getCLIProxyPath();
+
+    // Check if version is in faulty range (v81-85)
+    const isFaulty = isVersionFaulty(version);
+    // Check if version exceeds stable cap
+    const isUnstable = isNewerVersion(version, CLIPROXY_MAX_STABLE_VERSION);
+
+    if (isFaulty) {
+      return {
+        id: 'cliproxy-binary',
+        name: 'CLIProxy Binary',
+        status: 'warning',
+        message: `v${version} (faulty)`,
+        details: binaryPath,
+        fix: `Upgrade: ccs cliproxy install ${CLIPROXY_MAX_STABLE_VERSION.replace(/-\d+$/, '')}`,
+      };
+    }
+
+    if (isUnstable) {
+      return {
+        id: 'cliproxy-binary',
+        name: 'CLIProxy Binary',
+        status: 'warning',
+        message: `v${version} (experimental)`,
+        details: binaryPath,
+        fix: `Stable: ccs cliproxy install ${CLIPROXY_MAX_STABLE_VERSION.replace(/-\d+$/, '')}`,
+      };
+    }
+
     return {
       id: 'cliproxy-binary',
       name: 'CLIProxy Binary',

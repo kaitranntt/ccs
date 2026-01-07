@@ -6,7 +6,12 @@
  */
 
 import { getEffectiveApiKey, getEffectiveManagementSecret } from './auth-token-manager';
-import { getProxyTarget, buildProxyUrl, buildProxyHeaders } from './proxy-target-resolver';
+import {
+  getProxyTarget,
+  buildProxyUrl,
+  buildProxyHeaders,
+  buildManagementHeaders,
+} from './proxy-target-resolver';
 
 /** Per-account usage statistics */
 export interface AccountUsageStats {
@@ -109,9 +114,9 @@ export async function fetchCliproxyStats(port?: number): Promise<CliproxyStats |
     }
     const url = buildProxyUrl(target, '/v0/management/usage');
 
-    // For management endpoints, use CCS control panel secret for local, remote auth for remote
+    // For management endpoints, use management key for remote, local management secret for local
     const headers = target.isRemote
-      ? buildProxyHeaders(target)
+      ? buildManagementHeaders(target)
       : { Accept: 'application/json', Authorization: `Bearer ${getEffectiveManagementSecret()}` };
 
     const response = await fetch(url, {
@@ -326,9 +331,9 @@ export async function fetchCliproxyErrorLogs(port?: number): Promise<CliproxyErr
     }
     const url = buildProxyUrl(target, '/v0/management/request-error-logs');
 
-    // For management endpoints, use CCS control panel secret for local, remote auth for remote
+    // For management endpoints, use management key for remote, local management secret for local
     const headers = target.isRemote
-      ? buildProxyHeaders(target)
+      ? buildManagementHeaders(target)
       : { Accept: 'application/json', Authorization: `Bearer ${getEffectiveManagementSecret()}` };
 
     const response = await fetch(url, {
@@ -374,9 +379,9 @@ export async function fetchCliproxyErrorLogContent(
       `/v0/management/request-error-logs/${encodeURIComponent(name)}`
     );
 
-    // For management endpoints, use CCS control panel secret for local, remote auth for remote
+    // For management endpoints, use management key for remote, local management secret for local
     const headers = target.isRemote
-      ? buildProxyHeaders(target)
+      ? buildManagementHeaders(target)
       : { Authorization: `Bearer ${getEffectiveManagementSecret()}` };
 
     const response = await fetch(url, {

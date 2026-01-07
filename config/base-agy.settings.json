@@ -5,6 +5,6 @@
     "ANTHROPIC_MODEL": "gemini-3-pro-preview",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "gemini-3-pro-preview",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "gemini-3-pro-preview",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "gemini-3-flash-preview"
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "gemini-claude-sonnet-4-5"
   }
 }

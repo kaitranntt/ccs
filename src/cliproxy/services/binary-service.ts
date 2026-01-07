@@ -84,10 +84,10 @@ export async function checkLatestVersion(): Promise<LatestVersionResult> {
 }
 
 /**
- * Validate version format
+ * Validate version format (supports X.Y.Z or X.Y.Z-N suffix)
  */
 export function isValidVersionFormat(version: string): boolean {
-  return /^\d+\.\d+\.\d+$/.test(version);
+  return /^\d+\.\d+\.\d+(-\d+)?$/.test(version);
 }
 
 /**

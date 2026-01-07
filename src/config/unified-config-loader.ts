@@ -17,6 +17,7 @@ import {
   DEFAULT_COPILOT_CONFIG,
   DEFAULT_GLOBAL_ENV,
   DEFAULT_CLIPROXY_SERVER_CONFIG,
+  DEFAULT_QUOTA_MANAGEMENT_CONFIG,
   GlobalEnvConfig,
 } from './unified-config-types';
 import { isUnifiedConfigEnabled } from './feature-flags';
@@ -194,6 +195,8 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
         auth_token:
           partial.cliproxy_server?.remote?.auth_token ??
           DEFAULT_CLIPROXY_SERVER_CONFIG.remote.auth_token,
+        // management_key is optional - falls back to auth_token when not set
+        management_key: partial.cliproxy_server?.remote?.management_key,
       },
       fallback: {
         enabled:
@@ -208,6 +211,35 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
         auto_start:
           partial.cliproxy_server?.local?.auto_start ??
           DEFAULT_CLIPROXY_SERVER_CONFIG.local.auto_start,
+      },
+    },
+    // Quota management config - hybrid auto+manual account selection
+    quota_management: {
+      mode: partial.quota_management?.mode ?? DEFAULT_QUOTA_MANAGEMENT_CONFIG.mode,
+      auto: {
+        preflight_check:
+          partial.quota_management?.auto?.preflight_check ??
+          DEFAULT_QUOTA_MANAGEMENT_CONFIG.auto.preflight_check,
+        exhaustion_threshold:
+          partial.quota_management?.auto?.exhaustion_threshold ??
+          DEFAULT_QUOTA_MANAGEMENT_CONFIG.auto.exhaustion_threshold,
+        tier_priority:
+          partial.quota_management?.auto?.tier_priority ??
+          DEFAULT_QUOTA_MANAGEMENT_CONFIG.auto.tier_priority,
+        cooldown_minutes:
+          partial.quota_management?.auto?.cooldown_minutes ??
+          DEFAULT_QUOTA_MANAGEMENT_CONFIG.auto.cooldown_minutes,
+      },
+      manual: {
+        paused_accounts:
+          partial.quota_management?.manual?.paused_accounts ??
+          DEFAULT_QUOTA_MANAGEMENT_CONFIG.manual.paused_accounts,
+        forced_default:
+          partial.quota_management?.manual?.forced_default ??
+          DEFAULT_QUOTA_MANAGEMENT_CONFIG.manual.forced_default,
+        tier_lock:
+          partial.quota_management?.manual?.tier_lock ??
+          DEFAULT_QUOTA_MANAGEMENT_CONFIG.manual.tier_lock,
       },
     },
   };

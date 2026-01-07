@@ -1,3 +1,105 @@
+## [7.15.0](https://github.com/kaitranntt/ccs/compare/v7.14.0...v7.15.0) (2026-01-06)
+
+### Features
+
+* **api:** add pause/resume account endpoints ([c13003d](https://github.com/kaitranntt/ccs/commit/c13003d940a217d22b2b5a027815053ef93d9046)), closes [#282](https://github.com/kaitranntt/ccs/issues/282)
+* **cli:** add pause, resume, status subcommands ([cfd8dd9](https://github.com/kaitranntt/ccs/commit/cfd8dd974e875b858f78bb73e74e44062b72d38e)), closes [#282](https://github.com/kaitranntt/ccs/issues/282)
+* **cliproxy:** add hybrid quota management core ([11ffca3](https://github.com/kaitranntt/ccs/commit/11ffca33bdeb30b2b3631295ca64a17a480d8954)), closes [#282](https://github.com/kaitranntt/ccs/issues/282)
+* **cliproxy:** integrate pre-flight quota check ([10e3eec](https://github.com/kaitranntt/ccs/commit/10e3eec16f46b3318dfef5d33dc903cfbf9cae1d)), closes [#282](https://github.com/kaitranntt/ccs/issues/282)
+* **ui:** add pause/resume API hooks ([b92a35d](https://github.com/kaitranntt/ccs/commit/b92a35d09b203427a105bc28a487302c8a726f21)), closes [#282](https://github.com/kaitranntt/ccs/issues/282)
+* **ui:** add pause/resume toggle and tier badges ([4ad7292](https://github.com/kaitranntt/ccs/commit/4ad7292700c991e1d2f8478da4d6ed33ce14982d)), closes [#282](https://github.com/kaitranntt/ccs/issues/282)
+
+### Bug Fixes
+
+* **cliproxy:** harden nickname validation and race condition handling ([5970e70](https://github.com/kaitranntt/ccs/commit/5970e70e2641e7d77b6f77d9624cd6990a1b81ba))
+* **cliproxy:** prevent race in promptNickname close handler ([107e281](https://github.com/kaitranntt/ccs/commit/107e2813f96624c105bab7d227336b0779648f12))
+* **cliproxy:** update lastUsedAt on normal execution ([b55cd79](https://github.com/kaitranntt/ccs/commit/b55cd795ab5da18ea5363aa378712b467a17bf22))
+* **cliproxy:** use nickname as accountId for kiro/ghcp providers ([d96c67b](https://github.com/kaitranntt/ccs/commit/d96c67ba810fb933f4a26bf43b6c011e44ed5d47)), closes [#258](https://github.com/kaitranntt/ccs/issues/258) [#267](https://github.com/kaitranntt/ccs/issues/267)
+* **quota:** address edge cases from code review ([a32fdc8](https://github.com/kaitranntt/ccs/commit/a32fdc8cfb2160771762ca07c62c30905a817d1d)), closes [#30](https://github.com/kaitranntt/ccs/issues/30) [#31](https://github.com/kaitranntt/ccs/issues/31) [#8](https://github.com/kaitranntt/ccs/issues/8) [#26](https://github.com/kaitranntt/ccs/issues/26)
+* **quota:** correct tier detection - remove 2.5-pro from ultra indicators ([0af185f](https://github.com/kaitranntt/ccs/commit/0af185f6a0b40d3a10215ba183f583b25a3d9967))
+* **quota:** handle 'standard-tier' as free in tier mapping ([a5f1472](https://github.com/kaitranntt/ccs/commit/a5f1472047fc7e70329d066b41a5ba051b412051))
+* **quota:** use API tier detection instead of model-based heuristics ([aad0d44](https://github.com/kaitranntt/ccs/commit/aad0d44069b78f395285e3b71c0a9563b7abe4eb))
+
+### Documentation
+
+* **CLAUDE.md:** add help location reference and documentation requirements ([113cc06](https://github.com/kaitranntt/ccs/commit/113cc06add969879148d4541fe0517b1046c74f3))
+* **cli:** add cliproxy pause/resume/status to --help ([4b7328b](https://github.com/kaitranntt/ccs/commit/4b7328b3880a3fa1d71a21f6b73616968cd8737a))
+* update documentation for CCS v7.14.x with quota management ([ec4c2c2](https://github.com/kaitranntt/ccs/commit/ec4c2c2f7b5314d4d45968805126f581da7db3d7))
+
+### Code Refactoring
+
+* **quota:** simplify AccountTier to free|paid|unknown ([db071e2](https://github.com/kaitranntt/ccs/commit/db071e2ff2de3c880651445f1f9094a4a43bec74))
+
+## [7.14.0](https://github.com/kaitranntt/ccs/compare/v7.13.1...v7.14.0) (2026-01-06)
+
+### Features
+
+* **agy:** add preflight quota check with auto-switch ([c85ff74](https://github.com/kaitranntt/ccs/commit/c85ff74f3cdd9b346d1d4d929c29104ab16c658f))
+* **agy:** promote gemini-claude-sonnet-4-5 as default Haiku model ([c9cdfd9](https://github.com/kaitranntt/ccs/commit/c9cdfd98792cc6d272aa22e2317a3a3bb32105de)), closes [#270](https://github.com/kaitranntt/ccs/issues/270)
+* **cliproxy:** add background token refresh worker ([f98bb24](https://github.com/kaitranntt/ccs/commit/f98bb24a98618df132857b414e30997eb3cf0b90))
+* **cliproxy:** add dashboard UI parity for version stability ([c5621da](https://github.com/kaitranntt/ccs/commit/c5621dab515ea290e2740cc1fce79e9d65081579)), closes [#269](https://github.com/kaitranntt/ccs/issues/269)
+* **cliproxy:** add doctor subcommand for quota diagnostics ([944f5c0](https://github.com/kaitranntt/ccs/commit/944f5c0fb07bcf293a164b81886595aeb8217703)), closes [#252](https://github.com/kaitranntt/ccs/issues/252)
+* **cliproxy:** add version management UI with install/restart controls ([a69b2e9](https://github.com/kaitranntt/ccs/commit/a69b2e9d109130abf8a2a99d76bf4560d64c831c))
+* **dev:** add symlink setup for testing dev version ([981cef8](https://github.com/kaitranntt/ccs/commit/981cef82119359384e7385aff1791b0afa4f4fc1))
+* **quota:** add fetchAllProviderQuotas and findAvailableAccount ([24847f5](https://github.com/kaitranntt/ccs/commit/24847f5804ca258b597b7f367750315b9abfa9f8)), closes [#252](https://github.com/kaitranntt/ccs/issues/252)
+* **ui:** add stability warning to ProxyStatusWidget ([8a56a43](https://github.com/kaitranntt/ccs/commit/8a56a43989eb26b22ba28aa091a2bcef97701a20))
+
+### Bug Fixes
+
+* **agy:** edge case handling for quota failover ([5b58bd3](https://github.com/kaitranntt/ccs/commit/5b58bd35c9e2dfd7163bc8eff7804506b49b4872))
+* **cliproxy:** add edge case handling for version capping ([212aef8](https://github.com/kaitranntt/ccs/commit/212aef81bc68a2d0d146d410d18f7778b8c2c100))
+* **cliproxy:** add missing OAuth callback ports for codex, agy, iflow ([cfe604a](https://github.com/kaitranntt/ccs/commit/cfe604a97c5ef79fbfb1f020579e0b5541d49b27))
+* **cliproxy:** cap auto-update to v80 due to v81+ context bugs ([869ab3e](https://github.com/kaitranntt/ccs/commit/869ab3eecd97de2a84c18c5ad25fe2abf0bdb088)), closes [#269](https://github.com/kaitranntt/ccs/issues/269)
+* **oauth:** add stdin keepalive to prevent blocking on manual URL prompt ([0557f93](https://github.com/kaitranntt/ccs/commit/0557f93f2fdb17972324f05c9e216785f893ad16))
+* **oauth:** harden cleanup for edge cases in auth process ([472497f](https://github.com/kaitranntt/ccs/commit/472497fb0324a92993b2a7e7fd27c8f071a9e7c6))
+* **shared-manager:** normalize plugin registry paths to canonical ~/.claude/ ([1067afb](https://github.com/kaitranntt/ccs/commit/1067afbea713625713e72c1738ef06a21bd04d62)), closes [#276](https://github.com/kaitranntt/ccs/issues/276)
+* **ui:** add missing isStable and maxStableVersion to type ([4fd4d6c](https://github.com/kaitranntt/ccs/commit/4fd4d6c264b5dbcb9f3e181b46a82090764f46c6))
+* **ui:** clean up ProxyStatusWidget layout spacing ([4f69abb](https://github.com/kaitranntt/ccs/commit/4f69abbe88fb0bd6782373b5eeebd665dfcafd4b))
+* **ui:** update/downgrade button now installs correct version ([48d4a96](https://github.com/kaitranntt/ccs/commit/48d4a96a62fecde105f58bd68ca130571ef0daa4))
+* **websearch:** use 'where' command on Windows for CLI detection ([e03d9b7](https://github.com/kaitranntt/ccs/commit/e03d9b77437575a39af0dca14c2a6b5967ae4f09)), closes [#273](https://github.com/kaitranntt/ccs/issues/273)
+
+### Documentation
+
+* **agy:** add quota management and failover documentation ([8ea1e33](https://github.com/kaitranntt/ccs/commit/8ea1e333bc2b365b7f058201f714e41e822b815f))
+
+### Code Refactoring
+
+* **ui:** redesign ProxyStatusWidget with two-state UX ([8072b93](https://github.com/kaitranntt/ccs/commit/8072b93b3b2d4bc721fece815c8edf45da67b34b))
+
+## [7.13.1](https://github.com/kaitranntt/ccs/compare/v7.13.0...v7.13.1) (2026-01-05)
+
+### Bug Fixes
+
+* **cliproxy:** add management_key support for remote proxy auth separation ([0e58d0e](https://github.com/kaitranntt/ccs/commit/0e58d0e8b7fd07004990e99fbdc6a080380c0304))
+* **cliproxy:** add missing kiro/ghcp provider mappings in remote-auth-fetcher ([dea0e87](https://github.com/kaitranntt/ccs/commit/dea0e872bd529b2c6f825dc1d9e901d0896b7f41))
+* **cliproxy:** extract unique accountId from token filename for Kiro/GHCP ([7bb7ccc](https://github.com/kaitranntt/ccs/commit/7bb7ccc27fe0d9885c4dd7f23de664e2c8b4866f)), closes [#258](https://github.com/kaitranntt/ccs/issues/258)
+* **cliproxy:** proactive token refresh to prevent UND_ERR_SOCKET ([a6a653f](https://github.com/kaitranntt/ccs/commit/a6a653f14580888bcdccbf6b83b90d41b6b52136)), closes [#256](https://github.com/kaitranntt/ccs/issues/256)
+* **validation:** add Windows reserved name validation and version format edge cases ([ae1847d](https://github.com/kaitranntt/ccs/commit/ae1847d9011c8bff9caff206cf1d7082c61faf40))
+
+## [7.13.0](https://github.com/kaitranntt/ccs/compare/v7.12.2...v7.13.0) (2026-01-03)
+
+### Features
+
+* **minimax:** Add full MiniMax M2.1 support ([bd5c9a0](https://github.com/kaitranntt/ccs/commit/bd5c9a0033e1c4df8aef90db194a768f55e9eab8))
+* **minimax:** Add mm profile and migration support ([267599d](https://github.com/kaitranntt/ccs/commit/267599d09d691cb38b7a9f3b201ce1e3761bfe08))
+
+### Bug Fixes
+
+* **accounts:** integrate CLIProxy OAuth accounts into API endpoint ([eebcb7b](https://github.com/kaitranntt/ccs/commit/eebcb7b10351ce9c939ffcc769d354bc463a8ee1))
+* **migrate:** Add rename-profile flag handling ([4dace51](https://github.com/kaitranntt/ccs/commit/4dace513eab3ffc28cf67fc1db652f5908403973))
+* **minimax:** Add MiniMax placeholder to DEFAULT_PLACEHOLDERS ([46e0995](https://github.com/kaitranntt/ccs/commit/46e09950e8f9f612ce819e6191e63279b2fb3b1f))
+* **minimax:** prevent double-resolve race condition and align placeholder ([a59ad0e](https://github.com/kaitranntt/ccs/commit/a59ad0e8c63b4159a35558dcae03ed4a7ca42c6f))
+* **minimax:** restore migrate-command, remove broken migration file, fix validator typo ([c48f798](https://github.com/kaitranntt/ccs/commit/c48f798f3e375a25cf012f7b6f9c1853c8f99836))
+
+### Documentation
+
+* **minimax:** Update review_pr.md with fix status ([5d34bd6](https://github.com/kaitranntt/ccs/commit/5d34bd6ec2cd6a1a43fa3c62af820edb29442325))
+
+### Code Refactoring
+
+* **api-key-validator:** extract shared validation logic, remove unnecessary comments ([a00cf36](https://github.com/kaitranntt/ccs/commit/a00cf3691ef551f24dcac149c4473d9fdcf28043))
+* **minimax:** Rename to 'mm' for brevity ([2b549f5](https://github.com/kaitranntt/ccs/commit/2b549f5b3dddbd17f40ef987badf4715d89297c7))
+
 ## [7.12.2](https://github.com/kaitranntt/ccs/compare/v7.12.1...v7.12.2) (2026-01-01)
 
 ### Bug Fixes

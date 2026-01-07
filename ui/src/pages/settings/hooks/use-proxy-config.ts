@@ -13,6 +13,7 @@ export function useProxyConfig() {
   const [editedHost, setEditedHost] = useState<string | null>(null);
   const [editedPort, setEditedPort] = useState<string | null>(null);
   const [editedAuthToken, setEditedAuthToken] = useState<string | null>(null);
+  const [editedManagementKey, setEditedManagementKey] = useState<string | null>(null);
   const [editedLocalPort, setEditedLocalPort] = useState<string | null>(null);
 
   const fetchConfig = useCallback(async () => {
@@ -108,6 +109,8 @@ export function useProxyConfig() {
     setEditedPort,
     editedAuthToken,
     setEditedAuthToken,
+    editedManagementKey,
+    setEditedManagementKey,
     editedLocalPort,
     setEditedLocalPort,
     fetchConfig,

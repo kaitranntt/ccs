@@ -6,7 +6,7 @@
 import {
   getProxyTarget,
   buildProxyUrl,
-  buildProxyHeaders,
+  buildManagementHeaders,
   ProxyTarget,
 } from './proxy-target-resolver';
 
@@ -51,6 +51,11 @@ const PROVIDER_MAP: Record<string, string> = {
   codex: 'codex',
   qwen: 'qwen',
   iflow: 'iflow',
+  kiro: 'kiro',
+  codewhisperer: 'kiro', // CLIProxyAPI may use 'codewhisperer' for Kiro
+  ghcp: 'ghcp',
+  'github-copilot': 'ghcp',
+  copilot: 'ghcp',
 };
 
 /** Display names for providers */
@@ -60,6 +65,8 @@ const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   codex: 'Codex',
   qwen: 'Qwen',
   iflow: 'iFlow',
+  kiro: 'Kiro (AWS)',
+  ghcp: 'GitHub Copilot (OAuth)',
 };
 
 /**
@@ -74,6 +81,7 @@ export async function fetchRemoteAuthStatus(target?: ProxyTarget): Promise<Remot
   }
 
   const url = buildProxyUrl(proxyTarget, '/v0/management/auth-files');
+  const headers = buildManagementHeaders(proxyTarget);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REMOTE_FETCH_TIMEOUT_MS);
@@ -81,7 +89,7 @@ export async function fetchRemoteAuthStatus(target?: ProxyTarget): Promise<Remot
   try {
     const response = await fetch(url, {
       signal: controller.signal,
-      headers: buildProxyHeaders(proxyTarget),
+      headers,
     });
 
     clearTimeout(timeoutId);

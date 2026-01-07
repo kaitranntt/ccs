@@ -1,5 +1,7 @@
 # WebSearch Configuration Guide
 
+Last Updated: 2026-01-06
+
 CCS provides automatic web search capability for all profiles, including third-party providers that cannot access Anthropic's native WebSearch API.
 
 ## How WebSearch Works

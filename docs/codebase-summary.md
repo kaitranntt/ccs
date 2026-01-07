@@ -1,8 +1,8 @@
 # CCS Codebase Summary
 
-Last Updated: 2025-12-22
+Last Updated: 2026-01-06
 
-Comprehensive overview of the modularized CCS codebase structure following the Phase 9 modularization effort (Settings, Analytics, Auth Monitor splits + Test Infrastructure), v7.1 Remote CLIProxy feature, and v7.2 Kiro + GitHub Copilot (ghcp) OAuth providers.
+Comprehensive overview of the modularized CCS codebase structure following the Phase 9 modularization effort (Settings, Analytics, Auth Monitor splits + Test Infrastructure), v7.1 Remote CLIProxy feature, v7.2 Kiro + GitHub Copilot (ghcp) OAuth providers, and v7.14 Hybrid Quota Management.
 
 ## Repository Structure
 
@@ -71,6 +71,8 @@ src/
 │   ├── cliproxy-executor.ts  # Main executor (666 lines)
 │   ├── config-generator.ts   # Config file generation (531 lines)
 │   ├── account-manager.ts    # Account management (509 lines)
+│   ├── quota-manager.ts      # Hybrid quota management (NEW v7.14)
+│   ├── quota-fetcher.ts      # Provider quota API integration (NEW v7.14)
 │   ├── platform-detector.ts  # OS/arch detection
 │   ├── binary-manager.ts     # Binary download/update
 │   ├── auth-handler.ts       # Authentication handling
@@ -79,8 +81,8 @@ src/
 │   ├── service-manager.ts    # Background service
 │   ├── proxy-detector.ts     # Running proxy detection
 │   ├── startup-lock.ts       # Race condition prevention
-│   ├── remote-proxy-client.ts    # Remote proxy health checks (NEW v7.1)
-│   ├── proxy-config-resolver.ts  # CLI/env/config merging (NEW v7.1)
+│   ├── remote-proxy-client.ts    # Remote proxy health checks (v7.1)
+│   ├── proxy-config-resolver.ts  # CLI/env/config merging (v7.1)
 │   ├── types.ts              # ResolvedProxyConfig for local/remote modes
 │   └── [more files...]
 │
@@ -164,6 +166,7 @@ src/
 | Auth | `auth/`, `cliproxy/auth/` | Authentication across providers |
 | Config | `config/`, `types/` | Configuration & type definitions |
 | Providers | `cliproxy/`, `copilot/`, `glmt/` | Provider integrations (7 CLIProxy providers: gemini, codex, agy, qwen, iflow, kiro, ghcp) |
+| Quota | `cliproxy/quota-*.ts`, `account-manager.ts` | Hybrid quota management (v7.14) |
 | Remote Proxy | `cliproxy/remote-*.ts`, `proxy-config-resolver.ts` | Remote CLIProxy support (v7.1) |
 | Services | `web-server/`, `api/` | HTTP server, API services |
 | Utilities | `utils/`, `management/` | Helpers, diagnostics |

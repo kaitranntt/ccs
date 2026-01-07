@@ -1,6 +1,6 @@
 # CCS Project Roadmap
 
-Last Updated: 2025-12-22
+Last Updated: 2026-01-06
 
 Forward-looking roadmap documenting current priorities, GitHub issues, and future feature plans.
 
@@ -23,6 +23,7 @@ All major modularization work is complete. The codebase evolved from monolithic 
 | 9 | Test Infrastructure | 99 UI tests + 539 CLI tests, 90% coverage |
 | 10 | Remote CLIProxy | `proxy-config-resolver.ts`, `remote-proxy-client.ts` |
 | 11 | Kiro + ghcp Providers | OAuth support via CLIProxyAPIPlus (v7.2) |
+| 12 | Hybrid Quota Management | `quota-manager.ts`, `quota-fetcher.ts` (v7.14) |
 
 **Metrics Achieved**:
 - Files >500 lines: 12 -> 5 (-58%)
@@ -153,6 +154,7 @@ worktrees:
 - **#158**: Fix AGY OAuth flow
 - **#157**: ~~Add Kiro auth support from CLIProxyAPIPlus~~ **COMPLETE** (v7.2)
 - GitHub Copilot (ghcp) Device Code flow **COMPLETE** (v7.2)
+- Hybrid quota management **COMPLETE** (v7.14)
 
 ---
 
@@ -163,9 +165,10 @@ worktrees:
 | Modularization (Phases 1-9) | COMPLETE | - |
 | Remote CLIProxy Support (#142) | COMPLETE | v7.1 |
 | Kiro + GitHub Copilot OAuth (#157) | COMPLETE | v7.2 |
+| Hybrid Quota Management | COMPLETE | v7.14 |
 | Critical Bug Fixes (#158, #155, #124) | PLANNED | Q1 2026 |
 | Multiple CLIProxyAPI Instances | PLANNED | Q1 2026 |
-| Git Worktree Support | PLANNED | Q1 2026 |
+| Git Worktree Support | PLANNED | Q2 2026 |
 | Enhanced Model Support | PLANNED | Q2 2026 |
 
 ---

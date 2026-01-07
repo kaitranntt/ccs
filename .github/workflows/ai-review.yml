@@ -1,0 +1,362 @@
+# AI Code Review Workflow
+# Uses Claude Code CLI on self-hosted runner with CLIProxyAPI
+# Posts as ccs-agy-reviewer[bot] via GitHub App
+#
+# Triggers:
+# - Automatically on PR open/update
+# - Manually via /review comment on PR
+
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
+        type: string
+
+# Cancel in-progress runs for same PR
+concurrency:
+  group: ai-review-${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pr_number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Claude Code Review
+    # Only run on self-hosted runner with cliproxy access
+    runs-on: [self-hosted, cliproxy]
+
+    # Conditions:
+    # - PR event: always run
+    # - Comment event: only if it's a PR and contains /review
+    if: >
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, '/review'))
+
+    steps:
+      - name: Generate App Token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.CCS_REVIEWER_APP_ID }}
+          private-key: ${{ secrets.CCS_REVIEWER_PRIVATE_KEY }}
+
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout PR code
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUM="${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pr_number }}"
+          if [ -n "$PR_NUM" ]; then
+            gh pr checkout $PR_NUM || git checkout ${{ github.event.pull_request.head.sha }} 2>/dev/null || true
+          fi
+
+      - name: Determine PR Number
+        id: pr
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "number=${{ github.event.inputs.pr_number }}" >> $GITHUB_OUTPUT
+          else
+            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Add reaction to comment
+        if: github.event_name == 'issue_comment'
+        run: |
+          gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            --method POST -f content=eyes
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Ensure Claude Code installed
+        run: |
+          # Force cleanup of any stale lock/install markers
+          rm -rf ~/.claude/.installing ~/.claude/downloads 2>/dev/null || true
+          pkill -f "claude install" 2>/dev/null || true
+
+          if ! command -v claude &> /dev/null; then
+            echo "[i] Installing Claude Code..."
+            # Download and run install script
+            curl -fsSL https://claude.ai/install.sh > /tmp/claude-install.sh
+            chmod +x /tmp/claude-install.sh
+
+            # Run installer; on failure, try running claude install --force directly
+            if ! bash /tmp/claude-install.sh; then
+              echo "[!] Script install failed, trying direct --force..."
+              BINARY=$(find ~/.claude -name "claude" -type f -executable 2>/dev/null | head -1)
+              if [ -n "$BINARY" ]; then
+                "$BINARY" install --force || true
+              fi
+            fi
+            echo "$HOME/.local/bin" >> $GITHUB_PATH
+          else
+            echo "[i] Claude Code already installed: $(claude --version)"
+          fi
+
+      - name: Create review prompt template
+        run: |
+          cat > /tmp/review-instructions.txt << 'INSTRUCTIONS_END'
+          You are a senior staff engineer performing a comprehensive code review.
+
+          ## MANDATORY: Tool Usage Requirements
+          Before writing your review, you MUST:
+
+          1. **Read each changed file in full** using the Read tool
+             - Don't just look at the diff - read the ENTIRE file for context
+             - Understand the surrounding code, imports, and dependencies
+
+          2. **Find related test files** using Glob tool
+             - Pattern: `**/*test*` or `**/*.spec.*` or `**/__tests__/**`
+             - Read the test files to assess coverage
+
+          3. **Search for usages** using Grep tool
+             - Find where modified functions/classes are called
+             - Check for breaking changes impact
+
+          4. **Check project structure** using Glob tool
+             - Understand the codebase architecture
+             - Verify the changes follow existing patterns
+
+          ## Analysis Dimensions
+
+          ### 🔒 Security (CRITICAL)
+          - Auth bypass, privilege escalation, injection (SQL, command, XSS)
+          - Secrets/credentials exposure, insecure defaults
+          - OWASP Top 10 vulnerabilities
+          - Input validation at trust boundaries
+
+          ### ✅ Correctness
+          - Logic errors, off-by-one, null/undefined handling
+          - Race conditions, deadlocks, async issues
+          - Edge cases, boundary conditions
+          - Error handling completeness
+
+          ### 🏗️ Architecture and Design
+          - Coupling, cohesion, separation of concerns
+          - Design patterns usage (appropriate or over-engineered)
+          - API contract changes, backward compatibility
+          - Single responsibility, interface segregation
+
+          ### 🧪 Testing
+          - Test coverage for new/modified code
+          - Edge case coverage, negative tests
+          - Test quality (not just quantity)
+          - Integration vs unit test balance
+
+          ### ⚡ Performance
+          - O(n^2) or worse algorithms, unnecessary iterations
+          - Memory leaks, resource cleanup
+          - Database query efficiency (N+1, missing indexes)
+          - Only flag if measurable impact
+
+          ### 📖 Maintainability
+          - Naming clarity, self-documenting code
+          - Comments for "why" not "what"
+          - Complexity (cyclomatic, cognitive)
+          - Consistency with codebase patterns
+
+          ## Output Format (Markdown)
+
+          ## 🔍 Code Review
+
+          **Verdict**: [Choose one: ✅ Approve | ⚠️ Approve with notes | ❌ Request changes]
+
+          > 🤖 Reviewed by `MODEL_NAME`
+
+          ### Summary
+          [2-3 sentences: what this PR does, the approach taken, and overall assessment]
+
+          ### ✅ Strengths
+          [Specific things done well with file:line-range references]
+          1. **[Category]**: Description
+             - `src/path/file.ts:10-25` - specific code reference
+          2. ...
+
+          ### ⚠️ Issues Found
+          | File:Line | Issue | Severity | Impact |
+          |-----------|-------|----------|--------|
+          | `src/file.ts:123-145` | Description | 🔴/🟡/🟢 | What could go wrong |
+
+          ### 🔍 Code Quality Observations
+          **Positive:**
+          - Observation with `file.ts:line` reference
+
+          **Concerns:**
+          - Concern with `file.ts:line` reference and code example:
+          ```typescript
+          // Current code (problematic):
+          const x = something.slice(0, 60);
+
+          // Suggested improvement:
+          const x = truncateString(something, 60);
+          ```
+
+          ### 🧪 Testing
+          - **Coverage**: [Assessed by reading test files]
+          - **Test files examined**: `tests/path/file.test.ts`
+          - **Missing tests**: [List specific scenarios not covered]
+          - **Test quality**: [Observations about test implementations]
+
+          ### 🔒 Security
+          - [Detailed security analysis or "No concerns identified"]
+
+          ### ⚡ Performance
+          - [Performance analysis or "No concerns identified"]
+
+          ### 📝 Recommendations
+          1. **[Category]**: Specific recommendation
+             ```typescript
+             // Instead of:
+             problematicCode();
+
+             // Consider:
+             betterApproach();
+             ```
+
+          2. ...
+
+          ### 🎯 Alignment with Project Standards
+          - ✅/❌ Follows codebase patterns (cite specific examples)
+          - ✅/❌ Consistent naming/style
+          - ✅/❌ Proper error handling
+
+          ### Verdict: **[Final verdict with emoji]**
+          [One sentence final summary with key takeaway]
+
+          ---
+          **Guidelines:**
+          - Skip empty sections
+          - Only ❌ Request changes for 🔴 High severity issues
+          - Include code snippets for ALL non-trivial suggestions
+          - Reference specific line ranges, not just file names
+          INSTRUCTIONS_END
+
+      - name: Run Claude Code Review
+        env:
+          ANTHROPIC_BASE_URL: http://localhost:8317
+          ANTHROPIC_API_KEY: ${{ secrets.CLIPROXY_API_KEY }}
+          ANTHROPIC_MODEL: gemini-3-pro-preview
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          PR_NUM="${{ steps.pr.outputs.number }}"
+          REPO="${{ github.repository }}"
+
+          echo "[i] Running Claude Code review for PR #${PR_NUM}"
+          echo "[i] Model: ${ANTHROPIC_MODEL}"
+          echo "[i] Working directory: $(pwd)"
+
+          # Get PR metadata
+          PR_TITLE=$(gh pr view $PR_NUM --repo $REPO --json title --jq .title)
+          PR_BODY=$(gh pr view $PR_NUM --repo $REPO --json body --jq .body)
+
+          # Get list of changed files
+          CHANGED_FILES=$(gh pr diff $PR_NUM --repo $REPO --name-only)
+
+          # Get full diff (increased limit for comprehensive review)
+          DIFF=$(gh pr diff $PR_NUM --repo $REPO | head -8000)
+
+          # Replace model name in instructions
+          sed -i "s|MODEL_NAME|${ANTHROPIC_MODEL}|g" /tmp/review-instructions.txt
+
+          # Build the full prompt
+          cat > /tmp/full-prompt.txt << PROMPT_END
+          # Pull Request Review Task
+
+          ## PR Information
+          - **PR**: #${PR_NUM}
+          - **Title**: ${PR_TITLE}
+          - **Repository**: ${REPO}
+
+          ## Description
+          ${PR_BODY}
+
+          ## Changed Files
+          ${CHANGED_FILES}
+
+          ## Diff (for initial understanding only)
+          ${DIFF}
+
+          ## Your Task
+
+          **STEP 1 - MANDATORY EXPLORATION (before writing review):**
+          You MUST use tools to explore the codebase. Do not skip this step.
+
+          a) For EACH file in "Changed Files" above:
+             - Use Read tool to read the FULL file (not just diff)
+             - Examine imports, exports, and dependencies
+
+          b) Find test files:
+             - Use Glob with pattern: tests/**/*.test.* or **/*.spec.*
+             - Read relevant test files to assess coverage
+
+          c) Search for usages:
+             - Use Grep to find where modified functions/classes are used
+             - Assess breaking change impact
+
+          **STEP 2 - WRITE REVIEW:**
+          Only after completing Step 1, write your review following the format below.
+
+          $(cat /tmp/review-instructions.txt)
+
+          ---
+          BEGIN YOUR EXPLORATION NOW. Use Read, Glob, and Grep tools before writing your review.
+          PROMPT_END
+
+          # Run Claude Code with extended exploration
+          echo "[i] Starting comprehensive review (this may take 2-3 minutes)..."
+          REVIEW=$(cat /tmp/full-prompt.txt | claude -p \
+            --allowed-tools "Read,Glob,Grep" \
+            --max-turns 15 2>&1) || true
+
+          # Validate review output
+          if [ -z "$REVIEW" ] || [ ${#REVIEW} -lt 100 ]; then
+            echo "[!] Review output too short (${#REVIEW} chars), retrying..."
+            REVIEW=$(cat /tmp/full-prompt.txt | claude -p --max-turns 5 2>&1) || true
+          fi
+
+          # Final fallback
+          if [ -z "$REVIEW" ] || [ ${#REVIEW} -lt 50 ]; then
+            REVIEW="## 🔍 Code Review
+
+          **Verdict**: ⚠️ Review generation failed
+
+          > 🤖 Attempted by \`${ANTHROPIC_MODEL}\`
+
+          The automated review encountered an issue. Please request a manual review."
+          fi
+
+          # Post review as comment
+          echo "[i] Posting review (${#REVIEW} chars)..."
+          echo "$REVIEW" | gh pr comment $PR_NUM --repo $REPO --body-file -
+          echo "[OK] Review posted"
+
+      - name: Add success reaction
+        if: success() && github.event_name == 'issue_comment'
+        run: |
+          gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            --method POST -f content=rocket
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Add failure reaction
+        if: failure() && github.event_name == 'issue_comment'
+        run: |
+          gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            --method POST -f content=confused
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}

@@ -9,7 +9,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { CLIProxyProfileName } from '../../auth/profile-detector';
 import { CLIProxyProvider } from '../types';
-import { isReservedName } from '../../config/reserved-names';
+import { isReservedName, isWindowsReservedName } from '../../config/reserved-names';
 import { isUnifiedMode } from '../../config/unified-config-loader';
 import { deleteConfigForPort } from '../config-generator';
 import { deleteSessionLockForPort } from '../session-tracker';
@@ -57,6 +57,9 @@ export function validateProfileName(name: string): string | null {
   }
   if (isReservedName(name)) {
     return `'${name}' is a reserved name`;
+  }
+  if (isWindowsReservedName(name)) {
+    return `'${name}' is a Windows reserved device name and cannot be used`;
   }
   return null;
 }

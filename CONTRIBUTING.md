@@ -265,8 +265,22 @@ cd ccs
 # Create feature branch
 git checkout -b your-feature-name
 
+# Option 1: Test with built binary
+# Test locally with ./dist/ccs.js
+
+# Option 2: Symlink for seamless testing (recommended)
+bun run build
+bun run dev:symlink  # Symlinks global 'ccs' to dev version
+# Now 'ccs' command uses your dev changes!
+
 # Make changes
-# Test locally with ./ccs
+# Test with: ccs <command>
+
+# When done developing:
+bun run dev:unlink   # Restores original global ccs
+
+# Run tests
+# Test with: ccs <command>
 
 # Run tests
 bun run test           # All tests

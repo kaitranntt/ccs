@@ -4,8 +4,11 @@
  * Displays CLIProxy process status with start/stop/restart controls.
  * Shows: running state, port, session count, uptime, update availability.
  * In remote mode: shows remote server info instead of local controls.
+ *
+ * Design: Two-state widget (collapsed/expanded) with icon-only control buttons.
  */
 
+import { useState } from 'react';
 import {
   Activity,
   Power,
@@ -15,10 +18,34 @@ import {
   Square,
   RotateCw,
   ArrowUp,
+  ArrowDown,
   Globe,
+  AlertTriangle,
+  Settings,
+  X,
+  Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useQuery } from '@tanstack/react-query';
 import { api, type CliproxyServerConfig } from '@/lib/api-client';
 import {
@@ -26,8 +53,22 @@ import {
   useStartProxy,
   useStopProxy,
   useCliproxyUpdateCheck,
+  useCliproxyVersions,
+  useInstallVersion,
+  useRestartProxy,
 } from '@/hooks/use-cliproxy';
 import { cn } from '@/lib/utils';
+
+/** Client-side semver comparison (true if a > b) */
+function isNewerVersionClient(a: string, b: string): boolean {
+  const aParts = a.replace(/-\d+$/, '').split('.').map(Number);
+  const bParts = b.replace(/-\d+$/, '').split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((aParts[i] || 0) > (bParts[i] || 0)) return true;
+    if ((aParts[i] || 0) < (bParts[i] || 0)) return false;
+  }
+  return false;
+}
 
 function formatUptime(startedAt?: string): string {
   if (!startedAt) return '';
@@ -55,11 +96,69 @@ function formatTimeAgo(timestamp?: number): string {
   return `${hours}h ago`;
 }
 
+/** Icon button with tooltip wrapper */
+function IconButton({
+  icon: Icon,
+  tooltip,
+  onClick,
+  disabled,
+  isPending,
+  className,
+  variant = 'ghost',
+}: {
+  icon: React.ElementType;
+  tooltip: string;
+  onClick: () => void;
+  disabled?: boolean;
+  isPending?: boolean;
+  className?: string;
+  variant?: 'ghost' | 'outline' | 'destructive-ghost';
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant={variant === 'destructive-ghost' ? 'ghost' : variant}
+          size="sm"
+          className={cn(
+            'h-7 w-7 p-0',
+            variant === 'destructive-ghost' &&
+              'hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30',
+            className
+          )}
+          onClick={onClick}
+          disabled={disabled}
+        >
+          {isPending ? (
+            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Icon className="w-3.5 h-3.5" />
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="text-xs">
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function ProxyStatusWidget() {
   const { data: status, isLoading } = useProxyStatus();
   const { data: updateCheck } = useCliproxyUpdateCheck();
+  const { data: versionsData, isLoading: versionsLoading } = useCliproxyVersions();
   const startProxy = useStartProxy();
   const stopProxy = useStopProxy();
+  const restartProxy = useRestartProxy();
+  const installVersion = useInstallVersion();
+
+  // Version picker state (expanded section)
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [selectedVersion, setSelectedVersion] = useState<string>('');
+
+  // Confirmation dialog state for unstable versions
+  const [showUnstableConfirm, setShowUnstableConfirm] = useState(false);
+  const [pendingInstallVersion, setPendingInstallVersion] = useState<string | null>(null);
 
   // Fetch cliproxy_server config for remote mode detection
   const { data: cliproxyConfig } = useQuery<CliproxyServerConfig>({
@@ -73,8 +172,50 @@ export function ProxyStatusWidget() {
   const isRemoteMode = remoteConfig?.enabled && remoteConfig?.host;
 
   const isRunning = status?.running ?? false;
-  const isActioning = startProxy.isPending || stopProxy.isPending;
+  const isActioning =
+    startProxy.isPending ||
+    stopProxy.isPending ||
+    restartProxy.isPending ||
+    installVersion.isPending;
   const hasUpdate = updateCheck?.hasUpdate ?? false;
+  const isUnstable = updateCheck?.isStable === false;
+  const currentVersion = updateCheck?.currentVersion;
+
+  // Target version for update/downgrade badge
+  const targetVersion = isUnstable
+    ? updateCheck?.maxStableVersion || versionsData?.latestStable
+    : updateCheck?.latestVersion;
+
+  // Handle version install (shows confirmation for unstable)
+  const handleInstallVersion = (version: string) => {
+    if (!version) return;
+    const maxStable = versionsData?.maxStableVersion || '6.6.80';
+    const isVersionUnstable = isNewerVersionClient(version, maxStable);
+
+    if (isVersionUnstable) {
+      // Show confirmation dialog for unstable versions
+      setPendingInstallVersion(version);
+      setShowUnstableConfirm(true);
+      return;
+    }
+
+    // Install directly if stable
+    installVersion.mutate({ version });
+  };
+
+  // Confirm unstable version install
+  const handleConfirmUnstableInstall = () => {
+    if (pendingInstallVersion) {
+      installVersion.mutate({ version: pendingInstallVersion, force: true });
+    }
+    setShowUnstableConfirm(false);
+    setPendingInstallVersion(null);
+  };
+
+  const handleCancelUnstableInstall = () => {
+    setShowUnstableConfirm(false);
+    setPendingInstallVersion(null);
+  };
 
   // Build remote display info
   const remoteDisplayHost = isRemoteMode
@@ -86,14 +227,6 @@ export function ProxyStatusWidget() {
         return isDefaultPort ? remoteConfig.host : `${remoteConfig.host}:${port}`;
       })()
     : null;
-
-  // Restart = stop then start
-  const handleRestart = async () => {
-    await stopProxy.mutateAsync();
-    // Small delay to ensure port is released
-    await new Promise((r) => setTimeout(r, 500));
-    startProxy.mutate();
-  };
 
   // Remote mode: show remote server info
   if (isRemoteMode) {
@@ -130,49 +263,98 @@ export function ProxyStatusWidget() {
     );
   }
 
-  // Local mode: show original controls
-
+  // Local mode: Two-state widget (collapsed/expanded)
   return (
-    <div
-      className={cn(
-        'rounded-lg border p-3 transition-colors',
-        isRunning ? 'border-green-500/30 bg-green-500/5' : 'border-muted bg-muted/30'
-      )}
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div
-            className={cn(
-              'w-2 h-2 rounded-full',
-              isRunning ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/30'
+    <TooltipProvider delayDuration={300}>
+      <div
+        className={cn(
+          'rounded-lg border p-3 transition-colors',
+          isRunning ? 'border-green-500/30 bg-green-500/5' : 'border-muted bg-muted/30'
+        )}
+      >
+        {/* Header row: Status dot, title, icon buttons */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {/* Status indicator */}
+            <div
+              className={cn(
+                'w-2 h-2 rounded-full',
+                isRunning ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/30'
+              )}
+            />
+            <span className="text-sm font-medium">CLIProxy Plus</span>
+          </div>
+
+          {/* Right side: icon buttons when running */}
+          <div className="flex items-center gap-1">
+            {isLoading ? (
+              <RefreshCw className="w-3 h-3 animate-spin text-muted-foreground" />
+            ) : isRunning ? (
+              <>
+                <IconButton
+                  icon={RotateCw}
+                  tooltip="Restart"
+                  onClick={() => restartProxy.mutate()}
+                  disabled={isActioning}
+                  isPending={restartProxy.isPending}
+                />
+                <IconButton
+                  icon={Square}
+                  tooltip="Stop"
+                  onClick={() => stopProxy.mutate()}
+                  disabled={isActioning}
+                  isPending={stopProxy.isPending}
+                  variant="destructive-ghost"
+                />
+                <IconButton
+                  icon={isExpanded ? X : Settings}
+                  tooltip={isExpanded ? 'Close' : 'Version settings'}
+                  onClick={() => setIsExpanded(!isExpanded)}
+                  className={isExpanded ? 'bg-muted' : undefined}
+                />
+              </>
+            ) : (
+              <Power className="w-3 h-3 text-muted-foreground" />
             )}
-          />
-          <span className="text-sm font-medium">CLIProxy Plus</span>
-          {hasUpdate && (
-            <Badge
-              variant="secondary"
-              className="text-[10px] h-4 px-1.5 gap-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-              title={`Update: v${updateCheck?.currentVersion} -> v${updateCheck?.latestVersion}`}
+          </div>
+        </div>
+
+        {/* Version row: version + update badge */}
+        {currentVersion && (
+          <div className="mt-1.5 flex items-center gap-2">
+            <span
+              className={cn(
+                'text-xs font-mono text-muted-foreground',
+                isUnstable && 'text-amber-600 dark:text-amber-400'
+              )}
             >
-              <ArrowUp className="w-2.5 h-2.5" />
-              Update
-            </Badge>
-          )}
-        </div>
+              v{currentVersion}
+            </span>
+            {(hasUpdate || isUnstable) && targetVersion && (
+              <Badge
+                variant="secondary"
+                className={cn(
+                  'text-[10px] h-4 px-1.5 gap-0.5 cursor-pointer transition-colors',
+                  isUnstable
+                    ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50'
+                    : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50'
+                )}
+                onClick={() => handleInstallVersion(targetVersion)}
+                title={`Click to ${isUnstable ? 'downgrade' : 'update'}`}
+              >
+                {isUnstable ? (
+                  <ArrowDown className="w-2.5 h-2.5" />
+                ) : (
+                  <ArrowUp className="w-2.5 h-2.5" />
+                )}
+                {targetVersion}
+              </Badge>
+            )}
+          </div>
+        )}
 
-        <div className="flex items-center gap-1">
-          {isLoading ? (
-            <RefreshCw className="w-3 h-3 animate-spin text-muted-foreground" />
-          ) : isRunning ? (
-            <Activity className="w-3 h-3 text-green-600" />
-          ) : (
-            <Power className="w-3 h-3 text-muted-foreground" />
-          )}
-        </div>
-      </div>
-
-      {isRunning && status ? (
-        <>
+        {/* Stats row when running */}
+        {isRunning && status && (
           <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">Port {status.port}</span>
             {status.sessionCount !== undefined && status.sessionCount > 0 && (
@@ -188,81 +370,138 @@ export function ProxyStatusWidget() {
               </span>
             )}
           </div>
-          {/* Control buttons when running */}
-          <div className="mt-2 flex items-center gap-2">
-            <Button
-              variant={hasUpdate ? 'default' : 'outline'}
-              size="sm"
-              className={cn(
-                'h-7 text-xs gap-1 flex-1',
-                hasUpdate &&
-                  'bg-sidebar-accent hover:bg-sidebar-accent/90 text-sidebar-accent-foreground'
+        )}
+
+        {/* Expanded section: Version Management */}
+        {isRunning && (
+          <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+            <CollapsibleContent className="mt-3 pt-3 border-t border-muted">
+              {/* Section header */}
+              <h4 className="text-xs font-medium text-muted-foreground mb-3">Version Management</h4>
+
+              {/* Version picker row */}
+              <div className="flex items-center gap-2">
+                {/* Dropdown - full width, no truncation */}
+                <Select
+                  value={selectedVersion}
+                  onValueChange={setSelectedVersion}
+                  disabled={versionsLoading}
+                >
+                  <SelectTrigger className="h-8 text-xs flex-1">
+                    <SelectValue placeholder="Select version to install..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {versionsData?.versions.slice(0, 20).map((v) => {
+                      const vIsUnstable =
+                        versionsData?.maxStableVersion &&
+                        isNewerVersionClient(v, versionsData.maxStableVersion);
+                      return (
+                        <SelectItem key={v} value={v} className="text-xs">
+                          <span className="flex items-center gap-2">
+                            v{v}
+                            {v === versionsData.latestStable && (
+                              <span className="text-green-600 dark:text-green-400">(stable)</span>
+                            )}
+                            {vIsUnstable && (
+                              <span className="text-amber-600 dark:text-amber-400">⚠</span>
+                            )}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+
+                {/* Install button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5 px-3"
+                  onClick={() => handleInstallVersion(selectedVersion)}
+                  disabled={installVersion.isPending || !selectedVersion}
+                >
+                  {installVersion.isPending ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Download className="w-3.5 h-3.5" />
+                  )}
+                  Install
+                </Button>
+              </div>
+
+              {/* Stability warning for selected version */}
+              {selectedVersion &&
+                versionsData?.maxStableVersion &&
+                isNewerVersionClient(selectedVersion, versionsData.maxStableVersion) && (
+                  <div className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>Versions above {versionsData.maxStableVersion} have known issues</span>
+                  </div>
+                )}
+
+              {/* Sync time */}
+              {updateCheck?.checkedAt && (
+                <div className="mt-2 text-[10px] text-muted-foreground/60">
+                  Last checked {formatTimeAgo(updateCheck.checkedAt)}
+                </div>
               )}
-              onClick={handleRestart}
-              disabled={isActioning}
-              title={
-                hasUpdate
-                  ? `Restart to update: v${updateCheck?.currentVersion} -> v${updateCheck?.latestVersion}`
-                  : 'Restart CLIProxy service'
-              }
-            >
-              {isActioning ? (
-                <RefreshCw className="w-3 h-3 animate-spin" />
-              ) : hasUpdate ? (
-                <ArrowUp className="w-3 h-3" />
-              ) : (
-                <RotateCw className="w-3 h-3" />
-              )}
-              {hasUpdate ? 'Update' : 'Restart'}
-            </Button>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+        {/* Not running state */}
+        {!isRunning && (
+          <div className="mt-2 flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">Not running</span>
             <Button
               variant="outline"
               size="sm"
-              className="h-7 text-xs gap-1 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
-              onClick={() => stopProxy.mutate()}
-              disabled={isActioning}
-              title="Stop CLIProxy service"
+              className="h-7 text-xs gap-1"
+              onClick={() => startProxy.mutate()}
+              disabled={startProxy.isPending}
             >
-              {stopProxy.isPending ? (
+              {startProxy.isPending ? (
                 <RefreshCw className="w-3 h-3 animate-spin" />
               ) : (
-                <Square className="w-3 h-3" />
+                <Power className="w-3 h-3" />
               )}
-              Stop
+              Start
             </Button>
           </div>
-        </>
-      ) : (
-        <div className="mt-2 flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">Not running</span>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs gap-1"
-            onClick={() => startProxy.mutate()}
-            disabled={startProxy.isPending}
-          >
-            {startProxy.isPending ? (
-              <RefreshCw className="w-3 h-3 animate-spin" />
-            ) : (
-              <Power className="w-3 h-3" />
-            )}
-            Start
-          </Button>
-        </div>
-      )}
+        )}
 
-      {/* Version sync indicator */}
-      {updateCheck?.currentVersion && (
-        <div className="mt-2 pt-2 border-t border-muted flex items-center justify-between text-[10px] text-muted-foreground/70">
-          <span>v{updateCheck.currentVersion}</span>
-          {updateCheck.checkedAt && (
-            <span title={new Date(updateCheck.checkedAt).toLocaleString()}>
-              Synced {formatTimeAgo(updateCheck.checkedAt)}
-            </span>
-          )}
-        </div>
-      )}
-    </div>
+        {/* Unstable Version Confirmation Dialog */}
+        <AlertDialog open={showUnstableConfirm} onOpenChange={setShowUnstableConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-500" />
+                Install Unstable Version?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="space-y-2">
+                <p>
+                  You are about to install <strong>v{pendingInstallVersion}</strong>, which is above
+                  the maximum stable version{' '}
+                  <strong>v{versionsData?.maxStableVersion || '6.6.80'}</strong>.
+                </p>
+                <p className="text-amber-600 dark:text-amber-400">
+                  This version has known stability issues and may cause unexpected behavior.
+                </p>
+                <p>Are you sure you want to proceed?</p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={handleCancelUnstableInstall}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmUnstableInstall}
+                className="bg-amber-500 hover:bg-amber-600 text-white"
+              >
+                Install Anyway
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </TooltipProvider>
   );
 }

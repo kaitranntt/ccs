@@ -28,6 +28,8 @@ export default function ProxySection() {
     setEditedPort,
     editedAuthToken,
     setEditedAuthToken,
+    editedManagementKey,
+    setEditedManagementKey,
     editedLocalPort,
     setEditedLocalPort,
     fetchConfig,
@@ -62,11 +64,13 @@ export default function ProxySection() {
   const hostInput = config.remote.host ?? '';
   const portInput = config.remote.port !== undefined ? config.remote.port.toString() : '';
   const authTokenInput = config.remote.auth_token ?? '';
+  const managementKeyInput = config.remote.management_key ?? '';
   const localPortInput = (config.local.port ?? 8317).toString();
 
   const displayHost = editedHost ?? hostInput;
   const displayPort = editedPort ?? portInput;
   const displayAuthToken = editedAuthToken ?? authTokenInput;
+  const displayManagementKey = editedManagementKey ?? managementKeyInput;
   const displayLocalPort = editedLocalPort ?? localPortInput;
 
   // Save functions for blur events
@@ -95,6 +99,14 @@ export default function ProxySection() {
       saveConfig({ remote: { ...remoteConfig, auth_token: value } });
     }
     setEditedAuthToken(null);
+  };
+
+  const saveManagementKey = () => {
+    const value = editedManagementKey ?? displayManagementKey;
+    if (value !== config.remote.management_key) {
+      saveConfig({ remote: { ...remoteConfig, management_key: value || undefined } });
+    }
+    setEditedManagementKey(null);
   };
 
   const saveLocalPort = () => {
@@ -203,12 +215,15 @@ export default function ProxySection() {
               displayHost={displayHost}
               displayPort={displayPort}
               displayAuthToken={displayAuthToken}
+              displayManagementKey={displayManagementKey}
               setEditedHost={setEditedHost}
               setEditedPort={setEditedPort}
               setEditedAuthToken={setEditedAuthToken}
+              setEditedManagementKey={setEditedManagementKey}
               onSaveHost={saveHost}
               onSavePort={savePort}
               onSaveAuthToken={saveAuthToken}
+              onSaveManagementKey={saveManagementKey}
               onSaveConfig={saveConfig}
               onTestConnection={handleTestConnection}
             />

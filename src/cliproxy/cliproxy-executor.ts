@@ -58,6 +58,7 @@ import {
 import { detectRunningProxy, waitForProxyHealthy, reclaimOrphanedProxy } from './proxy-detector';
 import { withStartupLock } from './startup-lock';
 import { loadOrCreateUnifiedConfig } from '../config/unified-config-loader';
+import { preflightCheck } from './quota-manager';
 
 /** Default executor configuration */
 const DEFAULT_CONFIG: ExecutorConfig = {
@@ -443,6 +444,49 @@ export async function execClaudeWithCLIProxy(
       }
     } else {
       log(`${provider} already authenticated`);
+    }
+
+    // 3a. Proactive token refresh - prevent UND_ERR_SOCKET from expired tokens
+    // CLIProxyAPI may fail mid-request if token expires during use
+    const { ensureTokenValid } = await import('./auth/token-manager');
+    const tokenResult = await ensureTokenValid(provider, verbose);
+    if (!tokenResult.valid) {
+      // Token expired and refresh failed - trigger re-auth
+      console.error(warn('OAuth token expired and refresh failed'));
+      if (tokenResult.error) {
+        console.error(`    ${tokenResult.error}`);
+      }
+      console.error(`    Run "ccs ${provider} --auth" to re-authenticate`);
+      process.exit(1);
+    }
+    if (tokenResult.refreshed) {
+      log('Token was refreshed proactively');
+    }
+
+    // 3a-1. Update lastUsedAt for the account being used
+    // This ensures dashboard shows accurate "Last used" timestamps
+    const usedAccount = getDefaultAccount(provider);
+    if (usedAccount) {
+      touchAccount(provider, usedAccount.id);
+    }
+  }
+
+  // 3b. Preflight quota check - auto-switch to account with quota before launch
+  // Uses quota-manager for caching, tier priority, and cooldown support
+  if (provider === 'agy') {
+    const preflight = await preflightCheck(provider);
+
+    if (!preflight.proceed) {
+      console.error(fail(`Cannot start session: ${preflight.reason}`));
+      process.exit(1);
+    }
+
+    if (preflight.switchedFrom) {
+      console.log(info(`Auto-switched to ${preflight.accountId}`));
+      console.log(`    Reason: ${preflight.reason}`);
+      if (preflight.quotaPercent !== undefined) {
+        console.log(`    New account quota: ${preflight.quotaPercent.toFixed(1)}%`);
+      }
     }
   }
 

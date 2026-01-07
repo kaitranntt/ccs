@@ -5,7 +5,7 @@
  * Extracted from api-command.ts for reuse and testability.
  */
 
-import { isReservedName } from '../../config/reserved-names';
+import { isReservedName, isWindowsReservedName } from '../../config/reserved-names';
 
 /**
  * Validate API profile name
@@ -23,6 +23,9 @@ export function validateApiName(name: string): string | null {
   }
   if (isReservedName(name)) {
     return `'${name}' is a reserved name`;
+  }
+  if (isWindowsReservedName(name)) {
+    return `'${name}' is a Windows reserved device name and cannot be used`;
   }
   return null;
 }

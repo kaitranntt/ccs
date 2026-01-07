@@ -30,14 +30,20 @@ export interface ProviderEditorProps {
   onAddAccount: () => void;
   onSetDefault: (accountId: string) => void;
   onRemoveAccount: (accountId: string) => void;
+  onPauseToggle?: (accountId: string, paused: boolean) => void;
   isRemovingAccount?: boolean;
+  /** Pause/resume mutation in progress */
+  isPausingAccount?: boolean;
 }
 
 export interface AccountItemProps {
   account: OAuthAccount;
   onSetDefault: () => void;
   onRemove: () => void;
+  onPauseToggle?: (paused: boolean) => void;
   isRemoving?: boolean;
+  /** Pause/resume mutation in progress */
+  isPausingAccount?: boolean;
   privacyMode?: boolean;
   /** Show quota bar (only for 'agy' provider) */
   showQuota?: boolean;

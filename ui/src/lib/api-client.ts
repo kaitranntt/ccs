@@ -80,11 +80,18 @@ export interface UpdateVariant {
 export interface OAuthAccount {
   id: string;
   email?: string;
+  nickname?: string;
   provider: 'gemini' | 'codex' | 'agy' | 'qwen' | 'iflow' | 'kiro' | 'ghcp';
   isDefault: boolean;
   tokenFile: string;
   createdAt: string;
   lastUsedAt?: string;
+  /** Whether account is paused (skipped in quota rotation) */
+  paused?: boolean;
+  /** ISO timestamp when account was paused */
+  pausedAt?: string;
+  /** Account tier: free or paid (Pro/Ultra combined) */
+  tier?: 'free' | 'paid' | 'unknown';
 }
 
 export interface AuthStatus {
@@ -202,6 +209,8 @@ export interface ProxyRemoteConfig {
   port?: number;
   protocol: 'http' | 'https';
   auth_token: string;
+  /** Management key for /v0/management/* endpoints (optional, falls back to auth_token) */
+  management_key?: string;
 }
 
 /** Fallback configuration */
@@ -266,6 +275,37 @@ export interface CliproxyUpdateCheckResult {
   latestVersion: string;
   fromCache: boolean;
   checkedAt: number; // Unix timestamp of last check
+  isStable: boolean; // Whether current version is at or below max stable
+  maxStableVersion: string; // Maximum stable version (e.g., "6.6.80")
+  stabilityMessage?: string; // Warning message if running unstable version
+}
+
+/** Available versions list from GitHub releases */
+export interface CliproxyVersionsResponse {
+  versions: string[];
+  latestStable: string;
+  latest: string;
+  currentVersion: string;
+  maxStableVersion: string;
+  fromCache: boolean;
+  checkedAt: number;
+}
+
+/** Result from installing a specific version */
+export interface CliproxyInstallResult {
+  success: boolean;
+  version?: string;
+  isUnstable?: boolean;
+  requiresConfirmation?: boolean;
+  message?: string;
+  error?: string;
+}
+
+/** Result from restarting the proxy */
+export interface CliproxyRestartResult {
+  success: boolean;
+  port?: number;
+  error?: string;
 }
 
 // API
@@ -287,7 +327,9 @@ export const api = {
   cliproxy: {
     list: () => request<{ variants: Variant[] }>('/cliproxy'),
     getAuthStatus: () =>
-      request<{ authStatus: AuthStatus[]; source?: 'remote' | 'local' }>('/cliproxy/auth'),
+      request<{ authStatus: AuthStatus[]; source?: 'remote' | 'local'; error?: string }>(
+        '/cliproxy/auth'
+      ),
     create: (data: CreateVariant) =>
       request('/cliproxy', {
         method: 'POST',
@@ -305,6 +347,15 @@ export const api = {
     proxyStart: () => request<ProxyStartResult>('/cliproxy/proxy-start', { method: 'POST' }),
     proxyStop: () => request<ProxyStopResult>('/cliproxy/proxy-stop', { method: 'POST' }),
     updateCheck: () => request<CliproxyUpdateCheckResult>('/cliproxy/update-check'),
+
+    // Version management
+    versions: () => request<CliproxyVersionsResponse>('/cliproxy/versions'),
+    install: (version: string, force?: boolean) =>
+      request<CliproxyInstallResult>('/cliproxy/install', {
+        method: 'POST',
+        body: JSON.stringify({ version, force }),
+      }),
+    restart: () => request<CliproxyRestartResult>('/cliproxy/restart', { method: 'POST' }),
 
     // Stats and models for Overview tab
     stats: () => request<{ usage: Record<string, unknown> }>('/cliproxy/usage'),
@@ -357,6 +408,16 @@ export const api = {
         }),
       remove: (provider: string, accountId: string) =>
         request(`/cliproxy/auth/accounts/${provider}/${accountId}`, { method: 'DELETE' }),
+      pause: (provider: string, accountId: string) =>
+        request<{ provider: string; accountId: string; paused: boolean }>(
+          `/cliproxy/auth/accounts/${provider}/${accountId}/pause`,
+          { method: 'POST' }
+        ),
+      resume: (provider: string, accountId: string) =>
+        request<{ provider: string; accountId: string; paused: boolean }>(
+          `/cliproxy/auth/accounts/${provider}/${accountId}/resume`,
+          { method: 'POST' }
+        ),
     },
     // OAuth flow
     auth: {

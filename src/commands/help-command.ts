@@ -256,8 +256,13 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   printSubSection('CLI Proxy Plus Management', [
     ['ccs cliproxy', 'Show CLIProxy Plus status and version'],
     ['ccs cliproxy --help', 'Full CLIProxy Plus management help'],
+    ['ccs cliproxy doctor', 'Quota diagnostics (Antigravity)'],
     ['ccs cliproxy --install <ver>', 'Install specific version (e.g., 6.6.6)'],
     ['ccs cliproxy --latest', 'Update to latest version'],
+    ['', ''], // Spacer
+    ['ccs cliproxy pause <p> <a>', 'Pause account from rotation'],
+    ['ccs cliproxy resume <p> <a>', 'Resume paused account'],
+    ['ccs cliproxy status [provider]', 'Show quota/tier/pause status'],
   ]);
 
   // CLI Proxy configuration flags (new)

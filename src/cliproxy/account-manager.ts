@@ -14,6 +14,15 @@ import { CLIProxyProvider } from './types';
 import { getCliproxyDir, getAuthDir } from './config-generator';
 import { PROVIDER_TYPE_VALUES } from './auth/auth-types';
 
+/** Account tier for quota management (free vs paid - no Pro/Ultra distinction needed) */
+export type AccountTier = 'free' | 'paid' | 'unknown';
+
+/**
+ * Providers that typically have empty email in OAuth token files.
+ * For these providers, nickname is used as accountId instead of email.
+ */
+export const PROVIDERS_WITHOUT_EMAIL: CLIProxyProvider[] = ['kiro', 'ghcp'];
+
 /** Account information */
 export interface AccountInfo {
   /** Account identifier (email or custom name) */
@@ -32,6 +41,12 @@ export interface AccountInfo {
   createdAt: string;
   /** Last usage time */
   lastUsedAt?: string;
+  /** User-paused state (skip in quota rotation) */
+  paused?: boolean;
+  /** ISO timestamp when paused */
+  pausedAt?: string;
+  /** Account tier: free or paid (Pro/Ultra combined) */
+  tier?: AccountTier;
 }
 
 /** Provider accounts configuration */
@@ -57,6 +72,25 @@ const DEFAULT_REGISTRY: AccountsRegistry = {
 };
 
 /**
+ * Extract unique account ID from token filename when email is unavailable
+ * For Kiro/GHCP OAuth, filenames are: <provider>-<oauth>-<profile_id>.json
+ * Extracts: <oauth>-<profile_id> as unique identifier
+ * @example kiro-github-ABC123.json → github-ABC123
+ * @example ghcp-amazon-XYZ789.json → amazon-XYZ789
+ * @example kiro-nomail.json → default (no OAuth structure)
+ */
+export function extractAccountIdFromTokenFile(filename: string, email?: string): string {
+  if (email) return email;
+
+  // Pattern: <provider>-<oauth>-<profile_id>.json → extract <oauth>-<profile_id>
+  // Requires at least 2 hyphens to distinguish from simple filenames like "kiro-nomail.json"
+  const match = filename.match(/^[^-]+-([^-]+-[^.]+)\.json$/);
+  if (match) return match[1];
+
+  return 'default';
+}
+
+/**
  * Generate nickname from email
  * Takes prefix before @ symbol, sanitizes whitespace
  * Validation: 1-50 chars, any non-whitespace (permissive per user preference)
@@ -70,7 +104,7 @@ export function generateNickname(email?: string): string {
 
 /**
  * Validate nickname
- * Rules: 1-50 chars, any non-whitespace allowed (permissive)
+ * Rules: 1-50 chars, no whitespace, URL-safe, no reserved patterns
  * @returns null if valid, error message if invalid
  */
 export function validateNickname(nickname: string): string | null {
@@ -82,6 +116,14 @@ export function validateNickname(nickname: string): string | null {
   }
   if (/\s/.test(nickname)) {
     return 'Nickname cannot contain whitespace';
+  }
+  // Block URL-unsafe chars that break routing
+  if (/[%\/&?#]/.test(nickname)) {
+    return 'Nickname cannot contain special URL characters (%, /, &, ?, #)';
+  }
+  // Block reserved patterns used by auto-discovery (kiro-1, ghcp-2, etc.)
+  if (/^(kiro|ghcp)-\d+$/i.test(nickname)) {
+    return 'Nickname cannot match reserved pattern (kiro-N, ghcp-N)';
   }
   return null;
 }
@@ -238,6 +280,14 @@ export function findAccountByQuery(provider: CLIProxyProvider, query: string): A
 /**
  * Register a new account
  * Called after successful OAuth to record the account
+ *
+ * For providers without email (kiro, ghcp):
+ * - nickname is REQUIRED and used as accountId
+ * - Uniqueness is enforced to prevent overwriting
+ *
+ * For providers with email:
+ * - email is used as accountId
+ * - nickname is auto-generated from email if not provided
  */
 export function registerAccount(
   provider: CLIProxyProvider,
@@ -260,12 +310,44 @@ export function registerAccount(
     throw new Error('Failed to initialize provider accounts');
   }
 
-  // Determine account ID
-  const accountId = email || 'default';
-  const isFirstAccount = Object.keys(providerAccounts.accounts).length === 0;
+  // Determine account ID based on provider type
+  let accountId: string;
+  let accountNickname: string;
 
-  // Generate nickname if not provided
-  const accountNickname = nickname || generateNickname(email);
+  if (PROVIDERS_WITHOUT_EMAIL.includes(provider)) {
+    // For kiro/ghcp: nickname is REQUIRED and used as accountId
+    if (!nickname || nickname === 'default') {
+      throw new Error(
+        `Nickname is required when adding ${provider} accounts. ` +
+          `Use --nickname <name> or provide a nickname in the UI.`
+      );
+    }
+
+    // Validate nickname format
+    const validationError = validateNickname(nickname);
+    if (validationError) {
+      throw new Error(validationError);
+    }
+
+    // Check uniqueness
+    for (const [existingId, _account] of Object.entries(providerAccounts.accounts)) {
+      if (existingId.toLowerCase() === nickname.toLowerCase()) {
+        throw new Error(
+          `An account with nickname "${nickname}" already exists for ${provider}. ` +
+            `Choose a different nickname.`
+        );
+      }
+    }
+
+    accountId = nickname;
+    accountNickname = nickname;
+  } else {
+    // For other providers: use email as accountId, fallback to filename extraction
+    accountId = extractAccountIdFromTokenFile(tokenFile, email);
+    accountNickname = nickname || generateNickname(email);
+  }
+
+  const isFirstAccount = Object.keys(providerAccounts.accounts).length === 0;
 
   // Create or update account
   providerAccounts.accounts[accountId] = {
@@ -309,6 +391,76 @@ export function setDefaultAccount(provider: CLIProxyProvider, accountId: string)
   providerAccounts.default = accountId;
   saveAccountsRegistry(registry);
   return true;
+}
+
+/**
+ * Pause an account (skip in quota rotation)
+ */
+export function pauseAccount(provider: CLIProxyProvider, accountId: string): boolean {
+  const registry = loadAccountsRegistry();
+  const providerAccounts = registry.providers[provider];
+
+  if (!providerAccounts?.accounts[accountId]) {
+    return false;
+  }
+
+  providerAccounts.accounts[accountId].paused = true;
+  providerAccounts.accounts[accountId].pausedAt = new Date().toISOString();
+  saveAccountsRegistry(registry);
+  return true;
+}
+
+/**
+ * Resume a paused account
+ */
+export function resumeAccount(provider: CLIProxyProvider, accountId: string): boolean {
+  const registry = loadAccountsRegistry();
+  const providerAccounts = registry.providers[provider];
+
+  if (!providerAccounts?.accounts[accountId]) {
+    return false;
+  }
+
+  providerAccounts.accounts[accountId].paused = false;
+  providerAccounts.accounts[accountId].pausedAt = undefined;
+  saveAccountsRegistry(registry);
+  return true;
+}
+
+/**
+ * Check if an account is paused
+ */
+export function isAccountPaused(provider: CLIProxyProvider, accountId: string): boolean {
+  const accounts = getProviderAccounts(provider);
+  const account = accounts.find((a) => a.id === accountId);
+  return account?.paused ?? false;
+}
+
+/**
+ * Update account tier
+ */
+export function setAccountTier(
+  provider: CLIProxyProvider,
+  accountId: string,
+  tier: AccountTier
+): boolean {
+  const registry = loadAccountsRegistry();
+  const providerAccounts = registry.providers[provider];
+
+  if (!providerAccounts?.accounts[accountId]) {
+    return false;
+  }
+
+  providerAccounts.accounts[accountId].tier = tier;
+  saveAccountsRegistry(registry);
+  return true;
+}
+
+/**
+ * Get non-paused accounts for a provider
+ */
+export function getActiveAccounts(provider: CLIProxyProvider): AccountInfo[] {
+  return getProviderAccounts(provider).filter((a) => !a.paused);
 }
 
 /**
@@ -409,6 +561,10 @@ export function getAccountTokenPath(provider: CLIProxyProvider, accountId?: stri
 /**
  * Auto-discover accounts from existing token files
  * Called during migration or first run to populate accounts registry
+ *
+ * For kiro/ghcp providers without email, generates unique accountId from:
+ * 1. OAuth provider + profile ID from filename (e.g., github-ABC123)
+ * 2. Fallback: provider + index (e.g., kiro-1, kiro-2)
  */
 export function discoverExistingAccounts(): void {
   const authDir = getAuthDir();
@@ -448,7 +604,7 @@ export function discoverExistingAccounts(): void {
         continue;
       }
 
-      // Extract email if available, fallback to filename
+      // Extract email if available, fallback to filename-based ID
       let email = data.email || undefined;
 
       // Fallback: extract email from filename (e.g., "kiro-google-user@example.com.json")
@@ -459,12 +615,10 @@ export function discoverExistingAccounts(): void {
         }
       }
 
-      const accountId = email || 'default';
-
       // Initialize provider section if needed
       if (!registry.providers[provider]) {
         registry.providers[provider] = {
-          default: accountId,
+          default: 'default',
           accounts: {},
         };
       }
@@ -472,9 +626,43 @@ export function discoverExistingAccounts(): void {
       const providerAccounts = registry.providers[provider];
       if (!providerAccounts) continue;
 
+      // Skip if token file already registered (under any accountId)
+      const existingTokenFiles = Object.values(providerAccounts.accounts).map((a) => a.tokenFile);
+      if (existingTokenFiles.includes(file)) {
+        continue;
+      }
+
+      // Determine accountId based on provider type
+      let accountId: string;
+
+      if (PROVIDERS_WITHOUT_EMAIL.includes(provider) && !email) {
+        // For kiro/ghcp without email: extract from filename or generate unique
+        // Pattern: kiro-github-ABC123.json -> github-ABC123
+        const filenameId = extractAccountIdFromTokenFile(file, undefined);
+
+        if (filenameId !== 'default') {
+          accountId = filenameId;
+        } else {
+          // Generate unique ID: provider + incrementing index
+          let index = 1;
+          while (providerAccounts.accounts[`${provider}-${index}`]) {
+            index++;
+          }
+          accountId = `${provider}-${index}`;
+        }
+      } else {
+        // For providers with email: use email or filename extraction
+        accountId = extractAccountIdFromTokenFile(file, email);
+      }
+
       // Skip if account already registered
       if (providerAccounts.accounts[accountId]) {
         continue;
+      }
+
+      // Set as default if first account
+      if (Object.keys(providerAccounts.accounts).length === 0) {
+        providerAccounts.default = accountId;
       }
 
       // Get file stats for creation time
@@ -496,7 +684,30 @@ export function discoverExistingAccounts(): void {
     }
   }
 
-  saveAccountsRegistry(registry);
+  // Reload-merge pattern: reduce race condition with concurrent OAuth registration
+  // Reload fresh registry and merge discovered accounts (fresh registry wins on conflicts)
+  const freshRegistry = loadAccountsRegistry();
+  for (const [providerName, discovered] of Object.entries(registry.providers)) {
+    if (!discovered) continue;
+    const prov = providerName as CLIProxyProvider;
+    if (!freshRegistry.providers[prov]) {
+      freshRegistry.providers[prov] = discovered;
+    } else {
+      // Merge accounts, preferring fresh registry's existing entries
+      const freshProviderAccounts = freshRegistry.providers[prov];
+      if (!freshProviderAccounts) continue;
+      for (const [id, meta] of Object.entries(discovered.accounts)) {
+        if (!freshProviderAccounts.accounts[id]) {
+          freshProviderAccounts.accounts[id] = meta;
+          // Set default if none exists
+          if (!freshProviderAccounts.default || freshProviderAccounts.default === 'default') {
+            freshProviderAccounts.default = id;
+          }
+        }
+      }
+    }
+  }
+  saveAccountsRegistry(freshRegistry);
 }
 
 /**

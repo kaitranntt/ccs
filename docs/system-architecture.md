@@ -1,6 +1,6 @@
 # CCS System Architecture
 
-Last Updated: 2025-12-22
+Last Updated: 2026-01-06
 
 High-level architecture documentation for the CCS (Claude Code Switch) system.
 
@@ -8,12 +8,12 @@ High-level architecture documentation for the CCS (Claude Code Switch) system.
 
 ## System Overview
 
-CCS is a CLI wrapper that enables seamless switching between multiple Claude accounts and alternative AI providers (GLM, Gemini, Codex, Kiro, GitHub Copilot). It consists of two main components:
+CCS is a CLI wrapper that enables seamless switching between multiple Claude accounts and alternative AI providers (GLM, Gemini, Codex, Kiro, GitHub Copilot, OpenRouter, Qwen, Kimi, DeepSeek). It consists of two main components:
 
 1. **CLI Application** (`src/`) - Node.js TypeScript CLI
 2. **Dashboard UI** (`ui/`) - React web application served by Express
 
-CCS v7.2 adds Kiro (AWS) and GitHub Copilot (ghcp) OAuth providers via CLIProxyAPIPlus.
+CCS v7.14 adds Hybrid Quota Management with pause/resume/status commands and auto-failover.
 
 ```
 +===========================================================================+
@@ -131,7 +131,9 @@ CCS v7.2 adds Kiro (AWS) and GitHub Copilot (ghcp) OAuth providers via CLIProxyA
   | cliproxy-executor|     | copilot-package- |     | glmt-proxy       |
   | config-generator |     |   manager        |     | delta-accumulator|
   | account-manager  |     | [copilot logic]  |     | pipeline/        |
-  | auth/            |     +------------------+     +------------------+
+  | quota-manager    |     +------------------+     +------------------+
+  | quota-fetcher    |
+  | auth/            |
   | binary/          |
   | services/        |
   +------------------+
@@ -422,6 +424,55 @@ CCS v7.2 adds Kiro (AWS) and GitHub Copilot (ghcp) OAuth providers via CLIProxyA
     CCS_PROXY_PROTOCOL          Protocol (http/https)
     CCS_PROXY_AUTH_TOKEN        Auth token
     CCS_PROXY_FALLBACK_ENABLED  Enable fallback (true/false)
+```
+
+### Quota Management Flow (v7.14)
+
+```
++===========================================================================+
+|                      Quota Management Architecture                        |
++===========================================================================+
+
+  Pre-Flight Check (before session start)
+        |
+        v
+  +------------------+
+  | quota-manager.ts |  Hybrid quota management
+  +------------------+
+        |
+        +---> Get all active accounts for provider
+        |
+        +---> For each account:
+        |           |
+        |           v
+        |     +------------------+
+        |     | quota-fetcher.ts |  Provider-specific API calls
+        |     +------------------+
+        |           |
+        |           +---> Check isPaused flag --> Skip if paused
+        |           |
+        |           +---> Fetch quota from provider API
+        |           |       - Gemini: /models endpoint
+        |           |       - Codex: /api/v1/account
+        |           |       - Kiro: /api/usage
+        |           |
+        |           +---> Detect tier (free/paid/unknown)
+        |           |
+        |           +---> Check exhaustion status
+        |
+        +---> Select best account (not paused, not exhausted)
+        |
+        +---> Auto-failover to next account if current exhausted
+
+  CLI Commands:
+    ccs cliproxy pause <account>   --> Set isPaused=true in account-manager
+    ccs cliproxy resume <account>  --> Set isPaused=false
+    ccs cliproxy status [account]  --> Display quota + tier info
+
+  Dashboard UI:
+    - Pause/Resume toggle per account
+    - Tier badge (free/paid/unknown)
+    - Quota usage display
 ```
 
 ---

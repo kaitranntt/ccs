@@ -1,6 +1,6 @@
 # CCS Product Development Requirements (PDR)
 
-Last Updated: 2025-12-22
+Last Updated: 2026-01-06
 
 ## Product Overview
 
@@ -8,9 +8,9 @@ Last Updated: 2025-12-22
 
 **Tagline**: The universal AI profile manager for Claude Code
 
-**Description**: CLI wrapper enabling seamless switching between multiple Claude accounts and alternative AI providers (GLM, Gemini, Codex, OpenRouter) with a React-based dashboard for configuration management. Supports both local and remote CLIProxyAPI instances.
+**Description**: CLI wrapper enabling seamless switching between multiple Claude accounts and alternative AI providers (GLM, Gemini, Codex, OpenRouter, Qwen, Kimi, DeepSeek) with a React-based dashboard for configuration management. Supports both local and remote CLIProxyAPI instances with hybrid quota management.
 
-**Current Version**: v7.2.x (Kiro + GitHub Copilot OAuth providers)
+**Current Version**: v7.14.x (Hybrid Quota Management + Pause/Resume)
 
 ---
 
@@ -97,6 +97,14 @@ CCS provides:
 - Fallback to local proxy when remote unreachable
 - Protocol-based default ports (443 for HTTPS, 8317 for HTTP)
 - Dashboard UI for remote server configuration and testing
+
+### FR-009: Quota Management (v7.14)
+- Pause/resume individual accounts via `ccs cliproxy pause/resume <account>`
+- Check quota status via `ccs cliproxy status [account]`
+- Auto-failover when account exhausted
+- Tier detection: free/paid/unknown
+- Pre-flight quota checks before session start
+- Dashboard UI with pause/resume toggles and tier badges
 
 ---
 
@@ -216,6 +224,13 @@ CCS provides:
 - [x] Authorization Code flow for Kiro (port 9876)
 - [x] Device Code flow for ghcp (no local port needed)
 
+### v7.14 Release (Complete)
+- [x] Hybrid quota management with auto-failover
+- [x] `ccs cliproxy pause/resume/status` commands
+- [x] API tier detection (free/paid/unknown)
+- [x] Dashboard pause/resume toggles and tier badges
+- [x] Pre-flight quota checks before session start
+
 ### v8.0 Release (Planned - Q1 2026)
 - [ ] Multiple CLIProxyAPI instances (load balancing, failover)
 - [ ] Native git worktree support
@@ -239,6 +254,11 @@ CCS provides:
 - AWS Kiro (Authorization Code OAuth)
 - Z.AI GLM API
 - OpenRouter API
+- Moonshot Kimi API
+- DeepSeek API
+- Alibaba Qwen API
+- Minimax API
+- Azure Foundry API
 
 ### Third-Party Libraries
 - Express.js (web server)

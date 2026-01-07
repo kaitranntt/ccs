@@ -194,6 +194,44 @@ class SharedManager {
         }
       }
     }
+
+    // Normalize plugin registry paths after linking
+    this.normalizePluginRegistryPaths();
+  }
+
+  /**
+   * Normalize plugin registry paths to use canonical ~/.claude/ paths
+   * instead of instance-specific ~/.ccs/instances/<name>/ paths.
+   *
+   * This ensures installed_plugins.json is consistent regardless of
+   * which CCS instance installed the plugin.
+   */
+  normalizePluginRegistryPaths(): void {
+    const registryPath = path.join(this.claudeDir, 'plugins', 'installed_plugins.json');
+
+    // Skip if registry doesn't exist
+    if (!fs.existsSync(registryPath)) {
+      return;
+    }
+
+    try {
+      const original = fs.readFileSync(registryPath, 'utf8');
+
+      // Replace instance paths with canonical claude path
+      // Pattern: /.ccs/instances/<instance-name>/ -> /.claude/
+      const normalized = original.replace(/\/\.ccs\/instances\/[^/]+\//g, '/.claude/');
+
+      // Only write if changes were made
+      if (normalized !== original) {
+        // Validate JSON before writing
+        JSON.parse(normalized);
+        fs.writeFileSync(registryPath, normalized, 'utf8');
+        console.log(ok('Normalized plugin registry paths'));
+      }
+    } catch (err) {
+      // Log warning but don't fail - registry may be malformed
+      console.log(warn(`Could not normalize plugin registry: ${(err as Error).message}`));
+    }
   }
 
   /**

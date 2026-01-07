@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { detectClaudeCli } from './utils/claude-detector';
 import { getSettingsPath, loadSettings } from './utils/config-manager';
-import { validateGlmKey } from './utils/api-key-validator';
+import { validateGlmKey, validateMiniMaxKey } from './utils/api-key-validator';
 import { ErrorManager } from './utils/error-manager';
 import { execClaudeWithCLIProxy, CLIProxyProvider } from './cliproxy';
 import {
@@ -552,7 +552,7 @@ async function main(): Promise<void> {
       // Display WebSearch status (single line, equilibrium UX)
       displayWebSearchStatus();
 
-      // Pre-flight validation for GLM/GLMT profiles
+      // Pre-flight validation for GLM/GLMT/MiniMax profiles
       if (profileInfo.name === 'glm' || profileInfo.name === 'glmt') {
         const preflightSettingsPath = getSettingsPath(profileInfo.name);
         const preflightSettings = loadSettings(preflightSettingsPath);
@@ -573,6 +573,31 @@ async function main(): Promise<void> {
             }
             console.error('');
             console.error(info('To skip validation: CCS_SKIP_PREFLIGHT=1 ccs glm "prompt"'));
+            process.exit(1);
+          }
+        }
+      }
+
+      if (profileInfo.name === 'mm') {
+        const preflightSettingsPath = getSettingsPath(profileInfo.name);
+        const preflightSettings = loadSettings(preflightSettingsPath);
+        const apiKey = preflightSettings.env?.['ANTHROPIC_AUTH_TOKEN'];
+
+        if (apiKey) {
+          const validation = await validateMiniMaxKey(
+            apiKey,
+            preflightSettings.env?.['ANTHROPIC_BASE_URL']
+          );
+
+          if (!validation.valid) {
+            console.error('');
+            console.error(fail(validation.error || 'API key validation failed'));
+            if (validation.suggestion) {
+              console.error('');
+              console.error(validation.suggestion);
+            }
+            console.error('');
+            console.error(info('To skip validation: CCS_SKIP_PREFLIGHT=1 ccs mm "prompt"'));
             process.exit(1);
           }
         }

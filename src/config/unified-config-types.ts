@@ -16,8 +16,9 @@
  * Version 4 = Copilot API integration (GitHub Copilot proxy)
  * Version 5 = Remote proxy configuration (connect to remote CLIProxyAPI)
  * Version 6 = Customizable auth tokens (API key and management secret)
+ * Version 7 = Quota management for hybrid auto+manual account control
  */
-export const UNIFIED_CONFIG_VERSION = 6;
+export const UNIFIED_CONFIG_VERSION = 7;
 
 /**
  * Account configuration (formerly in profiles.json).
@@ -94,6 +95,23 @@ export interface CLIProxyLoggingConfig {
 }
 
 /**
+ * Token refresh configuration.
+ * Manages background token refresh worker settings.
+ */
+export interface TokenRefreshSettings {
+  /** Enable background token refresh (default: false) */
+  enabled?: boolean;
+  /** Refresh check interval in minutes (default: 30) */
+  interval_minutes?: number;
+  /** Preemptive refresh time in minutes (default: 45) */
+  preemptive_minutes?: number;
+  /** Maximum retry attempts per token (default: 3) */
+  max_retries?: number;
+  /** Enable verbose logging (default: false) */
+  verbose?: boolean;
+}
+
+/**
  * CLIProxy configuration section.
  */
 export interface CLIProxyConfig {
@@ -109,6 +127,8 @@ export interface CLIProxyConfig {
   kiro_no_incognito?: boolean;
   /** Global auth configuration for CLIProxyAPI */
   auth?: CLIProxyAuthConfig;
+  /** Background token refresh worker settings */
+  token_refresh?: TokenRefreshSettings;
 }
 
 /**
@@ -225,8 +245,15 @@ export interface ProxyRemoteConfig {
   port?: number;
   /** Protocol for remote connection */
   protocol: 'http' | 'https';
-  /** Auth token for remote proxy (optional, sent as header) */
+  /** Auth token for remote proxy API endpoints (optional, sent as header) */
   auth_token: string;
+  /**
+   * Management key for remote proxy management API endpoints.
+   * CLIProxyAPI uses separate authentication for management endpoints
+   * (/v0/management/*) via 'secret-key' config.
+   * If not set, falls back to auth_token for backwards compatibility.
+   */
+  management_key?: string;
   /** Connection timeout in milliseconds (default: 2000) */
   timeout?: number;
 }
@@ -316,12 +343,93 @@ export interface WebSearchConfig {
   customMcp?: unknown[];
 }
 
+// ============================================================================
+// QUOTA MANAGEMENT CONFIGURATION (v7+)
+// ============================================================================
+
+/**
+ * Auto quota management configuration.
+ * Controls automatic failover behavior.
+ */
+export interface AutoQuotaConfig {
+  /** Enable pre-flight quota check before requests (default: true) */
+  preflight_check: boolean;
+  /** Quota percentage below which account is "exhausted" (default: 5) */
+  exhaustion_threshold: number;
+  /** Tier priority for failover, highest to lowest (default: ['paid']) */
+  tier_priority: string[];
+  /** Minutes to skip exhausted account before retry (default: 5) */
+  cooldown_minutes: number;
+}
+
+/**
+ * Manual quota management configuration.
+ * User-controlled overrides for account selection.
+ */
+export interface ManualQuotaConfig {
+  /** User-paused accounts (stored in accounts.json) */
+  paused_accounts: string[];
+  /** Force use of specific account (overrides auto-selection) */
+  forced_default: string | null;
+  /** Lock to specific tier only */
+  tier_lock: string | null;
+}
+
+/**
+ * Quota management mode.
+ * - auto: Fully automatic failover based on quota
+ * - manual: User controls everything, no auto-switching
+ * - hybrid: Auto-failover with user overrides (default)
+ */
+export type QuotaManagementMode = 'auto' | 'manual' | 'hybrid';
+
+/**
+ * Quota management configuration section.
+ * Controls hybrid auto+manual account selection for multi-account setups.
+ */
+export interface QuotaManagementConfig {
+  /** Management mode (default: hybrid) */
+  mode: QuotaManagementMode;
+  /** Auto mode settings */
+  auto: AutoQuotaConfig;
+  /** Manual mode settings */
+  manual: ManualQuotaConfig;
+}
+
+/**
+ * Default auto quota configuration.
+ */
+export const DEFAULT_AUTO_QUOTA_CONFIG: AutoQuotaConfig = {
+  preflight_check: true,
+  exhaustion_threshold: 5,
+  tier_priority: ['paid'],
+  cooldown_minutes: 5,
+};
+
+/**
+ * Default manual quota configuration.
+ */
+export const DEFAULT_MANUAL_QUOTA_CONFIG: ManualQuotaConfig = {
+  paused_accounts: [],
+  forced_default: null,
+  tier_lock: null,
+};
+
+/**
+ * Default quota management configuration.
+ */
+export const DEFAULT_QUOTA_MANAGEMENT_CONFIG: QuotaManagementConfig = {
+  mode: 'hybrid',
+  auto: { ...DEFAULT_AUTO_QUOTA_CONFIG },
+  manual: { ...DEFAULT_MANUAL_QUOTA_CONFIG },
+};
+
 /**
  * Main unified configuration structure.
  * Stored in ~/.ccs/config.yaml
  */
 export interface UnifiedConfig {
-  /** Config version (5 for remote proxy support) */
+  /** Config version (7 for quota management) */
   version: number;
   /** Default profile name to use when none specified */
   default?: string;
@@ -343,6 +451,8 @@ export interface UnifiedConfig {
   cliproxy_server?: CliproxyServerConfig;
   /** Router configuration for multi-provider tier routing */
   router?: RouterConfig;
+  /** Quota management configuration (v7+) */
+  quota_management?: QuotaManagementConfig;
 }
 
 /**
@@ -475,6 +585,7 @@ export function createEmptyUnifiedConfig(): UnifiedConfig {
     },
     copilot: { ...DEFAULT_COPILOT_CONFIG },
     cliproxy_server: { ...DEFAULT_CLIPROXY_SERVER_CONFIG },
+    quota_management: { ...DEFAULT_QUOTA_MANAGEMENT_CONFIG },
   };
 }
 

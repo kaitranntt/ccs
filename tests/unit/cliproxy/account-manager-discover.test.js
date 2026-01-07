@@ -164,7 +164,7 @@ describe('Account Manager - discoverExistingAccounts', () => {
       assert.strictEqual(accountIds[0], 'actual@email.com', 'Should use data.email when available');
     });
 
-    it('falls back to "default" when no email in file or filename', () => {
+    it('generates unique ID for kiro/ghcp when no email in file or filename', () => {
       createAuthFile('kiro-nomail.json', {
         type: 'kiro',
         email: '',
@@ -174,7 +174,8 @@ describe('Account Manager - discoverExistingAccounts', () => {
       const accounts = getAccountsFile();
 
       const accountIds = Object.keys(accounts.providers.kiro.accounts);
-      assert.strictEqual(accountIds[0], 'default', 'Should fall back to "default"');
+      // For kiro/ghcp without email, generates unique ID like "kiro-1"
+      assert.strictEqual(accountIds[0], 'kiro-1', 'Should generate unique ID for kiro without email');
     });
 
     it('handles dots in email local part', () => {
@@ -273,6 +274,72 @@ describe('Account Manager - discoverExistingAccounts', () => {
         'user@example.com',
         'First account should be default'
       );
+    });
+
+    it('generates sequential IDs for multiple kiro files without email', () => {
+      // Create multiple kiro files without email in filename
+      // Files like "kiro-nomail.json" don't match oauth pattern (need 2+ hyphens)
+      createAuthFile('kiro-account1.json', {
+        type: 'kiro',
+        email: '',
+      });
+      createAuthFile('kiro-account2.json', {
+        type: 'kiro',
+        email: '',
+      });
+
+      accountManager.discoverExistingAccounts();
+      const accounts = getAccountsFile();
+
+      const accountIds = Object.keys(accounts.providers.kiro.accounts);
+      assert.strictEqual(accountIds.length, 2, 'Should have 2 accounts');
+      // Both should have kiro-N format since filenames don't match oauth pattern (1 hyphen only)
+      assert(accountIds.includes('kiro-1'), 'Should have kiro-1');
+      assert(accountIds.includes('kiro-2'), 'Should have kiro-2');
+    });
+
+    it('skips to next ID when collision exists', () => {
+      // Pre-create accounts.json with kiro-1 already registered
+      const accountsPath = path.join(testDir, '.ccs', 'cliproxy', 'accounts.json');
+      const existingRegistry = {
+        version: 1,
+        providers: {
+          kiro: {
+            default: 'kiro-1',
+            accounts: {
+              'kiro-1': {
+                tokenFile: 'kiro-existing.json',
+                createdAt: new Date().toISOString(),
+              },
+            },
+          },
+        },
+      };
+      fs.writeFileSync(accountsPath, JSON.stringify(existingRegistry));
+
+      // Create the existing token file (matches registry)
+      createAuthFile('kiro-existing.json', {
+        type: 'kiro',
+        email: '',
+      });
+
+      // Create new file that will need auto-generated ID (single hyphen = no oauth pattern match)
+      createAuthFile('kiro-newaccount.json', {
+        type: 'kiro',
+        email: '',
+      });
+
+      // Reload module to pick up pre-existing accounts.json
+      delete require.cache[require.resolve('../../../dist/cliproxy/account-manager')];
+      accountManager = require('../../../dist/cliproxy/account-manager');
+      accountManager.discoverExistingAccounts();
+
+      const accounts = getAccountsFile();
+      const accountIds = Object.keys(accounts.providers.kiro.accounts);
+
+      assert.strictEqual(accountIds.length, 2, 'Should have 2 accounts');
+      assert(accountIds.includes('kiro-1'), 'Should keep existing kiro-1');
+      assert(accountIds.includes('kiro-2'), 'New account should be kiro-2 (skipped kiro-1)');
     });
   });
 

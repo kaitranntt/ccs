@@ -8,7 +8,7 @@
 import { info, warn } from '../utils/ui';
 import { getBinDir, CLIPROXY_DEFAULT_PORT } from './config-generator';
 import { BinaryInfo, BinaryManagerConfig } from './types';
-import { CLIPROXY_FALLBACK_VERSION } from './platform-detector';
+import { CLIPROXY_FALLBACK_VERSION, CLIPROXY_MAX_STABLE_VERSION } from './platform-detector';
 import { isProxyRunning, stopProxy } from './services/proxy-lifecycle-service';
 import { waitForPortFree } from '../utils/port-utils';
 import {
@@ -151,11 +151,29 @@ export interface CliproxyUpdateCheckResult {
   latestVersion: string;
   fromCache: boolean;
   checkedAt: number;
+  // Stability fields
+  isStable: boolean;
+  maxStableVersion: string;
+  stabilityMessage?: string;
 }
 
 /** Check for CLIProxyAPI binary updates */
 export async function checkCliproxyUpdate(): Promise<CliproxyUpdateCheckResult> {
-  return new BinaryManager().checkForUpdates();
+  const result = await new BinaryManager().checkForUpdates();
+
+  // Import isNewerVersion for stability check
+  const { isNewerVersion } = await import('./binary/version-checker');
+  const isStable = !isNewerVersion(result.currentVersion, CLIPROXY_MAX_STABLE_VERSION);
+  const stabilityMessage = isStable
+    ? undefined
+    : `v${result.currentVersion} has known stability issues. Max stable: v${CLIPROXY_MAX_STABLE_VERSION}`;
+
+  return {
+    ...result,
+    isStable,
+    maxStableVersion: CLIPROXY_MAX_STABLE_VERSION,
+    stabilityMessage,
+  };
 }
 
 // Re-export version pin functions

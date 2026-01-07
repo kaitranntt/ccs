@@ -33,7 +33,8 @@ CLI wrapper for instant switching between multiple Claude accounts and alternati
 | Using `chore:` for dev→main PR | No npm release triggered | Use `feat:` or `fix:` prefix |
 | Committing directly to `main` or `dev` | Bypasses CI/review | Always use PRs |
 | Manual version bump or git tag | Conflicts with semantic-release | Let CI handle versioning |
-| Forgetting `--help` update | CLI docs out of sync | Update src/ccs.ts, lib/ccs, lib/ccs.ps1 |
+| Forgetting `--help` update | CLI docs out of sync | Update `src/commands/help-command.ts` |
+| Forgetting docs update | User docs out of sync | Update `docs/` and CCS docs submodule |
 
 ## Quality Gates (MANDATORY)
 
@@ -99,9 +100,60 @@ bun run validate            # Step 3: Final check (must pass)
 2. **TTY-aware colors** - Respect NO_COLOR env var
 3. **Non-invasive** - NEVER modify `~/.claude/settings.json`
 4. **Cross-platform parity** - bash/PowerShell/Node.js must behave identically
-5. **CLI documentation** - ALL changes MUST update `--help` in src/ccs.ts, lib/ccs, lib/ccs.ps1
+5. **CLI documentation** - ALL CLI changes MUST update respective `--help` handler (see table below)
 6. **Idempotent** - All install operations safe to run multiple times
 7. **Dashboard parity** - Configuration features MUST work in both CLI and Dashboard
+
+### Help Location Reference
+
+| Command | Help Handler Location |
+|---------|----------------------|
+| `ccs --help` | `src/commands/help-command.ts` |
+| `ccs cliproxy --help` | `src/commands/cliproxy-command.ts` → `showHelp()` |
+| `ccs auth --help` | `src/commands/auth-command.ts` |
+| `ccs api --help` | `src/commands/api-command.ts` |
+| `ccs copilot --help` | `src/commands/copilot-command.ts` |
+
+**Note:** `lib/ccs` and `lib/ccs.ps1` are bootstrap wrappers only—they delegate to Node.js and contain no help text.
+
+## Documentation Requirements (MANDATORY)
+
+**Documentation is a first-class citizen. ALL user-facing changes require docs updates.**
+
+### Local Documentation (`docs/`)
+
+Update local `docs/` folder for:
+- Architecture changes
+- Internal API documentation
+- Development guides
+
+### CCS Docs Submodule (Owner Only)
+
+**For @kaitranntt (repository owner):** When adding/changing CLI commands or config options, you MUST also update the CCS docs submodule at `~/CloudPersonal/ccs/docs/`:
+
+| Change Type | Files to Update |
+|-------------|-----------------|
+| New CLI command/flag | `reference/cli-commands.mdx` |
+| New config option | `reference/config-schema.mdx` |
+| Provider feature | `providers/<provider>.mdx` |
+| New feature | `features/<feature>.mdx` |
+
+**Workflow for docs submodule:**
+```bash
+cd ~/CloudPersonal/ccs/docs/
+git checkout main && git pull
+# Make changes
+git add -A && git commit -m "docs: <description>"
+git push origin main
+```
+
+**For external contributors:** Document changes in PR description. Owner will sync to CCS docs.
+
+### Pre-Commit Docs Checklist
+
+- [ ] Respective `--help` updated (see Help Location Reference table)
+- [ ] Local `docs/` updated if architecture changed
+- [ ] CCS docs submodule updated (owner) or PR description includes docs (contributor)
 
 ## Feature Interface Requirements
 
@@ -268,7 +320,9 @@ bun run test:unit         # Unit tests
 ### Local Development
 ```bash
 bun run dev               # Build + start config server (http://localhost:3000)
-./scripts/dev-install.sh  # Build, pack, install globally
+bun run dev:symlink       # Symlink global 'ccs' → dev dist/ccs.js (fast iteration)
+bun run dev:unlink        # Restore original global ccs
+./scripts/dev-install.sh  # Build, pack, install globally (full install)
 rm -rf ~/.ccs             # Clean environment
 ```
 
@@ -283,9 +337,13 @@ rm -rf ~/.ccs             # Clean environment
 
 **Code:**
 - [ ] Conventional commit format (`feat:`, `fix:`, etc.)
-- [ ] `--help` updated (src/ccs.ts, lib/ccs, lib/ccs.ps1) — if CLI changed
+- [ ] Respective `--help` updated (see Help Location Reference) — if CLI changed
 - [ ] Tests added/updated — if behavior changed
 - [ ] README.md updated — if user-facing
+
+**Documentation:**
+- [ ] CCS docs updated (owner: `~/CloudPersonal/ccs/docs/`) — if CLI/config changed
+- [ ] Local `docs/` updated — if architecture changed
 
 **Standards:**
 - [ ] ASCII only (NO emojis), NO_COLOR respected

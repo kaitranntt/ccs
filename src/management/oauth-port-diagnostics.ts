@@ -31,7 +31,7 @@ export const OAUTH_CALLBACK_PORTS: Record<CLIProxyProvider, number | null> = {
   codex: 1455,
   agy: 51121,
   qwen: null, // Device Code Flow - no callback port
-  iflow: null, // Device Code Flow - no callback port
+  iflow: 11451, // Authorization Code Flow
   kiro: 9876, // Authorization Code Flow
   ghcp: null, // Device Code Flow - no callback port
 };
@@ -49,7 +49,7 @@ export const OAUTH_FLOW_TYPES: Record<CLIProxyProvider, OAuthFlowType> = {
   codex: 'authorization_code',
   agy: 'authorization_code',
   qwen: 'device_code',
-  iflow: 'device_code',
+  iflow: 'authorization_code',
   kiro: 'authorization_code',
   ghcp: 'device_code',
 };

@@ -25,9 +25,14 @@ import { registerSession } from './session-tracker';
 import { detectRunningProxy, waitForProxyHealthy } from './proxy-detector';
 import { withStartupLock } from './startup-lock';
 import { isCliproxyRunning } from './stats-fetcher';
+import { TokenRefreshWorker, type RefreshResult } from './auth/token-refresh-worker';
+import { getTokenRefreshConfig } from './auth/token-refresh-config';
 
 /** Background proxy process reference */
 let proxyProcess: ChildProcess | null = null;
+
+/** Token refresh worker instance */
+let tokenRefreshWorker: TokenRefreshWorker | null = null;
 
 /** Cleanup registered flag */
 let cleanupRegistered = false;
@@ -77,6 +82,12 @@ function registerCleanup(): void {
   if (cleanupRegistered) return;
 
   const cleanup = () => {
+    // Stop token refresh worker first
+    if (tokenRefreshWorker && tokenRefreshWorker.isActive()) {
+      tokenRefreshWorker.stop();
+      tokenRefreshWorker = null;
+    }
+    // Then stop proxy process
     if (proxyProcess && !proxyProcess.killed) {
       proxyProcess.kill('SIGTERM');
       proxyProcess = null;
@@ -88,6 +99,38 @@ function registerCleanup(): void {
   process.once('SIGINT', cleanup);
 
   cleanupRegistered = true;
+}
+
+/**
+ * Start token refresh worker if configured
+ * @param verbose Enable verbose logging
+ */
+function startTokenRefreshWorker(verbose: boolean): void {
+  // Skip if already running
+  if (tokenRefreshWorker && tokenRefreshWorker.isActive()) {
+    return;
+  }
+
+  // Load config
+  const config = getTokenRefreshConfig();
+  if (!config) {
+    // Not configured or disabled
+    return;
+  }
+
+  // Create and start worker
+  tokenRefreshWorker = new TokenRefreshWorker({
+    refreshInterval: config.interval_minutes ?? 30,
+    preemptiveTime: config.preemptive_minutes ?? 45,
+    maxRetries: config.max_retries ?? 3,
+    verbose: config.verbose || verbose,
+  });
+
+  tokenRefreshWorker.start();
+
+  if (verbose) {
+    console.error('[i] Token refresh worker started');
+  }
 }
 
 export interface ServiceStartResult {
@@ -254,6 +297,9 @@ export async function ensureCliproxyService(
       log(`Session registered for PID ${proxyProcess.pid}`);
     }
 
+    // 6. Start token refresh worker if configured
+    startTokenRefreshWorker(verbose);
+
     return { started: true, alreadyRunning: false, port };
   });
 }
@@ -262,6 +308,13 @@ export async function ensureCliproxyService(
  * Stop the managed CLIProxy service
  */
 export function stopCliproxyService(): boolean {
+  // Stop token refresh worker first
+  if (tokenRefreshWorker && tokenRefreshWorker.isActive()) {
+    tokenRefreshWorker.stop();
+    tokenRefreshWorker = null;
+  }
+
+  // Then stop proxy process
   if (proxyProcess && !proxyProcess.killed) {
     proxyProcess.kill('SIGTERM');
     proxyProcess = null;
@@ -282,4 +335,28 @@ export async function getServiceStatus(port: number = CLIPROXY_DEFAULT_PORT): Pr
   const managedByUs = proxyProcess !== null && !proxyProcess.killed;
 
   return { running, managedByUs, port };
+}
+
+/**
+ * Check if token refresh worker is running
+ */
+export function isTokenRefreshWorkerRunning(): boolean {
+  return tokenRefreshWorker !== null && tokenRefreshWorker.isActive();
+}
+
+/**
+ * Get token refresh worker status
+ */
+export function getTokenRefreshStatus(): {
+  running: boolean;
+  lastResults: RefreshResult[] | null;
+} {
+  if (!tokenRefreshWorker) {
+    return { running: false, lastResults: null };
+  }
+
+  return {
+    running: tokenRefreshWorker.isActive(),
+    lastResults: tokenRefreshWorker.getLastRefreshResults(),
+  };
 }

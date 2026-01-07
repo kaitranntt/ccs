@@ -218,13 +218,16 @@ export async function testLocalhostBinding(port: number): Promise<BindingTestRes
     const server = net.createServer();
 
     server.once('error', (err: NodeJS.ErrnoException) => {
-      if (err.code === 'EADDRINUSE') {
-        resolve({ success: false, message: `Port ${port} is already in use` });
-      } else if (err.code === 'EACCES') {
-        resolve({ success: false, message: `Permission denied for port ${port}` });
-      } else {
-        resolve({ success: false, message: `Cannot bind to port ${port}: ${err.message}` });
-      }
+      // H8: Close server to prevent fd leak on error path
+      server.close(() => {
+        if (err.code === 'EADDRINUSE') {
+          resolve({ success: false, message: `Port ${port} is already in use` });
+        } else if (err.code === 'EACCES') {
+          resolve({ success: false, message: `Permission denied for port ${port}` });
+        } else {
+          resolve({ success: false, message: `Cannot bind to port ${port}: ${err.message}` });
+        }
+      });
     });
 
     server.once('listening', () => {

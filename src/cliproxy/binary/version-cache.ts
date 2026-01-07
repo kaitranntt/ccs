@@ -6,7 +6,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCliproxyDir, getBinDir } from '../config-generator';
-import { VersionCache, VERSION_CACHE_DURATION_MS, VERSION_PIN_FILE } from './types';
+import {
+  VersionCache,
+  VERSION_CACHE_DURATION_MS,
+  VERSION_PIN_FILE,
+  VersionListCache,
+} from './types';
 
 /**
  * Get path to version cache file
@@ -139,4 +144,53 @@ export function clearPinnedVersion(): void {
  */
 export function isVersionPinned(): boolean {
   return getPinnedVersion() !== null;
+}
+
+// ==================== Version List Cache ====================
+
+const VERSION_LIST_CACHE_FILE = '.version-list-cache.json';
+
+/**
+ * Get path to version list cache file
+ */
+export function getVersionListCachePath(): string {
+  return path.join(getCliproxyDir(), VERSION_LIST_CACHE_FILE);
+}
+
+/**
+ * Read version list cache if still valid
+ */
+export function readVersionListCache(): VersionListCache | null {
+  const cachePath = getVersionListCachePath();
+  if (!fs.existsSync(cachePath)) {
+    return null;
+  }
+
+  try {
+    const content = fs.readFileSync(cachePath, 'utf8');
+    const cache: VersionListCache = JSON.parse(content);
+
+    // Check if cache is still valid (1 hour)
+    if (Date.now() - cache.checkedAt < VERSION_CACHE_DURATION_MS) {
+      return cache;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Write version list to cache
+ */
+export function writeVersionListCache(cache: VersionListCache): void {
+  const cachePath = getVersionListCachePath();
+
+  try {
+    fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+    fs.writeFileSync(cachePath, JSON.stringify(cache), 'utf8');
+  } catch {
+    // Silent fail - caching is optional
+  }
 }

@@ -6,10 +6,16 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, Loader2 } from 'lucide-react';
+import { RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
 import { useCliproxyAuth } from '@/hooks/use-cliproxy';
 import { useCliproxyAuthFlow } from '@/hooks/use-cliproxy-auth-flow';
 import { cn } from '@/lib/utils';
+
+interface VersionInfo {
+  currentVersion: string;
+  isStable: boolean;
+  stabilityMessage?: string;
+}
 
 interface LoginButtonProps {
   provider: string;
@@ -110,6 +116,22 @@ export function CliproxyHeader({
   const { data: authData } = useCliproxyAuth();
   const { provider: authProvider, isAuthenticating, startAuth } = useCliproxyAuthFlow();
   const lastUpdatedText = useRelativeTime(lastUpdated);
+  const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
+
+  useEffect(() => {
+    fetch('/api/cliproxy/update-check')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) {
+          setVersionInfo({
+            currentVersion: data.currentVersion,
+            isStable: data.isStable,
+            stabilityMessage: data.stabilityMessage,
+          });
+        }
+      })
+      .catch(() => {}); // Silently fail
+  }, []);
 
   const providers = [
     { id: 'claude', displayName: 'Claude' },
@@ -169,6 +191,21 @@ export function CliproxyHeader({
           />
           {isRunning ? 'Running' : 'Offline'}
         </Badge>
+
+        {versionInfo && (
+          <Badge
+            variant={versionInfo.isStable ? 'secondary' : 'destructive'}
+            className={cn(
+              'gap-1.5',
+              !versionInfo.isStable &&
+                'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30'
+            )}
+            title={versionInfo.stabilityMessage}
+          >
+            {!versionInfo.isStable && <AlertTriangle className="w-3 h-3" />}v
+            {versionInfo.currentVersion}
+          </Badge>
+        )}
 
         {lastUpdatedText && (
           <span className="text-xs text-muted-foreground">{lastUpdatedText}</span>
