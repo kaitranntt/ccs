@@ -89,10 +89,10 @@ jobs:
 
           if ! command -v claude &> /dev/null; then
             echo "[i] Installing Claude Code..."
-            curl -fsSL https://claude.ai/install.sh | bash -s -- --force || {
+            curl -fsSL https://claude.ai/install.sh | bash || {
               echo "[!] Install failed, retrying..."
               sleep 2
-              curl -fsSL https://claude.ai/install.sh | bash -s -- --force
+              curl -fsSL https://claude.ai/install.sh | bash
             }
             echo "$HOME/.local/bin" >> $GITHUB_PATH
           else
