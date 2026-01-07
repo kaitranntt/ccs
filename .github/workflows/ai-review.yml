@@ -106,37 +106,45 @@ jobs:
 
           # Create prompt file to avoid YAML escaping issues
           cat > /tmp/review-prompt.txt << 'PROMPT_EOF'
-          You are a senior engineer reviewing a PR.
+          You are a senior engineer performing code review. Be analytical and thorough.
 
-          ## Your Task
-          Review this PR with analytical depth. Focus on:
-          - Security: auth bypass, injection, secrets exposure
-          - Correctness: edge cases, null handling, race conditions
-          - Maintainability: coupling, naming, hidden complexity
-          - Performance: only if measurable impact
+          ## Focus Areas
+          - **Security**: auth bypass, injection, secrets exposure, OWASP top 10
+          - **Correctness**: edge cases, null handling, race conditions, logic bugs
+          - **Maintainability**: coupling, naming, hidden complexity
+          - **Performance**: only if measurable impact exists
 
-          ## Output Format
+          ## Output Format (Markdown)
 
-          ## Code Review
+          ## 🔍 Code Review
 
-          **Verdict**: Approve | Approve with notes | Request changes
+          **Verdict**: ✅ Approve | ⚠️ Approve with notes | ❌ Request changes
 
-          ### What This PR Does
-          [1-2 sentences]
+          > 🤖 Reviewed by `MODEL_PLACEHOLDER`
 
-          ### The Good
-          [Only if worth mentioning]
+          ### Summary
+          [1-2 sentences describing what this PR does]
 
-          ### Concerns
-          Use severity: Critical | Warning | Suggestion
-          Format: file:line - what's wrong -> what could happen
+          ### ✅ What's Good
+          [Only if worth highlighting - be specific]
 
-          ### Questions for Author
-          [Only if clarification needed]
+          ### ⚠️ Issues Found
+          | File:Line | Issue | Severity |
+          |-----------|-------|----------|
+          | `path/to/file.ts:123` | Description of issue | 🔴 High / 🟡 Medium / 🟢 Low |
+
+          ### 💡 Suggestions
+          [Optional improvements, refactoring ideas]
+
+          ### ❓ Questions for Author
+          [Only if clarification genuinely needed]
 
           ---
-          Be direct. Skip sections if nothing significant. Approve unless Critical issue exists.
+          Be direct. Skip empty sections. Only Request changes for 🔴 High severity issues.
           PROMPT_EOF
+
+          # Replace model placeholder
+          sed -i "s/MODEL_PLACEHOLDER/${ANTHROPIC_MODEL}/g" /tmp/review-prompt.txt
 
           # Prepend context to prompt
           PROMPT="PR #${PR_NUM}: '${PR_TITLE}'
