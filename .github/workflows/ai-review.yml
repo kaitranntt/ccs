@@ -104,48 +104,53 @@ jobs:
           PR_TITLE=$(gh pr view $PR_NUM --repo $REPO --json title --jq .title)
           PR_BODY=$(gh pr view $PR_NUM --repo $REPO --json body --jq .body)
 
-          # Run Claude Code in print mode with review prompt
-          REVIEW=$(claude -p "You are a senior engineer reviewing PR #${PR_NUM}: '${PR_TITLE}'.
+          # Create prompt file to avoid YAML escaping issues
+          cat > /tmp/review-prompt.txt << 'PROMPT_EOF'
+          You are a senior engineer reviewing a PR.
 
-## Context
-Repository: ${REPO}
-Description: ${PR_BODY}
+          ## Your Task
+          Review this PR with analytical depth. Focus on:
+          - Security: auth bypass, injection, secrets exposure
+          - Correctness: edge cases, null handling, race conditions
+          - Maintainability: coupling, naming, hidden complexity
+          - Performance: only if measurable impact
 
-## Diff
-\`\`\`diff
-${DIFF}
-\`\`\`
+          ## Output Format
 
-## Your Task
-Review this PR with analytical depth. Focus on:
-- 🔐 Security: auth bypass, injection, secrets exposure
-- 🐛 Correctness: edge cases, null handling, race conditions
-- 🧹 Maintainability: coupling, naming, hidden complexity
-- ⚡ Performance: only if measurable impact
+          ## Code Review
 
-## Output Format
+          **Verdict**: Approve | Approve with notes | Request changes
 
-## 🔍 Code Review (${ANTHROPIC_MODEL})
+          ### What This PR Does
+          [1-2 sentences]
 
-**Verdict**: ✅ Approve | ✅ Approve with notes | ⚠️ Request changes
+          ### The Good
+          [Only if worth mentioning]
 
-### 📋 What This PR Does
-[1-2 sentences]
+          ### Concerns
+          Use severity: Critical | Warning | Suggestion
+          Format: file:line - what's wrong -> what could happen
 
-### ✨ The Good
-[Only if worth mentioning]
+          ### Questions for Author
+          [Only if clarification needed]
 
-### 🚨 Concerns
-Use severity: 🔴 Critical | 🟡 Warning | 🟢 Suggestion
-Format: \`file:line\` - what's wrong → what could happen
+          ---
+          Be direct. Skip sections if nothing significant. Approve unless Critical issue exists.
+          PROMPT_EOF
 
-### ❓ Questions for Author
-[Only if clarification needed]
+          # Prepend context to prompt
+          PROMPT="PR #${PR_NUM}: '${PR_TITLE}'
 
----
-Be direct. Skip sections if nothing significant. Approve unless 🔴 Critical issue exists." \
-            --allowed-tools "Read,Glob,Grep" \
-            --max-turns 3)
+          Repository: ${REPO}
+          Description: ${PR_BODY}
+
+          Diff:
+          ${DIFF}
+
+          $(cat /tmp/review-prompt.txt)"
+
+          # Run Claude Code in print mode
+          REVIEW=$(echo "$PROMPT" | claude -p --allowed-tools "Read,Glob,Grep" --max-turns 3)
 
           # Post review as comment
           echo "[i] Posting review..."
