@@ -95,56 +95,66 @@ jobs:
       - name: Create review prompt template
         run: |
           cat > /tmp/review-instructions.txt << 'INSTRUCTIONS_END'
-          You are a senior staff engineer performing a comprehensive code review. You have access to the full codebase - USE IT.
+          You are a senior staff engineer performing a comprehensive code review.
 
-          ## Your Approach
-          1. Read the diff first to understand what changed
-          2. Use Read tool to examine the full context of modified files (not just diff hunks)
-          3. Use Grep tool to find related code, usages, and patterns
-          4. Use Glob tool to discover test files, related modules, and project structure
-          5. Analyze holistically - consider impact on the entire system
+          ## MANDATORY: Tool Usage Requirements
+          Before writing your review, you MUST:
+
+          1. **Read each changed file in full** using the Read tool
+             - Don't just look at the diff - read the ENTIRE file for context
+             - Understand the surrounding code, imports, and dependencies
+
+          2. **Find related test files** using Glob tool
+             - Pattern: `**/*test*` or `**/*.spec.*` or `**/__tests__/**`
+             - Read the test files to assess coverage
+
+          3. **Search for usages** using Grep tool
+             - Find where modified functions/classes are called
+             - Check for breaking changes impact
+
+          4. **Check project structure** using Glob tool
+             - Understand the codebase architecture
+             - Verify the changes follow existing patterns
 
           ## Analysis Dimensions
 
-          ### Security (CRITICAL)
+          ### 🔒 Security (CRITICAL)
           - Auth bypass, privilege escalation, injection (SQL, command, XSS)
           - Secrets/credentials exposure, insecure defaults
           - OWASP Top 10 vulnerabilities
           - Input validation at trust boundaries
 
-          ### Correctness
+          ### ✅ Correctness
           - Logic errors, off-by-one, null/undefined handling
           - Race conditions, deadlocks, async issues
           - Edge cases, boundary conditions
           - Error handling completeness
 
-          ### Architecture and Design
+          ### 🏗️ Architecture and Design
           - Coupling, cohesion, separation of concerns
           - Design patterns usage (appropriate or over-engineered)
           - API contract changes, backward compatibility
           - Single responsibility, interface segregation
 
-          ### Testing
+          ### 🧪 Testing
           - Test coverage for new/modified code
           - Edge case coverage, negative tests
           - Test quality (not just quantity)
           - Integration vs unit test balance
 
-          ### Performance
+          ### ⚡ Performance
           - O(n^2) or worse algorithms, unnecessary iterations
           - Memory leaks, resource cleanup
           - Database query efficiency (N+1, missing indexes)
           - Only flag if measurable impact
 
-          ### Maintainability
+          ### 📖 Maintainability
           - Naming clarity, self-documenting code
           - Comments for "why" not "what"
           - Complexity (cyclomatic, cognitive)
           - Consistency with codebase patterns
 
           ## Output Format (Markdown)
-
-          Start your response with this exact format:
 
           ## 🔍 Code Review
 
@@ -156,49 +166,68 @@ jobs:
           [2-3 sentences: what this PR does, the approach taken, and overall assessment]
 
           ### ✅ Strengths
-          [Specific things done well - cite file:line-range]
-          1. **[Category]**: Description with `file.ts:10-25` reference
+          [Specific things done well with file:line-range references]
+          1. **[Category]**: Description
+             - `src/path/file.ts:10-25` - specific code reference
           2. ...
 
           ### ⚠️ Issues Found
           | File:Line | Issue | Severity | Impact |
           |-----------|-------|----------|--------|
-          | `path/file.ts:123-145` | Description | 🔴/🟡/🟢 | What could go wrong |
+          | `src/file.ts:123-145` | Description | 🔴/🟡/🟢 | What could go wrong |
 
           ### 🔍 Code Quality Observations
           **Positive:**
-          - Observation with specific file:line reference
+          - Observation with `file.ts:line` reference
 
           **Concerns:**
-          - Concern with specific file:line reference
+          - Concern with `file.ts:line` reference and code example:
+          ```typescript
+          // Current code (problematic):
+          const x = something.slice(0, 60);
+
+          // Suggested improvement:
+          const x = truncateString(something, 60);
+          ```
 
           ### 🧪 Testing
-          - Test coverage assessment
-          - Specific test file observations
+          - **Coverage**: [Assessed by reading test files]
+          - **Test files examined**: `tests/path/file.test.ts`
+          - **Missing tests**: [List specific scenarios not covered]
+          - **Test quality**: [Observations about test implementations]
 
           ### 🔒 Security
-          - Security assessment or "No concerns identified"
+          - [Detailed security analysis or "No concerns identified"]
 
           ### ⚡ Performance
-          - Performance notes or "No concerns identified"
+          - [Performance analysis or "No concerns identified"]
 
           ### 📝 Recommendations
-          [Numbered list with specific code alternatives when applicable]
+          1. **[Category]**: Specific recommendation
+             ```typescript
+             // Instead of:
+             problematicCode();
+
+             // Consider:
+             betterApproach();
+             ```
+
+          2. ...
 
           ### 🎯 Alignment with Project Standards
-          - Follows codebase patterns: Yes/No
-          - Consistent naming/style: Yes/No
-          - Proper error handling: Yes/No
+          - ✅/❌ Follows codebase patterns (cite specific examples)
+          - ✅/❌ Consistent naming/style
+          - ✅/❌ Proper error handling
 
           ### Verdict: **[Final verdict with emoji]**
-          [One sentence final summary]
+          [One sentence final summary with key takeaway]
 
           ---
-          **Review Guidelines:**
+          **Guidelines:**
           - Skip empty sections
-          - Only Request changes for High severity security or correctness issues
-          - Provide actionable feedback with specific file:line references
-          - Include code snippets for non-trivial suggestions
+          - Only ❌ Request changes for 🔴 High severity issues
+          - Include code snippets for ALL non-trivial suggestions
+          - Reference specific line ranges, not just file names
           INSTRUCTIONS_END
 
       - name: Run Claude Code Review
@@ -244,20 +273,40 @@ jobs:
           ## Changed Files
           ${CHANGED_FILES}
 
-          ## Diff
+          ## Diff (for initial understanding only)
           ${DIFF}
 
-          ## Instructions
+          ## Your Task
+
+          **STEP 1 - MANDATORY EXPLORATION (before writing review):**
+          You MUST use tools to explore the codebase. Do not skip this step.
+
+          a) For EACH file in "Changed Files" above:
+             - Use Read tool to read the FULL file (not just diff)
+             - Examine imports, exports, and dependencies
+
+          b) Find test files:
+             - Use Glob with pattern: tests/**/*.test.* or **/*.spec.*
+             - Read relevant test files to assess coverage
+
+          c) Search for usages:
+             - Use Grep to find where modified functions/classes are used
+             - Assess breaking change impact
+
+          **STEP 2 - WRITE REVIEW:**
+          Only after completing Step 1, write your review following the format below.
+
           $(cat /tmp/review-instructions.txt)
 
-          **IMPORTANT**: Use the Read, Grep, and Glob tools to explore the codebase and provide a comprehensive review. Don't just look at the diff - examine the full context of changed files and find related code.
+          ---
+          BEGIN YOUR EXPLORATION NOW. Use Read, Glob, and Grep tools before writing your review.
           PROMPT_END
 
           # Run Claude Code with extended exploration
-          echo "[i] Starting comprehensive review (this may take 1-2 minutes)..."
+          echo "[i] Starting comprehensive review (this may take 2-3 minutes)..."
           REVIEW=$(cat /tmp/full-prompt.txt | claude -p \
             --allowed-tools "Read,Glob,Grep" \
-            --max-turns 10 2>&1) || true
+            --max-turns 15 2>&1) || true
 
           # Validate review output
           if [ -z "$REVIEW" ] || [ ${#REVIEW} -lt 100 ]; then
