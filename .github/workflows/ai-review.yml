@@ -143,8 +143,8 @@ jobs:
           Be direct. Skip empty sections. Only Request changes for 🔴 High severity issues.
           PROMPT_EOF
 
-          # Replace model placeholder
-          sed -i "s/MODEL_PLACEHOLDER/${ANTHROPIC_MODEL}/g" /tmp/review-prompt.txt
+          # Replace model placeholder (using | delimiter to avoid slash issues)
+          sed -i "s|MODEL_PLACEHOLDER|${ANTHROPIC_MODEL}|g" /tmp/review-prompt.txt
 
           # Prepend context to prompt
           PROMPT="PR #${PR_NUM}: '${PR_TITLE}'
