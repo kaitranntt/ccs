@@ -49,10 +49,14 @@ jobs:
           app-id: ${{ secrets.CCS_REVIEWER_APP_ID }}
           private-key: ${{ secrets.CCS_REVIEWER_PRIVATE_KEY }}
 
-      - name: Checkout
+      - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Checkout PR head for file access
+        if: github.event_name == 'pull_request'
+        run: git checkout ${{ github.event.pull_request.head.sha }}
 
       - name: Determine PR Number
         id: pr
@@ -83,13 +87,120 @@ jobs:
             echo "[i] Claude Code already installed: $(claude --version)"
           fi
 
+      - name: Create review prompt template
+        run: |
+          cat > /tmp/review-instructions.txt << 'INSTRUCTIONS_END'
+          You are a senior staff engineer performing a comprehensive code review. You have access to the full codebase - USE IT.
+
+          ## Your Approach
+          1. Read the diff first to understand what changed
+          2. Use Read tool to examine the full context of modified files (not just diff hunks)
+          3. Use Grep tool to find related code, usages, and patterns
+          4. Use Glob tool to discover test files, related modules, and project structure
+          5. Analyze holistically - consider impact on the entire system
+
+          ## Analysis Dimensions
+
+          ### Security (CRITICAL)
+          - Auth bypass, privilege escalation, injection (SQL, command, XSS)
+          - Secrets/credentials exposure, insecure defaults
+          - OWASP Top 10 vulnerabilities
+          - Input validation at trust boundaries
+
+          ### Correctness
+          - Logic errors, off-by-one, null/undefined handling
+          - Race conditions, deadlocks, async issues
+          - Edge cases, boundary conditions
+          - Error handling completeness
+
+          ### Architecture and Design
+          - Coupling, cohesion, separation of concerns
+          - Design patterns usage (appropriate or over-engineered)
+          - API contract changes, backward compatibility
+          - Single responsibility, interface segregation
+
+          ### Testing
+          - Test coverage for new/modified code
+          - Edge case coverage, negative tests
+          - Test quality (not just quantity)
+          - Integration vs unit test balance
+
+          ### Performance
+          - O(n^2) or worse algorithms, unnecessary iterations
+          - Memory leaks, resource cleanup
+          - Database query efficiency (N+1, missing indexes)
+          - Only flag if measurable impact
+
+          ### Maintainability
+          - Naming clarity, self-documenting code
+          - Comments for "why" not "what"
+          - Complexity (cyclomatic, cognitive)
+          - Consistency with codebase patterns
+
+          ## Output Format (Markdown)
+
+          Start your response with this exact format:
+
+          ## 🔍 Code Review
+
+          **Verdict**: [Choose one: ✅ Approve | ⚠️ Approve with notes | ❌ Request changes]
+
+          > 🤖 Reviewed by `MODEL_NAME`
+
+          ### Summary
+          [2-3 sentences: what this PR does, the approach taken, and overall assessment]
+
+          ### ✅ Strengths
+          [Specific things done well - cite file:line-range]
+          1. **[Category]**: Description with `file.ts:10-25` reference
+          2. ...
+
+          ### ⚠️ Issues Found
+          | File:Line | Issue | Severity | Impact |
+          |-----------|-------|----------|--------|
+          | `path/file.ts:123-145` | Description | 🔴/🟡/🟢 | What could go wrong |
+
+          ### 🔍 Code Quality Observations
+          **Positive:**
+          - Observation with specific file:line reference
+
+          **Concerns:**
+          - Concern with specific file:line reference
+
+          ### 🧪 Testing
+          - Test coverage assessment
+          - Specific test file observations
+
+          ### 🔒 Security
+          - Security assessment or "No concerns identified"
+
+          ### ⚡ Performance
+          - Performance notes or "No concerns identified"
+
+          ### 📝 Recommendations
+          [Numbered list with specific code alternatives when applicable]
+
+          ### 🎯 Alignment with Project Standards
+          - Follows codebase patterns: Yes/No
+          - Consistent naming/style: Yes/No
+          - Proper error handling: Yes/No
+
+          ### Verdict: **[Final verdict with emoji]**
+          [One sentence final summary]
+
+          ---
+          **Review Guidelines:**
+          - Skip empty sections
+          - Only Request changes for High severity security or correctness issues
+          - Provide actionable feedback with specific file:line references
+          - Include code snippets for non-trivial suggestions
+          INSTRUCTIONS_END
+
       - name: Run Claude Code Review
         env:
-          # CLIProxyAPI configuration
           ANTHROPIC_BASE_URL: http://localhost:8317
           ANTHROPIC_API_KEY: ${{ secrets.CLIPROXY_API_KEY }}
           ANTHROPIC_MODEL: gemini-3-pro-preview
-          # GitHub token for gh CLI
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
@@ -98,70 +209,70 @@ jobs:
 
           echo "[i] Running Claude Code review for PR #${PR_NUM}"
           echo "[i] Model: ${ANTHROPIC_MODEL}"
+          echo "[i] Working directory: $(pwd)"
 
-          # Get PR diff for context
-          DIFF=$(gh pr diff $PR_NUM --repo $REPO | head -5000)
+          # Get PR metadata
           PR_TITLE=$(gh pr view $PR_NUM --repo $REPO --json title --jq .title)
           PR_BODY=$(gh pr view $PR_NUM --repo $REPO --json body --jq .body)
 
-          # Create prompt file to avoid YAML escaping issues
-          cat > /tmp/review-prompt.txt << 'PROMPT_EOF'
-          You are a senior engineer performing code review. Be analytical and thorough.
+          # Get list of changed files
+          CHANGED_FILES=$(gh pr diff $PR_NUM --repo $REPO --name-only)
 
-          ## Focus Areas
-          - **Security**: auth bypass, injection, secrets exposure, OWASP top 10
-          - **Correctness**: edge cases, null handling, race conditions, logic bugs
-          - **Maintainability**: coupling, naming, hidden complexity
-          - **Performance**: only if measurable impact exists
+          # Get full diff (increased limit for comprehensive review)
+          DIFF=$(gh pr diff $PR_NUM --repo $REPO | head -8000)
 
-          ## Output Format (Markdown)
+          # Replace model name in instructions
+          sed -i "s|MODEL_NAME|${ANTHROPIC_MODEL}|g" /tmp/review-instructions.txt
 
-          ## 🔍 Code Review
+          # Build the full prompt
+          cat > /tmp/full-prompt.txt << PROMPT_END
+          # Pull Request Review Task
 
-          **Verdict**: ✅ Approve | ⚠️ Approve with notes | ❌ Request changes
+          ## PR Information
+          - **PR**: #${PR_NUM}
+          - **Title**: ${PR_TITLE}
+          - **Repository**: ${REPO}
 
-          > 🤖 Reviewed by `MODEL_PLACEHOLDER`
+          ## Description
+          ${PR_BODY}
 
-          ### Summary
-          [1-2 sentences describing what this PR does]
+          ## Changed Files
+          ${CHANGED_FILES}
 
-          ### ✅ What's Good
-          [Only if worth highlighting - be specific]
-
-          ### ⚠️ Issues Found
-          | File:Line | Issue | Severity |
-          |-----------|-------|----------|
-          | `path/to/file.ts:123` | Description of issue | 🔴 High / 🟡 Medium / 🟢 Low |
-
-          ### 💡 Suggestions
-          [Optional improvements, refactoring ideas]
-
-          ### ❓ Questions for Author
-          [Only if clarification genuinely needed]
-
-          ---
-          Be direct. Skip empty sections. Only Request changes for 🔴 High severity issues.
-          PROMPT_EOF
-
-          # Replace model placeholder (using | delimiter to avoid slash issues)
-          sed -i "s|MODEL_PLACEHOLDER|${ANTHROPIC_MODEL}|g" /tmp/review-prompt.txt
-
-          # Prepend context to prompt
-          PROMPT="PR #${PR_NUM}: '${PR_TITLE}'
-
-          Repository: ${REPO}
-          Description: ${PR_BODY}
-
-          Diff:
+          ## Diff
           ${DIFF}
 
-          $(cat /tmp/review-prompt.txt)"
+          ## Instructions
+          $(cat /tmp/review-instructions.txt)
 
-          # Run Claude Code in print mode
-          REVIEW=$(echo "$PROMPT" | claude -p --allowed-tools "Read,Glob,Grep" --max-turns 3)
+          **IMPORTANT**: Use the Read, Grep, and Glob tools to explore the codebase and provide a comprehensive review. Don't just look at the diff - examine the full context of changed files and find related code.
+          PROMPT_END
+
+          # Run Claude Code with extended exploration
+          echo "[i] Starting comprehensive review (this may take 1-2 minutes)..."
+          REVIEW=$(cat /tmp/full-prompt.txt | claude -p \
+            --allowed-tools "Read,Glob,Grep" \
+            --max-turns 10 2>&1) || true
+
+          # Validate review output
+          if [ -z "$REVIEW" ] || [ ${#REVIEW} -lt 100 ]; then
+            echo "[!] Review output too short (${#REVIEW} chars), retrying..."
+            REVIEW=$(cat /tmp/full-prompt.txt | claude -p --max-turns 5 2>&1) || true
+          fi
+
+          # Final fallback
+          if [ -z "$REVIEW" ] || [ ${#REVIEW} -lt 50 ]; then
+            REVIEW="## 🔍 Code Review
+
+          **Verdict**: ⚠️ Review generation failed
+
+          > 🤖 Attempted by \`${ANTHROPIC_MODEL}\`
+
+          The automated review encountered an issue. Please request a manual review."
+          fi
 
           # Post review as comment
-          echo "[i] Posting review..."
+          echo "[i] Posting review (${#REVIEW} chars)..."
           echo "$REVIEW" | gh pr comment $PR_NUM --repo $REPO --body-file -
           echo "[OK] Review posted"
 
