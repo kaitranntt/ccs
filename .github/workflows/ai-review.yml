@@ -84,9 +84,16 @@ jobs:
 
       - name: Ensure Claude Code installed
         run: |
+          # Remove any stale lock files
+          rm -f /tmp/claude-install.lock ~/.claude/.installing 2>/dev/null || true
+
           if ! command -v claude &> /dev/null; then
             echo "[i] Installing Claude Code..."
-            curl -fsSL https://claude.ai/install.sh | bash
+            curl -fsSL https://claude.ai/install.sh | bash -s -- --force || {
+              echo "[!] Install failed, retrying..."
+              sleep 2
+              curl -fsSL https://claude.ai/install.sh | bash -s -- --force
+            }
             echo "$HOME/.local/bin" >> $GITHUB_PATH
           else
             echo "[i] Claude Code already installed: $(claude --version)"
