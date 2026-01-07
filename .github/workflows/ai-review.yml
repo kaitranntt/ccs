@@ -5,6 +5,8 @@
 # Triggers:
 # - Automatically on PR open/update
 # - Manually via /review comment on PR
+#
+# Logs stored on runner at: /opt/actions-runner/logs/ai-review/
 
 name: AI Code Review
 
@@ -255,10 +257,16 @@ jobs:
         run: |
           PR_NUM="${{ steps.pr.outputs.number }}"
           REPO="${{ github.repository }}"
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+
+          # Setup logging directory on runner
+          LOG_DIR="/opt/actions-runner/logs/ai-review/pr-${PR_NUM}-${TIMESTAMP}"
+          mkdir -p "$LOG_DIR"
 
           echo "[i] Running Claude Code review for PR #${PR_NUM}"
           echo "[i] Model: ${ANTHROPIC_MODEL}"
           echo "[i] Working directory: $(pwd)"
+          echo "[i] Log directory: ${LOG_DIR}"
 
           # Get PR metadata
           PR_TITLE=$(gh pr view $PR_NUM --repo $REPO --json title --jq .title)
@@ -267,8 +275,8 @@ jobs:
           # Get list of changed files
           CHANGED_FILES=$(gh pr diff $PR_NUM --repo $REPO --name-only)
 
-          # Get full diff (increased limit for comprehensive review)
-          DIFF=$(gh pr diff $PR_NUM --repo $REPO | head -8000)
+          # Get full diff (NO LIMIT - unlimited)
+          DIFF=$(gh pr diff $PR_NUM --repo $REPO)
 
           # Replace model name in instructions
           sed -i "s|MODEL_NAME|${ANTHROPIC_MODEL}|g" /tmp/review-instructions.txt
@@ -317,33 +325,119 @@ jobs:
           BEGIN YOUR EXPLORATION NOW. Use Read, Glob, and Grep tools before writing your review.
           PROMPT_END
 
-          # Run Claude Code with extended exploration
-          echo "[i] Starting comprehensive review (this may take 2-3 minutes)..."
-          REVIEW=$(cat /tmp/full-prompt.txt | claude -p \
-            --allowed-tools "Read,Glob,Grep" \
-            --max-turns 15 2>&1) || true
+          # Save prompt for debugging
+          cp /tmp/full-prompt.txt "$LOG_DIR/prompt.txt"
 
-          # Validate review output
-          if [ -z "$REVIEW" ] || [ ${#REVIEW} -lt 100 ]; then
-            echo "[!] Review output too short (${#REVIEW} chars), retrying..."
-            REVIEW=$(cat /tmp/full-prompt.txt | claude -p --max-turns 5 2>&1) || true
+          # Save metadata
+          cat > "$LOG_DIR/metadata.json" << EOF
+          {
+            "pr_number": ${PR_NUM},
+            "repository": "${REPO}",
+            "model": "${ANTHROPIC_MODEL}",
+            "timestamp": "${TIMESTAMP}",
+            "changed_files_count": $(echo "$CHANGED_FILES" | wc -l),
+            "diff_lines": $(echo "$DIFF" | wc -l),
+            "workflow_run_id": "${{ github.run_id }}"
+          }
+          EOF
+
+          # Run Claude Code with NO LIMITS
+          echo "[i] Starting comprehensive review (unlimited turns)..."
+          START_TIME=$(date +%s)
+
+          # Run with separate stdout/stderr capture
+          set +e
+          cat /tmp/full-prompt.txt | claude -p \
+            --allowed-tools "Read,Glob,Grep" \
+            > "$LOG_DIR/claude-stdout.txt" \
+            2> "$LOG_DIR/claude-stderr.txt"
+          EXIT_CODE=$?
+          set -e
+
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+
+          # Save timing info
+          cat > "$LOG_DIR/timing.txt" << EOF
+          Start: $(date -d @$START_TIME '+%Y-%m-%d %H:%M:%S')
+          End: $(date -d @$END_TIME '+%Y-%m-%d %H:%M:%S')
+          Duration: ${DURATION} seconds
+          Exit code: ${EXIT_CODE}
+          EOF
+
+          echo "[i] Review completed in ${DURATION}s with exit code ${EXIT_CODE}"
+
+          # Read the review output
+          REVIEW=$(cat "$LOG_DIR/claude-stdout.txt")
+          REVIEW_LEN=${#REVIEW}
+
+          echo "[i] Review output: ${REVIEW_LEN} chars"
+          echo "[i] Stderr output: $(wc -c < "$LOG_DIR/claude-stderr.txt") chars"
+
+          # Log stderr if non-empty (for debugging)
+          if [ -s "$LOG_DIR/claude-stderr.txt" ]; then
+            echo "[!] Claude stderr output:"
+            cat "$LOG_DIR/claude-stderr.txt"
           fi
 
-          # Final fallback
-          if [ -z "$REVIEW" ] || [ ${#REVIEW} -lt 50 ]; then
+          # Validate review output - retry if too short
+          if [ -z "$REVIEW" ] || [ ${REVIEW_LEN} -lt 100 ]; then
+            echo "[!] Review output too short (${REVIEW_LEN} chars), retrying without tool restrictions..."
+
+            cat /tmp/full-prompt.txt | claude -p \
+              > "$LOG_DIR/claude-stdout-retry.txt" \
+              2> "$LOG_DIR/claude-stderr-retry.txt" || true
+
+            REVIEW=$(cat "$LOG_DIR/claude-stdout-retry.txt")
+            REVIEW_LEN=${#REVIEW}
+            echo "[i] Retry output: ${REVIEW_LEN} chars"
+          fi
+
+          # Final fallback with error details
+          if [ -z "$REVIEW" ] || [ ${REVIEW_LEN} -lt 50 ]; then
+            STDERR_CONTENT=$(cat "$LOG_DIR/claude-stderr.txt" 2>/dev/null | head -10 || echo "No stderr")
             REVIEW="## 🔍 Code Review
 
           **Verdict**: ⚠️ Review generation failed
 
           > 🤖 Attempted by \`${ANTHROPIC_MODEL}\`
 
-          The automated review encountered an issue. Please request a manual review."
+          The automated review encountered an issue. Details logged to runner.
+
+          **Debug info:**
+          - Exit code: ${EXIT_CODE}
+          - Duration: ${DURATION}s
+          - Output length: ${REVIEW_LEN} chars
+          - Log path: \`${LOG_DIR}\`
+
+          Please request a manual review or check runner logs."
           fi
 
+          # Save final review
+          echo "$REVIEW" > "$LOG_DIR/final-review.txt"
+
+          # Update metadata with result
+          cat > "$LOG_DIR/metadata.json" << EOF
+          {
+            "pr_number": ${PR_NUM},
+            "repository": "${REPO}",
+            "model": "${ANTHROPIC_MODEL}",
+            "timestamp": "${TIMESTAMP}",
+            "changed_files_count": $(echo "$CHANGED_FILES" | wc -l),
+            "diff_lines": $(echo "$DIFF" | wc -l),
+            "workflow_run_id": "${{ github.run_id }}",
+            "duration_seconds": ${DURATION},
+            "exit_code": ${EXIT_CODE},
+            "review_length": ${REVIEW_LEN},
+            "success": $([ ${REVIEW_LEN} -ge 100 ] && echo "true" || echo "false")
+          }
+          EOF
+
           # Post review as comment
-          echo "[i] Posting review (${#REVIEW} chars)..."
+          echo "[i] Posting review (${REVIEW_LEN} chars)..."
           echo "$REVIEW" | gh pr comment $PR_NUM --repo $REPO --body-file -
           echo "[OK] Review posted"
+          echo "[i] Logs saved to: ${LOG_DIR}"
 
       - name: Add success reaction
         if: success() && github.event_name == 'issue_comment'
