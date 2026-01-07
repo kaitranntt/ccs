@@ -54,9 +54,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Checkout PR head for file access
-        if: github.event_name == 'pull_request'
-        run: git checkout ${{ github.event.pull_request.head.sha }}
+      - name: Checkout PR code
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUM="${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pr_number }}"
+          if [ -n "$PR_NUM" ]; then
+            gh pr checkout $PR_NUM || git checkout ${{ github.event.pull_request.head.sha }} 2>/dev/null || true
+          fi
 
       - name: Determine PR Number
         id: pr
