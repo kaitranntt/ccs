@@ -437,6 +437,13 @@ async function main(): Promise<void> {
     process.exit(exitCode);
   }
 
+  // Special case: persist command (write profile env to ~/.claude/settings.json)
+  if (firstArg === 'persist') {
+    const { handlePersistCommand } = await import('./commands/persist-command');
+    await handlePersistCommand(args.slice(1));
+    return;
+  }
+
   // Special case: setup command (first-time wizard)
   if (firstArg === 'setup' || firstArg === '--setup') {
     const { handleSetupCommand } = await import('./commands/setup-command');

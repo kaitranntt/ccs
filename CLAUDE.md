@@ -98,7 +98,7 @@ bun run validate            # Step 3: Final check (must pass)
 
 1. **NO EMOJIS** - ASCII only: [OK], [!], [X], [i]
 2. **TTY-aware colors** - Respect NO_COLOR env var
-3. **Non-invasive** - NEVER modify `~/.claude/settings.json`
+3. **Non-invasive** - NEVER modify `~/.claude/settings.json` without explicit user request and confirmation (exception: `ccs persist` command)
 4. **Cross-platform parity** - bash/PowerShell/Node.js must behave identically
 5. **CLI documentation** - ALL CLI changes MUST update respective `--help` handler (see table below)
 6. **Idempotent** - All install operations safe to run multiple times
@@ -113,6 +113,7 @@ bun run validate            # Step 3: Final check (must pass)
 | `ccs auth --help` | `src/commands/auth-command.ts` |
 | `ccs api --help` | `src/commands/api-command.ts` |
 | `ccs copilot --help` | `src/commands/copilot-command.ts` |
+| `ccs persist --help` | `src/commands/persist-command.ts` → `showHelp()` |
 
 **Note:** `lib/ccs` and `lib/ccs.ps1` are bootstrap wrappers only—they delegate to Node.js and contain no help text.
 
