@@ -67,12 +67,21 @@ function getClaudeSettingsPath(): string {
   return path.join(os.homedir(), '.claude', 'settings.json');
 }
 
-/** Read existing Claude settings.json */
+/** Read existing Claude settings.json with validation */
 function readClaudeSettings(): Record<string, unknown> {
   const settingsPath = getClaudeSettingsPath();
   try {
     const content = fs.readFileSync(settingsPath, 'utf8');
-    return JSON.parse(content) as Record<string, unknown>;
+    // Handle empty file (0 bytes)
+    if (!content.trim()) {
+      return {};
+    }
+    const parsed: unknown = JSON.parse(content);
+    // Validate parsed value is a plain object (not array, null, or primitive)
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      throw new Error('settings.json must contain a JSON object, not an array or primitive');
+    }
+    return parsed as Record<string, unknown>;
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code === 'ENOENT') {
@@ -89,6 +98,10 @@ function readClaudeSettings(): Record<string, unknown> {
  */
 function writeClaudeSettings(settings: Record<string, unknown>): void {
   const settingsPath = getClaudeSettingsPath();
+  // Security: Reject symlinks to prevent writing to unexpected locations
+  if (isSymlink(settingsPath)) {
+    throw new Error('settings.json is a symlink - refusing to write for security');
+  }
   const dir = path.dirname(settingsPath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -96,11 +109,28 @@ function writeClaudeSettings(settings: Record<string, unknown>): void {
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', { mode: 0o600 });
 }
 
-/** Create backup of settings.json */
+/** Maximum number of backups to keep (oldest are deleted) */
+const MAX_BACKUPS = 10;
+
+/** Check if path is a symlink (security check) */
+function isSymlink(filePath: string): boolean {
+  try {
+    const stats = fs.lstatSync(filePath);
+    return stats.isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+/** Create backup of settings.json with proper permissions and rotation */
 function createBackup(): string {
   const settingsPath = getClaudeSettingsPath();
   if (!fs.existsSync(settingsPath)) {
     throw new Error('No settings.json to backup');
+  }
+  // Security: Reject symlinks to prevent writing to unexpected locations
+  if (isSymlink(settingsPath)) {
+    throw new Error('settings.json is a symlink - refusing to backup for security');
   }
   const now = new Date();
   const timestamp =
@@ -113,7 +143,26 @@ function createBackup(): string {
     now.getSeconds().toString().padStart(2, '0');
   const backupPath = `${settingsPath}.backup.${timestamp}`;
   fs.copyFileSync(settingsPath, backupPath);
+  // Security: Set restrictive permissions on backup (contains API keys)
+  fs.chmodSync(backupPath, 0o600);
+  // Cleanup: Rotate old backups (keep only MAX_BACKUPS)
+  cleanupOldBackups();
   return backupPath;
+}
+
+/** Remove old backups keeping only MAX_BACKUPS most recent */
+function cleanupOldBackups(): void {
+  const backups = getBackupFiles();
+  if (backups.length > MAX_BACKUPS) {
+    const toDelete = backups.slice(MAX_BACKUPS);
+    for (const backup of toDelete) {
+      try {
+        fs.unlinkSync(backup.path);
+      } catch {
+        // Ignore deletion errors (file may be locked or already deleted)
+      }
+    }
+  }
 }
 
 interface BackupFile {
@@ -284,8 +333,31 @@ async function handleRestore(timestamp: string | boolean, yes: boolean): Promise
       process.exit(0);
     }
   }
+  // Validate backup JSON integrity before restore
+  try {
+    const backupContent = fs.readFileSync(backup.path, 'utf8');
+    const parsed: unknown = JSON.parse(backupContent);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      console.log(fail('Backup file is corrupted: not a valid JSON object'));
+      process.exit(1);
+    }
+  } catch (error) {
+    console.log(fail(`Backup file is corrupted: ${(error as Error).message}`));
+    process.exit(1);
+  }
+  // Security: Reject symlink backup files
+  if (isSymlink(backup.path)) {
+    console.log(fail('Backup file is a symlink - refusing to restore for security'));
+    process.exit(1);
+  }
   // Copy backup over settings.json
-  fs.copyFileSync(backup.path, getClaudeSettingsPath());
+  const settingsPath = getClaudeSettingsPath();
+  // Security: Reject symlink target
+  if (isSymlink(settingsPath)) {
+    console.log(fail('settings.json is a symlink - refusing to restore for security'));
+    process.exit(1);
+  }
+  fs.copyFileSync(backup.path, settingsPath);
   console.log(ok(`Restored from backup: ${backup.timestamp}`));
 }
 
@@ -432,6 +504,8 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
   // Check if settings.json exists for backup
   const settingsPath = getClaudeSettingsPath();
   const settingsExist = fs.existsSync(settingsPath);
+  // Track backup path for error recovery guidance
+  let createdBackupPath: string | null = null;
   // Backup prompt (unless --yes)
   if (settingsExist) {
     let createBackupFlag: boolean = parsedArgs.yes === true; // Auto-backup with --yes
@@ -442,8 +516,8 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
     }
     if (createBackupFlag) {
       try {
-        const backupPath = createBackup();
-        console.log(ok(`Backup created: ${backupPath.replace(os.homedir(), '~')}`));
+        createdBackupPath = createBackup();
+        console.log(ok(`Backup created: ${createdBackupPath.replace(os.homedir(), '~')}`));
         console.log('');
       } catch (error) {
         console.log(fail(`Failed to create backup: ${(error as Error).message}`));
@@ -461,7 +535,16 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
   }
   // Read existing settings and merge
   const existingSettings = readClaudeSettings();
-  const existingEnv = (existingSettings.env as Record<string, string>) || {};
+  // Validate existing env is an object (not array/primitive)
+  const rawEnv = existingSettings.env;
+  let existingEnv: Record<string, string> = {};
+  if (rawEnv !== undefined && rawEnv !== null) {
+    if (typeof rawEnv !== 'object' || Array.isArray(rawEnv)) {
+      console.log(warn('Existing env in settings.json is not an object - it will be replaced'));
+    } else {
+      existingEnv = rawEnv as Record<string, string>;
+    }
+  }
   const mergedSettings = {
     ...existingSettings,
     env: {
@@ -474,6 +557,12 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
     writeClaudeSettings(mergedSettings);
   } catch (error) {
     console.log(fail(`Failed to write settings: ${(error as Error).message}`));
+    if (createdBackupPath) {
+      console.log('');
+      console.log(info(`A backup was created before this error:`));
+      console.log(`    ${createdBackupPath.replace(os.homedir(), '~')}`);
+      console.log(dim('    To restore: ccs persist --restore'));
+    }
     process.exit(1);
   }
   console.log('');
