@@ -85,11 +85,28 @@ export class ContentTransformer {
     return anthropicTools.map((tool) => ({
       type: 'function' as const,
       function: {
-        name: tool.name,
+        name: this.sanitizeToolName(tool.name),
         description: tool.description,
         parameters: tool.input_schema || {},
       },
     }));
+  }
+
+  /**
+   * Sanitize tool name to meet OpenAI/Gemini requirements
+   * Must start with letter/underscore and contain only alphanumeric/underscore/dash
+   */
+  private sanitizeToolName(name: string): string {
+    // Replace any invalid characters with underscore
+    let sanitized = name.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    // Ensure strict start with letter or underscore
+    if (!/^[a-zA-Z_]/.test(sanitized)) {
+      sanitized = '_' + sanitized;
+    }
+
+    // Max length 64 chars
+    return sanitized.slice(0, 64);
   }
 
   /**
