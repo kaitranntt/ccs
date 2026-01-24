@@ -198,9 +198,9 @@ export async function installCliproxyVersion(
 }
 
 /** Fetch the latest CLIProxyAPI version from GitHub API */
-export async function fetchLatestCliproxyVersion(): Promise<string> {
-  const backend = getConfiguredBackend();
-  const result = await new BinaryManager({}, backend).checkForUpdates();
+export async function fetchLatestCliproxyVersion(backend?: CLIProxyBackend): Promise<string> {
+  const effectiveBackend = backend ?? getConfiguredBackend();
+  const result = await new BinaryManager({}, effectiveBackend).checkForUpdates();
   return result.latestVersion;
 }
 
@@ -221,9 +221,11 @@ export interface CliproxyUpdateCheckResult {
 }
 
 /** Check for CLIProxyAPI binary updates */
-export async function checkCliproxyUpdate(): Promise<CliproxyUpdateCheckResult> {
-  const backend = getConfiguredBackend();
-  const result = await new BinaryManager({}, backend).checkForUpdates();
+export async function checkCliproxyUpdate(
+  backend?: CLIProxyBackend
+): Promise<CliproxyUpdateCheckResult> {
+  const effectiveBackend = backend ?? getConfiguredBackend();
+  const result = await new BinaryManager({}, effectiveBackend).checkForUpdates();
 
   // Import isNewerVersion for stability check
   const { isNewerVersion } = await import('./binary/version-checker');
@@ -232,11 +234,11 @@ export async function checkCliproxyUpdate(): Promise<CliproxyUpdateCheckResult> 
     ? undefined
     : `v${result.currentVersion} has known stability issues. Max stable: v${CLIPROXY_MAX_STABLE_VERSION}`;
 
-  const backendLabel = backend === 'plus' ? 'CLIProxy Plus' : 'CLIProxy';
+  const backendLabel = effectiveBackend === 'plus' ? 'CLIProxy Plus' : 'CLIProxy';
 
   return {
     ...result,
-    backend,
+    backend: effectiveBackend,
     backendLabel,
     isStable,
     maxStableVersion: CLIPROXY_MAX_STABLE_VERSION,

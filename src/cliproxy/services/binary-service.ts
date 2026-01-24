@@ -77,7 +77,7 @@ export async function checkLatestVersion(backend?: CLIProxyBackend): Promise<Lat
   try {
     // Use checkCliproxyUpdate which is backend-aware (uses correct GitHub repo)
     const { checkCliproxyUpdate } = await import('../binary-manager');
-    const updateResult = await checkCliproxyUpdate();
+    const updateResult = await checkCliproxyUpdate(effectiveBackend);
     const latestVersion = updateResult.latestVersion;
     const currentVersion = getInstalledCliproxyVersion(effectiveBackend);
     const updateAvailable = latestVersion !== currentVersion;
@@ -151,7 +151,7 @@ export async function installLatest(
     backend ?? loadOrCreateUnifiedConfig().cliproxy?.backend ?? DEFAULT_BACKEND;
 
   try {
-    const latestVersion = await fetchLatestCliproxyVersion();
+    const latestVersion = await fetchLatestCliproxyVersion(effectiveBackend);
     const currentVersion = getInstalledCliproxyVersion(effectiveBackend);
     const wasPinned = isVersionPinned(effectiveBackend);
 
