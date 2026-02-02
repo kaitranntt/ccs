@@ -11,7 +11,7 @@
  */
 
 import * as fs from 'fs';
-import { fail, info, warn, color } from '../../utils/ui';
+import { fail, info, warn, color, ok } from '../../utils/ui';
 import { ensureCLIProxyBinary } from '../binary-manager';
 import { generateConfig } from '../config-generator';
 import { CLIProxyProvider } from '../types';
@@ -27,11 +27,18 @@ import {
   enhancedPreflightOAuthCheck,
   OAUTH_CALLBACK_PORTS as OAUTH_PORTS,
 } from '../../management/oauth-port-diagnostics';
-import { OAuthOptions, OAUTH_CALLBACK_PORTS, getOAuthConfig } from './auth-types';
+import {
+  OAuthOptions,
+  OAUTH_CALLBACK_PORTS,
+  getOAuthConfig,
+  ProviderOAuthConfig,
+  CLIPROXY_CALLBACK_PROVIDER_MAP,
+} from './auth-types';
 import { isHeadlessEnvironment, killProcessOnPort, showStep } from './environment-detector';
 import { getProviderTokenDir, isAuthenticated, registerAccountFromToken } from './token-manager';
 import { executeOAuthProcess } from './oauth-process';
 import { importKiroToken } from './kiro-import';
+import { getProxyTarget, buildProxyUrl, buildManagementHeaders } from '../proxy-target-resolver';
 
 /**
  * Prompt user to add another account
@@ -187,6 +194,154 @@ async function prepareBinary(
 }
 
 /**
+ * Handle paste-callback mode: show auth URL, prompt for callback paste
+ * Uses proxy target resolver to connect to correct CLIProxyAPI instance (local or remote)
+ */
+async function handlePasteCallbackMode(
+  provider: CLIProxyProvider,
+  oauthConfig: ProviderOAuthConfig,
+  verbose: boolean,
+  tokenDir: string,
+  nickname?: string
+): Promise<AccountInfo | null> {
+  // Resolve CLIProxyAPI target (local or remote based on config)
+  const target = getProxyTarget();
+  // OAuth state timeout (10 minutes, matches CLIProxyAPI state TTL)
+  const OAUTH_STATE_TIMEOUT_MS = 10 * 60 * 1000;
+
+  console.log('');
+  console.log(info(`Starting ${oauthConfig.displayName} OAuth (paste-callback mode)...`));
+
+  try {
+    // Request auth URL from CLIProxyAPI
+    // Note: Uses /oauth/${provider}/start endpoint (different from web-server routes which use
+    // /v0/management/${provider}-auth-url). Both start OAuth flows but this endpoint is simpler
+    // for CLI paste-callback mode as it directly returns the auth URL without is_webui param.
+    const startResponse = await fetch(buildProxyUrl(target, `/oauth/${provider}/start`), {
+      method: 'POST',
+      headers: buildManagementHeaders(target, { 'Content-Type': 'application/json' }),
+    });
+
+    if (!startResponse.ok) {
+      console.log(fail('Failed to start OAuth flow'));
+      return null;
+    }
+
+    const startData = (await startResponse.json()) as {
+      url?: string;
+      auth_url?: string;
+      status?: string;
+    };
+    const authUrl = startData.url || startData.auth_url;
+
+    if (!authUrl) {
+      console.log(fail('No authorization URL received'));
+      return null;
+    }
+
+    // Display auth URL in box
+    console.log('');
+    console.log('  +--------------------------------------------------------------+');
+    console.log('  |  Open this URL in any browser:                               |');
+    console.log('  +--------------------------------------------------------------+');
+    console.log('');
+    console.log(`    ${authUrl}`);
+    console.log('');
+
+    // Prompt for callback URL
+    const readline = await import('readline');
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    const callbackUrl = await new Promise<string | null>((resolve) => {
+      let resolved = false;
+
+      rl.on('close', () => {
+        if (!resolved) {
+          resolved = true;
+          resolve(null);
+        }
+      });
+
+      console.log(info('After completing authentication, paste the callback URL here:'));
+      rl.question('> ', (answer) => {
+        resolved = true;
+        rl.close();
+        resolve(answer.trim() || null);
+      });
+
+      // Timeout after 10 minutes (match state TTL)
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          rl.close();
+          console.log('');
+          console.log(fail('Timed out waiting for callback URL (10 minutes)'));
+          resolve(null);
+        }
+      }, OAUTH_STATE_TIMEOUT_MS);
+    });
+
+    if (!callbackUrl) {
+      console.log(info('Cancelled'));
+      return null;
+    }
+
+    // Validate callback URL
+    let code: string | undefined;
+    try {
+      const parsed = new URL(callbackUrl);
+      code = parsed.searchParams.get('code') || undefined;
+    } catch {
+      console.log(fail('Invalid URL format'));
+      return null;
+    }
+
+    if (!code) {
+      console.log(fail('Invalid callback URL: missing code parameter'));
+      return null;
+    }
+
+    // Submit callback to CLIProxyAPI
+    console.log(info('Submitting callback...'));
+
+    const callbackProvider = CLIPROXY_CALLBACK_PROVIDER_MAP[provider] || provider;
+
+    // Note: /oauth-callback is a CLIProxyAPI endpoint (not /v0/management prefix)
+    const callbackResponse = await fetch(buildProxyUrl(target, '/oauth-callback'), {
+      method: 'POST',
+      headers: buildManagementHeaders(target, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        provider: callbackProvider,
+        redirect_url: callbackUrl,
+      }),
+    });
+
+    const callbackData = (await callbackResponse.json()) as {
+      status?: string;
+      error?: string;
+    };
+
+    if (!callbackResponse.ok || callbackData.status === 'error') {
+      console.log(fail(callbackData.error || 'OAuth callback failed'));
+      return null;
+    }
+
+    console.log(ok('Authentication successful!'));
+    return registerAccountFromToken(provider, tokenDir, nickname);
+  } catch (error) {
+    if (verbose) {
+      console.log(fail(`Error: ${(error as Error).message}`));
+    } else {
+      console.log(fail('OAuth failed. Use --verbose for details.'));
+    }
+    return null;
+  }
+}
+
+/**
  * Trigger OAuth flow for provider
  * Auto-detects headless environment and uses --no-browser flag accordingly
  * Shows real-time step-by-step progress for better user feedback
@@ -202,6 +357,12 @@ export async function triggerOAuth(
 
   // Check for existing accounts
   const existingAccounts = getProviderAccounts(provider);
+
+  // Handle paste-callback mode
+  if (options.pasteCallback) {
+    const tokenDir = getProviderTokenDir(provider);
+    return handlePasteCallbackMode(provider, oauthConfig, verbose, tokenDir, nickname);
+  }
 
   // For kiro/ghcp: require nickname if not provided (CLI only, not fromUI)
   if (PROVIDERS_WITHOUT_EMAIL.includes(provider) && !nickname && !fromUI) {

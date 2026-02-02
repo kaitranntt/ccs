@@ -250,6 +250,11 @@ async function handleTokenNotFound(
   console.log(fail('Token not found after authentication'));
   console.log('');
   console.log('The browser showed success but callback was not received.');
+  console.log('');
+  console.log('Common causes:');
+  console.log('  1. OAuth session timed out (sessions expire after ~10 minutes)');
+  console.log('  2. Callback server could not receive the redirect');
+  console.log('  3. Browser did not redirect to localhost properly');
 
   if (process.platform === 'win32') {
     console.log('');
@@ -263,6 +268,11 @@ async function handleTokenNotFound(
     );
   }
 
+  console.log('');
+  console.log('If you copied the OAuth URL to a different browser:');
+  console.log('  - Complete authentication within the timeout window');
+  console.log('  - Ensure you are on the same machine (localhost callback)');
+  console.log('  - Copy the entire URL including all parameters');
   console.log('');
   console.log(`Try: ccs ${provider} --auth --verbose`);
   return null;

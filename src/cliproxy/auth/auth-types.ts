@@ -163,6 +163,37 @@ export const PROVIDER_TYPE_VALUES: Record<CLIProxyProvider, string[]> = {
 };
 
 /**
+ * Maps CCS provider names to CLIProxyAPI callback provider names
+ * Used when submitting OAuth callbacks to CLIProxyAPI management endpoint
+ */
+export const CLIPROXY_CALLBACK_PROVIDER_MAP: Record<CLIProxyProvider, string> = {
+  gemini: 'gemini',
+  codex: 'codex',
+  agy: 'antigravity',
+  kiro: 'kiro',
+  ghcp: 'copilot',
+  claude: 'anthropic',
+  qwen: 'qwen',
+  iflow: 'iflow',
+};
+
+/**
+ * Maps CCS provider names to CLIProxyAPI auth-url endpoint prefixes.
+ * Used for GET /v0/management/${prefix}-auth-url endpoints.
+ * These differ from callback names for some providers (e.g., gemini-cli vs gemini).
+ */
+export const CLIPROXY_AUTH_URL_PROVIDER_MAP: Record<CLIProxyProvider, string> = {
+  gemini: 'gemini-cli',
+  codex: 'codex',
+  agy: 'antigravity',
+  kiro: 'kiro',
+  ghcp: 'github',
+  claude: 'anthropic',
+  qwen: 'qwen',
+  iflow: 'iflow',
+};
+
+/**
  * Get OAuth config for provider
  */
 export function getOAuthConfig(provider: CLIProxyProvider): ProviderOAuthConfig {
@@ -188,4 +219,6 @@ export interface OAuthOptions {
   noIncognito?: boolean;
   /** If true, skip OAuth and import token from Kiro IDE directly (Kiro only) */
   import?: boolean;
+  /** Enable paste-callback mode: show auth URL and prompt for callback paste */
+  pasteCallback?: boolean;
 }

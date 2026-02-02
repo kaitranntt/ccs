@@ -290,6 +290,7 @@ export async function execClaudeWithCLIProxy(
 
   // 2. Handle special flags (use argsWithoutProxy - proxy flags already stripped)
   const forceAuth = argsWithoutProxy.includes('--auth');
+  const pasteCallback = argsWithoutProxy.includes('--paste-callback');
   const forceHeadless = argsWithoutProxy.includes('--headless');
   const forceLogout = argsWithoutProxy.includes('--logout');
   const forceConfig = argsWithoutProxy.includes('--config');
@@ -521,6 +522,7 @@ export async function execClaudeWithCLIProxy(
         ...(forceHeadless ? { headless: true } : {}),
         ...(setNickname ? { nickname: setNickname } : {}),
         ...(noIncognito ? { noIncognito: true } : {}),
+        ...(pasteCallback ? { pasteCallback: true } : {}),
       });
       if (!authSuccess) {
         throw new Error(`Authentication required for ${providerConfig.displayName}`);
@@ -963,6 +965,7 @@ export async function execClaudeWithCLIProxy(
   // Note: Proxy flags (--proxy-host, etc.) already stripped by resolveProxyConfig()
   const ccsFlags = [
     '--auth',
+    '--paste-callback',
     '--headless',
     '--logout',
     '--config',

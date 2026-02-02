@@ -107,13 +107,19 @@ export function getTimeoutTroubleshooting(
   lines.push('');
   lines.push('TROUBLESHOOTING:');
   lines.push('  1. Check browser completed auth (should show success page)');
+  lines.push('  2. Complete OAuth in the same browser session that opened');
 
   if (port) {
-    lines.push(`  2. Check for port conflicts: lsof -ti:${port} or ss -tlnp | grep ${port}`);
-    lines.push(`  3. Try: ccs ${provider} --auth --verbose`);
+    lines.push(`  3. Check for port conflicts: lsof -ti:${port} or ss -tlnp | grep ${port}`);
+    lines.push(`  4. Try: ccs ${provider} --auth --verbose`);
   } else {
-    lines.push(`  2. Try: ccs ${provider} --auth --verbose`);
+    lines.push(`  3. Try: ccs ${provider} --auth --verbose`);
   }
+
+  lines.push('');
+  lines.push('If you copied the URL to another browser:');
+  lines.push('  - OAuth sessions expire after ~10 minutes');
+  lines.push('  - Callback must reach localhost (same machine only)');
 
   return lines;
 }

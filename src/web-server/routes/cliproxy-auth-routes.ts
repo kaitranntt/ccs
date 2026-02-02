@@ -1,7 +1,3 @@
-/**
- * CLIProxy Auth Routes - Authentication and account management for CLIProxy providers
- */
-
 import { Router, Request, Response } from 'express';
 import {
   getAllAuthStatus,
@@ -29,11 +25,19 @@ import {
   PROVIDERS_WITHOUT_EMAIL,
   validateNickname,
 } from '../../cliproxy/account-manager';
-import { getProxyTarget } from '../../cliproxy/proxy-target-resolver';
+import {
+  getProxyTarget,
+  buildProxyUrl,
+  buildManagementHeaders,
+} from '../../cliproxy/proxy-target-resolver';
 import { fetchRemoteAuthStatus } from '../../cliproxy/remote-auth-fetcher';
 import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
 import { tryKiroImport } from '../../cliproxy/auth/kiro-import';
 import { getProviderTokenDir } from '../../cliproxy/auth/token-manager';
+import {
+  CLIPROXY_CALLBACK_PROVIDER_MAP,
+  CLIPROXY_AUTH_URL_PROVIDER_MAP,
+} from '../../cliproxy/auth/auth-types';
 import type { CLIProxyProvider } from '../../cliproxy/types';
 import { CLIPROXY_PROFILES } from '../../auth/profile-detector';
 
@@ -529,6 +533,177 @@ router.post('/kiro/import', async (_req: Request, res: Response): Promise<void> 
     }
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// ==================== Manual Callback Submission ====================
+
+/**
+ * POST /api/cliproxy/auth/:provider/start-url - Start OAuth and return auth URL immediately
+ * Unlike /start which blocks until completion, this returns the URL for manual callback flow
+ */
+router.post('/:provider/start-url', async (req: Request, res: Response): Promise<void> => {
+  const { provider } = req.params;
+
+  // Check remote mode
+  const target = getProxyTarget();
+  if (target.isRemote) {
+    res.status(501).json({ error: 'Manual OAuth flow not available in remote mode' });
+    return;
+  }
+
+  // Validate provider
+  if (!validProviders.includes(provider as CLIProxyProvider)) {
+    res.status(400).json({ error: `Invalid provider: ${provider}` });
+    return;
+  }
+
+  try {
+    const authUrlProvider =
+      CLIPROXY_AUTH_URL_PROVIDER_MAP[provider as CLIProxyProvider] || provider;
+
+    // Call CLIProxyAPI to start OAuth and get auth URL
+    // CLIProxyAPI management routes are under /v0/management prefix
+    const response = await fetch(
+      buildProxyUrl(target, `/v0/management/${authUrlProvider}-auth-url?is_webui=true`),
+      { headers: buildManagementHeaders(target) }
+    );
+
+    if (!response.ok) {
+      const error = await response.text();
+      res.status(response.status).json({ error: error || 'Failed to start OAuth' });
+      return;
+    }
+
+    const data = (await response.json()) as { url?: string; auth_url?: string; state?: string };
+    const authUrl = data.url || data.auth_url;
+
+    if (!authUrl) {
+      res.status(500).json({ error: 'No authorization URL received from CLIProxyAPI' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      authUrl,
+      state: data.state,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to start OAuth';
+    res.status(503).json({ error: `CLIProxyAPI not reachable: ${message}` });
+  }
+});
+
+/**
+ * GET /api/cliproxy/auth/:provider/status - Poll OAuth status
+ * Checks if OAuth has completed for the given state
+ */
+router.get('/:provider/status', async (req: Request, res: Response): Promise<void> => {
+  const { provider } = req.params;
+  const { state } = req.query;
+
+  if (!state || typeof state !== 'string') {
+    res.status(400).json({ error: 'state query parameter required' });
+    return;
+  }
+
+  // Validate provider
+  if (!validProviders.includes(provider as CLIProxyProvider)) {
+    res.status(400).json({ error: `Invalid provider: ${provider}` });
+    return;
+  }
+
+  try {
+    const target = getProxyTarget();
+
+    // CLIProxyAPI management routes are under /v0/management prefix
+    const response = await fetch(
+      buildProxyUrl(target, `/v0/management/get-auth-status?state=${encodeURIComponent(state)}`),
+      { headers: buildManagementHeaders(target) }
+    );
+    const data = (await response.json()) as { status?: string; error?: string };
+
+    res.json(data);
+  } catch {
+    res.status(503).json({ status: 'error', error: 'CLIProxyAPI not reachable' });
+  }
+});
+
+/**
+ * Parse callback URL to extract code and state parameters.
+ */
+function parseCallbackUrl(url: string): { code?: string; state?: string } {
+  try {
+    const parsed = new URL(url);
+    return {
+      code: parsed.searchParams.get('code') || undefined,
+      state: parsed.searchParams.get('state') || undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * POST /api/cliproxy/auth/:provider/submit-callback - Submit OAuth callback URL manually
+ * For cross-browser OAuth flows where callback cannot redirect directly
+ */
+router.post('/:provider/submit-callback', async (req: Request, res: Response): Promise<void> => {
+  const { provider } = req.params;
+  const { redirectUrl } = req.body;
+
+  // Check remote mode
+  const target = getProxyTarget();
+  if (target.isRemote) {
+    res.status(501).json({ error: 'Manual callback not available in remote mode' });
+    return;
+  }
+
+  // Validate provider
+  if (!validProviders.includes(provider as CLIProxyProvider)) {
+    res.status(400).json({ error: `Invalid provider: ${provider}` });
+    return;
+  }
+
+  // Validate redirectUrl
+  if (!redirectUrl || typeof redirectUrl !== 'string') {
+    res.status(400).json({ error: 'redirectUrl is required' });
+    return;
+  }
+
+  const parsed = parseCallbackUrl(redirectUrl);
+  if (!parsed.code) {
+    res.status(400).json({ error: 'Invalid callback URL: missing code parameter' });
+    return;
+  }
+
+  try {
+    const callbackProvider =
+      CLIPROXY_CALLBACK_PROVIDER_MAP[provider as CLIProxyProvider] || provider;
+
+    // Forward to CLIProxyAPI /oauth-callback endpoint (under /v0/management prefix)
+    const response = await fetch(buildProxyUrl(target, '/v0/management/oauth-callback'), {
+      method: 'POST',
+      headers: buildManagementHeaders(target, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        provider: callbackProvider,
+        redirect_url: redirectUrl,
+      }),
+    });
+
+    const data = (await response.json()) as { status?: string; error?: string };
+
+    if (!response.ok || data.status === 'error') {
+      res.status(response.status >= 400 ? response.status : 400).json({
+        error: data.error || 'OAuth callback failed',
+      });
+      return;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to submit callback';
+    res.status(503).json({ error: `CLIProxyAPI not reachable: ${message}` });
   }
 });
 

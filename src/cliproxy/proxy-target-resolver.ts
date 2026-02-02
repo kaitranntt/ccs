@@ -13,6 +13,7 @@ import {
   normalizeProtocol,
   validateRemotePort,
 } from './config-generator';
+import { getEffectiveManagementSecret } from './auth-token-manager';
 
 /** Resolved proxy target for making requests */
 export interface ProxyTarget {
@@ -63,9 +64,11 @@ export function getProxyTarget(): ProxyTarget {
     };
   }
 
+  const localPort = config?.local?.port ?? CLIPROXY_DEFAULT_PORT;
+
   return {
     host: '127.0.0.1',
-    port: config?.local?.port ?? CLIPROXY_DEFAULT_PORT,
+    port: localPort,
     protocol: 'http',
     isRemote: false,
   };
@@ -108,7 +111,8 @@ export function buildProxyHeaders(
 
 /**
  * Build request headers for management API endpoints (/v0/management/*).
- * Uses management_key if configured, otherwise falls back to authToken.
+ * For remote targets: uses management_key, falls back to authToken.
+ * For local targets: uses the effective management secret from CCS config.
  *
  * @param target Resolved proxy target
  * @param additionalHeaders Extra headers to merge
@@ -122,8 +126,11 @@ export function buildManagementHeaders(
     ...additionalHeaders,
   };
 
-  // Use management key for management API, fallback to authToken
-  const authKey = target.managementKey ?? target.authToken;
+  // Remote: use configured management key or auth token
+  // Local: use CCS management secret (default: 'ccs')
+  const authKey = target.isRemote
+    ? (target.managementKey ?? target.authToken)
+    : getEffectiveManagementSecret();
 
   if (authKey) {
     headers['Authorization'] = `Bearer ${authKey}`;

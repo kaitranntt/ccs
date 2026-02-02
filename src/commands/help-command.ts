@@ -171,6 +171,10 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
       ['', ''], // Spacer
       ['ccs <provider> --auth', 'Authenticate only'],
       ['ccs <provider> --auth --add', 'Add another account'],
+      [
+        'ccs <provider> --paste-callback',
+        'Show auth URL and prompt for callback paste (cross-browser)',
+      ],
       ['ccs <provider> --accounts', 'List all accounts'],
       ['ccs <provider> --use <name>', 'Switch to account'],
       ['ccs <provider> --config', 'Change model (agy, gemini)'],
