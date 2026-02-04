@@ -205,3 +205,7 @@ export { ToolNameMapper } from './tool-name-mapper';
 
 export type { ToolSanitizationProxyConfig } from './tool-sanitization-proxy';
 export { ToolSanitizationProxy } from './tool-sanitization-proxy';
+
+// Schema sanitization (for MCP input_schema non-standard property removal)
+export type { SchemaSanitizationResult } from './schema-sanitizer';
+export { sanitizeInputSchema, sanitizeToolSchemas } from './schema-sanitizer';

@@ -3,8 +3,9 @@
  *
  * HTTP proxy that intercepts Claude CLI → CLIProxy requests to:
  * 1. Sanitize MCP tool names exceeding Gemini's 64-char limit
- * 2. Forward sanitized requests to upstream
- * 3. Restore original names in responses
+ * 2. Sanitize MCP tool input_schema to remove non-standard JSON Schema properties
+ * 3. Forward sanitized requests to upstream
+ * 4. Restore original names in responses
  *
  * Follows CodexReasoningProxy pattern for consistency.
  */
@@ -16,6 +17,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { URL } from 'url';
 import { ToolNameMapper, type Tool, type ContentBlock } from './tool-name-mapper';
+import { sanitizeToolSchemas } from './schema-sanitizer';
 import { getCcsDir } from '../utils/config-manager';
 
 export interface ToolSanitizationProxyConfig {
@@ -207,7 +209,25 @@ export class ToolSanitizationProxy {
       // Sanitize tools if present
       let modifiedBody = parsed;
       if (isRecord(parsed) && Array.isArray(parsed.tools)) {
-        const sanitizedTools = mapper.registerTools(parsed.tools as Tool[]);
+        // Step 1: Sanitize input_schema properties (remove non-standard JSON Schema properties)
+        const schemaResult = sanitizeToolSchemas(
+          parsed.tools as Array<{ name: string; input_schema?: Record<string, unknown> }>
+        );
+
+        if (schemaResult.totalRemoved > 0) {
+          for (const entry of schemaResult.removedByTool) {
+            this.writeLog(
+              'warn',
+              `[tool-sanitization-proxy] Schema sanitized for "${entry.name}": removed ${entry.removed.length} non-standard properties`
+            );
+          }
+          this.log(
+            `Sanitized ${schemaResult.totalRemoved} schema properties across ${schemaResult.removedByTool.length} tool(s)`
+          );
+        }
+
+        // Step 2: Sanitize tool names (truncate to 64 chars for Gemini)
+        const sanitizedTools = mapper.registerTools(schemaResult.tools as Tool[]);
         modifiedBody = { ...parsed, tools: sanitizedTools };
 
         // Log sanitization warnings
