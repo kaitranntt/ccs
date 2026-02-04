@@ -448,9 +448,9 @@ describe('Image Analyzer Hook', () => {
         { CCS_IMAGE_ANALYSIS_ENABLED: '1', CCS_PROFILE_TYPE: 'cliproxy' }
       );
 
-      // Should block with error (exit 2 outputs JSON to stderr)
+      // Should block with error
       expect(result.code).toBe(2);
-      const output = JSON.parse(result.stderr);
+      const output = JSON.parse(result.stdout);
       expect(output.decision).toBe('block');
       expect(output.hookSpecificOutput.permissionDecisionReason).toContain('File too large');
 
@@ -486,7 +486,7 @@ describe('Image Analyzer Hook', () => {
       // Should block (exit 2) when CLIProxy not available to prevent context overflow
       expect(result.code).toBe(2);
       // stderr contains debug messages and JSON; extract JSON (last line)
-      const stderrLines = result.stderr.trim().split('\n');
+      const stderrLines = result.stdout.trim().split('\n');
       const jsonLine = stderrLines[stderrLines.length - 1];
       const output = JSON.parse(jsonLine);
       expect(output.decision).toBe('block');
@@ -510,9 +510,9 @@ describe('Image Analyzer Hook', () => {
         { CCS_IMAGE_ANALYSIS_ENABLED: '1', CCS_PROFILE_TYPE: 'cliproxy' }
       );
 
-      // Should block with analysis (exit 2 outputs JSON to stderr)
+      // Should block with analysis (exit 2)
       expect(result.code).toBe(2);
-      const output = JSON.parse(result.stderr);
+      const output = JSON.parse(result.stdout);
       expect(output.decision).toBe('block');
       expect(output.hookSpecificOutput.permissionDecision).toBe('deny');
       expect(output.hookSpecificOutput.permissionDecisionReason).toContain('red square');
@@ -533,9 +533,9 @@ describe('Image Analyzer Hook', () => {
         { CCS_IMAGE_ANALYSIS_ENABLED: '1', CCS_PROFILE_TYPE: 'cliproxy' }
       );
 
-      // Exit 2 outputs JSON to stderr
+      // Exit 2 outputs JSON to stdout
       expect(result.code).toBe(2);
-      const output = JSON.parse(result.stderr);
+      const output = JSON.parse(result.stdout);
       expect(output.decision).toBe('block');
       expect(output.hookSpecificOutput.permissionDecisionReason).toContain('white image');
     });
@@ -660,10 +660,10 @@ describe('Image Analyzer Hook', () => {
         { CCS_IMAGE_ANALYSIS_ENABLED: '1', CCS_PROFILE_TYPE: 'cliproxy' }
       );
 
-      // On API error, hook blocks with error message (exit 2 outputs JSON to stderr)
+      // On API error, hook blocks with error message (exit 2)
       // This ensures Claude knows the analysis failed rather than silently passing through
       expect(result.code).toBe(2);
-      const output = JSON.parse(result.stderr);
+      const output = JSON.parse(result.stdout);
       expect(output.decision).toBe('block');
       expect(output.hookSpecificOutput.permissionDecisionReason).toContain('Error');
     });
@@ -722,9 +722,9 @@ describe('Image Analyzer Hook', () => {
         { CCS_IMAGE_ANALYSIS_ENABLED: '1', CCS_PROFILE_TYPE: 'cliproxy' }
       );
 
-      // Exit 2 outputs JSON to stderr
+      // Exit 2 outputs JSON to stdout
       expect(result.code).toBe(2);
-      const output = JSON.parse(result.stderr);
+      const output = JSON.parse(result.stdout);
       expect(output.decision).toBe('block');
       expect(output.reason).toBeDefined();
       expect(output.systemMessage).toBeDefined();
@@ -745,8 +745,8 @@ describe('Image Analyzer Hook', () => {
         { CCS_IMAGE_ANALYSIS_ENABLED: '1', CCS_PROFILE_TYPE: 'cliproxy' }
       );
 
-      // Exit 2 outputs JSON to stderr
-      const output = JSON.parse(result.stderr);
+      // Exit 2 outputs JSON to stdout
+      const output = JSON.parse(result.stdout);
       expect(output.hookSpecificOutput.permissionDecisionReason).toContain('test-image.png');
     });
 
@@ -761,8 +761,8 @@ describe('Image Analyzer Hook', () => {
         { CCS_IMAGE_ANALYSIS_ENABLED: '1', CCS_PROFILE_TYPE: 'cliproxy' }
       );
 
-      // Exit 2 outputs JSON to stderr
-      const output = JSON.parse(result.stderr);
+      // Exit 2 outputs JSON to stdout
+      const output = JSON.parse(result.stdout);
       expect(output.hookSpecificOutput.permissionDecisionReason).toContain('gemini-2.5-flash');
     });
 
@@ -786,9 +786,9 @@ describe('Image Analyzer Hook', () => {
       fs.chmodSync(errorPath, 0o644);
       fs.unlinkSync(errorPath);
 
-      // Should output error in JSON format (exit 2 outputs to stderr)
+      // Should output error in JSON format
       expect(result.code).toBe(2);
-      const output = JSON.parse(result.stderr);
+      const output = JSON.parse(result.stdout);
       expect(output.decision).toBe('block');
       expect(output.hookSpecificOutput.permissionDecisionReason).toContain('Error');
     });
