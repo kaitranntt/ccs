@@ -26,7 +26,7 @@ export function CostByModelCard({
   privacyMode,
 }: CostByModelCardProps) {
   return (
-    <Card className="flex flex-col h-full min-h-0 shadow-sm lg:col-span-4">
+    <Card className="flex flex-col h-full overflow-hidden shadow-sm lg:col-span-4">
       <CardHeader className="px-3 py-2">
         <CardTitle className="text-base font-semibold flex items-center gap-2">
           <DollarSign className="w-4 h-4" />
