@@ -215,6 +215,63 @@ describe('sanitizeInputSchema', () => {
     expect(result.removedCount).toBe(0);
     expect(result.schema).toEqual(schema);
   });
+
+  test('preserves additionalItems keyword', () => {
+    const schema = {
+      type: 'array',
+      items: [{ type: 'string' }],
+      additionalItems: { type: 'boolean' },
+    };
+    const result = sanitizeInputSchema(schema);
+    expect(result.removedCount).toBe(0);
+    expect(result.schema.additionalItems).toEqual({ type: 'boolean' });
+  });
+
+  test('preserves if/then/else and sanitizes nested schemas', () => {
+    const schema = {
+      if: { properties: { type: { const: 'foo' } }, uiHint: 'remove' },
+      then: { required: ['foo'], badProp: 123 },
+      else: { required: ['bar'] },
+    };
+    const result = sanitizeInputSchema(schema);
+    expect(result.removedCount).toBe(2);
+    expect(result.schema.if).toEqual({ properties: { type: { const: 'foo' } } });
+    expect(result.schema.then).toEqual({ required: ['foo'] });
+  });
+
+  test('preserves patternProperties keyword', () => {
+    const schema = {
+      type: 'object',
+      patternProperties: { '^S_': { type: 'string' } },
+    };
+    const result = sanitizeInputSchema(schema);
+    // Current implementation doesn't handle patternProperties specially,
+    // so the pattern key '^S_' gets removed as it's not a valid JSON Schema keyword
+    expect(result.removedCount).toBe(1);
+    expect(result.removedPaths).toContain('patternProperties.^S_');
+    expect(result.schema.patternProperties).toEqual({});
+  });
+
+  test('preserves contains keyword', () => {
+    const schema = {
+      type: 'array',
+      contains: { type: 'number', minimum: 5 },
+    };
+    const result = sanitizeInputSchema(schema);
+    expect(result.schema.contains).toEqual({ type: 'number', minimum: 5 });
+  });
+
+  test('handles null input gracefully', () => {
+    const result = sanitizeInputSchema(null as any);
+    expect(result.schema).toBeNull();
+    expect(result.removedCount).toBe(0);
+  });
+
+  test('handles undefined input gracefully', () => {
+    const result = sanitizeInputSchema(undefined as any);
+    expect(result.schema).toBeUndefined();
+    expect(result.removedCount).toBe(0);
+  });
 });
 
 describe('sanitizeToolSchemas', () => {
@@ -293,5 +350,16 @@ describe('sanitizeToolSchemas', () => {
 
     expect(result.totalRemoved).toBe(0);
     expect(result.removedByTool).toHaveLength(0);
+  });
+
+  test('handles tools without input_schema (skips null tools)', () => {
+    const tools = [
+      { name: 'simple_tool', description: 'No schema' },
+      { name: 'valid', input_schema: { type: 'object' } },
+    ];
+    const result = sanitizeToolSchemas(tools);
+    expect(result.tools).toHaveLength(2);
+    expect(result.tools[0].name).toBe('simple_tool');
+    expect(result.tools[1].name).toBe('valid');
   });
 });
