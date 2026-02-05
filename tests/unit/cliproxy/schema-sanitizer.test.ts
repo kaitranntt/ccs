@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import { sanitizeInputSchema, sanitizeToolSchemas } from '../../../dist/cliproxy/schema-sanitizer';
+import { sanitizeInputSchema, sanitizeToolSchemas } from '../../../dist/cliproxy/schema-sanitizer.js';
 
 describe('sanitizeInputSchema', () => {
   test('preserves valid JSON Schema properties', () => {
@@ -239,26 +239,37 @@ describe('sanitizeInputSchema', () => {
     expect(result.schema.then).toEqual({ required: ['foo'] });
   });
 
-  test('preserves patternProperties keyword', () => {
+  test('preserves patternProperties keyword and sanitizes nested schemas', () => {
     const schema = {
       type: 'object',
-      patternProperties: { '^S_': { type: 'string' } },
+      patternProperties: { '^S_': { type: 'string', customProp: 'remove' } },
     };
     const result = sanitizeInputSchema(schema);
-    // Current implementation doesn't handle patternProperties specially,
-    // so the pattern key '^S_' gets removed as it's not a valid JSON Schema keyword
     expect(result.removedCount).toBe(1);
-    expect(result.removedPaths).toContain('patternProperties.^S_');
-    expect(result.schema.patternProperties).toEqual({});
+    expect(result.removedPaths).toContain('patternProperties.^S_.customProp');
+    expect(result.schema.patternProperties).toEqual({ '^S_': { type: 'string' } });
   });
 
-  test('preserves contains keyword', () => {
+  test('preserves contains keyword and sanitizes nested schema', () => {
     const schema = {
       type: 'array',
-      contains: { type: 'number', minimum: 5 },
+      contains: { type: 'number', minimum: 5, customProp: 'remove' },
     };
     const result = sanitizeInputSchema(schema);
+    expect(result.removedCount).toBe(1);
+    expect(result.removedPaths).toContain('contains.customProp');
     expect(result.schema.contains).toEqual({ type: 'number', minimum: 5 });
+  });
+
+  test('preserves propertyNames keyword and sanitizes nested schema', () => {
+    const schema = {
+      type: 'object',
+      propertyNames: { type: 'string', pattern: '^[a-z]+$', customProp: 'remove' },
+    };
+    const result = sanitizeInputSchema(schema);
+    expect(result.removedCount).toBe(1);
+    expect(result.removedPaths).toContain('propertyNames.customProp');
+    expect(result.schema.propertyNames).toEqual({ type: 'string', pattern: '^[a-z]+$' });
   });
 
   test('handles null input gracefully', () => {

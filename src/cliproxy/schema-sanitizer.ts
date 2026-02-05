@@ -186,8 +186,18 @@ function sanitizeSchemaRecursive(
       continue;
     }
 
+    if (key === 'propertyNames' && typeof value === 'object') {
+      result[key] = sanitizeSchemaRecursive(value, keyPath, removedPaths, visited, depth + 1);
+      continue;
+    }
+
     // Conditional keywords
     if (['if', 'then', 'else'].includes(key) && typeof value === 'object') {
+      result[key] = sanitizeSchemaRecursive(value, keyPath, removedPaths, visited, depth + 1);
+      continue;
+    }
+
+    if (key === 'contains' && typeof value === 'object') {
       result[key] = sanitizeSchemaRecursive(value, keyPath, removedPaths, visited, depth + 1);
       continue;
     }
@@ -206,6 +216,24 @@ function sanitizeSchemaRecursive(
           );
         }
         result[key] = sanitizedDefs;
+        continue;
+      }
+    }
+
+    if (key === 'patternProperties') {
+      // Pattern property containers - preserve pattern keys and sanitize schema values
+      if (typeof value === 'object' && value !== null) {
+        const sanitizedPatterns: Record<string, unknown> = {};
+        for (const [pattern, patternSchema] of Object.entries(value as Record<string, unknown>)) {
+          sanitizedPatterns[pattern] = sanitizeSchemaRecursive(
+            patternSchema,
+            `${keyPath}.${pattern}`,
+            removedPaths,
+            visited,
+            depth + 1
+          );
+        }
+        result[key] = sanitizedPatterns;
         continue;
       }
     }
