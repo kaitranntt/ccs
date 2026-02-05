@@ -173,6 +173,12 @@ function sanitizeSchemaRecursive(
       continue;
     }
 
+    if (key === 'additionalItems' && typeof value === 'object' && value !== null) {
+      // Can be boolean or schema object (tuple validation)
+      result[key] = sanitizeSchemaRecursive(value, keyPath, removedPaths, visited, depth + 1);
+      continue;
+    }
+
     // Composition keywords contain schema arrays
     if (['oneOf', 'anyOf', 'allOf'].includes(key) && Array.isArray(value)) {
       result[key] = value.map((item, index) =>
@@ -234,6 +240,28 @@ function sanitizeSchemaRecursive(
           );
         }
         result[key] = sanitizedPatterns;
+        continue;
+      }
+    }
+
+    if (key === 'dependencies') {
+      if (typeof value === 'object' && value !== null) {
+        const sanitizedDeps: Record<string, unknown> = {};
+        for (const [depName, depValue] of Object.entries(value as Record<string, unknown>)) {
+          // Schema dependencies need recursion, property dependencies (arrays) pass through
+          if (typeof depValue === 'object' && depValue !== null && !Array.isArray(depValue)) {
+            sanitizedDeps[depName] = sanitizeSchemaRecursive(
+              depValue,
+              `${keyPath}.${depName}`,
+              removedPaths,
+              visited,
+              depth + 1
+            );
+          } else {
+            sanitizedDeps[depName] = depValue;
+          }
+        }
+        result[key] = sanitizedDeps;
         continue;
       }
     }

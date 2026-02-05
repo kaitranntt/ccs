@@ -227,6 +227,18 @@ describe('sanitizeInputSchema', () => {
     expect(result.schema.additionalItems).toEqual({ type: 'boolean' });
   });
 
+  test('sanitizes nested schemas in additionalItems', () => {
+    const schema = {
+      type: 'array',
+      items: [{ type: 'string' }],
+      additionalItems: { type: 'boolean', customProp: 'remove' },
+    };
+    const result = sanitizeInputSchema(schema);
+    expect(result.removedCount).toBe(1);
+    expect(result.removedPaths).toContain('additionalItems.customProp');
+    expect(result.schema.additionalItems).toEqual({ type: 'boolean' });
+  });
+
   test('preserves if/then/else and sanitizes nested schemas', () => {
     const schema = {
       if: { properties: { type: { const: 'foo' } }, uiHint: 'remove' },
@@ -270,6 +282,23 @@ describe('sanitizeInputSchema', () => {
     expect(result.removedCount).toBe(1);
     expect(result.removedPaths).toContain('propertyNames.customProp');
     expect(result.schema.propertyNames).toEqual({ type: 'string', pattern: '^[a-z]+$' });
+  });
+
+  test('handles dependencies with both property and schema dependencies', () => {
+    const schema = {
+      type: 'object',
+      dependencies: {
+        bar: ['foo'], // property dependency (array) - pass through
+        baz: { properties: { qux: { type: 'string' } }, customProp: 'remove' }, // schema dependency
+      },
+    };
+    const result = sanitizeInputSchema(schema);
+    expect(result.removedCount).toBe(1);
+    expect(result.removedPaths).toContain('dependencies.baz.customProp');
+    expect(result.schema.dependencies).toEqual({
+      bar: ['foo'],
+      baz: { properties: { qux: { type: 'string' } } },
+    });
   });
 
   test('handles null input gracefully', () => {
