@@ -4,7 +4,7 @@
  * Cross-platform shell execution utilities for CCS.
  */
 
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, ChildProcess, execSync } from 'child_process';
 import { ErrorManager } from './error-manager';
 import { getWebSearchHookEnv } from './websearch-manager';
 
@@ -56,6 +56,21 @@ export function execClaude(
   const env = envVars
     ? { ...process.env, ...envVars, ...webSearchEnv }
     : { ...process.env, ...webSearchEnv };
+
+  // propagate key env vars to tmux session so agent team teammates
+  // (spawned via tmux split-window) inherit the correct config dir
+  if (process.env.TMUX && envVars) {
+    const tmuxPropagateVars = ['CLAUDE_CONFIG_DIR', 'CCS_PROFILE_TYPE', 'CCS_WEBSEARCH_SKIP'];
+    for (const key of tmuxPropagateVars) {
+      if (envVars[key]) {
+        try {
+          execSync(`tmux setenv ${key} ${JSON.stringify(envVars[key])}`, { stdio: 'ignore' });
+        } catch {
+          // tmux setenv can fail if not in a tmux session; safe to ignore
+        }
+      }
+    }
+  }
 
   let child: ChildProcess;
   if (needsShell) {
