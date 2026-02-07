@@ -2,7 +2,12 @@
  * Provider Token Refreshers
  *
  * Exports refresh functions for each OAuth provider.
- * Currently only Gemini is implemented; others return placeholder errors.
+ *
+ * Refresh responsibility:
+ * - CCS-managed: gemini (CCS refreshes tokens directly via Google OAuth)
+ * - CLIProxy-delegated: codex, agy, kiro, ghcp, qwen, iflow
+ *   (CLIProxyAPIPlus handles refresh automatically in background)
+ * - Not implemented: claude
  */
 
 import { CLIProxyProvider } from '../../types';
@@ -13,6 +18,29 @@ export interface ProviderRefreshResult {
   success: boolean;
   error?: string;
   expiresAt?: number;
+  /** True if refresh is delegated to CLIProxy (not handled by CCS) */
+  delegated?: boolean;
+}
+
+/**
+ * Providers where CLIProxyAPIPlus owns token refresh.
+ * CLIProxyAPIPlus runs background refresh automatically (e.g. kiro: every 1 min).
+ * CCS should not attempt to refresh these — just trust CLIProxy.
+ */
+const CLIPROXY_DELEGATED_REFRESH: CLIProxyProvider[] = [
+  'codex',
+  'agy',
+  'kiro',
+  'ghcp',
+  'qwen',
+  'iflow',
+];
+
+/**
+ * Check if a provider's token refresh is delegated to CLIProxy
+ */
+export function isRefreshDelegated(provider: CLIProxyProvider): boolean {
+  return CLIPROXY_DELEGATED_REFRESH.includes(provider);
 }
 
 /**
@@ -35,6 +63,10 @@ export async function refreshToken(
     case 'iflow':
     case 'kiro':
     case 'ghcp':
+      // CLIProxyAPIPlus handles refresh for these providers automatically.
+      // No action needed from CCS — report success with delegated flag.
+      return { success: true, delegated: true };
+
     case 'claude':
       return {
         success: false,

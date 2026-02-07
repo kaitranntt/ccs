@@ -10,6 +10,7 @@ import * as path from 'path';
 import { CLIProxyProvider } from '../types';
 import { CLIPROXY_PROFILES } from '../../auth/profile-detector';
 import { getProviderAccounts, getAccountTokenPath } from '../account-manager';
+import { isRefreshDelegated } from './provider-refreshers';
 
 /** Preemptive refresh time: refresh tokens 45 minutes before expiry */
 export const PREEMPTIVE_REFRESH_MINUTES = 45;
@@ -74,9 +75,13 @@ export function getTokenExpiryInfo(
     const content = fs.readFileSync(tokenPath, 'utf-8');
     const data: TokenData = JSON.parse(content);
 
-    // Validate refresh_token exists (required for refresh)
-    if (!data.refresh_token || typeof data.refresh_token !== 'string') {
-      return null;
+    // Validate refresh_token exists (required for CCS-managed refresh).
+    // CLIProxy-delegated providers may not expose refresh_token in token files —
+    // CLIProxyAPIPlus manages refresh internally, so skip this check for them.
+    if (!isRefreshDelegated(provider)) {
+      if (!data.refresh_token || typeof data.refresh_token !== 'string') {
+        return null;
+      }
     }
 
     // Calculate expiry time with validation

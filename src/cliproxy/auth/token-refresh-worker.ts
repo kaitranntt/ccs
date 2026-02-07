@@ -7,7 +7,7 @@
 
 import { CLIProxyProvider } from '../types';
 import { getAllTokenExpiryInfo, TokenExpiryInfo } from './token-expiry-checker';
-import { refreshToken } from './provider-refreshers';
+import { refreshToken, isRefreshDelegated } from './provider-refreshers';
 
 /** Worker configuration */
 export interface TokenRefreshConfig {
@@ -182,7 +182,10 @@ export class TokenRefreshWorker {
 
     try {
       const tokens = getAllTokenExpiryInfo();
-      const tokensNeedingRefresh = tokens.filter((t) => t.needsRefresh);
+      // Skip CLIProxy-delegated providers — they handle their own refresh
+      const tokensNeedingRefresh = tokens.filter(
+        (t) => t.needsRefresh && !isRefreshDelegated(t.provider)
+      );
 
       if (tokensNeedingRefresh.length === 0) {
         this.log('[OK] All tokens valid, no refresh needed');
