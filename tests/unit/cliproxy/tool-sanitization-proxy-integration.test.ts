@@ -613,5 +613,85 @@ describe('ToolSanitizationProxy Integration', () => {
         proxy.stop();
       }
     });
+
+    it('injects synthetic response via SSE processing path (with sanitized tool names)', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      // Upstream returns empty content — no content_block_start events
+      // Using sanitized tool name ('foo__bar__bar' → 'foo__bar') triggers the SSE processing path
+      mockResponse = {
+        status: 200,
+        stream: true,
+        body: [
+          'event: message_start\n',
+          'data: {"type":"message_start","message":{"id":"msg_sse","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null}}\n\n',
+          'event: message_delta\n',
+          'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"input_tokens":10,"output_tokens":0}}\n\n',
+          'event: message_stop\n',
+          'data: {"type":"message_stop"}\n\n',
+        ],
+      };
+
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stream: true,
+            tools: [{ name: 'foo__bar__bar' }], // Triggers sanitization → SSE processing path
+          }),
+        });
+
+        const text = await response.text();
+        expect(text).toContain('[Proxy Error]');
+        expect(text).toContain('content_block_start');
+        const messageStartCount = (text.match(/"type":"message_start"/g) || []).length;
+        expect(messageStartCount).toBe(1);
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    it('injects synthetic response when upstream sends only message_start (real failure mode)', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      // Real failure: upstream sends message_start then abruptly ends — no message_delta or message_stop
+      mockResponse = {
+        status: 200,
+        stream: true,
+        body: [
+          'event: message_start\n',
+          'data: {"type":"message_start","message":{"id":"msg_abrupt","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null}}\n\n',
+        ],
+      };
+
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stream: true,
+            tools: [{ name: 'valid_tool' }],
+          }),
+        });
+
+        const text = await response.text();
+        expect(text).toContain('[Proxy Error]');
+        expect(text).toContain('content_block_start');
+        expect(text).toContain('message_delta');
+        expect(text).toContain('message_stop');
+        // Only 1 message_start — upstream's original
+        const messageStartCount = (text.match(/"type":"message_start"/g) || []).length;
+        expect(messageStartCount).toBe(1);
+      } finally {
+        proxy.stop();
+      }
+    });
   });
 });

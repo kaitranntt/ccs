@@ -446,7 +446,11 @@ export class ToolSanitizationProxy {
           const isSuccessResponse =
             (upstreamRes.statusCode || 200) >= 200 && (upstreamRes.statusCode || 200) < 300;
 
-          // If no changes were made, intercept to detect empty responses
+          // If no changes were made, intercept to detect empty responses.
+          // In the real failure case (issue #350), upstream sends message_start but
+          // NOT message_delta/message_stop, so the synthetic response completes the
+          // stream. If upstream DID send message_stop, Claude Code treats the second
+          // synthetic block as additional content in the same conversation turn.
           if (!mapper.hasChanges()) {
             upstreamRes.on('data', (chunk: Buffer) => {
               hasReceivedData = true;
