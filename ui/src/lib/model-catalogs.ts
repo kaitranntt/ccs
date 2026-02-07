@@ -15,8 +15,10 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
       {
         id: 'gemini-claude-opus-4-6-thinking',
         name: 'Claude Opus 4.6 Thinking',
-        description: 'Latest flagship, 1M context, extended thinking',
-        extendedContext: true,
+        description: 'Latest flagship, extended thinking',
+        // TODO: Re-enable when Antigravity backend supports 1M context (currently 256k)
+        // extendedContext: true,
+        extendedContext: false,
         presetMapping: {
           default: 'gemini-claude-opus-4-6-thinking',
           opus: 'gemini-claude-opus-4-6-thinking',

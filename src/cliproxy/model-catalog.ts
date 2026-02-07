@@ -78,7 +78,7 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
       {
         id: 'gemini-claude-opus-4-6-thinking',
         name: 'Claude Opus 4.6 Thinking',
-        description: 'Latest flagship, 1M context, extended thinking',
+        description: 'Latest flagship, extended thinking',
         thinking: {
           type: 'budget',
           min: 1024,
@@ -86,7 +86,9 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
           zeroAllowed: true,
           dynamicAllowed: true,
         },
-        extendedContext: true,
+        // TODO: Re-enable when Antigravity backend supports 1M context (currently 256k)
+        // extendedContext: true,
+        extendedContext: false,
       },
       {
         id: 'gemini-claude-opus-4-5-thinking',
