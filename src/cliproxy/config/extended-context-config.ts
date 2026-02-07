@@ -85,7 +85,25 @@ export function applyExtendedContextConfig(
   const baseModel = envVars.ANTHROPIC_MODEL || '';
   const cleanModelId = stripModelSuffixes(baseModel);
 
+  // Tier model env vars to apply/strip extended context suffix
+  const tierModels = [
+    'ANTHROPIC_DEFAULT_OPUS_MODEL',
+    'ANTHROPIC_DEFAULT_SONNET_MODEL',
+    'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+  ] as const;
+
   if (!shouldApplyExtendedContext(provider, cleanModelId, extendedContextOverride)) {
+    // Strip [1m] suffix from models that no longer support extended context
+    // (e.g., user had it enabled before backend dropped support)
+    if (envVars.ANTHROPIC_MODEL?.toLowerCase().endsWith('[1m]')) {
+      envVars.ANTHROPIC_MODEL = envVars.ANTHROPIC_MODEL.replace(/\[1m\]$/i, '');
+    }
+    for (const tierVar of tierModels) {
+      const model = envVars[tierVar];
+      if (model?.toLowerCase().endsWith('[1m]')) {
+        envVars[tierVar] = model.replace(/\[1m\]$/i, '');
+      }
+    }
     return;
   }
 
@@ -95,11 +113,6 @@ export function applyExtendedContextConfig(
   }
 
   // Apply to tier models if they support extended context
-  const tierModels = [
-    'ANTHROPIC_DEFAULT_OPUS_MODEL',
-    'ANTHROPIC_DEFAULT_SONNET_MODEL',
-    'ANTHROPIC_DEFAULT_HAIKU_MODEL',
-  ] as const;
 
   for (const tierVar of tierModels) {
     const model = envVars[tierVar];

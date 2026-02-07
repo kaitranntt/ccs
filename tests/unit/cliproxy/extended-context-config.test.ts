@@ -151,4 +151,23 @@ describe('applyExtendedContextConfig', () => {
     applyExtendedContextConfig(env, 'gemini', undefined);
     expect(env.ANTHROPIC_MODEL).toBeUndefined();
   });
+
+  it('strips [1m] suffix from models that no longer support extended context', () => {
+    // Simulates user who had [1m] in saved settings before support was removed
+    const env: NodeJS.ProcessEnv = {
+      ANTHROPIC_MODEL: 'gemini-claude-opus-4-6-thinking[1m]',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'gemini-claude-opus-4-6-thinking[1m]',
+    };
+    applyExtendedContextConfig(env, 'agy', undefined);
+    expect(env.ANTHROPIC_MODEL).toBe('gemini-claude-opus-4-6-thinking');
+    expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gemini-claude-opus-4-6-thinking');
+  });
+
+  it('strips [1m] suffix when --no-1m is explicit even if model has it', () => {
+    const env: NodeJS.ProcessEnv = {
+      ANTHROPIC_MODEL: 'gemini-2.5-pro[1m]',
+    };
+    applyExtendedContextConfig(env, 'gemini', false);
+    expect(env.ANTHROPIC_MODEL).toBe('gemini-2.5-pro');
+  });
 });
