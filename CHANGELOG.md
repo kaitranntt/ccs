@@ -1,3 +1,9 @@
+## [7.38.0](https://github.com/kaitranntt/ccs/compare/v7.37.1...v7.38.0) (2026-02-07)
+
+### Features
+
+* **release:** v7.38.0 - Extended Context, Qwen Models, Bug Fixes ([#480](https://github.com/kaitranntt/ccs/issues/480)) ([b454834](https://github.com/kaitranntt/ccs/commit/b4548341750804339c87c48259dd8741425d2acf)), closes [#472](https://github.com/kaitranntt/ccs/issues/472) [#474](https://github.com/kaitranntt/ccs/issues/474) [#103](https://github.com/kaitranntt/ccs/issues/103) [#478](https://github.com/kaitranntt/ccs/issues/478) [#482](https://github.com/kaitranntt/ccs/issues/482)
+
 ## [7.37.1](https://github.com/kaitranntt/ccs/compare/v7.37.0...v7.37.1) (2026-02-05)
 
 ### Bug Fixes
