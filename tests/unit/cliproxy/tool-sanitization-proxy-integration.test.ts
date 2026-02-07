@@ -528,6 +528,9 @@ describe('ToolSanitizationProxy Integration', () => {
         expect(text).toContain('content_block_start');
         expect(text).toContain('content_block_delta');
         expect(text).toContain('content_block_stop');
+        // Should NOT have duplicate message_start (upstream already sent one)
+        const messageStartCount = (text.match(/"type":"message_start"/g) || []).length;
+        expect(messageStartCount).toBe(1); // Only the upstream one, not a synthetic duplicate
       } finally {
         proxy.stop();
       }
