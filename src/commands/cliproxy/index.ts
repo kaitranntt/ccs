@@ -23,6 +23,11 @@ import { handleCreate, handleRemove } from './variant-subcommand';
 import { handleProxyStatus, handleStop } from './proxy-lifecycle-subcommand';
 import { showStatus, handleInstallVersion, handleInstallLatest } from './install-subcommand';
 import { showHelp } from './help-subcommand';
+import {
+  handleCatalogStatus,
+  handleCatalogRefresh,
+  handleCatalogReset,
+} from './catalog-subcommand';
 
 /**
  * Parse --backend flag from args
@@ -163,6 +168,21 @@ export async function handleCliproxyCommand(args: string[]): Promise<void> {
 
   if (command === 'remove' || command === 'delete' || command === 'rm') {
     await handleRemove(remainingArgs.slice(1));
+    return;
+  }
+
+  // Catalog commands
+  if (command === 'catalog') {
+    const subcommand = remainingArgs[1];
+    if (subcommand === 'refresh') {
+      await handleCatalogRefresh(verbose);
+      return;
+    }
+    if (subcommand === 'reset') {
+      await handleCatalogReset();
+      return;
+    }
+    await handleCatalogStatus(verbose);
     return;
   }
 

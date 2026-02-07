@@ -121,3 +121,36 @@ export interface SyncStatus {
   /** Remote CLIProxy URL */
   remoteUrl?: string;
 }
+
+/**
+ * Remote model thinking support from CLIProxyAPI model-definitions endpoint
+ */
+export interface RemoteThinkingSupport {
+  min?: number;
+  max?: number;
+  zero_allowed?: boolean;
+  dynamic_allowed?: boolean;
+  levels?: string[];
+}
+
+/**
+ * Remote model info from CLIProxyAPI model-definitions endpoint
+ */
+export interface RemoteModelInfo {
+  id: string;
+  display_name?: string;
+  description?: string;
+  context_length?: number;
+  max_completion_tokens?: number;
+  thinking?: RemoteThinkingSupport;
+  owned_by?: string;
+  type?: string;
+}
+
+/**
+ * Response from GET /v0/management/model-definitions/:channel
+ */
+export interface GetModelDefinitionsResponse {
+  channel: string;
+  models: RemoteModelInfo[];
+}

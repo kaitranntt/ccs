@@ -24,6 +24,7 @@ import miscRoutes from './misc-routes';
 import cliproxyServerRoutes from './proxy-routes';
 import authRoutes from './auth-routes';
 import persistRoutes from './persist-routes';
+import catalogRoutes from './catalog-routes';
 
 // Create the main API router
 export const apiRoutes = Router();
@@ -53,6 +54,7 @@ apiRoutes.use('/cliproxy', variantRoutes);
 apiRoutes.use('/cliproxy/auth', cliproxyAuthRoutes);
 apiRoutes.use('/cliproxy', cliproxyStatsRoutes);
 apiRoutes.use('/cliproxy/sync', cliproxySyncRoutes);
+apiRoutes.use('/cliproxy/catalog', catalogRoutes);
 apiRoutes.use('/cliproxy/openai-compat', providerRoutes);
 
 // ==================== WebSearch ====================

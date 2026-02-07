@@ -176,8 +176,21 @@ export type {
   ManagementApiErrorCode,
   ClaudeKeyPatch,
   SyncStatus,
+  RemoteModelInfo,
+  RemoteThinkingSupport,
 } from './management-api-types';
 export { ManagementApiClient, createManagementClient } from './management-api-client';
+
+// Catalog cache (model catalog sync with CLIProxyAPI)
+export {
+  getResolvedCatalog,
+  getAllResolvedCatalogs,
+  getCacheAge,
+  clearCatalogCache,
+  setCachedCatalog,
+  SYNCABLE_PROVIDERS,
+  PROVIDER_TO_CHANNEL,
+} from './catalog-cache';
 
 // Sync module (profile sync to remote CLIProxy)
 export type { SyncableProfile, SyncPreviewItem } from './sync';

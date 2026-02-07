@@ -31,6 +31,14 @@ export async function showHelp(): Promise<void> {
       ],
     ],
     [
+      'Catalog Commands:',
+      [
+        ['catalog', 'Show catalog status (cached vs static)'],
+        ['catalog refresh', 'Sync models from remote CLIProxy'],
+        ['catalog reset', 'Clear cache, revert to static catalog'],
+      ],
+    ],
+    [
       'Local Sync:',
       [
         ['sync', 'Sync API profiles to local CLIProxy config'],
