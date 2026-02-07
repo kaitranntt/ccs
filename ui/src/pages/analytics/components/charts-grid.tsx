@@ -44,9 +44,9 @@ export function ChartsGrid({
   const { privacyMode } = usePrivacy();
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 gap-4">
+    <div className="flex flex-col min-h-0 gap-4">
       {/* Usage Trend Chart - Full Width */}
-      <Card className="flex flex-col flex-1 min-h-0 max-h-[500px] overflow-hidden shadow-sm">
+      <Card className="flex flex-col min-h-[300px] max-h-[500px] overflow-hidden shadow-sm">
         <CardHeader className="px-3 py-2 shrink-0">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <TrendingUp className="w-4 h-4" />
@@ -62,8 +62,8 @@ export function ChartsGrid({
         </CardContent>
       </Card>
 
-      {/* Bottom Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 h-auto lg:min-h-[180px] shrink-0">
+      {/* Bottom Row - fixed height with internal scroll per card */}
+      <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 lg:h-[280px] shrink-0">
         {/* Cost by Model */}
         <CostByModelCard
           models={models}

@@ -40,7 +40,7 @@ export function AnalyticsPage() {
   } = useAnalyticsPage();
 
   return (
-    <div className="flex flex-col h-full overflow-hidden px-4 pt-4 pb-6 gap-4">
+    <div className="flex flex-col min-h-full px-4 pt-4 pb-6 gap-4">
       {/* Header */}
       <AnalyticsHeader
         dateRange={dateRange}
