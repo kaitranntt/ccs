@@ -439,10 +439,36 @@ export class ToolSanitizationProxy {
         (upstreamRes) => {
           clientRes.writeHead(upstreamRes.statusCode || 200, upstreamRes.headers);
 
-          // If no changes were made, just pipe through
+          // Track whether upstream emitted any content (guards against empty proxy responses)
+          let hasReceivedContent = false;
+          let hasReceivedData = false;
+          const isSuccessResponse =
+            (upstreamRes.statusCode || 200) >= 200 && (upstreamRes.statusCode || 200) < 300;
+
+          // If no changes were made, intercept to detect empty responses
           if (!mapper.hasChanges()) {
-            upstreamRes.pipe(clientRes);
-            upstreamRes.on('end', () => resolve());
+            upstreamRes.on('data', (chunk: Buffer) => {
+              hasReceivedData = true;
+              const chunkStr = chunk.toString('utf8');
+              if (
+                chunkStr.includes('"content_block_start"') ||
+                chunkStr.includes('"message_delta"')
+              ) {
+                hasReceivedContent = true;
+              }
+              clientRes.write(chunk);
+            });
+            upstreamRes.on('end', () => {
+              if (!hasReceivedContent && isSuccessResponse && hasReceivedData) {
+                this.writeLog(
+                  'warn',
+                  '[tool-sanitization-proxy] Empty response detected from upstream (no content blocks). Injecting synthetic response to prevent client crash.'
+                );
+                clientRes.write(this.buildSyntheticErrorResponse());
+              }
+              clientRes.end();
+              resolve();
+            });
             upstreamRes.on('error', reject);
             return;
           }
@@ -451,6 +477,7 @@ export class ToolSanitizationProxy {
           let buffer = '';
 
           upstreamRes.on('data', (chunk: Buffer) => {
+            hasReceivedData = true;
             buffer += chunk.toString('utf8');
 
             // Process complete SSE events
@@ -460,6 +487,10 @@ export class ToolSanitizationProxy {
             for (const event of events) {
               if (!event.trim()) continue;
 
+              if (event.includes('"content_block_start"') || event.includes('"message_delta"')) {
+                hasReceivedContent = true;
+              }
+
               const processedEvent = this.processSSEEvent(event, mapper);
               clientRes.write(processedEvent + '\n\n');
             }
@@ -468,9 +499,22 @@ export class ToolSanitizationProxy {
           upstreamRes.on('end', () => {
             // Process any remaining buffer
             if (buffer.trim()) {
+              if (buffer.includes('"content_block_start"') || buffer.includes('"message_delta"')) {
+                hasReceivedContent = true;
+              }
               const processedEvent = this.processSSEEvent(buffer, mapper);
               clientRes.write(processedEvent + '\n\n');
             }
+
+            // Safety net: if upstream sent data but no content blocks, inject synthetic response
+            if (!hasReceivedContent && isSuccessResponse && hasReceivedData) {
+              this.writeLog(
+                'warn',
+                '[tool-sanitization-proxy] Empty response detected from upstream (no content blocks). Injecting synthetic response to prevent client crash.'
+              );
+              clientRes.write(this.buildSyntheticErrorResponse());
+            }
+
             clientRes.end();
             resolve();
           });
@@ -541,5 +585,22 @@ export class ToolSanitizationProxy {
     }
 
     return processedLines.join('\n');
+  }
+
+  /**
+   * Build a synthetic minimal SSE response when upstream returns empty content.
+   * Prevents Claude Code from crashing with "No assistant message found".
+   */
+  private buildSyntheticErrorResponse(): string {
+    const msgId = `msg_synthetic_${Date.now()}`;
+    const events = [
+      `event: message_start\ndata: {"type":"message_start","message":{"id":"${msgId}","type":"message","role":"assistant","content":[],"model":"unknown","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}`,
+      `event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+      `event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"[Proxy Error] The upstream API returned an empty response. This typically occurs when the proxy drops unsigned thinking blocks during sub-agent execution. Please retry the request."}}`,
+      `event: content_block_stop\ndata: {"type":"content_block_stop","index":0}`,
+      `event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":0,"output_tokens":0}}`,
+      `event: message_stop\ndata: {"type":"message_stop"}`,
+    ];
+    return events.join('\n\n') + '\n\n';
   }
 }
