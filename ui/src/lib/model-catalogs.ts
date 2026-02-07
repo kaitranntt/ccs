@@ -10,12 +10,24 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
   agy: {
     provider: 'agy',
     displayName: 'Antigravity',
-    defaultModel: 'gemini-claude-opus-4-5-thinking',
+    defaultModel: 'gemini-claude-opus-4-6-thinking',
     models: [
+      {
+        id: 'gemini-claude-opus-4-6-thinking',
+        name: 'Claude Opus 4.6 Thinking',
+        description: 'Latest flagship, 1M context, extended thinking',
+        extendedContext: true,
+        presetMapping: {
+          default: 'gemini-claude-opus-4-6-thinking',
+          opus: 'gemini-claude-opus-4-6-thinking',
+          sonnet: 'gemini-claude-sonnet-4-5-thinking',
+          haiku: 'gemini-claude-sonnet-4-5',
+        },
+      },
       {
         id: 'gemini-claude-opus-4-5-thinking',
         name: 'Claude Opus 4.5 Thinking',
-        description: 'Most capable, extended thinking',
+        description: 'Previous flagship, extended thinking',
         presetMapping: {
           default: 'gemini-claude-opus-4-5-thinking',
           opus: 'gemini-claude-opus-4-5-thinking',
@@ -29,7 +41,7 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
         description: 'Balanced with extended thinking',
         presetMapping: {
           default: 'gemini-claude-sonnet-4-5-thinking',
-          opus: 'gemini-claude-opus-4-5-thinking',
+          opus: 'gemini-claude-opus-4-6-thinking',
           sonnet: 'gemini-claude-sonnet-4-5-thinking',
           haiku: 'gemini-claude-sonnet-4-5',
         },
@@ -40,7 +52,7 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
         description: 'Fast and capable',
         presetMapping: {
           default: 'gemini-claude-sonnet-4-5',
-          opus: 'gemini-claude-opus-4-5-thinking',
+          opus: 'gemini-claude-opus-4-6-thinking',
           sonnet: 'gemini-claude-sonnet-4-5',
           haiku: 'gemini-claude-sonnet-4-5',
         },

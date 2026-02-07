@@ -73,12 +73,25 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
   agy: {
     provider: 'agy',
     displayName: 'Antigravity',
-    defaultModel: 'gemini-claude-opus-4-5-thinking',
+    defaultModel: 'gemini-claude-opus-4-6-thinking',
     models: [
+      {
+        id: 'gemini-claude-opus-4-6-thinking',
+        name: 'Claude Opus 4.6 Thinking',
+        description: 'Latest flagship, 1M context, extended thinking',
+        thinking: {
+          type: 'budget',
+          min: 1024,
+          max: 128000,
+          zeroAllowed: true,
+          dynamicAllowed: true,
+        },
+        extendedContext: true,
+      },
       {
         id: 'gemini-claude-opus-4-5-thinking',
         name: 'Claude Opus 4.5 Thinking',
-        description: 'Most capable, extended thinking',
+        description: 'Previous flagship, extended thinking',
         thinking: {
           type: 'budget',
           min: 1024,
