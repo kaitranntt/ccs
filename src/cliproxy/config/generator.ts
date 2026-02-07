@@ -25,8 +25,25 @@ export const CCS_CONTROL_PANEL_SECRET = 'ccs';
  * v3: Logging disabled by default (user opt-in via ~/.ccs/config.yaml)
  * v4: Added Kiro (AWS) and GitHub Copilot providers
  * v5: Added disable-cooling: true for stability
+ * v6: Added oauth-model-alias with Opus 4.6 support
  */
-export const CLIPROXY_CONFIG_VERSION = 5;
+export const CLIPROXY_CONFIG_VERSION = 6;
+
+/**
+ * Default Antigravity oauth-model-alias entries.
+ * Maps user-facing model names to Antigravity internal model names.
+ * Must stay in sync with CLIProxyAPIPlus defaultAntigravityAliases().
+ */
+const DEFAULT_ANTIGRAVITY_ALIASES: Array<{ name: string; alias: string }> = [
+  { name: 'rev19-uic3-1p', alias: 'gemini-2.5-computer-use-preview-10-2025' },
+  { name: 'gemini-3-pro-image', alias: 'gemini-3-pro-image-preview' },
+  { name: 'gemini-3-pro-high', alias: 'gemini-3-pro-preview' },
+  { name: 'gemini-3-flash', alias: 'gemini-3-flash-preview' },
+  { name: 'claude-sonnet-4-5', alias: 'gemini-claude-sonnet-4-5' },
+  { name: 'claude-sonnet-4-5-thinking', alias: 'gemini-claude-sonnet-4-5-thinking' },
+  { name: 'claude-opus-4-5-thinking', alias: 'gemini-claude-opus-4-5-thinking' },
+  { name: 'claude-opus-4-6-thinking', alias: 'gemini-claude-opus-4-6-thinking' },
+];
 
 /** Provider display names (static metadata) */
 const PROVIDER_DISPLAY_NAMES: Record<CLIProxyProvider, string> = {
@@ -74,16 +91,51 @@ function getLoggingSettings(): { loggingToFile: boolean; requestLog: boolean } {
 }
 
 /**
+ * Generate oauth-model-alias YAML section.
+ * Merges default Antigravity aliases with any user-added custom aliases.
+ */
+function generateOAuthModelAliasSection(existingAliases?: string): string {
+  // Start with default aliases
+  const aliasEntries = [...DEFAULT_ANTIGRAVITY_ALIASES];
+
+  // Parse and merge existing user aliases if provided
+  if (existingAliases) {
+    const existingNames = new Set(aliasEntries.map((a) => a.name));
+    const lines = existingAliases.split('\n');
+    let currentName = '';
+    for (const line of lines) {
+      const nameMatch = line.match(/^\s+-\s*name:\s*(.+)/);
+      const aliasMatch = line.match(/^\s+alias:\s*(.+)/);
+      if (nameMatch) {
+        currentName = nameMatch[1].trim();
+      } else if (aliasMatch && currentName && !existingNames.has(currentName)) {
+        aliasEntries.push({ name: currentName, alias: aliasMatch[1].trim() });
+        existingNames.add(currentName);
+        currentName = '';
+      }
+    }
+  }
+
+  const entries = aliasEntries
+    .map((a) => `    - name: ${a.name}\n      alias: ${a.alias}`)
+    .join('\n');
+
+  return `oauth-model-alias:\n  antigravity:\n${entries}`;
+}
+
+/**
  * Generate UNIFIED config.yaml content for ALL providers
  * This enables concurrent usage of gemini/codex/agy without config conflicts.
  * CLIProxyAPI routes requests by model name to the appropriate provider.
  *
  * @param port - Server port (default: 8317)
  * @param userApiKeys - User-added API keys to preserve (default: [])
+ * @param existingAliases - Existing oauth-model-alias content to merge with defaults
  */
 function generateUnifiedConfigContent(
   port: number = CLIPROXY_DEFAULT_PORT,
-  userApiKeys: string[] = []
+  userApiKeys: string[] = [],
+  existingAliases?: string
 ): string {
   const authDir = getAuthDir(); // Base auth dir - CLIProxyAPI scans subdirectories
   // Convert Windows backslashes to forward slashes for YAML compatibility
@@ -174,6 +226,7 @@ ${apiKeysYaml}
 
 # OAuth tokens directory (auto-discovered by CLIProxyAPI)
 auth-dir: "${authDirNormalized}"
+${generateOAuthModelAliasSection(existingAliases)}
 `;
 
   return config;
@@ -251,8 +304,34 @@ export function parseUserApiKeys(content: string): string[] {
 }
 
 /**
+ * Extract a YAML section from config content by key name.
+ * Returns the raw lines (including indented children) or empty string.
+ */
+function extractYamlSection(content: string, sectionKey: string): string {
+  const lines = content.split('\n');
+  const sectionLines: string[] = [];
+  let inSection = false;
+
+  for (const line of lines) {
+    if (line.startsWith(`${sectionKey}:`)) {
+      inSection = true;
+      continue; // Skip the key line itself
+    }
+    if (inSection) {
+      // Section ends at next top-level key or EOF
+      if (line.match(/^\S/) && line.trim().length > 0) {
+        break;
+      }
+      sectionLines.push(line);
+    }
+  }
+
+  return sectionLines.join('\n').trim();
+}
+
+/**
  * Force regenerate config.yaml with latest settings.
- * Preserves user-added API keys and port settings.
+ * Preserves user-added API keys, claude-api-key section, and port settings.
  *
  * @param port - Default port to use if not found in existing config
  * @returns Path to new config file
@@ -263,6 +342,8 @@ export function regenerateConfig(port: number = CLIPROXY_DEFAULT_PORT): string {
   // Preserve user settings from existing config
   let effectivePort = port;
   let userApiKeys: string[] = [];
+  let claudeApiKeySection = '';
+  let existingAliases = '';
 
   if (fs.existsSync(configPath)) {
     try {
@@ -276,6 +357,12 @@ export function regenerateConfig(port: number = CLIPROXY_DEFAULT_PORT): string {
 
       // Preserve user-added API keys (fix for issue #200)
       userApiKeys = parseUserApiKeys(content);
+
+      // Preserve claude-api-key section (managed via dashboard/API)
+      claudeApiKeySection = extractYamlSection(content, 'claude-api-key');
+
+      // Preserve existing oauth-model-alias user customizations
+      existingAliases = extractYamlSection(content, 'oauth-model-alias');
     } catch {
       // Use defaults if reading fails
     }
@@ -287,8 +374,14 @@ export function regenerateConfig(port: number = CLIPROXY_DEFAULT_PORT): string {
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
   fs.mkdirSync(getAuthDir(), { recursive: true, mode: 0o700 });
 
-  // Generate fresh config with preserved user API keys
-  const configContent = generateUnifiedConfigContent(effectivePort, userApiKeys);
+  // Generate fresh config with preserved user API keys and aliases
+  let configContent = generateUnifiedConfigContent(effectivePort, userApiKeys, existingAliases);
+
+  // Re-append claude-api-key section if it existed
+  if (claudeApiKeySection) {
+    configContent += `claude-api-key:\n${claudeApiKeySection}\n`;
+  }
+
   fs.writeFileSync(configPath, configContent, { mode: 0o600 });
 
   return configPath;
