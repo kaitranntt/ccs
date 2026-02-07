@@ -63,7 +63,7 @@ export function ChartsGrid({
       </Card>
 
       {/* Bottom Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 h-auto lg:h-[180px] shrink-0">
+      <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 h-auto lg:min-h-[180px] shrink-0">
         {/* Cost by Model */}
         <CostByModelCard
           models={models}
