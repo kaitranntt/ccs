@@ -490,4 +490,125 @@ describe('ToolSanitizationProxy Integration', () => {
       }
     });
   });
+
+  describe('Empty Response Safety Net (Issue #350)', () => {
+    it('injects synthetic response when streaming 200 has no content blocks', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      // Upstream sends message_start + message_delta + message_stop but NO content blocks
+      mockResponse = {
+        status: 200,
+        stream: true,
+        body: [
+          'event: message_start\n',
+          'data: {"type":"message_start","message":{"id":"msg_test","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null}}\n\n',
+          'event: message_delta\n',
+          'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"input_tokens":10,"output_tokens":0}}\n\n',
+          'event: message_stop\n',
+          'data: {"type":"message_stop"}\n\n',
+        ],
+      };
+
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stream: true,
+            tools: [{ name: 'valid_tool' }],
+          }),
+        });
+
+        const text = await response.text();
+        // Should contain the synthetic error message
+        expect(text).toContain('[Proxy Error]');
+        expect(text).toContain('content_block_start');
+        expect(text).toContain('content_block_delta');
+        expect(text).toContain('content_block_stop');
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    it('does NOT inject synthetic response when content blocks exist', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      mockResponse = {
+        status: 200,
+        stream: true,
+        body: [
+          'event: message_start\n',
+          'data: {"type":"message_start","message":{"id":"msg_ok","type":"message","role":"assistant","content":[],"model":"test"}}\n\n',
+          'event: content_block_start\n',
+          'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n',
+          'event: content_block_delta\n',
+          'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}\n\n',
+          'event: content_block_stop\n',
+          'data: {"type":"content_block_stop","index":0}\n\n',
+          'event: message_delta\n',
+          'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}\n\n',
+          'event: message_stop\n',
+          'data: {"type":"message_stop"}\n\n',
+        ],
+      };
+
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stream: true,
+            tools: [{ name: 'valid_tool' }],
+          }),
+        });
+
+        const text = await response.text();
+        expect(text).toContain('Hello');
+        expect(text).not.toContain('[Proxy Error]');
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    it('does NOT inject synthetic response for 4xx/5xx errors', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      // 429 rate limit with SSE body but no content blocks
+      mockResponse = {
+        status: 429,
+        stream: true,
+        body: [
+          'event: error\n',
+          'data: {"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}\n\n',
+        ],
+      };
+
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stream: true,
+            tools: [{ name: 'valid_tool' }],
+          }),
+        });
+
+        expect(response.status).toBe(429);
+        const text = await response.text();
+        expect(text).not.toContain('[Proxy Error]');
+        expect(text).toContain('rate_limit_error');
+      } finally {
+        proxy.stop();
+      }
+    });
+  });
 });

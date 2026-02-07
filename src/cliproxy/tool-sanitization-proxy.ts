@@ -450,23 +450,24 @@ export class ToolSanitizationProxy {
             upstreamRes.on('data', (chunk: Buffer) => {
               hasReceivedData = true;
               const chunkStr = chunk.toString('utf8');
-              if (
-                chunkStr.includes('"content_block_start"') ||
-                chunkStr.includes('"message_delta"')
-              ) {
+              if (chunkStr.includes('"content_block_start"')) {
                 hasReceivedContent = true;
               }
               clientRes.write(chunk);
             });
             upstreamRes.on('end', () => {
-              if (!hasReceivedContent && isSuccessResponse && hasReceivedData) {
-                this.writeLog(
-                  'warn',
-                  '[tool-sanitization-proxy] Empty response detected from upstream (no content blocks). Injecting synthetic response to prevent client crash.'
-                );
-                clientRes.write(this.buildSyntheticErrorResponse());
+              try {
+                if (!hasReceivedContent && isSuccessResponse && hasReceivedData) {
+                  this.writeLog(
+                    'warn',
+                    '[tool-sanitization-proxy] Empty response detected from upstream (no content blocks). Injecting synthetic response to prevent client crash.'
+                  );
+                  clientRes.write(this.buildSyntheticErrorResponse());
+                }
+                clientRes.end();
+              } catch {
+                // Client may have disconnected — safe to ignore
               }
-              clientRes.end();
               resolve();
             });
             upstreamRes.on('error', reject);
@@ -487,7 +488,7 @@ export class ToolSanitizationProxy {
             for (const event of events) {
               if (!event.trim()) continue;
 
-              if (event.includes('"content_block_start"') || event.includes('"message_delta"')) {
+              if (event.includes('"content_block_start"')) {
                 hasReceivedContent = true;
               }
 
@@ -497,25 +498,29 @@ export class ToolSanitizationProxy {
           });
 
           upstreamRes.on('end', () => {
-            // Process any remaining buffer
-            if (buffer.trim()) {
-              if (buffer.includes('"content_block_start"') || buffer.includes('"message_delta"')) {
-                hasReceivedContent = true;
+            try {
+              // Process any remaining buffer
+              if (buffer.trim()) {
+                if (buffer.includes('"content_block_start"')) {
+                  hasReceivedContent = true;
+                }
+                const processedEvent = this.processSSEEvent(buffer, mapper);
+                clientRes.write(processedEvent + '\n\n');
               }
-              const processedEvent = this.processSSEEvent(buffer, mapper);
-              clientRes.write(processedEvent + '\n\n');
-            }
 
-            // Safety net: if upstream sent data but no content blocks, inject synthetic response
-            if (!hasReceivedContent && isSuccessResponse && hasReceivedData) {
-              this.writeLog(
-                'warn',
-                '[tool-sanitization-proxy] Empty response detected from upstream (no content blocks). Injecting synthetic response to prevent client crash.'
-              );
-              clientRes.write(this.buildSyntheticErrorResponse());
-            }
+              // Safety net: if upstream sent data but no content blocks, inject synthetic response
+              if (!hasReceivedContent && isSuccessResponse && hasReceivedData) {
+                this.writeLog(
+                  'warn',
+                  '[tool-sanitization-proxy] Empty response detected from upstream (no content blocks). Injecting synthetic response to prevent client crash.'
+                );
+                clientRes.write(this.buildSyntheticErrorResponse());
+              }
 
-            clientRes.end();
+              clientRes.end();
+            } catch {
+              // Client may have disconnected — safe to ignore
+            }
             resolve();
           });
 
