@@ -13,6 +13,8 @@ import { isDaemonRunning, startDaemon } from './copilot-daemon';
 import { ensureCopilotApi } from './copilot-package-manager';
 import { CopilotStatus } from './types';
 import { fail, info, ok } from '../utils/ui';
+import { getWebSearchHookEnv } from '../utils/websearch-manager';
+import { getImageAnalysisHookEnv } from '../utils/hooks';
 
 /**
  * Get full copilot status (auth + daemon).
@@ -133,11 +135,16 @@ export async function executeCopilotProfile(
   const globalEnvConfig = getGlobalEnvConfig();
   const globalEnv = globalEnvConfig.enabled ? globalEnvConfig.env : {};
 
-  // Merge with current environment (global env first, copilot overrides)
+  // Merge with current environment (global env first, copilot overrides, then hook env vars)
+  const webSearchEnv = getWebSearchHookEnv();
+  const imageAnalysisEnv = getImageAnalysisHookEnv('copilot');
   const env = {
     ...process.env,
     ...globalEnv,
     ...copilotEnv,
+    ...webSearchEnv,
+    ...imageAnalysisEnv,
+    CCS_PROFILE_TYPE: 'copilot',
   };
 
   console.log(info(`Using GitHub Copilot proxy (model: ${config.model})`));
