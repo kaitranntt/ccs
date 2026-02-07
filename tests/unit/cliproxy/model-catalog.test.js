@@ -76,7 +76,7 @@ describe('Model Catalog', () => {
       assert.strictEqual(gem3.tier, undefined, 'AGY models should not have paid tier');
     });
 
-    it('has 4 models total', () => {
+    it('has 5 models total', () => {
       const { MODEL_CATALOG } = modelCatalog;
       assert.strictEqual(MODEL_CATALOG.agy.models.length, 5);
     });

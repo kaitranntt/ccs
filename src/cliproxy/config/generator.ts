@@ -318,15 +318,16 @@ function extractYamlSection(content: string, sectionKey: string): string {
       continue; // Skip the key line itself
     }
     if (inSection) {
-      // Section ends at next top-level key or EOF
-      if (line.match(/^\S/) && line.trim().length > 0) {
+      // Section ends at next top-level key (skip comments and blank lines)
+      if (line.match(/^\S/) && !line.startsWith('#') && line.trim().length > 0) {
         break;
       }
       sectionLines.push(line);
     }
   }
 
-  return sectionLines.join('\n').trim();
+  // Strip leading/trailing blank lines but preserve indentation
+  return sectionLines.join('\n').replace(/^\n+/, '').replace(/\n+$/, '');
 }
 
 /**
