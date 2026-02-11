@@ -370,6 +370,25 @@ export interface AutoQuotaConfig {
 }
 
 /**
+ * Runtime quota monitor configuration.
+ * Controls adaptive polling during active sessions.
+ */
+export interface RuntimeMonitorConfig {
+  /** Enable runtime monitoring during sessions (default: true) */
+  enabled: boolean;
+  /** Poll interval in seconds when quota > warn_threshold (default: 300) */
+  normal_interval_seconds: number;
+  /** Poll interval in seconds when quota <= warn_threshold (default: 60) */
+  critical_interval_seconds: number;
+  /** Quota percentage that triggers fast polling + warning (default: 20) */
+  warn_threshold: number;
+  /** Quota percentage that triggers cooldown + switch (default: 5) */
+  exhaust_threshold: number;
+  /** Minutes to cooldown exhausted account (default: 10) */
+  cooldown_minutes: number;
+}
+
+/**
  * Manual quota management configuration.
  * User-controlled overrides for account selection.
  */
@@ -401,6 +420,8 @@ export interface QuotaManagementConfig {
   auto: AutoQuotaConfig;
   /** Manual mode settings */
   manual: ManualQuotaConfig;
+  /** Runtime monitor settings */
+  runtime_monitor: RuntimeMonitorConfig;
 }
 
 /**
@@ -423,12 +444,25 @@ export const DEFAULT_MANUAL_QUOTA_CONFIG: ManualQuotaConfig = {
 };
 
 /**
+ * Default runtime monitor configuration.
+ */
+export const DEFAULT_RUNTIME_MONITOR_CONFIG: RuntimeMonitorConfig = {
+  enabled: true,
+  normal_interval_seconds: 300,
+  critical_interval_seconds: 60,
+  warn_threshold: 20,
+  exhaust_threshold: 5,
+  cooldown_minutes: 10,
+};
+
+/**
  * Default quota management configuration.
  */
 export const DEFAULT_QUOTA_MANAGEMENT_CONFIG: QuotaManagementConfig = {
   mode: 'hybrid',
   auto: { ...DEFAULT_AUTO_QUOTA_CONFIG },
   manual: { ...DEFAULT_MANUAL_QUOTA_CONFIG },
+  runtime_monitor: { ...DEFAULT_RUNTIME_MONITOR_CONFIG },
 };
 
 // ============================================================================

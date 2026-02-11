@@ -23,6 +23,7 @@ import {
   type AccountInfo,
 } from './account-manager';
 import { loadOrCreateUnifiedConfig } from '../config/unified-config-loader';
+import type { RuntimeMonitorConfig } from '../config/unified-config-types';
 
 // ============================================================================
 // QUOTA CACHE (30-second TTL)
@@ -415,4 +416,129 @@ export async function getQuotaStatus(provider: CLIProxyProvider): Promise<{
   );
 
   return { accounts: results };
+}
+
+// ============================================================================
+// RUNTIME QUOTA MONITOR (adaptive polling during active sessions)
+// ============================================================================
+
+/** Active monitor timer (null = not running) */
+let monitorTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Tracks if warning was shown this session (avoid spam) */
+let hasWarnedThisSession = false;
+
+/** Guards against in-flight poll callbacks running after stop */
+let monitorStopped = false;
+
+/**
+ * Schedule next quota poll with adaptive interval.
+ * Uses setTimeout chain (not setInterval) for dynamic interval switching.
+ */
+function scheduleNextPoll(
+  provider: CLIProxyProvider,
+  accountId: string,
+  monitorConfig: RuntimeMonitorConfig,
+  intervalMs: number
+): void {
+  monitorTimer = setTimeout(async () => {
+    // Guard: skip if monitor was stopped while this callback was queued
+    if (monitorStopped) return;
+
+    try {
+      const quota = await fetchQuotaWithDedup(provider, accountId);
+      if (monitorStopped) return; // Re-check after async fetch
+      const avgQuota = calculateAverageQuota(quota) ?? 100;
+
+      if (avgQuota <= monitorConfig.exhaust_threshold) {
+        // EXHAUSTED: cooldown + switch default + stop monitoring
+        const { handleQuotaExhaustion } = await import('./account-safety');
+        await handleQuotaExhaustion(provider, accountId, monitorConfig.cooldown_minutes);
+        monitorTimer = null;
+        return; // Stop polling
+      }
+
+      if (avgQuota <= monitorConfig.warn_threshold) {
+        // WARNING: switch to critical interval, warn once
+        if (!hasWarnedThisSession) {
+          const { writeQuotaWarning } = await import('./account-safety');
+          writeQuotaWarning(accountId, avgQuota);
+          hasWarnedThisSession = true;
+        }
+        scheduleNextPoll(
+          provider,
+          accountId,
+          monitorConfig,
+          monitorConfig.critical_interval_seconds * 1000
+        );
+        return;
+      }
+
+      // HEALTHY: keep normal interval
+      scheduleNextPoll(
+        provider,
+        accountId,
+        monitorConfig,
+        monitorConfig.normal_interval_seconds * 1000
+      );
+    } catch {
+      // API failure: silently reschedule at same interval
+      scheduleNextPoll(provider, accountId, monitorConfig, intervalMs);
+    }
+  }, intervalMs);
+
+  // Prevent monitor from keeping Node.js process alive
+  if (monitorTimer && typeof monitorTimer === 'object' && 'unref' in monitorTimer) {
+    monitorTimer.unref();
+  }
+}
+
+/**
+ * Start adaptive quota monitor for an active session.
+ * Polls at normal_interval (300s) when healthy, switches to
+ * critical_interval (60s) when quota hits warn_threshold (20%).
+ * Auto-stops on exhaustion or when stopQuotaMonitor() is called.
+ *
+ * Only monitors 'agy' provider (only one with quota API).
+ * No-op for other providers, manual mode, or if disabled in config.
+ */
+export function startQuotaMonitor(provider: CLIProxyProvider, accountId: string): void {
+  // Only Antigravity supports quota
+  if (provider !== 'agy') return;
+
+  // Prevent duplicate monitors
+  if (monitorTimer) return;
+
+  const config = loadOrCreateUnifiedConfig();
+  const quotaConfig = config.quota_management;
+
+  // Skip if config missing (shouldn't happen with defaults)
+  if (!quotaConfig) return;
+
+  // Skip if manual mode or runtime monitor disabled
+  if (quotaConfig.mode === 'manual') return;
+  if (!quotaConfig.runtime_monitor?.enabled) return;
+
+  hasWarnedThisSession = false;
+  monitorStopped = false;
+
+  // Start first poll at normal interval
+  scheduleNextPoll(
+    provider,
+    accountId,
+    quotaConfig.runtime_monitor,
+    quotaConfig.runtime_monitor.normal_interval_seconds * 1000
+  );
+}
+
+/**
+ * Stop the runtime quota monitor. Safe to call multiple times.
+ */
+export function stopQuotaMonitor(): void {
+  monitorStopped = true;
+  if (monitorTimer) {
+    clearTimeout(monitorTimer);
+    monitorTimer = null;
+  }
+  hasWarnedThisSession = false;
 }

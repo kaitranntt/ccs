@@ -374,3 +374,97 @@ export function maskEmail(email: string): string {
 function truncate(str: string, maxLen: number): string {
   return str.length > maxLen ? str.slice(0, maxLen - 3) + '...' : str;
 }
+
+// --- Quota Exhaustion Handling ---
+
+/**
+ * Write boxed quota warning to stderr (20% threshold).
+ * Uses process.stderr.write() to work alongside inherited stdio.
+ * ASCII-only output (no emojis) per project constraints.
+ */
+export function writeQuotaWarning(accountId: string, quotaPercent: number): void {
+  const masked = maskEmail(accountId);
+  const lines = [
+    `[!] Quota Low: ${masked} (${quotaPercent}% remaining)`,
+    `    Next session will use a different account if available`,
+  ];
+  const maxLen = Math.max(...lines.map((l) => l.length));
+  const border = '\u2550'.repeat(maxLen + 2);
+
+  process.stderr.write('\n');
+  process.stderr.write(`\u2554${border}\u2557\n`);
+  for (const line of lines) {
+    process.stderr.write(`\u2551 ${line.padEnd(maxLen)} \u2551\n`);
+  }
+  process.stderr.write(`\u255A${border}\u255D\n`);
+  process.stderr.write('\n');
+}
+
+/**
+ * Write boxed quota exhaustion alert to stderr.
+ * Called when quota falls below exhaust_threshold — account will be cooled down.
+ */
+function writeQuotaExhausted(
+  accountId: string,
+  switchedTo: string | null,
+  cooldownMinutes: number
+): void {
+  const masked = maskEmail(accountId);
+  const lines = [`[X] Quota Exhausted: ${masked}`, `    Cooldown: ${cooldownMinutes} minutes`];
+  if (switchedTo) {
+    lines.push(`    Next session default: ${maskEmail(switchedTo)}`);
+  } else {
+    lines.push(`    No alternative accounts available`);
+  }
+
+  const maxLen = Math.max(...lines.map((l) => l.length));
+  const border = '\u2550'.repeat(maxLen + 2);
+
+  process.stderr.write('\n');
+  process.stderr.write(`\u2554${border}\u2557\n`);
+  for (const line of lines) {
+    process.stderr.write(`\u2551 ${line.padEnd(maxLen)} \u2551\n`);
+  }
+  process.stderr.write(`\u255A${border}\u255D\n`);
+  process.stderr.write('\n');
+}
+
+/**
+ * Handle quota exhaustion for an active session.
+ * Applies cooldown to exhausted account, finds healthy alternative,
+ * switches default, and alerts user via stderr.
+ *
+ * @returns switchedTo account ID or null if no alternatives
+ */
+export async function handleQuotaExhaustion(
+  provider: CLIProxyProvider,
+  accountId: string,
+  cooldownMinutes: number
+): Promise<{ switchedTo: string | null; reason: string }> {
+  // Dynamic imports to avoid circular dependencies
+  const { applyCooldown, findHealthyAccount } = await import('./quota-manager');
+  const { setDefaultAccount, touchAccount } = await import('./account-manager');
+
+  // Apply cooldown to exhausted account
+  applyCooldown(provider, accountId, cooldownMinutes);
+
+  // Find healthy alternative
+  const alternative = await findHealthyAccount(provider, [accountId]);
+
+  if (alternative) {
+    setDefaultAccount(provider, alternative.id);
+    touchAccount(provider, alternative.id);
+    writeQuotaExhausted(accountId, alternative.id, cooldownMinutes);
+    return {
+      switchedTo: alternative.id,
+      reason: `Quota exhausted, switched to ${alternative.id}`,
+    };
+  }
+
+  // No alternatives — warn but continue (graceful degradation)
+  writeQuotaExhausted(accountId, null, cooldownMinutes);
+  return {
+    switchedTo: null,
+    reason: 'Quota exhausted, no alternatives available',
+  };
+}

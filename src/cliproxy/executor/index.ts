@@ -793,6 +793,15 @@ export async function execClaudeWithCLIProxy(
     });
   }
 
+  // 12b. Start runtime quota monitor (adaptive polling during session)
+  if (!skipLocalAuth) {
+    const { startQuotaMonitor } = await import('../quota-manager');
+    const monitorAccount = getDefaultAccount(provider);
+    if (monitorAccount) {
+      startQuotaMonitor(provider, monitorAccount.id);
+    }
+  }
+
   // 13. Setup cleanup handlers
   setupCleanupHandlers(
     claude,

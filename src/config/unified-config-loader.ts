@@ -341,6 +341,26 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
           partial.quota_management?.manual?.tier_lock ??
           DEFAULT_QUOTA_MANAGEMENT_CONFIG.manual.tier_lock,
       },
+      runtime_monitor: {
+        enabled:
+          partial.quota_management?.runtime_monitor?.enabled ??
+          DEFAULT_QUOTA_MANAGEMENT_CONFIG.runtime_monitor.enabled,
+        normal_interval_seconds:
+          partial.quota_management?.runtime_monitor?.normal_interval_seconds ??
+          DEFAULT_QUOTA_MANAGEMENT_CONFIG.runtime_monitor.normal_interval_seconds,
+        critical_interval_seconds:
+          partial.quota_management?.runtime_monitor?.critical_interval_seconds ??
+          DEFAULT_QUOTA_MANAGEMENT_CONFIG.runtime_monitor.critical_interval_seconds,
+        warn_threshold:
+          partial.quota_management?.runtime_monitor?.warn_threshold ??
+          DEFAULT_QUOTA_MANAGEMENT_CONFIG.runtime_monitor.warn_threshold,
+        exhaust_threshold:
+          partial.quota_management?.runtime_monitor?.exhaust_threshold ??
+          DEFAULT_QUOTA_MANAGEMENT_CONFIG.runtime_monitor.exhaust_threshold,
+        cooldown_minutes:
+          partial.quota_management?.runtime_monitor?.cooldown_minutes ??
+          DEFAULT_QUOTA_MANAGEMENT_CONFIG.runtime_monitor.cooldown_minutes,
+      },
     },
     // Thinking config - auto/manual/off control for reasoning budget
     thinking: {

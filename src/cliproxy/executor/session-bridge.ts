@@ -21,6 +21,7 @@ import {
 import { detectRunningProxy, waitForProxyHealthy, reclaimOrphanedProxy } from '../proxy-detector';
 import { withStartupLock } from '../startup-lock';
 import { killProcessOnPort } from '../../utils/platform-commands';
+import { stopQuotaMonitor } from '../quota-manager';
 
 export interface ProxySessionResult {
   sessionId?: string;
@@ -184,6 +185,7 @@ export function setupCleanupHandlers(
   };
 
   const cleanup = () => {
+    stopQuotaMonitor();
     log('Parent signal received, cleaning up');
 
     if (
@@ -214,6 +216,7 @@ export function setupCleanupHandlers(
   };
 
   claude.on('exit', (code, signal) => {
+    stopQuotaMonitor();
     log(`Claude exited: code=${code}, signal=${signal}`);
 
     if (
@@ -250,6 +253,7 @@ export function setupCleanupHandlers(
   });
 
   claude.on('error', (error) => {
+    stopQuotaMonitor();
     console.error(require('../../utils/ui').fail(`Claude CLI error: ${error}`));
 
     if (
