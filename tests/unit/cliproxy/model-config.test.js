@@ -94,9 +94,9 @@ describe('Model Config', () => {
         env: {
           ANTHROPIC_BASE_URL: expect.any(String),
           ANTHROPIC_AUTH_TOKEN: expect.any(String),
-          ANTHROPIC_MODEL: 'gemini-claude-opus-4-5-thinking',
-          ANTHROPIC_DEFAULT_OPUS_MODEL: 'gemini-claude-opus-4-5-thinking',
-          ANTHROPIC_DEFAULT_SONNET_MODEL: 'gemini-claude-opus-4-5-thinking',
+          ANTHROPIC_MODEL: 'claude-opus-4-5-thinking',
+          ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-5-thinking',
+          ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-opus-4-5-thinking',
           ANTHROPIC_DEFAULT_HAIKU_MODEL: expect.any(String),
         },
       };
@@ -106,9 +106,9 @@ describe('Model Config', () => {
         env: {
           ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/agy',
           ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
-          ANTHROPIC_MODEL: 'gemini-claude-opus-4-5-thinking',
-          ANTHROPIC_DEFAULT_OPUS_MODEL: 'gemini-claude-opus-4-5-thinking',
-          ANTHROPIC_DEFAULT_SONNET_MODEL: 'gemini-claude-opus-4-5-thinking',
+          ANTHROPIC_MODEL: 'claude-opus-4-5-thinking',
+          ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-5-thinking',
+          ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-opus-4-5-thinking',
           ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gemini-3-flash-preview',
         },
       };
@@ -120,7 +120,7 @@ describe('Model Config', () => {
       assert(parsed.env.ANTHROPIC_MODEL, 'Should have ANTHROPIC_MODEL');
       assert.strictEqual(
         parsed.env.ANTHROPIC_MODEL,
-        'gemini-claude-opus-4-5-thinking'
+        'claude-opus-4-5-thinking'
       );
     });
 
@@ -129,9 +129,9 @@ describe('Model Config', () => {
         env: {
           ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/agy',
           ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
-          ANTHROPIC_MODEL: 'gemini-claude-opus-4-5-thinking',
-          ANTHROPIC_DEFAULT_OPUS_MODEL: 'gemini-claude-opus-4-5-thinking',
-          ANTHROPIC_DEFAULT_SONNET_MODEL: 'gemini-claude-opus-4-5-thinking',
+          ANTHROPIC_MODEL: 'claude-opus-4-5-thinking',
+          ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-5-thinking',
+          ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-opus-4-5-thinking',
           ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gemini-3-flash-preview',
         },
       };

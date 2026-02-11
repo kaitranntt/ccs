@@ -5,7 +5,7 @@
  * Claude Code recognizes this suffix to enable extended context.
  *
  * Behavior:
- * - Gemini family (gemini-* but NOT gemini-claude-*): Auto-enabled by default
+ * - Gemini family (gemini-*): Auto-enabled by default
  * - Claude (Anthropic): Opt-in via --1m flag
  */
 

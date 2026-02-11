@@ -24,6 +24,52 @@ interface ProviderSettings {
   env: NodeJS.ProcessEnv;
 }
 
+/** Model name prefix that was deprecated in CLIProxyAPI registry */
+const DEPRECATED_MODEL_PREFIX = 'gemini-claude-';
+/** Replacement prefix matching actual upstream model names */
+const UPSTREAM_MODEL_PREFIX = 'claude-';
+
+/** Env vars that contain model names and may need migration */
+const MODEL_ENV_KEYS = [
+  'ANTHROPIC_MODEL',
+  'ANTHROPIC_DEFAULT_OPUS_MODEL',
+  'ANTHROPIC_DEFAULT_SONNET_MODEL',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+];
+
+/**
+ * Migrate deprecated gemini-claude-* model names to upstream claude-* names in a settings file.
+ * CLIProxyAPI registry no longer recognizes the gemini-claude-* prefix convention.
+ * Preserves any suffixes like (high), [1m], etc.
+ *
+ * Returns true if migration was performed and file was updated.
+ */
+function migrateDeprecatedModelNames(settingsPath: string, settings: ProviderSettings): boolean {
+  if (!settings.env || typeof settings.env !== 'object') return false;
+
+  let migrated = false;
+  for (const key of MODEL_ENV_KEYS) {
+    const value = settings.env[key];
+    if (typeof value !== 'string') continue;
+
+    // Check if the base model name (before any suffixes) uses the deprecated prefix
+    if (value.toLowerCase().startsWith(DEPRECATED_MODEL_PREFIX)) {
+      settings.env[key] = UPSTREAM_MODEL_PREFIX + value.slice(DEPRECATED_MODEL_PREFIX.length);
+      migrated = true;
+    }
+  }
+
+  if (migrated) {
+    try {
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', { mode: 0o600 });
+    } catch {
+      // Best-effort migration — don't block startup if write fails
+    }
+  }
+
+  return migrated;
+}
+
 /** Remote proxy configuration for URL rewriting */
 export interface RemoteProxyRewriteConfig {
   host: string;
@@ -191,6 +237,8 @@ export function getEffectiveEnvVars(
         const settings: ProviderSettings = JSON.parse(content);
 
         if (settings.env && typeof settings.env === 'object') {
+          // Migrate deprecated gemini-claude-* model names if present
+          migrateDeprecatedModelNames(expandedPath, settings);
           // Custom variant settings found - merge with global env
           envVars = { ...globalEnv, ...settings.env };
           // Ensure required vars are present (fall back to defaults if missing)
@@ -220,6 +268,8 @@ export function getEffectiveEnvVars(
       const settings: ProviderSettings = JSON.parse(content);
 
       if (settings.env && typeof settings.env === 'object') {
+        // Migrate deprecated gemini-claude-* model names if present
+        migrateDeprecatedModelNames(settingsPath, settings);
         // User override found - merge with global env
         envVars = { ...globalEnv, ...settings.env };
         // Ensure required vars are present (fall back to defaults if missing)
@@ -306,6 +356,7 @@ export function getRemoteEnvVars(
         const content = fs.readFileSync(expandedPath, 'utf-8');
         const settings: ProviderSettings = JSON.parse(content);
         if (settings.env && typeof settings.env === 'object') {
+          migrateDeprecatedModelNames(expandedPath, settings);
           userEnvVars = settings.env as Record<string, string>;
         }
       } catch {
@@ -323,6 +374,7 @@ export function getRemoteEnvVars(
         const content = fs.readFileSync(settingsPath, 'utf-8');
         const settings: ProviderSettings = JSON.parse(content);
         if (settings.env && typeof settings.env === 'object') {
+          migrateDeprecatedModelNames(settingsPath, settings);
           userEnvVars = settings.env as Record<string, string>;
         }
       } catch {

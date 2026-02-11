@@ -73,10 +73,10 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
   agy: {
     provider: 'agy',
     displayName: 'Antigravity',
-    defaultModel: 'gemini-claude-opus-4-6-thinking',
+    defaultModel: 'claude-opus-4-6-thinking',
     models: [
       {
-        id: 'gemini-claude-opus-4-6-thinking',
+        id: 'claude-opus-4-6-thinking',
         name: 'Claude Opus 4.6 Thinking',
         description: 'Latest flagship, extended thinking',
         thinking: {
@@ -91,7 +91,7 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
         extendedContext: false,
       },
       {
-        id: 'gemini-claude-opus-4-5-thinking',
+        id: 'claude-opus-4-5-thinking',
         name: 'Claude Opus 4.5 Thinking',
         description: 'Previous flagship, extended thinking',
         thinking: {
@@ -103,7 +103,7 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
         },
       },
       {
-        id: 'gemini-claude-sonnet-4-5-thinking',
+        id: 'claude-sonnet-4-5-thinking',
         name: 'Claude Sonnet 4.5 Thinking',
         description: 'Balanced with extended thinking',
         thinking: {
@@ -115,7 +115,7 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
         },
       },
       {
-        id: 'gemini-claude-sonnet-4-5',
+        id: 'claude-sonnet-4-5',
         name: 'Claude Sonnet 4.5',
         description: 'Fast and capable',
         thinking: { type: 'none' },
@@ -354,10 +354,10 @@ export function supportsExtendedContext(provider: CLIProxyProvider, modelId: str
 }
 
 /**
- * Check if model is a native Gemini model (not gemini-claude-*).
+ * Check if model is a native Gemini model (not Claude via Antigravity).
  * Native Gemini models get extended context auto-enabled.
  */
 export function isNativeGeminiModel(modelId: string): boolean {
   const lower = modelId.toLowerCase();
-  return lower.startsWith('gemini-') && !lower.startsWith('gemini-claude-');
+  return lower.startsWith('gemini-');
 }

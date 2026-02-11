@@ -56,8 +56,8 @@ describe('shouldApplyExtendedContext', () => {
       expect(shouldApplyExtendedContext('gemini', 'gemini-3-pro-preview', undefined)).toBe(true);
     });
 
-    it('returns false for gemini-claude-* models (not native Gemini)', () => {
-      expect(shouldApplyExtendedContext('agy', 'gemini-claude-opus-4-5-thinking', undefined)).toBe(
+    it('returns false for Claude models without explicit flag', () => {
+      expect(shouldApplyExtendedContext('agy', 'claude-opus-4-5-thinking', undefined)).toBe(
         false
       );
     });
@@ -155,12 +155,12 @@ describe('applyExtendedContextConfig', () => {
   it('strips [1m] suffix from models that no longer support extended context', () => {
     // Simulates user who had [1m] in saved settings before support was removed
     const env: NodeJS.ProcessEnv = {
-      ANTHROPIC_MODEL: 'gemini-claude-opus-4-6-thinking[1m]',
-      ANTHROPIC_DEFAULT_OPUS_MODEL: 'gemini-claude-opus-4-6-thinking[1m]',
+      ANTHROPIC_MODEL: 'claude-opus-4-6-thinking[1m]',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-6-thinking[1m]',
     };
     applyExtendedContextConfig(env, 'agy', undefined);
-    expect(env.ANTHROPIC_MODEL).toBe('gemini-claude-opus-4-6-thinking');
-    expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gemini-claude-opus-4-6-thinking');
+    expect(env.ANTHROPIC_MODEL).toBe('claude-opus-4-6-thinking');
+    expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('claude-opus-4-6-thinking');
   });
 
   it('strips [1m] suffix when --no-1m is explicit even if model has it', () => {

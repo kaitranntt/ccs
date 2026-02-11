@@ -103,13 +103,13 @@ describe('InteractivePrompt', () => {
         process.env.CCS_YES = '1';
 
         const options = [
-          { id: 'gemini-claude-opus-4-5-thinking', label: 'Claude Opus 4.5 Thinking' },
-          { id: 'gemini-claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
+          { id: 'claude-opus-4-5-thinking', label: 'Claude Opus 4.5 Thinking' },
+          { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
         ];
 
         try {
           const result = await InteractivePrompt.selectFromList('Select:', options);
-          assert.strictEqual(result, 'gemini-claude-opus-4-5-thinking');
+          assert.strictEqual(result, 'claude-opus-4-5-thinking');
         } finally {
           delete process.env.CCS_YES;
         }

@@ -39,13 +39,13 @@ describe('Model Catalog', () => {
   describe('AGY models', () => {
     it('has correct default model', () => {
       const { MODEL_CATALOG } = modelCatalog;
-      assert.strictEqual(MODEL_CATALOG.agy.defaultModel, 'gemini-claude-opus-4-6-thinking');
+      assert.strictEqual(MODEL_CATALOG.agy.defaultModel, 'claude-opus-4-6-thinking');
     });
 
     it('includes Claude Opus 4.5 Thinking', () => {
       const { MODEL_CATALOG } = modelCatalog;
       const opus = MODEL_CATALOG.agy.models.find(
-        (m) => m.id === 'gemini-claude-opus-4-5-thinking'
+        (m) => m.id === 'claude-opus-4-5-thinking'
       );
       assert(opus, 'Should include Claude Opus 4.5 Thinking');
       assert.strictEqual(opus.name, 'Claude Opus 4.5 Thinking');
@@ -54,7 +54,7 @@ describe('Model Catalog', () => {
     it('includes Claude Sonnet 4.5 Thinking', () => {
       const { MODEL_CATALOG } = modelCatalog;
       const sonnetThinking = MODEL_CATALOG.agy.models.find(
-        (m) => m.id === 'gemini-claude-sonnet-4-5-thinking'
+        (m) => m.id === 'claude-sonnet-4-5-thinking'
       );
       assert(sonnetThinking, 'Should include Claude Sonnet 4.5 Thinking');
       assert.strictEqual(sonnetThinking.name, 'Claude Sonnet 4.5 Thinking');
@@ -62,7 +62,7 @@ describe('Model Catalog', () => {
 
     it('includes Claude Sonnet 4.5', () => {
       const { MODEL_CATALOG } = modelCatalog;
-      const sonnet = MODEL_CATALOG.agy.models.find((m) => m.id === 'gemini-claude-sonnet-4-5');
+      const sonnet = MODEL_CATALOG.agy.models.find((m) => m.id === 'claude-sonnet-4-5');
       assert(sonnet, 'Should include Claude Sonnet 4.5');
       assert.strictEqual(sonnet.name, 'Claude Sonnet 4.5');
     });
@@ -160,7 +160,7 @@ describe('Model Catalog', () => {
   describe('findModel', () => {
     it('finds Claude Opus 4.5 Thinking in agy', () => {
       const { findModel } = modelCatalog;
-      const model = findModel('agy', 'gemini-claude-opus-4-5-thinking');
+      const model = findModel('agy', 'claude-opus-4-5-thinking');
       assert(model, 'Should find model');
       assert.strictEqual(model.name, 'Claude Opus 4.5 Thinking');
     });
@@ -227,7 +227,7 @@ describe('Model Catalog', () => {
     it('Claude Opus 4.5 Thinking is not deprecated', () => {
       const { MODEL_CATALOG } = modelCatalog;
       const opus = MODEL_CATALOG.agy.models.find(
-        (m) => m.id === 'gemini-claude-opus-4-5-thinking'
+        (m) => m.id === 'claude-opus-4-5-thinking'
       );
       assert(opus, 'Should include Claude Opus 4.5 Thinking');
       assert.strictEqual(opus.deprecated, undefined, 'Should not be marked as deprecated');
@@ -236,7 +236,7 @@ describe('Model Catalog', () => {
     it('Claude Sonnet 4.5 Thinking is not deprecated', () => {
       const { MODEL_CATALOG } = modelCatalog;
       const sonnetThinking = MODEL_CATALOG.agy.models.find(
-        (m) => m.id === 'gemini-claude-sonnet-4-5-thinking'
+        (m) => m.id === 'claude-sonnet-4-5-thinking'
       );
       assert(sonnetThinking, 'Should include Claude Sonnet 4.5 Thinking');
       assert.strictEqual(sonnetThinking.deprecated, undefined, 'Should not be marked as deprecated');
@@ -247,13 +247,13 @@ describe('Model Catalog', () => {
       const models = MODEL_CATALOG.agy.models;
 
       // Find indices of thinking models
-      const opusIdx = models.findIndex((m) => m.id === 'gemini-claude-opus-4-5-thinking');
+      const opusIdx = models.findIndex((m) => m.id === 'claude-opus-4-5-thinking');
       const sonnetThinkingIdx = models.findIndex(
-        (m) => m.id === 'gemini-claude-sonnet-4-5-thinking'
+        (m) => m.id === 'claude-sonnet-4-5-thinking'
       );
 
       // Find indices of non-thinking models
-      const sonnetIdx = models.findIndex((m) => m.id === 'gemini-claude-sonnet-4-5');
+      const sonnetIdx = models.findIndex((m) => m.id === 'claude-sonnet-4-5');
       const geminiIdx = models.findIndex((m) => m.id === 'gemini-3-pro-preview');
 
       // Thinking models should come before non-thinking models
@@ -273,13 +273,13 @@ describe('Model Catalog', () => {
   describe('isModelDeprecated', () => {
     it('returns false for thinking models (no longer deprecated)', () => {
       const { isModelDeprecated } = modelCatalog;
-      assert.strictEqual(isModelDeprecated('agy', 'gemini-claude-opus-4-5-thinking'), false);
-      assert.strictEqual(isModelDeprecated('agy', 'gemini-claude-sonnet-4-5-thinking'), false);
+      assert.strictEqual(isModelDeprecated('agy', 'claude-opus-4-5-thinking'), false);
+      assert.strictEqual(isModelDeprecated('agy', 'claude-sonnet-4-5-thinking'), false);
     });
 
     it('returns false for non-deprecated models', () => {
       const { isModelDeprecated } = modelCatalog;
-      assert.strictEqual(isModelDeprecated('agy', 'gemini-claude-sonnet-4-5'), false);
+      assert.strictEqual(isModelDeprecated('agy', 'claude-sonnet-4-5'), false);
       assert.strictEqual(isModelDeprecated('agy', 'gemini-3-pro-preview'), false);
     });
 
@@ -292,13 +292,13 @@ describe('Model Catalog', () => {
   describe('getModelDeprecationReason', () => {
     it('returns undefined for thinking models (no longer deprecated)', () => {
       const { getModelDeprecationReason } = modelCatalog;
-      assert.strictEqual(getModelDeprecationReason('agy', 'gemini-claude-opus-4-5-thinking'), undefined);
-      assert.strictEqual(getModelDeprecationReason('agy', 'gemini-claude-sonnet-4-5-thinking'), undefined);
+      assert.strictEqual(getModelDeprecationReason('agy', 'claude-opus-4-5-thinking'), undefined);
+      assert.strictEqual(getModelDeprecationReason('agy', 'claude-sonnet-4-5-thinking'), undefined);
     });
 
     it('returns undefined for non-deprecated models', () => {
       const { getModelDeprecationReason } = modelCatalog;
-      assert.strictEqual(getModelDeprecationReason('agy', 'gemini-claude-sonnet-4-5'), undefined);
+      assert.strictEqual(getModelDeprecationReason('agy', 'claude-sonnet-4-5'), undefined);
     });
   });
 });

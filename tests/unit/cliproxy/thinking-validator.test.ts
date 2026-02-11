@@ -106,7 +106,7 @@ describe('Thinking Validator', () => {
 
   describe('Budget-type models (like Claude via agy)', () => {
     // Claude models via agy use budget-type thinking
-    const budgetModel = 'gemini-claude-sonnet-4-5-thinking';
+    const budgetModel = 'claude-sonnet-4-5-thinking';
 
     it('should accept valid numeric budget', () => {
       const result = validateThinking('agy', budgetModel, 8192);

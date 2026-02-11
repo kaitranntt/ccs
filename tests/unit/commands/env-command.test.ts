@@ -125,14 +125,14 @@ describe('env-command', () => {
       const result = transformToOpenAI({
         ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/gemini',
         ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
-        ANTHROPIC_MODEL: 'gemini-claude-sonnet-4-5',
+        ANTHROPIC_MODEL: 'claude-sonnet-4-5',
       });
 
       expect(result).toEqual({
         OPENAI_API_KEY: 'ccs-internal-managed',
         OPENAI_BASE_URL: 'http://127.0.0.1:8317/api/provider/gemini',
         LOCAL_ENDPOINT: 'http://127.0.0.1:8317/api/provider/gemini',
-        OPENAI_MODEL: 'gemini-claude-sonnet-4-5',
+        OPENAI_MODEL: 'claude-sonnet-4-5',
       });
     });
 
