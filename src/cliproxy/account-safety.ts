@@ -64,6 +64,11 @@ function saveAutoPaused(data: AutoPausedFile): void {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', { mode: 0o600 });
 }
 
+/**
+ * Check if a process is alive. NOTE: PIDs can be recycled by the OS.
+ * If a stale PID is reused by an unrelated process, cleanup is deferred until that process exits.
+ * This is acceptable — next CCS launch will self-heal via cleanupStaleAutoPauses().
+ */
 function isPidAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);

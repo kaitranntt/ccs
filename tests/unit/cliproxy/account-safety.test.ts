@@ -17,6 +17,8 @@ import {
   cleanupStaleAutoPauses,
   restoreAutoPausedAccounts,
   checkNewAccountConflict,
+  handleBanDetection,
+  warnCrossProviderDuplicates,
 } from '../../../src/cliproxy/account-safety';
 
 // --- Test isolation: use temp CCS_HOME ---
@@ -480,5 +482,140 @@ describe('restoreAutoPausedAccounts', () => {
       fs.readFileSync(path.join(ccsDir(), 'cliproxy', 'accounts.json'), 'utf-8')
     );
     expect(registry.providers.agy.accounts['banned@gmail.com'].paused).toBe(true);
+  });
+});
+
+// ========================================
+// handleBanDetection
+// ========================================
+
+describe('handleBanDetection', () => {
+  it('should pause account when ban error detected', () => {
+    writeRegistry({
+      gemini: {
+        default: 'user@gmail.com',
+        accounts: {
+          'user@gmail.com': {
+            email: 'user@gmail.com',
+            tokenFile: 'gemini-user.json',
+          },
+        },
+      },
+    });
+    writeTokenFile('gemini-user.json');
+
+    const result = handleBanDetection(
+      'gemini',
+      'user@gmail.com',
+      'API access disabled in this account'
+    );
+
+    expect(result).toBe(true);
+
+    // Verify account was paused in registry
+    const registry = JSON.parse(
+      fs.readFileSync(path.join(ccsDir(), 'cliproxy', 'accounts.json'), 'utf-8')
+    );
+    expect(registry.providers.gemini.accounts['user@gmail.com'].paused).toBe(true);
+  });
+
+  it('should return false for non-ban errors', () => {
+    writeRegistry({
+      gemini: {
+        default: 'user@gmail.com',
+        accounts: {
+          'user@gmail.com': {
+            email: 'user@gmail.com',
+            tokenFile: 'gemini-user.json',
+          },
+        },
+      },
+    });
+    writeTokenFile('gemini-user.json');
+
+    const result = handleBanDetection('gemini', 'user@gmail.com', 'Rate limit exceeded');
+
+    expect(result).toBe(false);
+
+    // Verify account was NOT paused
+    const registry = JSON.parse(
+      fs.readFileSync(path.join(ccsDir(), 'cliproxy', 'accounts.json'), 'utf-8')
+    );
+    expect(registry.providers.gemini.accounts['user@gmail.com'].paused).toBeUndefined();
+  });
+});
+
+// ========================================
+// warnCrossProviderDuplicates
+// ========================================
+
+describe('warnCrossProviderDuplicates', () => {
+  it('should return true when duplicates exist', () => {
+    writeRegistry({
+      gemini: {
+        default: 'shared@gmail.com',
+        accounts: {
+          'shared@gmail.com': {
+            email: 'shared@gmail.com',
+            tokenFile: 'gemini-shared.json',
+          },
+        },
+      },
+      agy: {
+        default: 'shared@gmail.com',
+        accounts: {
+          'shared@gmail.com': {
+            email: 'shared@gmail.com',
+            tokenFile: 'agy-shared.json',
+          },
+        },
+      },
+    });
+
+    const result = warnCrossProviderDuplicates('gemini');
+    expect(result).toBe(true);
+  });
+
+  it('should return false when no duplicates', () => {
+    writeRegistry({
+      gemini: {
+        default: 'user1@gmail.com',
+        accounts: {
+          'user1@gmail.com': {
+            email: 'user1@gmail.com',
+            tokenFile: 'gemini-user1.json',
+          },
+        },
+      },
+      agy: {
+        default: 'user2@gmail.com',
+        accounts: {
+          'user2@gmail.com': {
+            email: 'user2@gmail.com',
+            tokenFile: 'agy-user2.json',
+          },
+        },
+      },
+    });
+
+    const result = warnCrossProviderDuplicates('gemini');
+    expect(result).toBe(false);
+  });
+
+  it('should return false for non-Google providers', () => {
+    writeRegistry({
+      kiro: {
+        default: 'user@example.com',
+        accounts: {
+          'user@example.com': {
+            email: 'user@example.com',
+            tokenFile: 'kiro-user.json',
+          },
+        },
+      },
+    });
+
+    const result = warnCrossProviderDuplicates('kiro' as never);
+    expect(result).toBe(false);
   });
 });
