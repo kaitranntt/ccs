@@ -26,7 +26,7 @@ interface PRContext {
 // Config
 const MAX_DIFF_LINES = 10000;
 const CLIPROXY_URL = process.env.CLIPROXY_URL || 'http://localhost:8317';
-const MODEL = process.env.REVIEW_MODEL || 'gemini-claude-opus-4-6-thinking';
+const MODEL = process.env.REVIEW_MODEL || 'claude-opus-4-6-thinking';
 
 // System prompt for code review - new style
 const CODE_REVIEWER_SYSTEM_PROMPT = `You are the CCS AGY Code Reviewer, an expert AI assistant reviewing pull requests for the CCS CLI project.

@@ -8,14 +8,14 @@ export const EXTENDED_CONTEXT_SUFFIX = '[1m]';
 
 /**
  * Check if model is a native Gemini model (auto-enabled behavior).
- * Native Gemini models: gemini-* but NOT gemini-claude-*
+ * Native Gemini models have the gemini-* prefix.
  *
  * NOTE: This function is intentionally duplicated from src/cliproxy/model-catalog.ts
  * to avoid bundling backend code in the UI. Keep both in sync.
  */
 export function isNativeGeminiModel(modelId: string): boolean {
   const lower = modelId.toLowerCase();
-  return lower.startsWith('gemini-') && !lower.startsWith('gemini-claude-');
+  return lower.startsWith('gemini-');
 }
 
 /**

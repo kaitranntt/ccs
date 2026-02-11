@@ -70,12 +70,12 @@ jobs:
     # CLIProxy environment for model routing
     env:
       ANTHROPIC_BASE_URL: http://localhost:8317
-      REVIEW_MODEL: gemini-claude-opus-4-6-thinking
+      REVIEW_MODEL: claude-opus-4-6-thinking
       ANTHROPIC_AUTH_TOKEN: ccs-internal-managed
-      ANTHROPIC_MODEL: gemini-claude-opus-4-6-thinking
-      ANTHROPIC_DEFAULT_OPUS_MODEL: gemini-claude-opus-4-6-thinking
-      ANTHROPIC_DEFAULT_SONNET_MODEL: gemini-claude-sonnet-4-5-thinking
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: gemini-claude-sonnet-4-5
+      ANTHROPIC_MODEL: claude-opus-4-6-thinking
+      ANTHROPIC_DEFAULT_OPUS_MODEL: claude-opus-4-6-thinking
+      ANTHROPIC_DEFAULT_SONNET_MODEL: claude-sonnet-4-5-thinking
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: claude-sonnet-4-5
       DISABLE_BUG_COMMAND: "1"
       DISABLE_ERROR_REPORTING: "1"
       DISABLE_TELEMETRY: "1"
