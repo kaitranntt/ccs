@@ -50,6 +50,7 @@ import {
   displayWebSearchStatus,
 } from '../../utils/websearch-manager';
 import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
+import { installImageAnalyzerHook } from '../../utils/hooks';
 import { HttpsTunnelProxy } from '../https-tunnel-proxy';
 
 // Import modular components
@@ -161,6 +162,9 @@ export async function execClaudeWithCLIProxy(
   ensureMcpWebSearch();
   installWebSearchHook();
   displayWebSearchStatus();
+
+  // Sync image analyzer hook from npm package to ~/.ccs/hooks/
+  installImageAnalyzerHook();
 
   const providerConfig = getProviderConfig(provider);
   log(`Provider: ${providerConfig.displayName}`);
