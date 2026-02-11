@@ -425,8 +425,8 @@ describe('Image Analyzer Hook', () => {
         },
       });
 
-      // Should exit with error (code 2)
-      expect(hookProcess.status).toBe(2);
+      // Should pass through silently (exit 0) — can't determine file type from malformed input
+      expect(hookProcess.status).toBe(0);
     });
   });
 
