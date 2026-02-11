@@ -26,23 +26,24 @@ export const CCS_CONTROL_PANEL_SECRET = 'ccs';
  * v4: Added Kiro (AWS) and GitHub Copilot providers
  * v5: Added disable-cooling: true for stability
  * v6: Added oauth-model-alias with Opus 4.6 support
+ * v7: Added fork:true for Claude model aliases (keep both upstream and alias names)
  */
-export const CLIPROXY_CONFIG_VERSION = 6;
+export const CLIPROXY_CONFIG_VERSION = 7;
 
 /**
  * Default Antigravity oauth-model-alias entries.
  * Maps user-facing model names to Antigravity internal model names.
  * Must stay in sync with CLIProxyAPIPlus defaultAntigravityAliases().
  */
-const DEFAULT_ANTIGRAVITY_ALIASES: Array<{ name: string; alias: string }> = [
+const DEFAULT_ANTIGRAVITY_ALIASES: Array<{ name: string; alias: string; fork?: boolean }> = [
   { name: 'rev19-uic3-1p', alias: 'gemini-2.5-computer-use-preview-10-2025' },
   { name: 'gemini-3-pro-image', alias: 'gemini-3-pro-image-preview' },
   { name: 'gemini-3-pro-high', alias: 'gemini-3-pro-preview' },
   { name: 'gemini-3-flash', alias: 'gemini-3-flash-preview' },
-  { name: 'claude-sonnet-4-5', alias: 'gemini-claude-sonnet-4-5' },
-  { name: 'claude-sonnet-4-5-thinking', alias: 'gemini-claude-sonnet-4-5-thinking' },
-  { name: 'claude-opus-4-5-thinking', alias: 'gemini-claude-opus-4-5-thinking' },
-  { name: 'claude-opus-4-6-thinking', alias: 'gemini-claude-opus-4-6-thinking' },
+  { name: 'claude-sonnet-4-5', alias: 'gemini-claude-sonnet-4-5', fork: true },
+  { name: 'claude-sonnet-4-5-thinking', alias: 'gemini-claude-sonnet-4-5-thinking', fork: true },
+  { name: 'claude-opus-4-5-thinking', alias: 'gemini-claude-opus-4-5-thinking', fork: true },
+  { name: 'claude-opus-4-6-thinking', alias: 'gemini-claude-opus-4-6-thinking', fork: true },
 ];
 
 /** Provider display names (static metadata) */
@@ -103,21 +104,44 @@ function generateOAuthModelAliasSection(existingAliases?: string): string {
     const existingNames = new Set(aliasEntries.map((a) => a.name));
     const lines = existingAliases.split('\n');
     let currentName = '';
+    let currentAlias = '';
+    let currentFork = false;
     for (const line of lines) {
       const nameMatch = line.match(/^\s+-\s*name:\s*(.+)/);
       const aliasMatch = line.match(/^\s+alias:\s*(.+)/);
+      const forkMatch = line.match(/^\s+fork:\s*(.+)/);
       if (nameMatch) {
+        // Flush previous entry if complete
+        if (currentName && currentAlias && !existingNames.has(currentName)) {
+          aliasEntries.push({
+            name: currentName,
+            alias: currentAlias,
+            fork: currentFork || undefined,
+          });
+          existingNames.add(currentName);
+        }
         currentName = nameMatch[1].trim();
-      } else if (aliasMatch && currentName && !existingNames.has(currentName)) {
-        aliasEntries.push({ name: currentName, alias: aliasMatch[1].trim() });
-        existingNames.add(currentName);
-        currentName = '';
+        currentAlias = '';
+        currentFork = false;
+      } else if (aliasMatch) {
+        currentAlias = aliasMatch[1].trim();
+      } else if (forkMatch) {
+        currentFork = forkMatch[1].trim().toLowerCase() === 'true';
       }
+    }
+    // Flush last entry
+    if (currentName && currentAlias && !existingNames.has(currentName)) {
+      aliasEntries.push({ name: currentName, alias: currentAlias, fork: currentFork || undefined });
+      existingNames.add(currentName);
     }
   }
 
   const entries = aliasEntries
-    .map((a) => `    - name: ${a.name}\n      alias: ${a.alias}`)
+    .map((a) => {
+      let entry = `    - name: ${a.name}\n      alias: ${a.alias}`;
+      if (a.fork) entry += '\n      fork: true';
+      return entry;
+    })
     .join('\n');
 
   return `oauth-model-alias:\n  antigravity:\n${entries}`;
