@@ -173,7 +173,7 @@ describe('Quota Exhaustion Handlers', () => {
           normal_interval_seconds: 300,
           critical_interval_seconds: 60,
           warn_threshold: 20,
-          exhaust_threshold: 0,
+          exhaustion_threshold: 0,
           cooldown_minutes: 10,
         },
       });
@@ -214,7 +214,7 @@ describe('Quota Exhaustion Handlers', () => {
           normal_interval_seconds: 300,
           critical_interval_seconds: 60,
           warn_threshold: 20,
-          exhaust_threshold: 0,
+          exhaustion_threshold: 0,
           cooldown_minutes: 10,
         },
       });
@@ -252,7 +252,7 @@ describe('Quota Exhaustion Handlers', () => {
           normal_interval_seconds: 300,
           critical_interval_seconds: 60,
           warn_threshold: 20,
-          exhaust_threshold: 0,
+          exhaustion_threshold: 0,
           cooldown_minutes: 10,
         },
       });
@@ -299,14 +299,14 @@ describe('Quota Exhaustion Handlers', () => {
           normal_interval_seconds: 300,
           critical_interval_seconds: 60,
           warn_threshold: 20,
-          exhaust_threshold: 0,
+          exhaustion_threshold: 0,
           cooldown_minutes: 5,
         },
       });
 
-      expect(async () => {
-        await handleQuotaExhaustion('agy', 'test@gmail.com', 5);
-      }).not.toThrow();
+      const result = await handleQuotaExhaustion('agy', 'test@gmail.com', 5);
+      expect(result).toBeDefined();
+      expect(result.switchedTo).toBeNull();
     });
   });
 });

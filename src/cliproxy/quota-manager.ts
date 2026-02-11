@@ -450,7 +450,7 @@ function scheduleNextPoll(
       if (monitorStopped) return; // Re-check after async fetch
       const avgQuota = calculateAverageQuota(quota) ?? 100;
 
-      if (avgQuota <= monitorConfig.exhaust_threshold) {
+      if (avgQuota <= monitorConfig.exhaustion_threshold) {
         // EXHAUSTED: cooldown + switch default + stop monitoring
         const { handleQuotaExhaustion } = await import('./account-safety');
         await handleQuotaExhaustion(provider, accountId, monitorConfig.cooldown_minutes);

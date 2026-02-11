@@ -354,9 +354,9 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
         warn_threshold:
           partial.quota_management?.runtime_monitor?.warn_threshold ??
           DEFAULT_QUOTA_MANAGEMENT_CONFIG.runtime_monitor.warn_threshold,
-        exhaust_threshold:
-          partial.quota_management?.runtime_monitor?.exhaust_threshold ??
-          DEFAULT_QUOTA_MANAGEMENT_CONFIG.runtime_monitor.exhaust_threshold,
+        exhaustion_threshold:
+          partial.quota_management?.runtime_monitor?.exhaustion_threshold ??
+          DEFAULT_QUOTA_MANAGEMENT_CONFIG.runtime_monitor.exhaustion_threshold,
         cooldown_minutes:
           partial.quota_management?.runtime_monitor?.cooldown_minutes ??
           DEFAULT_QUOTA_MANAGEMENT_CONFIG.runtime_monitor.cooldown_minutes,

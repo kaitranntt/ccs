@@ -385,7 +385,7 @@ function truncate(str: string, maxLen: number): string {
 export function writeQuotaWarning(accountId: string, quotaPercent: number): void {
   const masked = maskEmail(accountId);
   const lines = [
-    `[!] Quota Low: ${masked} (${quotaPercent}% remaining)`,
+    `[!] Quota Low: ${masked} (${Math.round(quotaPercent)}% remaining)`,
     `    Next session will use a different account if available`,
   ];
   const maxLen = Math.max(...lines.map((l) => l.length));
@@ -402,7 +402,7 @@ export function writeQuotaWarning(accountId: string, quotaPercent: number): void
 
 /**
  * Write boxed quota exhaustion alert to stderr.
- * Called when quota falls below exhaust_threshold — account will be cooled down.
+ * Called when quota falls below exhaustion_threshold — account will be cooled down.
  */
 function writeQuotaExhausted(
   accountId: string,

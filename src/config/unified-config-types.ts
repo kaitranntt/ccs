@@ -383,7 +383,7 @@ export interface RuntimeMonitorConfig {
   /** Quota percentage that triggers fast polling + warning (default: 20) */
   warn_threshold: number;
   /** Quota percentage that triggers cooldown + switch (default: 5) */
-  exhaust_threshold: number;
+  exhaustion_threshold: number;
   /** Minutes to cooldown exhausted account (default: 10) */
   cooldown_minutes: number;
 }
@@ -451,7 +451,7 @@ export const DEFAULT_RUNTIME_MONITOR_CONFIG: RuntimeMonitorConfig = {
   normal_interval_seconds: 300,
   critical_interval_seconds: 60,
   warn_threshold: 20,
-  exhaust_threshold: 5,
+  exhaustion_threshold: 5,
   cooldown_minutes: 10,
 };
 
