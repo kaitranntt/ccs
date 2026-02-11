@@ -268,20 +268,23 @@ export function enforceProviderIsolation(provider: CLIProxyProvider): number {
     pauseAccount(p, accountId);
   }
 
-  // Record for crash recovery
-  data.sessions = data.sessions.filter((s) => s.initiator !== provider);
-  data.sessions.push({
+  // Record for crash recovery (re-read to reduce concurrent write race window)
+  const freshData = loadAutoPaused();
+  freshData.sessions = freshData.sessions.filter((s) => s.initiator !== provider);
+  freshData.sessions.push({
     initiator: provider,
     pid: process.pid,
     pausedAt: new Date().toISOString(),
     accounts: toPause,
   });
-  saveAutoPaused(data);
+  saveAutoPaused(freshData);
 
   console.error('');
   console.error(info(`Account safety: auto-paused ${toPause.length} conflicting account(s)`));
   for (const { provider: p, accountId } of toPause) {
-    console.error(`    ${maskEmail(accountId)} (${p})`);
+    const acct = registry.providers[p]?.accounts[accountId];
+    const display = acct?.email ? maskEmail(acct.email) : accountId;
+    console.error(`    ${display} (${p})`);
   }
   console.error('    Will restore on session exit.');
   console.error('');
@@ -356,7 +359,7 @@ export function handleBanDetection(
 }
 
 /** Mask email for privacy in terminal output */
-function maskEmail(email: string): string {
+export function maskEmail(email: string): string {
   const [local, domain] = email.split('@');
   if (!local || !domain) return email;
   return `${local.slice(0, 3)}***@${domain}`;
