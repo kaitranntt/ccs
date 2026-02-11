@@ -33,6 +33,7 @@ pnpm-lock.yaml
 package-lock.json
 
 .claude/active-plan
+.claude/agent-memory/
 
 # Logs directory
 logs/

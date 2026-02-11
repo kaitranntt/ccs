@@ -451,7 +451,10 @@ function scheduleNextPoll(
       const avgQuota = calculateAverageQuota(quota) ?? 100;
 
       if (avgQuota <= monitorConfig.exhaustion_threshold) {
-        // EXHAUSTED: cooldown + switch default + stop monitoring
+        // EXHAUSTED: cooldown + switch default + stop monitoring.
+        // NOTE: Monitor stops here intentionally. The current session continues
+        // on the exhausted account (can't hot-swap mid-session). The switched
+        // default only takes effect on next session start via preflightCheck().
         const { handleQuotaExhaustion } = await import('./account-safety');
         await handleQuotaExhaustion(provider, accountId, monitorConfig.cooldown_minutes);
         monitorTimer = null;
@@ -518,6 +521,12 @@ export function startQuotaMonitor(provider: CLIProxyProvider, accountId: string)
   // Skip if manual mode or runtime monitor disabled
   if (quotaConfig.mode === 'manual') return;
   if (!quotaConfig.runtime_monitor?.enabled) return;
+
+  // Validate thresholds: warn must be > exhaustion to avoid immediate exhaustion on warning
+  const monitorConfig = quotaConfig.runtime_monitor;
+  if (monitorConfig.warn_threshold <= monitorConfig.exhaustion_threshold) {
+    return; // Invalid config — skip monitoring silently (logged at config level)
+  }
 
   hasWarnedThisSession = false;
   monitorStopped = false;

@@ -452,7 +452,7 @@ export const DEFAULT_RUNTIME_MONITOR_CONFIG: RuntimeMonitorConfig = {
   critical_interval_seconds: 60,
   warn_threshold: 20,
   exhaustion_threshold: 5,
-  cooldown_minutes: 10,
+  cooldown_minutes: 5,
 };
 
 /**
