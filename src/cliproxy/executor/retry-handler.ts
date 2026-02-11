@@ -10,6 +10,7 @@
 
 import { fail, warn, info } from '../../utils/ui';
 import { CLIProxyProvider } from '../types';
+import { handleBanDetection } from '../account-safety';
 
 /**
  * Check if error is network-related
@@ -50,6 +51,15 @@ export async function handleTokenExpiration(
   const tokenResult = await ensureTokenValid(provider, verbose);
 
   if (!tokenResult.valid) {
+    // Check if this is an account ban/disable before generic error
+    if (tokenResult.error) {
+      const { getDefaultAccount } = await import('../account-manager');
+      const account = getDefaultAccount(provider);
+      if (account) {
+        handleBanDetection(provider, account.id, tokenResult.error);
+      }
+    }
+
     // Token expired and refresh failed - trigger re-auth
     console.error(warn('OAuth token expired and refresh failed'));
     if (tokenResult.error) {

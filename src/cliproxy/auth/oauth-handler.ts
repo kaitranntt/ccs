@@ -39,6 +39,7 @@ import { getProviderTokenDir, isAuthenticated, registerAccountFromToken } from '
 import { executeOAuthProcess } from './oauth-process';
 import { importKiroToken } from './kiro-import';
 import { getProxyTarget, buildProxyUrl, buildManagementHeaders } from '../proxy-target-resolver';
+import { checkNewAccountConflict, warnNewAccountConflict } from '../account-safety';
 
 /**
  * Prompt user to add another account
@@ -379,7 +380,17 @@ async function handlePasteCallbackMode(
     }
 
     console.log(ok('Authentication successful!'));
-    return registerAccountFromToken(provider, tokenDir, nickname);
+    const account = registerAccountFromToken(provider, tokenDir, nickname);
+
+    // Account safety: check for cross-provider conflicts
+    if (account?.email) {
+      const conflicts = checkNewAccountConflict(provider, account.email);
+      if (conflicts) {
+        warnNewAccountConflict(account.email, conflicts);
+      }
+    }
+
+    return account;
   } catch (error) {
     if (verbose) {
       console.log(fail(`Error: ${(error as Error).message}`));
@@ -541,6 +552,14 @@ export async function triggerOAuth(
     console.log(info('Tip: To save your AWS login credentials for future sessions:'));
     console.log('       Use: ccs kiro --no-incognito');
     console.log('       Or enable "Kiro: Use normal browser" in: ccs config');
+  }
+
+  // Account safety: check for cross-provider conflicts
+  if (account?.email) {
+    const conflicts = checkNewAccountConflict(provider, account.email);
+    if (conflicts) {
+      warnNewAccountConflict(account.email, conflicts);
+    }
   }
 
   return account;

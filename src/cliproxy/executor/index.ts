@@ -62,6 +62,12 @@ import {
   handleQuotaCheck,
 } from './retry-handler';
 import { checkOrJoinProxy, registerProxySession, setupCleanupHandlers } from './session-bridge';
+import {
+  warnCrossProviderDuplicates,
+  cleanupStaleAutoPauses,
+  enforceProviderIsolation,
+  restoreAutoPausedAccounts,
+} from '../account-safety';
 import { getWebSearchHookEnv } from '../../utils/websearch-manager';
 
 /** Default executor configuration */
@@ -501,6 +507,20 @@ export async function execClaudeWithCLIProxy(
   // 3b. Preflight quota check (Antigravity only)
   if (!skipLocalAuth) {
     await handleQuotaCheck(provider);
+  }
+
+  // 3c. Account safety: enforce cross-provider isolation
+  if (!skipLocalAuth) {
+    cleanupStaleAutoPauses();
+    const isolated = enforceProviderIsolation(provider);
+    if (isolated === 0) {
+      // No enforcement — still warn about duplicates for awareness
+      warnCrossProviderDuplicates(provider);
+    } else {
+      process.on('exit', () => {
+        restoreAutoPausedAccounts(provider);
+      });
+    }
   }
 
   // 4. First-run model configuration
