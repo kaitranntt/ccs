@@ -160,6 +160,7 @@ bun run validate            # Step 3: Final check (must pass)
 | `ccs env --help` | `src/commands/env-command.ts` → `showHelp()` |
 | `ccs persist --help` | `src/commands/persist-command.ts` → `showHelp()` |
 | `ccs setup --help` | `src/commands/setup-command.ts` → `showHelp()` |
+| `ccs skills --help` | `src/commands/skills-command.ts` → `showHelp()` |
 
 **Note:** `lib/ccs` and `lib/ccs.ps1` are bootstrap wrappers only—they delegate to Node.js and contain no help text.
 

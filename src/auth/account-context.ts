@@ -7,17 +7,22 @@
 
 export type AccountContextMode = 'isolated' | 'shared';
 export type AccountContinuityMode = 'standard' | 'deeper';
+export type AccountSkillsMode = 'shared' | 'isolated';
+
+export const DEFAULT_ACCOUNT_SKILLS_MODE: AccountSkillsMode = 'shared';
 
 export interface AccountContextMetadata {
   context_mode?: AccountContextMode;
   context_group?: string;
   continuity_mode?: AccountContinuityMode;
+  skills_mode?: AccountSkillsMode;
 }
 
 export interface AccountContextPolicy {
   mode: AccountContextMode;
   group?: string;
   continuityMode?: AccountContinuityMode;
+  skillsMode?: AccountSkillsMode;
 }
 
 export interface CreateAccountContextInput {
@@ -72,13 +77,15 @@ export function isAccountContextMetadata(value: unknown): value is AccountContex
   const mode = candidate['context_mode'];
   const group = candidate['context_group'];
   const continuity = candidate['continuity_mode'];
+  const skills = candidate['skills_mode'];
 
   const modeValid = mode === undefined || mode === 'isolated' || mode === 'shared';
   const groupValid = group === undefined || typeof group === 'string';
   const continuityValid =
     continuity === undefined || continuity === 'standard' || continuity === 'deeper';
+  const skillsValid = skills === undefined || skills === 'shared' || skills === 'isolated';
 
-  if (!modeValid || !groupValid || !continuityValid) {
+  if (!modeValid || !groupValid || !continuityValid || !skillsValid) {
     return false;
   }
 
@@ -153,6 +160,8 @@ export function resolveAccountContextPolicy(
   metadata?: AccountContextMetadata | null
 ): AccountContextPolicy {
   const mode: AccountContextMode = metadata?.context_mode === 'shared' ? 'shared' : 'isolated';
+  const skillsMode: AccountSkillsMode =
+    metadata?.skills_mode === 'isolated' ? 'isolated' : DEFAULT_ACCOUNT_SKILLS_MODE;
 
   if (mode === 'shared') {
     const continuityMode: AccountContinuityMode =
@@ -161,7 +170,7 @@ export function resolveAccountContextPolicy(
     if (rawGroup && rawGroup.trim().length > 0) {
       const normalized = normalizeContextGroupName(rawGroup);
       if (isValidContextGroupName(normalized)) {
-        return { mode: 'shared', group: normalized, continuityMode };
+        return { mode: 'shared', group: normalized, continuityMode, skillsMode };
       }
     }
 
@@ -169,10 +178,11 @@ export function resolveAccountContextPolicy(
       mode: 'shared',
       group: DEFAULT_ACCOUNT_CONTEXT_GROUP,
       continuityMode,
+      skillsMode,
     };
   }
 
-  return { mode: 'isolated' };
+  return { mode: 'isolated', skillsMode };
 }
 
 /**
@@ -181,17 +191,21 @@ export function resolveAccountContextPolicy(
 export function policyToAccountContextMetadata(
   policy: AccountContextPolicy
 ): AccountContextMetadata {
+  const skillsMode = policy.skillsMode === 'isolated' ? ('isolated' as const) : undefined;
+
   if (policy.mode === 'shared') {
     return {
       context_mode: 'shared',
       context_group: policy.group || DEFAULT_ACCOUNT_CONTEXT_GROUP,
       continuity_mode:
         policy.continuityMode === 'deeper' ? 'deeper' : DEFAULT_ACCOUNT_CONTINUITY_MODE,
+      skills_mode: skillsMode,
     };
   }
 
   return {
     context_mode: 'isolated',
+    skills_mode: skillsMode,
   };
 }
 
@@ -199,10 +213,11 @@ export function policyToAccountContextMetadata(
  * User-facing summary for display/help output.
  */
 export function formatAccountContextPolicy(policy: AccountContextPolicy): string {
+  const skillsSuffix = policy.skillsMode === 'isolated' ? ', skills: isolated' : '';
   if (policy.mode === 'shared') {
     const continuity = policy.continuityMode === 'deeper' ? 'deeper continuity' : 'standard';
-    return `shared (${policy.group || DEFAULT_ACCOUNT_CONTEXT_GROUP}, ${continuity})`;
+    return `shared (${policy.group || DEFAULT_ACCOUNT_CONTEXT_GROUP}, ${continuity}${skillsSuffix})`;
   }
 
-  return 'isolated';
+  return `isolated${skillsSuffix}`;
 }

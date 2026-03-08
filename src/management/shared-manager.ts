@@ -10,7 +10,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { ok, info, warn } from '../utils/ui';
-import { AccountContextPolicy, DEFAULT_ACCOUNT_CONTEXT_GROUP } from '../auth/account-context';
+import {
+  AccountContextPolicy,
+  DEFAULT_ACCOUNT_CONTEXT_GROUP,
+  DEFAULT_ACCOUNT_SKILLS_MODE,
+} from '../auth/account-context';
 import { getCcsDir } from '../utils/config-manager';
 
 interface SharedItem {
@@ -536,6 +540,102 @@ class SharedManager {
           `Synced shared project memory: ${migrated} migrated, ${merged} merged conflict(s), ${linked} linked`
         )
       );
+    }
+  }
+
+  /**
+   * Sync skills directory based on account policy.
+   *
+   * - shared (default): instance/skills is a symlink to shared/skills (→ ~/.claude/skills).
+   * - isolated: instance/skills is a real directory. Shared skills are individually
+   *   symlinked in, and profile-specific skills (added via npx skills) coexist.
+   */
+  async syncSkills(instancePath: string, policy: AccountContextPolicy): Promise<void> {
+    const skillsPath = path.join(instancePath, 'skills');
+    const skillsMode = policy.skillsMode || DEFAULT_ACCOUNT_SKILLS_MODE;
+
+    if (skillsMode === 'isolated') {
+      const currentStats = await this.getLstat(skillsPath);
+
+      // Already a real directory — just sync shared skills into it
+      if (currentStats?.isDirectory() && !currentStats.isSymbolicLink()) {
+        await this.syncSharedSkillsToIsolated(skillsPath);
+        return;
+      }
+
+      // Remove existing symlink (shared → isolated transition)
+      if (currentStats?.isSymbolicLink()) {
+        await fs.promises.unlink(skillsPath);
+      } else if (currentStats) {
+        await fs.promises.rm(skillsPath, { force: true });
+      }
+
+      await this.ensureDirectory(skillsPath);
+      await this.syncSharedSkillsToIsolated(skillsPath);
+    } else {
+      // shared mode: restore shared symlink
+      const currentStats = await this.getLstat(skillsPath);
+
+      // Already the correct shared symlink — nothing to do
+      const sharedSkills = path.join(this.sharedDir, 'skills');
+      if (currentStats?.isSymbolicLink()) {
+        if (await this.isSymlinkTarget(skillsPath, sharedSkills)) {
+          return;
+        }
+        await fs.promises.unlink(skillsPath);
+      } else if (currentStats?.isDirectory()) {
+        // Real directory → shared: warn about profile-only skills being lost
+        console.log(
+          warn(
+            'Restoring shared skills mode. Profile-only skills in this directory will be removed.'
+          )
+        );
+        await fs.promises.rm(skillsPath, { recursive: true, force: true });
+      } else if (currentStats) {
+        await fs.promises.rm(skillsPath, { force: true });
+      }
+
+      await this.linkDirectoryWithFallback(sharedSkills, skillsPath);
+    }
+  }
+
+  /**
+   * Sync shared skills into an isolated instance skills directory.
+   * Resolves through ~/.ccs/shared/skills (which symlinks to ~/.claude/skills).
+   * Each shared skill entry is individually symlinked. Existing entries are preserved
+   * to protect profile-specific skills added via npx skills.
+   */
+  private async syncSharedSkillsToIsolated(instanceSkillsPath: string): Promise<void> {
+    // Resolve through shared dir symlink (shared/skills -> ~/.claude/skills)
+    const sharedSkillsSymlink = path.join(this.sharedDir, 'skills');
+
+    if (!(await this.pathExists(sharedSkillsSymlink))) {
+      return;
+    }
+
+    // Resolve to canonical path so we enumerate the actual skills directory
+    let resolvedSkillsPath: string;
+    try {
+      resolvedSkillsPath = await fs.promises.realpath(sharedSkillsSymlink);
+    } catch (_err) {
+      return;
+    }
+
+    let entries: fs.Dirent[];
+    try {
+      entries = await fs.promises.readdir(resolvedSkillsPath, { withFileTypes: true });
+    } catch (_err) {
+      return;
+    }
+
+    for (const entry of entries) {
+      const targetPath = path.join(resolvedSkillsPath, entry.name);
+      const linkPath = path.join(instanceSkillsPath, entry.name);
+
+      // Skip if already exists (preserves profile-specific skills)
+      if (await this.pathExists(linkPath)) continue;
+
+      await this.linkDirectoryWithFallback(targetPath, linkPath);
     }
   }
 

@@ -294,6 +294,17 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['--disallowedTools <list>', 'Block specific tools'],
   ]);
 
+  // Per-Profile Skills
+  printSubSection('Per-Profile Skills', [
+    ['ccs skills <profile> isolate', 'Enable per-profile skills'],
+    ['ccs skills <profile> share', 'Restore shared skills mode'],
+    ['ccs skills <profile> add <pkg>', 'Add skill to specific profile'],
+    ['ccs skills <profile> remove [skill]', 'Remove skill from profile'],
+    ['ccs skills <profile> list', 'List skills for profile'],
+    ['ccs skills <profile> find [query]', 'Search for available skills'],
+    ['ccs skills <profile> sync', 'Sync shared skills to profile'],
+  ]);
+
   // Diagnostics
   printSubSection('Diagnostics', [
     ['ccs setup', 'First-time setup wizard'],

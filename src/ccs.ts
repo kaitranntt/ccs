@@ -564,6 +564,10 @@ async function main(): Promise<void> {
       const exitCode = await handleCursorCommand(args.slice(1));
       process.exit(exitCode);
     },
+    skills: async () => {
+      const { handleSkillsCommand } = await import('./commands/skills-command');
+      await handleSkillsCommand(args.slice(1));
+    },
   };
 
   const earlyCommandHandler = earlyCommandHandlers[normalizedFirstArg];

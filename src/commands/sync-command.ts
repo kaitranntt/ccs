@@ -70,6 +70,31 @@ export async function handleSyncCommand(): Promise<void> {
     console.log(info('No instances to sync MCP servers'));
   }
 
+  // Sync skills for isolated-skills profiles
+  const { resolveAccountContextPolicy } = await import('../auth/account-context');
+  const { loadOrCreateUnifiedConfig } = await import('../config/unified-config-loader');
+  const config = loadOrCreateUnifiedConfig();
+  let skillsSynced = 0;
+
+  for (const [name, account] of Object.entries(config.accounts)) {
+    if (account.skills_mode !== 'isolated') {
+      continue;
+    }
+
+    if (!instanceMgr.hasInstance(name)) {
+      continue;
+    }
+
+    const policy = resolveAccountContextPolicy(account);
+    const instancePath = instanceMgr.getInstancePath(name);
+    await sharedManager.syncSkills(instancePath, policy);
+    skillsSynced++;
+  }
+
+  if (skillsSynced > 0) {
+    console.log(ok(`Skills synced for ${skillsSynced} isolated profile(s)`));
+  }
+
   console.log('');
   console.log(ok('Sync complete!'));
   console.log('');

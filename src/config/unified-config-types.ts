@@ -48,6 +48,8 @@ export interface AccountConfig {
   continuity_mode?: 'standard' | 'deeper';
   /** Bare profile: no shared symlinks (commands, skills, agents, settings.json) */
   bare?: boolean;
+  /** Skills mode: shared (default) uses global symlink, isolated enables per-profile skills */
+  skills_mode?: 'shared' | 'isolated';
 }
 
 /**
