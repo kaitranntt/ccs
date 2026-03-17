@@ -94,9 +94,8 @@ export async function runImageAnalysisCheck(results: HealthCheck): Promise<void>
  * Fix image analysis configuration issues
  */
 export async function fixImageAnalysisConfig(): Promise<boolean> {
-  const { updateUnifiedConfig, loadOrCreateUnifiedConfig } = await import(
-    '../../config/unified-config-loader'
-  );
+  const { updateUnifiedConfig, loadOrCreateUnifiedConfig } =
+    await import('../../config/unified-config-loader');
 
   const config = loadOrCreateUnifiedConfig();
   let fixed = false;
