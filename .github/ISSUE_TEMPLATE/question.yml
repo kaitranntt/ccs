@@ -1,0 +1,58 @@
+name: Question
+description: Ask for setup help, usage clarification, or behavior explanation when docs do not answer it.
+title: "question: "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Questions are welcome.
+
+        If this is a suspected security vulnerability, stop here and use the private reporting path in `SECURITY.md` instead of posting details publicly.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Topic
+      options:
+        - Installation or setup
+        - CLI usage
+        - Dashboard or config
+        - Provider or auth flow
+        - API profiles or proxy
+        - Contributor workflow
+        - Other
+  - type: textarea
+    id: question
+    attributes:
+      label: What do you need help with?
+      placeholder: I expected `ccs ...` to do ..., but I am not sure whether I configured it correctly.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Include what you tried, what docs you checked, and what blocked you.
+  - type: input
+    id: version
+    attributes:
+      label: CCS version
+      description: Output of `ccs --version`, if you have it
+      placeholder: 7.56.0
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+        - Windows
+        - Other
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked the docs and existing issues first.
+        - label: This is not a private security disclosure.

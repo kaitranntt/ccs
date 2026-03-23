@@ -31,9 +31,9 @@ This applies to project spaces, including:
 
 Maintainers may edit or remove content, lock conversations, close threads, reject contributions, or block participants when needed to protect the project and contributors.
 
-For non-sensitive concerns, open a GitHub Discussion or issue.
+For non-sensitive concerns, use the public issue templates.
 
-For sensitive concerns, do not post details publicly. Ask a maintainer for a private reporting path first and keep the initial message minimal.
+For sensitive concerns, do not post details publicly. Use the private reporting path in `SECURITY.md`.
 
 ## Practical Rule
 

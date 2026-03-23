@@ -9,6 +9,7 @@ CCS is a Bun + TypeScript CLI with a React dashboard. This guide is the shortest
 - Open PRs against `dev`.
 - Use conventional commits.
 - If you change user-facing behavior, update the docs that describe it.
+- Suspected security vulnerabilities do not go through public issues. Use [SECURITY.md](./SECURITY.md).
 
 If you are new to the project, start with a docs fix, a focused bug fix, or an issue labeled `good first issue`.
 
@@ -191,10 +192,21 @@ Releases are automated with semantic-release.
 - Merges to `main` publish the `@latest` channel.
 - Do not manually bump versions, create tags, or run manual `npm publish`.
 
+## Security Reporting
+
+If you think you found a security vulnerability, do not open a public GitHub issue.
+
+Use the private reporting path in [SECURITY.md](./SECURITY.md):
+
+- https://github.com/kaitranntt/ccs/security/advisories/new
+
+Public issues are fine for normal bugs, regressions, docs problems, and feature requests. They are not fine for exploit details, leaked credentials, or anything that could put users at risk before a fix ships.
+
 ## Need Help?
 
 - Bugs and features: https://github.com/kaitranntt/ccs/issues
-- Questions and discussion: https://github.com/kaitranntt/ccs/discussions
+- Questions: https://github.com/kaitranntt/ccs/issues/new/choose
+- Security reports: https://github.com/kaitranntt/ccs/security/advisories/new
 - Hosted docs: https://docs.ccs.kaitran.ca
 - User-facing docs: [README.md](./README.md)
 - Internal architecture notes: [docs/](./docs)

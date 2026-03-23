@@ -32,6 +32,13 @@ Run Claude, Gemini, GLM, and any Anthropic-compatible API - concurrently, withou
 Looking for the full setup guide, command reference, provider guides, or troubleshooting?
 Start at **https://docs.ccs.kaitran.ca**.
 
+## Contribute And Report Safely
+
+- Contributing guide: [CONTRIBUTING.md](./CONTRIBUTING.md)
+- Starter work: [good first issue](https://github.com/kaitranntt/ccs/labels/good%20first%20issue), [help wanted](https://github.com/kaitranntt/ccs/labels/help%20wanted)
+- Questions: [open a question issue](https://github.com/kaitranntt/ccs/issues/new/choose)
+- Security reports: [SECURITY.md](./SECURITY.md) and the [private advisory form](https://github.com/kaitranntt/ccs/security/advisories/new)
+
 ### 1. Install
 
 ```bash
@@ -665,7 +672,7 @@ bun remove -g @kaitranntt/ccs
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md).
+See [CONTRIBUTING.md](./CONTRIBUTING.md). For suspected vulnerabilities, use [SECURITY.md](./SECURITY.md) instead of a public issue.
 
 <br>
 
@@ -683,6 +690,6 @@ MIT License - see [LICENSE](LICENSE).
 
 ---
 
-**[ccs.kaitran.ca](https://ccs.kaitran.ca)** | **[docs.ccs.kaitran.ca](https://docs.ccs.kaitran.ca)** | [Report Issues](https://github.com/kaitranntt/ccs/issues) | [Star on GitHub](https://github.com/kaitranntt/ccs)
+**[ccs.kaitran.ca](https://ccs.kaitran.ca)** | **[docs.ccs.kaitran.ca](https://docs.ccs.kaitran.ca)** | [Issue Templates](https://github.com/kaitranntt/ccs/issues/new/choose) | [Private Security Report](https://github.com/kaitranntt/ccs/security/advisories/new) | [Star on GitHub](https://github.com/kaitranntt/ccs)
 
 </div>

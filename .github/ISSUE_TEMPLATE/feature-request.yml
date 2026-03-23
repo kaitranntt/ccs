@@ -60,5 +60,5 @@ body:
     attributes:
       label: Before submitting
       options:
-        - label: I searched existing issues and discussions first.
+        - label: I searched existing issues and docs first.
         - label: This request describes a concrete user problem, not just a broad idea dump.

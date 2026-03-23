@@ -9,6 +9,8 @@ body:
       value: |
         Thanks for reporting this. Use as much of this template as you can.
         A partial but useful report is better than no report.
+
+        If this is a suspected security vulnerability, do not file it publicly. Use the private reporting path in `SECURITY.md`.
   - type: dropdown
     id: area
     attributes:

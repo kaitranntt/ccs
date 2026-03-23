@@ -1,5 +1,8 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
-  - name: Questions and discussion
-    url: https://github.com/kaitranntt/ccs/discussions
-    about: Use Discussions for open-ended questions, support requests, and idea shaping.
+  - name: Private security report
+    url: https://github.com/kaitranntt/ccs/security/advisories/new
+    about: Report suspected vulnerabilities privately. Do not open public issues for security reports.
+  - name: Documentation hub
+    url: https://docs.ccs.kaitran.ca
+    about: Installation, provider guides, CLI reference, and troubleshooting.
