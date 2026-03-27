@@ -1,0 +1,32 @@
+services:
+  ccs-cliproxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.integrated
+      args:
+        CCS_NPM_VERSION: "${CCS_NPM_VERSION:-latest}"
+    image: ccs-cliproxy:latest
+    container_name: ccs-cliproxy
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${CCS_DASHBOARD_PORT:-3000}:3000"
+      - "${CCS_CLIPROXY_PORT:-8317}:8317"
+    environment:
+      CCS_PORT: 3000
+      NODE_ENV: production
+      NO_COLOR: "${NO_COLOR:-}"
+      CCS_DEBUG: "${CCS_DEBUG:-}"
+    volumes:
+      - ccs_home:/root/.ccs
+      - ccs_logs:/var/log/ccs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS --max-time 2 http://localhost:3000/ >/dev/null && curl -fsS --max-time 2 http://127.0.0.1:8317/ >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  ccs_home:
+  ccs_logs:

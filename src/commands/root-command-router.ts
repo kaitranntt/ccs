@@ -130,6 +130,13 @@ const ROOT_COMMAND_ROUTES: readonly NamedCommandRoute[] = [
     },
   },
   {
+    name: 'docker',
+    handle: async (args) => {
+      const { handleDockerCommand } = await import('./docker-command');
+      await handleDockerCommand(args);
+    },
+  },
+  {
     name: 'config',
     handle: async (args) => {
       const { handleConfigCommand } = await import('./config-command');

@@ -470,6 +470,20 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     writeLine
   );
 
+  printSubSection(
+    'Docker Deployment',
+    [
+      ['ccs docker --help', 'Manage the integrated CCS + CLIProxy Docker stack'],
+      ['ccs docker up', 'Build and start the stack locally'],
+      ['ccs docker up --host <ssh>', 'Stage assets to ~/.ccs/docker and deploy remotely'],
+      ['ccs docker status', 'Show docker compose and supervisor status'],
+      ['ccs docker logs --follow', 'Tail combined CCS + CLIProxy logs'],
+      ['ccs docker update', 'Update CCS and CLIProxy inside the running container'],
+      ['ccs docker config', 'Show bundled asset paths and deployment defaults'],
+    ],
+    writeLine
+  );
+
   // CLI Proxy configuration flags (new)
   printSubSection(
     'CLI Proxy Configuration',

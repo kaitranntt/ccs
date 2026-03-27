@@ -32,6 +32,7 @@
   },
   "files": [
     "dist/",
+    "docker/",
     "lib/",
     "scripts/",
     "config/",

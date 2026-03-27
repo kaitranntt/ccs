@@ -33,6 +33,12 @@ beforeEach(() => {
     },
   }));
 
+  mock.module('../../../src/commands/docker-command', () => ({
+    handleDockerCommand: async (args: string[]) => {
+      calls.push(`docker:${args.join(' ')}`);
+    },
+  }));
+
   mock.module('../../../src/commands/tokens-command', () => ({
     handleTokensCommand: async () => 37,
   }));
@@ -84,6 +90,16 @@ describe('root-command-router', () => {
     await expect(tryHandleRootCommand(['api', 'discover', '--register'])).resolves.toBe(true);
 
     expect(calls).toEqual(['api:discover --register']);
+  });
+
+  it('routes docker commands through the root router', async () => {
+    const tryHandleRootCommand = await loadTryHandleRootCommand();
+
+    await expect(tryHandleRootCommand(['docker', 'status', '--host', 'my-box'])).resolves.toBe(
+      true
+    );
+
+    expect(calls).toEqual(['docker:status --host my-box']);
   });
 
   it('exits with the nested command exit code when required', async () => {

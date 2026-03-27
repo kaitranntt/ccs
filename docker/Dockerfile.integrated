@@ -1,0 +1,23 @@
+FROM eceasy/cli-proxy-api:latest
+
+ARG CCS_NPM_VERSION=latest
+
+RUN apk add --no-cache \
+    curl \
+    jq \
+    nodejs \
+    npm \
+    supervisor
+
+RUN npm install -g @kaitranntt/ccs@${CCS_NPM_VERSION} \
+  && ln -sf /usr/local/lib/node_modules/@kaitranntt/ccs/dist/docker/docker-bootstrap.js /usr/local/bin/ccs-docker-bootstrap
+
+COPY supervisord.conf /etc/supervisord.conf
+COPY entrypoint-integrated.sh /entrypoint-integrated.sh
+
+RUN chmod +x /entrypoint-integrated.sh \
+  && mkdir -p /var/log/ccs
+
+EXPOSE 3000 8085 8317
+
+ENTRYPOINT ["/entrypoint-integrated.sh"]

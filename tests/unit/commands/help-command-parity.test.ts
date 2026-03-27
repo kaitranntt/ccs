@@ -60,6 +60,16 @@ describe('help command parity', () => {
     expect(rendered.includes('Force all-interface binding for remote devices')).toBe(true);
   });
 
+  test('root help documents docker deployment commands', async () => {
+    const lines: string[] = [];
+    await handleHelpCommand((line) => lines.push(line));
+
+    const rendered = stripAnsi(lines.join('\n'));
+    expect(rendered.includes('ccs docker --help')).toBe(true);
+    expect(rendered.includes('ccs docker up --host <ssh>')).toBe(true);
+    expect(rendered.includes('ccs docker update')).toBe(true);
+  });
+
   test('root help documents official channels native-only scope and process-env tokens', async () => {
     const lines: string[] = [];
     await handleHelpCommand((line) => lines.push(line));
