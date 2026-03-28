@@ -13,8 +13,10 @@ describe('route target parsing', () => {
 
   it('returns null for invalid target values', () => {
     expect(parseProfileTarget('glm')).toBeNull();
+    expect(parseProfileTarget('codex')).toBeNull();
     expect(parseProfileTarget('')).toBeNull();
     expect(parseVariantTarget('factory')).toBeNull();
+    expect(parseVariantTarget('codex')).toBeNull();
     expect(parseVariantTarget('  ')).toBeNull();
   });
 

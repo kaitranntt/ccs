@@ -18,6 +18,7 @@ import {
 import type { CLIProxyProvider } from '../../cliproxy/types';
 import type { Config, Settings } from '../../types/config';
 import type { TargetType } from '../../targets/target-adapter';
+import { isPersistedTargetType } from '../../targets/target-metadata';
 import { ValidationError } from '../../errors/error-types';
 
 /** Model mapping for API profiles */
@@ -438,7 +439,7 @@ export function validateFilePath(filePath: string): {
 }
 
 /**
- * Parse and validate a target param (claude/droid). Returns null if invalid/absent.
+ * Parse and validate a persisted target param. Returns null if invalid/absent.
  * Shared by profile-routes and variant-routes.
  */
 export function parseTarget(rawTarget: unknown): TargetType | null {
@@ -451,7 +452,7 @@ export function parseTarget(rawTarget: unknown): TargetType | null {
   }
 
   const normalized = rawTarget.trim().toLowerCase();
-  if (normalized === 'claude' || normalized === 'droid') {
+  if (isPersistedTargetType(normalized)) {
     return normalized;
   }
 

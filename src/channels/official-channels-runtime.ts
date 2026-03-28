@@ -292,7 +292,7 @@ export function getOfficialChannelsStateScopeMessage(): string {
 }
 
 export function getOfficialChannelsSupportMessage(): string {
-  return 'Works only for native Claude default/account sessions. It does not apply to API, OAuth, or Droid targets such as `ccs glm`, `ccs gemini`, `ccs codex`, or `ccs --target droid`.';
+  return 'Works only for native Claude default/account sessions. It does not apply to API, OAuth, or non-Claude targets such as `ccs glm`, `ccs gemini`, `ccs codex`, `ccs --target droid`, or `ccs --target codex`.';
 }
 
 export function getOfficialChannelsAccountStatusCaveat(): string {

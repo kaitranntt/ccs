@@ -689,7 +689,10 @@ export function findCatalogModel(provider: string, modelId: string) {
     .sort((left, right) => compareGeminiVersions(right.info.version, left.info.version))[0]?.model;
 }
 
-export function resolveCatalogModelId(modelId: string, availableModels: CatalogAvailableModel[] = []): string {
+export function resolveCatalogModelId(
+  modelId: string,
+  availableModels: CatalogAvailableModel[] = []
+): string {
   const normalizedModelId = normalizeModelId(modelId);
   const liveGeminiModelId = resolveGeminiPreviewModelId(normalizedModelId, availableModels);
   if (liveGeminiModelId) return liveGeminiModelId;

@@ -10,14 +10,13 @@ import { loadConfigSafe } from '../../utils/config-manager';
 import { loadOrCreateUnifiedConfig, isUnifiedMode } from '../../config/unified-config-loader';
 import { expandPath } from '../../utils/helpers';
 import type { TargetType } from '../../targets/target-adapter';
+import { isPersistedTargetType } from '../../targets/target-metadata';
 import type { Settings } from '../../types/config';
 import type { ApiProfileInfo, CliproxyVariantInfo, ApiListResult } from './profile-types';
 import { resolveCliproxyBridgeMetadata } from './cliproxy-profile-bridge';
 
-const VALID_TARGETS: ReadonlySet<TargetType> = new Set<TargetType>(['claude', 'droid']);
-
 function sanitizeTarget(target: unknown): TargetType {
-  if (typeof target === 'string' && VALID_TARGETS.has(target as TargetType)) {
+  if (isPersistedTargetType(target)) {
     return target as TargetType;
   }
   return 'claude';

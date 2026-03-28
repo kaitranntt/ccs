@@ -107,6 +107,10 @@ export async function showApiCommandHelp(writeLine: HelpWriter = console.log): P
   writeLine(
     `  ${color('ccs api create gemini-droid --cliproxy-provider gemini --target droid', 'command')}`
   );
+  writeLine(`  ${color('ccs api create codex-api --cliproxy-provider codex', 'command')}`);
+  writeLine(
+    `  ${color('ccs codex-api --target codex', 'command')} ${dim('# runtime-only native Codex launch')}`
+  );
   writeLine('');
   writeLine(`  ${dim('# Create with name')}`);
   writeLine(`  ${color('ccs api create myapi', 'command')}`);

@@ -13,6 +13,7 @@ import { CLIProxyProfileName, CLIPROXY_PROFILES } from '../../auth/profile-detec
 import { supportsModelConfig, getProviderCatalog, ModelEntry } from '../../cliproxy/model-catalog';
 import { CLIProxyProvider, CLIProxyBackend } from '../../cliproxy/types';
 import type { TargetType } from '../../targets/target-adapter';
+import { getPersistedTargetChoices, isPersistedTargetType } from '../../targets/target-metadata';
 import { isUnifiedMode } from '../../config/unified-config-loader';
 import { initUI, header, color, ok, fail, warn, info, infoBox, dim } from '../../utils/ui';
 import { InteractivePrompt } from '../../utils/prompt';
@@ -42,7 +43,7 @@ interface CliproxyProfileArgs {
 
 function parseTargetValue(rawValue: string): TargetType | null {
   const normalized = rawValue.trim().toLowerCase();
-  if (normalized === 'claude' || normalized === 'droid') {
+  if (isPersistedTargetType(normalized)) {
     return normalized;
   }
   return null;
@@ -73,7 +74,9 @@ export function parseProfileArgs(args: string[]): CliproxyProfileArgs {
         i += 1;
         const parsedTarget = parseTargetValue(rawValue);
         if (!parsedTarget) {
-          result.errors.push(`Invalid --target value "${rawValue}". Use: claude or droid`);
+          result.errors.push(
+            `Invalid --target value "${rawValue}". Use: ${getPersistedTargetChoices()}`
+          );
         } else {
           result.target = parsedTarget;
         }
@@ -82,7 +85,9 @@ export function parseProfileArgs(args: string[]): CliproxyProfileArgs {
       const rawValue = arg.slice('--target='.length);
       const parsedTarget = parseTargetValue(rawValue);
       if (!parsedTarget) {
-        result.errors.push(`Invalid --target value "${rawValue}". Use: claude or droid`);
+        result.errors.push(
+          `Invalid --target value "${rawValue}". Use: ${getPersistedTargetChoices()}`
+        );
       } else {
         result.target = parsedTarget;
       }

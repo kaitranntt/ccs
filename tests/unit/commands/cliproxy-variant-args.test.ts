@@ -26,6 +26,13 @@ describe('cliproxy variant arg parser', () => {
     expect(parsed.errors).toEqual(['Missing value for --target']);
   });
 
+  test('rejects runtime-only codex as a persisted variant target value', () => {
+    const parsed = parseProfileArgs(['variant-a', '--target', 'codex']);
+
+    expect(parsed.target).toBeUndefined();
+    expect(parsed.errors).toEqual(['Invalid --target value "codex". Use: claude or droid']);
+  });
+
   test('uses last --target value when repeated', () => {
     const parsed = parseProfileArgs(['variant-a', '--target', 'claude', '--target=droid']);
 

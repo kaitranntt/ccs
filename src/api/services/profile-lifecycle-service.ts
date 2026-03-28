@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { Config, Settings } from '../../types';
 import type { TargetType } from '../../targets/target-adapter';
+import { getPersistedTargetChoices, isPersistedTargetType } from '../../targets/target-metadata';
 import { getCcsDir, getConfigPath, loadConfigSafe } from '../../utils/config-manager';
 import { ensureProfileHooksOrThrow } from '../../utils/websearch/profile-hook-injector';
 import { isSensitiveKey } from '../../utils/sensitive-keys';
@@ -29,7 +30,7 @@ const SETTINGS_FILE_SUFFIX = '.settings.json';
 const REDACTED_TOKEN_SENTINEL = '__CCS_REDACTED__';
 
 function parseTargetValue(value: unknown): TargetType | null {
-  if (value === 'claude' || value === 'droid') {
+  if (isPersistedTargetType(value)) {
     return value;
   }
   return null;
@@ -359,7 +360,7 @@ export function importApiProfileBundle(
   if (input.profile.target !== undefined && bundleTarget === null) {
     return {
       success: false,
-      error: 'Invalid bundle profile target. Expected: claude or droid.',
+      error: `Invalid bundle profile target. Expected: ${getPersistedTargetChoices()}.`,
     };
   }
 
