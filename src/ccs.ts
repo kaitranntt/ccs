@@ -56,6 +56,8 @@ import {
   getTarget,
   ClaudeAdapter,
   DroidAdapter,
+  CodexAdapter,
+  evaluateTargetRuntimeCompatibility,
   pruneOrphanedModels,
   resolveDroidProvider,
   type TargetCredentials,
@@ -66,6 +68,7 @@ import {
   resolveDroidReasoningRuntime,
 } from './targets/droid-reasoning-runtime';
 import { DroidCommandRouterError, routeDroidCommandArgs } from './targets/droid-command-router';
+import { resolveCliproxyBridgeMetadata } from './api/services/cliproxy-profile-bridge';
 
 // Version and Update check utilities
 import { getVersion } from './utils/version';
@@ -183,6 +186,7 @@ async function main(): Promise<void> {
   // Register target adapters
   registerTarget(new ClaudeAdapter());
   registerTarget(new DroidAdapter());
+  registerTarget(new CodexAdapter());
 
   const args = process.argv.slice(2);
 
@@ -381,21 +385,25 @@ async function main(): Promise<void> {
         process.exit(1);
       }
 
-      if (profileInfo.type === 'cliproxy' && !targetAdapter.supportsProfileType('cliproxy')) {
-        console.error(fail(`${targetAdapter.displayName} does not support CLIProxy profiles`));
-        console.error(info('Use a settings-based profile with --target instead'));
-        process.exit(1);
-      }
-
-      if (profileInfo.type === 'copilot' && !targetAdapter.supportsProfileType('copilot')) {
-        console.error(fail(`${targetAdapter.displayName} does not support Copilot profiles`));
-        process.exit(1);
-      }
-
-      if (profileInfo.type === 'account' && !targetAdapter.supportsProfileType('account')) {
-        console.error(fail(`${targetAdapter.displayName} does not support account-based profiles`));
-        console.error(info('Use a settings-based profile with --target instead'));
-        process.exit(1);
+      if (profileInfo.type !== 'settings') {
+        const compatibility = evaluateTargetRuntimeCompatibility({
+          target: resolvedTarget,
+          profileType: profileInfo.type,
+          cliproxyProvider: profileInfo.type === 'cliproxy' ? profileInfo.provider : undefined,
+          isComposite:
+            profileInfo.type === 'cliproxy' ? Boolean(profileInfo.isComposite) : undefined,
+        });
+        if (!compatibility.supported) {
+          console.error(
+            fail(
+              compatibility.reason || `${targetAdapter.displayName} does not support this profile.`
+            )
+          );
+          if (compatibility.suggestion) {
+            console.error(info(compatibility.suggestion));
+          }
+          process.exit(1);
+        }
       }
 
       if (profileInfo.type === 'default') {
@@ -428,6 +436,8 @@ async function main(): Promise<void> {
       console.error(fail(`${displayName} CLI not found.`));
       if (resolvedTarget === 'droid') {
         console.error(info('Install: npm i -g @factory/cli'));
+      } else if (resolvedTarget === 'codex') {
+        console.error(info('Install a recent @openai/codex build, then retry.'));
       }
       process.exit(1);
     }
@@ -446,7 +456,7 @@ async function main(): Promise<void> {
     }
 
     let targetRemainingArgs = remainingArgs;
-    let droidReasoningOverride: string | number | undefined;
+    let runtimeReasoningOverride: string | number | undefined;
     if (resolvedTarget === 'droid') {
       try {
         const droidRoute = routeDroidCommandArgs(remainingArgs);
@@ -455,7 +465,7 @@ async function main(): Promise<void> {
         if (droidRoute.mode === 'interactive') {
           const runtime = resolveDroidReasoningRuntime(remainingArgs, process.env.CCS_THINKING);
           targetRemainingArgs = runtime.argsWithoutReasoningFlags;
-          droidReasoningOverride = runtime.reasoningOverride;
+          runtimeReasoningOverride = runtime.reasoningOverride;
 
           if (runtime.duplicateDisplays.length > 0) {
             console.error(
@@ -484,6 +494,28 @@ async function main(): Promise<void> {
           console.error('    Examples: --thinking low, --thinking 8192, --thinking off');
           console.error('    Codex alias: --effort medium|high|xhigh');
           console.error('    Droid exec: --reasoning-effort high');
+          process.exit(1);
+        }
+        throw error;
+      }
+    } else if (resolvedTarget === 'codex') {
+      try {
+        const runtime = resolveDroidReasoningRuntime(remainingArgs, process.env.CCS_THINKING);
+        targetRemainingArgs = runtime.argsWithoutReasoningFlags;
+        runtimeReasoningOverride = runtime.reasoningOverride;
+
+        if (runtime.duplicateDisplays.length > 0) {
+          console.error(
+            warn(
+              `[!] Multiple reasoning flags detected. Using first occurrence: ${runtime.sourceDisplay || '<first-flag>'}`
+            )
+          );
+        }
+      } catch (error) {
+        if (error instanceof DroidReasoningFlagError) {
+          console.error(fail(error.message));
+          console.error('    Examples: --thinking low, --thinking 8192, --thinking off');
+          console.error('    Codex alias: --effort minimal|low|medium|high|xhigh');
           process.exit(1);
         }
         throw error;
@@ -625,7 +657,7 @@ async function main(): Promise<void> {
             baseUrl: envVars['ANTHROPIC_BASE_URL'],
             model: envVars['ANTHROPIC_MODEL'],
           }),
-          reasoningOverride: droidReasoningOverride,
+          reasoningOverride: runtimeReasoningOverride,
           envVars,
         };
 
@@ -643,7 +675,11 @@ async function main(): Promise<void> {
         }
 
         await adapter.prepareCredentials(creds);
-        const targetArgs = adapter.buildArgs(profileInfo.name, targetRemainingArgs);
+        const targetArgs = adapter.buildArgs(profileInfo.name, targetRemainingArgs, {
+          creds,
+          profileType: profileInfo.type,
+          binaryInfo: targetBinaryInfo || undefined,
+        });
         const targetEnv = adapter.buildEnv(creds, profileInfo.type);
         adapter.exec(targetArgs, targetEnv, { binaryInfo: targetBinaryInfo || undefined });
         return;
@@ -722,6 +758,26 @@ async function main(): Promise<void> {
         ? expandPath(profileInfo.settingsPath)
         : getSettingsPath(profileInfo.name);
       const settings = loadSettings(expandedSettingsPath);
+      const cliproxyBridge = resolveCliproxyBridgeMetadata(settings);
+      if (resolvedTarget !== 'claude') {
+        const compatibility = evaluateTargetRuntimeCompatibility({
+          target: resolvedTarget,
+          profileType: profileInfo.type,
+          cliproxyBridgeProvider: cliproxyBridge?.provider ?? null,
+        });
+        if (!compatibility.supported) {
+          console.error(
+            fail(
+              compatibility.reason ||
+                `${targetAdapter?.displayName || resolvedTarget} does not support this profile.`
+            )
+          );
+          if (compatibility.suggestion) {
+            console.error(info(compatibility.suggestion));
+          }
+          process.exit(1);
+        }
+      }
       const rawSettingsEnv = profileInfo.env ?? settings.env ?? {};
       const isDeprecatedGlmtProfile = isDeprecatedGlmtProfileName(profileInfo.name);
       const glmtNormalization = isDeprecatedGlmtProfile
@@ -841,11 +897,15 @@ async function main(): Promise<void> {
             baseUrl: directAnthropicBaseUrl,
             model: settingsEnv['ANTHROPIC_MODEL'],
           }),
-          reasoningOverride: droidReasoningOverride,
+          reasoningOverride: runtimeReasoningOverride,
           envVars,
         };
         await adapter.prepareCredentials(creds);
-        const targetArgs = adapter.buildArgs(profileInfo.name, targetRemainingArgs);
+        const targetArgs = adapter.buildArgs(profileInfo.name, targetRemainingArgs, {
+          creds,
+          profileType: profileInfo.type,
+          binaryInfo: targetBinaryInfo || undefined,
+        });
         const targetEnv = adapter.buildEnv(creds, profileInfo.type);
         adapter.exec(targetArgs, targetEnv, { binaryInfo: targetBinaryInfo || undefined });
         return;
@@ -938,9 +998,9 @@ async function main(): Promise<void> {
             baseUrl: process.env['ANTHROPIC_BASE_URL'],
             model: process.env['ANTHROPIC_MODEL'],
           }),
-          reasoningOverride: droidReasoningOverride,
+          reasoningOverride: runtimeReasoningOverride,
         };
-        if (!creds.baseUrl || !creds.apiKey) {
+        if (resolvedTarget === 'droid' && (!creds.baseUrl || !creds.apiKey)) {
           console.error(
             fail(
               `${adapter.displayName} default mode requires ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN`
@@ -950,7 +1010,11 @@ async function main(): Promise<void> {
           process.exit(1);
         }
         await adapter.prepareCredentials(creds);
-        const targetArgs = adapter.buildArgs('default', targetRemainingArgs);
+        const targetArgs = adapter.buildArgs('default', targetRemainingArgs, {
+          creds,
+          profileType: 'default',
+          binaryInfo: targetBinaryInfo || undefined,
+        });
         const targetEnv = adapter.buildEnv(creds, 'default');
         adapter.exec(targetArgs, targetEnv, { binaryInfo: targetBinaryInfo || undefined });
         return;

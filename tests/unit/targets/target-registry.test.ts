@@ -13,6 +13,7 @@ import {
   getRegisteredTargets,
   ClaudeAdapter,
   DroidAdapter,
+  CodexAdapter,
 } from '../../../src/targets';
 
 describe('target-registry', () => {
@@ -20,6 +21,7 @@ describe('target-registry', () => {
     // Re-register adapters (registry is module-scoped singleton)
     registerTarget(new ClaudeAdapter());
     registerTarget(new DroidAdapter());
+    registerTarget(new CodexAdapter());
   });
 
   it('should register and retrieve claude adapter', () => {
@@ -39,6 +41,12 @@ describe('target-registry', () => {
     expect(adapter.type).toBe('claude');
   });
 
+  it('should register and retrieve codex adapter', () => {
+    const adapter = getTarget('codex');
+    expect(adapter.type).toBe('codex');
+    expect(adapter.displayName).toBe('Codex CLI');
+  });
+
   it('should throw for unknown target', () => {
     expect(() => getTarget('unknown' as never)).toThrow(/Unknown target "unknown"/);
   });
@@ -46,6 +54,7 @@ describe('target-registry', () => {
   it('should check target existence', () => {
     expect(hasTarget('claude')).toBe(true);
     expect(hasTarget('droid')).toBe(true);
+    expect(hasTarget('codex')).toBe(true);
     expect(hasTarget('unknown' as never)).toBe(false);
   });
 
@@ -53,6 +62,7 @@ describe('target-registry', () => {
     const targets = getRegisteredTargets();
     expect(targets).toContain('claude');
     expect(targets).toContain('droid');
+    expect(targets).toContain('codex');
   });
 });
 

@@ -11,7 +11,7 @@
  */
 import type { ProfileType } from '../types/profile';
 
-export type TargetType = 'claude' | 'droid';
+export type TargetType = 'claude' | 'droid' | 'codex';
 
 /**
  * Credentials resolved by CCS profile system, ready for delivery to target CLI.
@@ -39,6 +39,8 @@ export interface TargetCredentials {
 export interface TargetBinaryInfo {
   path: string;
   needsShell: boolean; // Windows .cmd/.bat/.ps1
+  version?: string;
+  features?: readonly string[];
 }
 
 /**
@@ -72,7 +74,15 @@ export interface TargetAdapter {
    * Build target-specific argument vector.
    * `userArgs` are the arguments after CCS profile/flag parsing.
    */
-  buildArgs(profile: string, userArgs: string[]): string[];
+  buildArgs(
+    profile: string,
+    userArgs: string[],
+    options?: {
+      creds?: TargetCredentials;
+      profileType?: ProfileType;
+      binaryInfo?: TargetBinaryInfo;
+    }
+  ): string[];
 
   /**
    * Build environment variables for process spawn.

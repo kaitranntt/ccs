@@ -10,21 +10,24 @@
 
 import * as path from 'path';
 import { TargetType } from './target-adapter';
+import {
+  getBuiltinArgv0TargetMap,
+  getLegacyTargetAliasEnvVars,
+  getRuntimeTargetChoices,
+  isPersistedTargetType,
+  isRuntimeTargetType,
+} from './target-metadata';
 
 /**
  * Built-in argv[0] aliases for explicit runtime entrypoints.
- * `ccs-droid` is the transparent alias; `ccsd` remains as a legacy shortcut.
+ * Droid and Codex install dedicated runtime aliases alongside the base `ccs` bin.
  */
-const BUILTIN_ARGV0_TARGET_MAP: Record<string, TargetType> = {
-  'ccs-droid': 'droid',
-  ccsd: 'droid',
-};
+const BUILTIN_ARGV0_TARGET_MAP: Record<string, TargetType> = getBuiltinArgv0TargetMap();
 const ALIAS_NAME_REGEX = /^[a-z0-9._-]+$/;
 const INTERNAL_ENTRY_TARGET_ENV_VAR = 'CCS_INTERNAL_ENTRY_TARGET';
 const GENERIC_TARGET_ALIAS_ENV_VAR = 'CCS_TARGET_ALIASES';
-const LEGACY_TARGET_ALIAS_ENV_VARS: Partial<Record<TargetType, string>> = {
-  droid: 'CCS_DROID_ALIASES',
-};
+const LEGACY_TARGET_ALIAS_ENV_VARS: Partial<Record<TargetType, string>> =
+  getLegacyTargetAliasEnvVars();
 const RESERVED_BIN_NAMES = new Set<string>(['ccs', ...Object.keys(BUILTIN_ARGV0_TARGET_MAP)]);
 
 function addAliasToMap(map: Record<string, TargetType>, alias: string, target: TargetType): void {
@@ -64,7 +67,7 @@ function parseGenericTargetAliasConfig(map: Record<string, TargetType>, rawConfi
 
     const rawTarget = entry.slice(0, separatorIndex).trim().toLowerCase();
     const rawAliases = entry.slice(separatorIndex + 1).trim();
-    if (!rawAliases || !isValidTarget(rawTarget)) {
+    if (!rawAliases || !isRuntimeTargetType(rawTarget)) {
       continue;
     }
 
@@ -100,30 +103,21 @@ function resolveEntrypointTarget(): TargetType | null {
   }
 
   const normalizedTarget = rawTarget.trim().toLowerCase();
-  return isValidTarget(normalizedTarget) ? normalizedTarget : null;
+  return isRuntimeTargetType(normalizedTarget) ? normalizedTarget : null;
 }
-
-/**
- * Valid target types for --target flag validation.
- */
-const VALID_TARGETS: ReadonlySet<string> = new Set<TargetType>(['claude', 'droid']);
 
 interface ParsedTargetFlags {
   targetOverride?: TargetType;
   cleanedArgs: string[];
 }
 
-function isValidTarget(target: unknown): target is TargetType {
-  return typeof target === 'string' && VALID_TARGETS.has(target as TargetType);
-}
-
 function normalizeTargetValue(value: string): TargetType {
   const normalized = value.toLowerCase();
-  if (isValidTarget(normalized)) {
+  if (isRuntimeTargetType(normalized)) {
     return normalized as TargetType;
   }
 
-  const available = Array.from(VALID_TARGETS).join(', ');
+  const available = getRuntimeTargetChoices();
   throw new Error(`Unknown target "${value}". Available: ${available}`);
 }
 
@@ -148,7 +142,7 @@ function parseTargetFlags(args: string[]): ParsedTargetFlags {
     if (arg === '--target') {
       const value = args[i + 1];
       if (!value || value.startsWith('-')) {
-        throw new Error('--target requires a value (claude or droid)');
+        throw new Error(`--target requires a value (${getRuntimeTargetChoices()})`);
       }
       targetOverride = normalizeTargetValue(value);
       i += 1; // Skip value
@@ -158,7 +152,7 @@ function parseTargetFlags(args: string[]): ParsedTargetFlags {
     if (arg.startsWith('--target=')) {
       const value = arg.slice('--target='.length).trim();
       if (!value) {
-        throw new Error('--target requires a value (claude or droid)');
+        throw new Error(`--target requires a value (${getRuntimeTargetChoices()})`);
       }
       targetOverride = normalizeTargetValue(value);
       continue;
@@ -204,7 +198,7 @@ export function resolveTargetType(
 
   // 3. Check per-profile config
   if (profileConfig?.target !== undefined) {
-    return isValidTarget(profileConfig.target) ? profileConfig.target : 'claude';
+    return isPersistedTargetType(profileConfig.target) ? profileConfig.target : 'claude';
   }
 
   // 4. Default

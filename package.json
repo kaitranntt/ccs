@@ -28,7 +28,9 @@
   "bin": {
     "ccs": "dist/ccs.js",
     "ccs-droid": "dist/bin/droid-runtime.js",
-    "ccsd": "dist/bin/droid-runtime.js"
+    "ccsd": "dist/bin/droid-runtime.js",
+    "ccs-codex": "dist/bin/codex-runtime.js",
+    "ccsx": "dist/bin/codex-runtime.js"
   },
   "files": [
     "dist/",

@@ -131,6 +131,8 @@ describe('cross-platform', () => {
       assert(packageJson.bin.ccs, 'bin field should specify ccs command');
       assert(packageJson.bin['ccs-droid'], 'bin field should specify ccs-droid command');
       assert(packageJson.bin.ccsd, 'bin field should specify ccsd command');
+      assert(packageJson.bin['ccs-codex'], 'bin field should specify ccs-codex command');
+      assert(packageJson.bin.ccsx, 'bin field should specify ccsx command');
       assert.notStrictEqual(
         packageJson.bin['ccs-droid'],
         packageJson.bin.ccs,
@@ -141,9 +143,23 @@ describe('cross-platform', () => {
         packageJson.bin.ccsd,
         'legacy ccsd alias should share the dedicated droid runtime entrypoint'
       );
+      assert.notStrictEqual(
+        packageJson.bin['ccs-codex'],
+        packageJson.bin.ccs,
+        'ccs-codex should use a dedicated runtime entrypoint'
+      );
+      assert.strictEqual(
+        packageJson.bin['ccs-codex'],
+        packageJson.bin.ccsx,
+        'ccsx should share the dedicated codex runtime entrypoint'
+      );
       assert(
         fs.existsSync(path.join(__dirname, '..', '..', packageJson.bin['ccs-droid'])),
         'dedicated droid runtime entrypoint should exist'
+      );
+      assert(
+        fs.existsSync(path.join(__dirname, '..', '..', packageJson.bin['ccs-codex'])),
+        'dedicated codex runtime entrypoint should exist'
       );
       assert(packageJson.scripts, 'package.json should have scripts field');
     });
