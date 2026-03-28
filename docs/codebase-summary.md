@@ -1,8 +1,8 @@
 # CCS Codebase Summary
 
-Last Updated: 2026-03-24
+Last Updated: 2026-03-28
 
-Comprehensive overview of the modularized CCS codebase structure following the Phase 9 modularization effort (Settings, Analytics, Auth Monitor splits + Test Infrastructure), v7.1 Remote CLIProxy feature, v7.2 Kiro + GitHub Copilot (ghcp) OAuth providers, v7.14 Hybrid Quota Management, v7.34 Image Analysis Hook, account-context validation hardening, and Official Claude Channels runtime support.
+Comprehensive overview of the modularized CCS codebase structure following the Phase 9 modularization effort (Settings, Analytics, Auth Monitor splits + Test Infrastructure), v7.1 Remote CLIProxy feature, v7.2 Kiro + GitHub Copilot (ghcp) OAuth providers, v7.14 Hybrid Quota Management, v7.34 Image Analysis Hook, account-context validation hardening, Official Claude Channels runtime support, and native Codex runtime target support.
 
 ## Repository Structure
 
@@ -35,6 +35,9 @@ The main CLI is organized into domain-specific modules with barrel exports.
 ```
 src/
 ├── ccs.ts                    # Main entry point & profile execution flow
+├── bin/                      # Dedicated runtime entrypoints
+│   ├── droid-runtime.ts      # argv[0] shim for ccs-droid / ccsd
+│   └── codex-runtime.ts      # argv[0] shim for ccs-codex / ccsx
 ├── types/                    # TypeScript type definitions
 │   ├── index.ts              # Barrel export (aggregates all types)
 │   ├── cli.ts                # CLI types (ParsedArgs, ExitCode)
@@ -67,8 +70,12 @@ src/
 │   ├── target-adapter.ts     # TargetAdapter interface contract
 │   ├── target-registry.ts    # Registry for runtime adapter lookup
 │   ├── target-resolver.ts    # Resolution logic (flag > config > argv[0])
+│   ├── target-metadata.ts    # Runtime vs persisted target metadata and alias lists
+│   ├── target-runtime-compatibility.ts # Guardrails for target/profile combinations
 │   ├── claude-adapter.ts     # Claude Code CLI implementation
 │   ├── droid-adapter.ts      # Factory Droid CLI implementation
+│   ├── codex-adapter.ts      # Native Codex CLI implementation
+│   ├── codex-detector.ts     # Codex binary detection and capability probing
 │   ├── droid-detector.ts     # Droid binary detection & version checks
 │   └── droid-config-manager.ts  # ~/.factory/settings.json management
 │
@@ -203,7 +210,7 @@ src/
 | Category | Directories | Purpose |
 |----------|-------------|---------|
 | Core | `commands/`, `errors/` | CLI commands, error handling |
-| Targets | `targets/` | Multi-CLI adapter pattern (Claude Code, Factory Droid, extensible) |
+| Targets | `bin/`, `targets/` | Multi-CLI adapter pattern (Claude Code, Factory Droid, Codex CLI, extensible) |
 | Auth | `auth/`, `cliproxy/auth/` | Authentication across providers |
 | Config | `config/`, `types/` | Configuration & type definitions |
 | Providers | `cliproxy/`, `copilot/`, `glmt/` | Provider integrations plus retained legacy transformer internals |
@@ -238,6 +245,17 @@ src/
 
 - Runtime contract lives in `src/channels/official-channels-runtime.ts` and is consumed from `src/ccs.ts`, `src/commands/config-channels-command.ts`, and `src/web-server/routes/channels-routes.ts`.
 - Canonical config lives under `channels.*` in `~/.ccs/config.yaml`; legacy `discord_channels.*` remains read-compatible only when canonical fields are absent.
+
+### Native Codex Runtime Target
+
+- Runtime aliases: `ccs-codex` and `ccsx` resolve through `src/bin/codex-runtime.ts` and `src/targets/target-resolver.ts`.
+- Metadata boundary: `src/targets/target-metadata.ts` keeps Codex runtime-only in v1, so persisted default targets remain `claude | droid`.
+- Compatibility guardrails: `src/targets/target-runtime-compatibility.ts` centralizes which profile types can execute on Codex.
+- Adapter behavior: `src/targets/codex-adapter.ts` and `src/targets/codex-detector.ts` launch native Codex without rewriting `~/.codex/config.toml`; CCS-backed routes use transient `codex -c key=value` overrides and env-key injection.
+- Supported Codex flows in v1:
+  - `default`
+  - CLIProxy provider `codex`
+  - settings/API profiles only when they resolve to a Codex CLIProxy bridge
 - Telegram and Discord bot tokens are intentionally written into Claude-managed machine state under `~/.claude/channels/<channel>/.env`, unless the official `*_STATE_DIR` environment override redirects that channel elsewhere.
 - iMessage is tokenless, macOS-only, and still depends on Claude-side plugin install plus OS permissions.
 - Auto-enable is gated on Bun availability, verified Claude Code v2.1.80+, verified `claude.ai` auth, native Claude `default/account` sessions, and per-channel setup readiness.
