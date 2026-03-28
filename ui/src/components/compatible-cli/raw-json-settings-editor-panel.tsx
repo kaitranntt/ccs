@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { toast } from 'sonner';
 import { Copy, FileCode2, Loader2, RefreshCw, Save } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -7,7 +7,7 @@ import { CodeEditor } from '@/components/shared/code-editor';
 import i18n from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
-interface RawJsonSettingsEditorPanelProps {
+interface RawConfigEditorPanelProps {
   title: string;
   pathLabel: string;
   loading: boolean;
@@ -19,9 +19,13 @@ interface RawJsonSettingsEditorPanelProps {
   onChange: (nextValue: string) => void;
   onSave: () => Promise<void> | void;
   onRefresh: () => Promise<void> | void;
+  language?: 'json' | 'yaml' | 'toml';
+  loadingLabel?: string;
+  parseWarningLabel?: string;
+  ownershipNotice?: ReactNode;
 }
 
-export function RawJsonSettingsEditorPanel({
+export function RawConfigEditorPanel({
   title,
   pathLabel,
   loading,
@@ -33,7 +37,11 @@ export function RawJsonSettingsEditorPanel({
   onChange,
   onSave,
   onRefresh,
-}: RawJsonSettingsEditorPanelProps) {
+  language = 'json',
+  loadingLabel = 'Loading settings.json...',
+  parseWarningLabel = 'Parse warning',
+  ownershipNotice,
+}: RawConfigEditorPanelProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -82,13 +90,14 @@ export function RawJsonSettingsEditorPanel({
         {loading ? (
           <div className="h-full flex items-center justify-center text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin mr-2" />
-            Loading settings.json...
+            {loadingLabel}
           </div>
         ) : (
           <div className="flex h-full min-h-0 flex-col">
+            {ownershipNotice && <div className="mx-4 mt-4">{ownershipNotice}</div>}
             {parseWarning && (
               <div className="mx-4 mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
-                Parse warning: {parseWarning}
+                {parseWarningLabel}: {parseWarning}
               </div>
             )}
             <div className="min-h-0 flex-1 p-4 pt-3">
@@ -96,7 +105,7 @@ export function RawJsonSettingsEditorPanel({
                 <CodeEditor
                   value={value}
                   onChange={onChange}
-                  language="json"
+                  language={language}
                   minHeight="100%"
                   heightMode="fill-parent"
                 />
@@ -108,3 +117,5 @@ export function RawJsonSettingsEditorPanel({
     </div>
   );
 }
+
+export const RawJsonSettingsEditorPanel = RawConfigEditorPanel;

@@ -468,6 +468,19 @@ Codex is a real runtime target, but it is intentionally narrower than Claude or 
 | `account` | No | Claude-only account isolation concept |
 | `copilot` | No | Not a native Codex provider path |
 
+### Codex Dashboard Surface
+
+CCS also exposes a dedicated dashboard route at `ccs config` -> `Compatible` -> `Codex CLI`.
+That page is intentionally narrower than the Droid dashboard:
+
+- reads and writes only the user config layer: `~/.codex/config.toml` or `$CODEX_HOME/config.toml`
+- shows binary detection, user-layer config summaries, support-matrix guidance, and upstream docs
+- warns that transient CCS runtime overrides such as `codex -c key=value` and
+  `CCS_CODEX_API_KEY` can change the effective runtime without persisting into the file editor
+
+This keeps the dashboard honest about Codex's merged configuration model while still giving users
+one place to inspect and manage the user-owned layer safely.
+
 ### Runtime Alias Pattern
 
 ```bash

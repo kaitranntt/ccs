@@ -17,6 +17,7 @@ const layoutManagedRouteFiles = [
   'src/pages/copilot.tsx',
   'src/pages/cursor.tsx',
   'src/pages/claude-extension.tsx',
+  'src/pages/codex.tsx',
   'src/pages/droid.tsx',
   'src/pages/accounts.tsx',
   'src/pages/settings/index.tsx',
@@ -26,13 +27,27 @@ const layoutManagedRouteFiles = [
 
 const forbiddenViewportHeightPattern = /\b(?:h-screen|min-h-screen)\b|calc\(100(?:d|l|s)?vh/i;
 
+function readSource(relativePath: string): string {
+  return readFileSync(path.join(projectRoot, relativePath), 'utf8');
+}
+
 describe('dashboard route height contract', () => {
   it.each(layoutManagedRouteFiles)(
     '%s relies on the shared layout for viewport height',
     (relativePath) => {
-      const source = readFileSync(path.join(projectRoot, relativePath), 'utf8');
+      const source = readSource(relativePath);
 
       expect(source).not.toMatch(forbiddenViewportHeightPattern);
     }
   );
+
+  it('keeps the Codex dashboard registered in router and sidebar navigation', () => {
+    const appSource = readSource('src/App.tsx');
+    const sidebarSource = readSource('src/components/layout/app-sidebar.tsx');
+
+    expect(appSource).toContain('path="/codex"');
+    expect(appSource).toContain('<CodexPage />');
+    expect(sidebarSource).toContain("path: '/codex'");
+    expect(sidebarSource).toContain("label: 'Codex CLI'");
+  });
 });

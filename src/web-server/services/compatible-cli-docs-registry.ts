@@ -3,7 +3,7 @@ export interface CompatibleCliDocLink {
   label: string;
   url: string;
   category: 'overview' | 'configuration' | 'byok' | 'reference';
-  source: 'factory' | 'provider';
+  source: 'factory' | 'provider' | 'openai' | 'github';
   description: string;
 }
 
@@ -92,6 +92,72 @@ const COMPATIBLE_CLI_DOCS_REGISTRY: Record<string, CompatibleCliDocsRegistryEntr
           label: 'OpenAI Chat Completions Spec',
           apiFormat: 'Chat Completions API',
           url: 'https://platform.openai.com/docs/api-reference/chat',
+        },
+      ],
+    },
+  },
+  codex: {
+    cliId: 'codex',
+    displayName: 'Codex CLI',
+    docsReference: {
+      providerValues: ['openai', 'oss', 'custom model_providers'],
+      settingsHierarchy: [
+        'system managed config',
+        'user config ($CODEX_HOME/config.toml)',
+        'cwd config',
+        'tree/repo config',
+        'CLI -c overrides and environment variables',
+      ],
+      notes: [
+        'User config lives at ~/.codex/config.toml unless CODEX_HOME overrides the base directory',
+        'Codex merges multiple config layers; this dashboard edits only the user layer',
+        'CLI --profile selects a named [profiles.<name>] overlay on top of base config',
+        'CCS-backed Codex launches may apply transient -c overrides and CCS_CODEX_API_KEY',
+        'Official docs treat model_providers, mcp_servers, features, and project trust as schema-backed config surfaces',
+      ],
+      links: [
+        {
+          id: 'codex-config-basic',
+          label: 'Codex Config Basics',
+          url: 'https://developers.openai.com/codex/config-basic',
+          category: 'overview',
+          source: 'openai',
+          description:
+            'Official user-layer setup, config location, and basic configuration guidance.',
+        },
+        {
+          id: 'codex-config-advanced',
+          label: 'Codex Config Advanced',
+          url: 'https://developers.openai.com/codex/config-advanced',
+          category: 'configuration',
+          source: 'openai',
+          description: 'Advanced layering, project trust, profiles, and stricter config behaviors.',
+        },
+        {
+          id: 'codex-config-reference',
+          label: 'Codex Config Reference',
+          url: 'https://developers.openai.com/codex/config-reference',
+          category: 'reference',
+          source: 'openai',
+          description:
+            'Canonical upstream config schema surface for model providers, features, MCP, and more.',
+        },
+        {
+          id: 'codex-releases',
+          label: 'Codex GitHub Releases',
+          url: 'https://github.com/openai/codex/releases',
+          category: 'reference',
+          source: 'github',
+          description:
+            'Track CLI release notes and upstream behavior changes across stable and prerelease builds.',
+        },
+      ],
+      providerDocs: [
+        {
+          provider: 'openai',
+          label: 'OpenAI Responses API',
+          apiFormat: 'Responses API',
+          url: 'https://platform.openai.com/docs/api-reference/responses',
         },
       ],
     },

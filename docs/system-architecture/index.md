@@ -1,6 +1,6 @@
 # CCS System Architecture
 
-Last Updated: 2026-03-18
+Last Updated: 2026-03-28
 
 High-level architecture overview for the CCS (Claude Code Switch) system.
 
@@ -8,7 +8,7 @@ High-level architecture overview for the CCS (Claude Code Switch) system.
 
 ## System Overview
 
-CCS is a CLI wrapper that enables seamless switching between multiple Claude accounts and alternative AI providers (GLM, Gemini, Codex, Kiro, GitHub Copilot, OpenRouter, Qwen, Kimi, DeepSeek). It now supports multiple CLI targets (Claude Code, Factory Droid) for credential delivery.
+CCS is a CLI wrapper that enables seamless switching between multiple Claude accounts and alternative AI providers (GLM, Gemini, Codex, Kiro, GitHub Copilot, OpenRouter, Qwen, Kimi, DeepSeek). It now supports multiple CLI targets (Claude Code, Factory Droid, Codex CLI) for credential delivery.
 
 The system consists of two main components:
 
@@ -25,8 +25,8 @@ CCS v7.34 adds Image Analysis Hook for vision model proxying through CLIProxy wi
 +===========================================================================+
 |                                                                           |
 |   +------------------+      +-----------------+      +----------------+   |
-|   |   User Terminal  | ---> |   CCS CLI       | ---> | Target CLI     |   |
-|   |   (ccs command)  |      |   (src/ccs.ts)  |      | (claude/droid) |   |
+|   |   User Terminal  | ---> |   CCS CLI       | ---> | Target CLI           |   |
+|   |   (ccs command)  |      |   (src/ccs.ts)  |      | (claude/droid/codex) |   |
 |   +------------------+      +-----------------+      +----------------+   |
 |                                    |                        |             |
 |                                    v                        v             |
@@ -61,7 +61,7 @@ Profile Resolution (CLIProxy, Settings/API, Account-based)
 Target Resolution (--target flag > config > argv[0] > default)
         |
         v
-Get Target Adapter (Claude or Droid)
+Get Target Adapter (Claude, Droid, or Codex)
         |
         +---> detectBinary()     (find CLI on system)
         |
@@ -86,12 +86,19 @@ Spawn Target Process
   - Spawns: `droid -m custom:ccs-<profile> <args>`
   - Model config includes baseUrl, apiKey, provider
 
+- **Codex Adapter**: Transient runtime overrides plus user-layer dashboard inspection
+  - Uses `codex -c key=value` only for CCS-routed launches
+  - Preserves native `~/.codex/config.toml` ownership
+  - Dashboard page reads/writes only the user config layer with explicit runtime-vs-provider warnings
+
 **Runtime alias pattern (built-in bins / argv[0]-style):**
 
 ```
 ccs        → Target: claude (default)
 ccs-droid  → Target: droid (explicit alias)
 ccsd       → Target: droid (legacy shortcut)
+ccs-codex  → Target: codex (explicit alias)
+ccsx       → Target: codex (short alias)
 ```
 
 For details on the adapter architecture, see [Target Adapters](./target-adapters.md).
