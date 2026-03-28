@@ -1,6 +1,6 @@
 # CCS Project Roadmap
 
-Last Updated: 2026-03-27
+Last Updated: 2026-03-28
 
 Forward-looking roadmap documenting current priorities, GitHub issues, and future feature plans.
 
@@ -41,6 +41,7 @@ All major modularization work is complete. The codebase evolved from monolithic 
 
 ### Recent Fixes
 
+- **2026-03-28**: **#773** CCS now ships a dedicated `Compatible -> Codex CLI` dashboard route. The page detects the local Codex binary, reads and writes the user-owned `~/.codex/config.toml` layer, surfaces support-matrix/runtime-routing guidance, links to official OpenAI Codex docs, and warns that transient CCS runtime overrides such as `codex -c key=value` and `CCS_CODEX_API_KEY` may change effective behavior without persisting into the file.
 - **2026-03-27**: WebSearch dashboard cards now manage Exa, Tavily, and Brave API keys inline instead of relying on a separate manual env step. CCS stores those secrets through `global_env`, reflects masked key state in `/api/websearch`, and counts dashboard-managed keys as ready in the WebSearch status flow.
 - **2026-03-27**: **#812** CCS now includes a first-class `ccs docker` command suite for self-hosting the integrated Dashboard + CLIProxy stack. The CLI can stage bundled Docker assets locally or to a remote `--host` over SSH, report compose/supervisor status, stream CCS or CLIProxy logs, and run in-container update flows without relying on ad-hoc deployment scripts.
 - **2026-03-24**: Official Claude Channels now follow Anthropic's actual runtime contract. CCS blocks auto-enable unless Bun is available, Claude Code is verified at v2.1.80+, and `claude.ai` auth is verified; treats `--allow-dangerously-skip-permissions` as an explicit override; keeps Telegram/Discord bot tokens in Claude's shared `~/.claude/channels/` state (or official `*_STATE_DIR` overrides); and upgrades the dashboard/CLI status flow with Bun/version/auth/state-scope guidance, safer token draft retention on refresh failures, and a non-macOS iMessage toggle that can still be turned off when already selected.

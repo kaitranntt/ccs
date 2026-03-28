@@ -1,12 +1,17 @@
 /**
  * Code Editor Component
- * Lightweight JSON editor with syntax highlighting, line numbers, and validation
+ * Lightweight JSON/TOML editor with syntax highlighting, line numbers, and validation
  * Uses react-simple-code-editor + prism-react-renderer for minimal bundle size (~18KB)
  */
 
 import { useState, useCallback, useMemo } from 'react';
 import Editor from 'react-simple-code-editor';
 import { Highlight, themes } from 'prism-react-renderer';
+import Prism from 'prismjs';
+import 'prismjs/components/prism-json';
+import 'prismjs/components/prism-yaml';
+import 'prismjs/components/prism-toml';
+import { parse as parseToml } from 'smol-toml';
 import { useTheme } from '@/hooks/use-theme';
 import { cn } from '@/lib/utils';
 import { isSensitiveKey } from '@/lib/sensitive-keys';
@@ -16,7 +21,7 @@ import { Button } from '@/components/ui/button';
 interface CodeEditorProps {
   value: string;
   onChange: (value: string) => void;
-  language?: 'json' | 'yaml';
+  language?: 'json' | 'yaml' | 'toml';
   readonly?: boolean;
   className?: string;
   minHeight?: string;
@@ -64,6 +69,26 @@ function validateJson(code: string): ValidationResult {
   }
 }
 
+function validateToml(code: string): ValidationResult {
+  if (!code.trim()) {
+    return { valid: true };
+  }
+
+  try {
+    parseToml(code);
+    return { valid: true };
+  } catch (error) {
+    const message = (error as Error).message;
+    const lineMatch = message.match(/line\s+(\d+)/i);
+
+    return {
+      valid: false,
+      error: message,
+      line: lineMatch ? Number.parseInt(lineMatch[1], 10) : undefined,
+    };
+  }
+}
+
 export function CodeEditor({
   value,
   onChange,
@@ -83,6 +108,9 @@ export function CodeEditor({
     if (language === 'json') {
       return validateJson(value);
     }
+    if (language === 'toml') {
+      return validateToml(value);
+    }
     return { valid: true };
   }, [value, language]);
 
@@ -90,7 +118,12 @@ export function CodeEditor({
   // Note: Line numbers removed - they break textarea/pre alignment in react-simple-code-editor
   const highlightCode = useCallback(
     (code: string) => (
-      <Highlight theme={isDark ? themes.nightOwl : themes.github} code={code} language={language}>
+      <Highlight
+        prism={Prism}
+        theme={isDark ? themes.nightOwl : themes.github}
+        code={code}
+        language={language}
+      >
         {({ tokens, getLineProps, getTokenProps }) => {
           let nextValueIsSensitive = false;
 

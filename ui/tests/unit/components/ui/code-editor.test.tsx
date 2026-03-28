@@ -55,4 +55,16 @@ describe('CodeEditor', () => {
 
     expect(container.querySelector('[data-slot="code-editor-viewport"]')).not.toBeInTheDocument();
   });
+
+  it('validates TOML payloads when language is toml', () => {
+    render(
+      <CodeEditor
+        value={'model = "gpt-5.4"\n[features]\nmulti_agent = true\n'}
+        onChange={vi.fn()}
+        language="toml"
+      />
+    );
+
+    expect(screen.getByText('Valid TOML')).toBeInTheDocument();
+  });
 });

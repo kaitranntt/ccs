@@ -162,7 +162,7 @@ Allowed when:
 
 ## Target Adapter Pattern
 
-The target adapter pattern enables pluggable support for multiple CLI implementations (Claude Code, Factory Droid, etc.) while preserving a unified profile system.
+The target adapter pattern enables pluggable support for multiple CLI implementations (Claude Code, Factory Droid, Codex CLI, etc.) while preserving a unified profile system.
 
 ### Pattern Overview
 
@@ -170,7 +170,7 @@ The target adapter pattern enables pluggable support for multiple CLI implementa
 
 ```typescript
 interface TargetAdapter {
-  readonly type: TargetType;                                    // 'claude' | 'droid'
+  readonly type: TargetType;                                    // 'claude' | 'droid' | 'codex'
   readonly displayName: string;                                 // Human-readable name
 
   detectBinary(): TargetBinaryInfo | null;                      // Find CLI on system
@@ -184,12 +184,12 @@ interface TargetAdapter {
 
 ### Key Differences Per Target
 
-| Aspect | Claude | Droid |
-|--------|--------|-------|
-| **Credential delivery** | Environment variables | Config file (~/.factory/settings.json) |
-| **Spawn args** | `claude <args>` | `droid -m custom:ccs-<profile> <args>` |
-| **Config write** | None (uses env) | `upsertCcsModel()` writes to settings |
-| **Binary detection** | `detectClaudeCli()` | `detectDroidCli()` with version check |
+| Aspect | Claude | Droid | Codex |
+|--------|--------|-------|-------|
+| **Credential delivery** | Environment variables | Config file (~/.factory/settings.json) | Transient `-c` overrides + `CCS_CODEX_API_KEY` |
+| **Spawn args** | `claude <args>` | `droid -m custom:ccs-<profile> <args>` | `codex <args>` or `codex -c ... <args>` |
+| **Config write** | None (uses env) | `upsertCcsModel()` writes to settings | None at runtime; dashboard edits user-owned `~/.codex/config.toml` only |
+| **Binary detection** | `detectClaudeCli()` | `detectDroidCli()` with version check | `detectCodexCli()` plus `--config` capability probe |
 
 ### Target Resolution Priority
 
@@ -203,6 +203,8 @@ Resolves which adapter to use via `resolveTargetType()`:
 3. argv[0] detection (runtime alias pattern):
    - ccs-droid → droid
    - ccsd → droid
+   - ccs-codex → codex
+   - ccsx → codex
    - ccs → default
    ↓
 4. Fallback: 'claude' (lowest priority)
@@ -216,6 +218,7 @@ At startup, adapters self-register into the runtime registry:
 // In ccs.ts or initialization
 registerTarget(new ClaudeAdapter());
 registerTarget(new DroidAdapter());
+registerTarget(new CodexAdapter());
 
 // Later, when executing
 const targetType = resolveTargetType(args, profileConfig);

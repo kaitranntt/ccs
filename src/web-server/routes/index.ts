@@ -24,6 +24,7 @@ import aiProviderRoutes from './ai-provider-routes';
 import copilotRoutes from './copilot-routes';
 import cursorRoutes from './cursor-routes';
 import droidRoutes from './droid-routes';
+import codexRoutes from './codex-routes';
 import miscRoutes from './misc-routes';
 import cliproxyServerRoutes from './proxy-routes';
 import authRoutes from './auth-routes';
@@ -76,6 +77,9 @@ apiRoutes.use('/cursor', cursorRoutes);
 
 // ==================== Droid ====================
 apiRoutes.use('/droid', droidRoutes);
+
+// ==================== Codex ====================
+apiRoutes.use('/codex', codexRoutes);
 
 // ==================== CLIProxy Server Settings ====================
 apiRoutes.use('/cliproxy-server', cliproxyServerRoutes);

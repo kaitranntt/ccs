@@ -119,6 +119,7 @@ function buildNavGroups(t: (key: string) => string): SidebarGroupDef[] {
       title: t('nav.compatibleClis'),
       items: [
         { path: '/claude-extension', icon: Puzzle, label: t('nav.claudeExtension') },
+        { path: '/codex', iconSrc: '/assets/providers/codex-color.svg', label: 'Codex CLI' },
         { path: '/droid', icon: TerminalSquare, label: t('nav.factoryDroid') },
       ],
     },

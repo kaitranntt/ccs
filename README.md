@@ -89,6 +89,7 @@ The dashboard provides visual management for all account types:
 - **OAuth Providers**: One-click auth for Gemini, Codex, Antigravity, Kiro, Copilot
 - **AI Providers**: Configure Gemini, Codex, Claude, Vertex, and OpenAI-compatible API keys under `CLIProxy -> AI Providers`
 - **API Profiles**: Configure GLM, Kimi, OpenRouter, and other Anthropic-compatible APIs as CCS-native profiles
+- **Codex CLI**: Dedicated dashboard page for native runtime diagnostics and guarded `config.toml` editing
 - **Factory Droid**: Track Droid install location and BYOK settings health
 - **Updates Center**: Track support rollouts (Droid target, CLIProxy provider changes, WebSearch integrations)
 - **Health Monitor**: Real-time status across all profiles
@@ -266,6 +267,14 @@ Not supported in v1:
 - Generic API profiles that are not Codex-routed CLIProxy bridges
 - Non-Codex CLIProxy providers on Codex target
 - Composite CLIProxy variants on Codex target
+
+Dashboard parity: `ccs config` -> `Compatible` -> `Codex CLI`
+
+The dedicated Codex dashboard reads and writes the user layer only: `~/.codex/config.toml`
+(or `$CODEX_HOME/config.toml`). It shows binary detection, a user-layer summary, support
+matrix guidance, and upstream docs, while warning that transient CCS runtime overrides such as
+`codex -c key=value` and `CCS_CODEX_API_KEY` can change the effective runtime without persisting
+back into that file.
 
 ### Per-Profile Target Defaults
 

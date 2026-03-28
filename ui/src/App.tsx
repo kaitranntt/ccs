@@ -34,6 +34,7 @@ const CursorPage = lazy(() => import('@/pages/cursor').then((m) => ({ default: m
 const ClaudeExtensionPage = lazy(() =>
   import('@/pages/claude-extension').then((m) => ({ default: m.ClaudeExtensionPage }))
 );
+const CodexPage = lazy(() => import('@/pages/codex').then((m) => ({ default: m.CodexPage })));
 const DroidPage = lazy(() => import('@/pages/droid').then((m) => ({ default: m.DroidPage })));
 const AccountsPage = lazy(() =>
   import('@/pages/accounts').then((m) => ({ default: m.AccountsPage }))
@@ -138,6 +139,14 @@ export default function App() {
                       element={
                         <Suspense fallback={<PageLoader />}>
                           <ClaudeExtensionPage />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/codex"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <CodexPage />
                         </Suspense>
                       }
                     />
