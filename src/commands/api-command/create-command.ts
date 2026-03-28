@@ -417,6 +417,17 @@ export async function handleApiCreateCommand(args: string[]): Promise<void> {
         `  ${color(`ccs ${result.name} --target droid "your prompt"`, 'command')} ${dim('# target flag alternative')}`
       );
     }
+    if (cliproxyProvider === 'codex') {
+      console.log(
+        `  ${color(`ccs ${result.name} --target codex "your prompt"`, 'command')} ${dim('# native Codex runtime')}`
+      );
+      console.log(
+        `  ${color(`ccs-codex ${result.name} "your prompt"`, 'command')} ${dim('# explicit Codex alias')}`
+      );
+      console.log(
+        `  ${color(`ccsx ${result.name} "your prompt"`, 'command')} ${dim('# short alias')}`
+      );
+    }
     console.log('');
     console.log(dim('Manage provider accounts, keys, and models in: ccs cliproxy'));
     return;

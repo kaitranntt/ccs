@@ -7,6 +7,7 @@
 import { Router, Request, Response } from 'express';
 import { isReservedName, RESERVED_PROFILE_NAMES } from '../../config/reserved-names';
 import type { CLIProxyProvider } from '../../cliproxy/types';
+import { getPersistedTargetChoices } from '../../targets/target-metadata';
 import { parseTarget } from './route-helpers';
 import {
   createVariant,
@@ -55,7 +56,7 @@ router.post('/', (req: Request, res: Response): void => {
   const parsedTarget = parseTarget(req.body.target);
 
   if (req.body.target !== undefined && parsedTarget === null) {
-    res.status(400).json({ error: 'Invalid target. Expected: claude or droid' });
+    res.status(400).json({ error: `Invalid target. Expected: ${getPersistedTargetChoices()}` });
     return;
   }
 
@@ -178,7 +179,7 @@ router.put('/:name', (req: Request, res: Response): void => {
     const parsedTarget = parseTarget(req.body.target);
 
     if (req.body.target !== undefined && parsedTarget === null) {
-      res.status(400).json({ error: 'Invalid target. Expected: claude or droid' });
+      res.status(400).json({ error: `Invalid target. Expected: ${getPersistedTargetChoices()}` });
       return;
     }
 

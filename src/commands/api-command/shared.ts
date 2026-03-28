@@ -1,5 +1,6 @@
 import type { ModelMapping } from '../../api/services';
 import type { TargetType } from '../../targets/target-adapter';
+import { getPersistedTargetChoices, isPersistedTargetType } from '../../targets/target-metadata';
 import {
   applyExtendedContextSuffix,
   hasExtendedContextSuffix,
@@ -108,7 +109,7 @@ export function extractPositionalArgs(args: string[]): string[] {
 
 function parseTargetValue(value: string): TargetType | null {
   const normalized = value.trim().toLowerCase();
-  if (normalized === 'claude' || normalized === 'droid') {
+  if (isPersistedTargetType(normalized)) {
     return normalized;
   }
   return null;
@@ -132,7 +133,7 @@ export function parseOptionalTargetFlag(
   if (!target) {
     return {
       remainingArgs: extracted.remainingArgs,
-      errors: [`Invalid --target value "${extracted.value}". Use: claude or droid`],
+      errors: [`Invalid --target value "${extracted.value}". Use: ${getPersistedTargetChoices()}`],
     };
   }
 
@@ -251,7 +252,9 @@ export function parseApiCommandArgs(
     (value) => {
       const target = parseTargetValue(value);
       if (!target) {
-        result.errors.push(`Invalid --target value "${value}". Use: claude or droid`);
+        result.errors.push(
+          `Invalid --target value "${value}". Use: ${getPersistedTargetChoices()}`
+        );
         return;
       }
       result.target = target;

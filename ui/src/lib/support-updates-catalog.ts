@@ -56,6 +56,51 @@ export const SUPPORT_SCOPE_LABELS: Record<SupportScope, string> = {
 
 export const SUPPORT_NOTICES: SupportNotice[] = [
   {
+    id: 'codex-target-runtime-support',
+    title: 'Native Codex runtime support is live',
+    summary:
+      'Codex now participates as a first-class runtime target through ccs-codex, ccsx, or --target codex.',
+    primaryAction:
+      'Use Codex as a runtime target for native Codex sessions and Codex-routed CLIProxy flows.',
+    publishedAt: '2026-03-28',
+    status: 'new',
+    scopes: ['target', 'cliproxy', 'api-profiles'],
+    entryIds: ['codex-target', 'codex-cliproxy'],
+    highlights: [
+      'Use ccs-codex or ccsx for native Codex runs.',
+      'Built-in Codex and Codex bridge profiles can run on native Codex with --target codex.',
+      'Saved default targets for API profiles and variants remain claude or droid.',
+    ],
+    actions: [
+      {
+        id: 'copy-codex-alias-command',
+        label: 'Open native Codex',
+        description: 'Launch Codex through the explicit CCS runtime alias.',
+        type: 'command',
+        command: 'ccs-codex',
+      },
+      {
+        id: 'copy-codex-provider-command',
+        label: 'Run built-in Codex on Codex',
+        description: 'Use the built-in Codex provider with native Codex runtime.',
+        type: 'command',
+        command: 'ccs codex --target codex "your prompt"',
+      },
+      {
+        id: 'open-cliproxy-codex',
+        label: 'Open Codex provider settings',
+        description: 'Review Codex provider and bridge flows in the dashboard.',
+        type: 'route',
+        path: '/cliproxy',
+      },
+    ],
+    routes: [
+      { label: 'CLIProxy', path: '/cliproxy' },
+      { label: 'API Profiles', path: '/providers' },
+    ],
+    commands: ['ccs-codex', 'ccsx', 'ccs codex --target codex "your prompt"'],
+  },
+  {
     id: 'droid-target-support',
     title: 'Factory Droid support is live',
     summary:
@@ -186,6 +231,27 @@ export const CLI_SUPPORT_ENTRIES: CliSupportEntry[] = [
     notes: 'Use ccs-droid as the explicit runtime alias. Legacy ccsd still works.',
   },
   {
+    id: 'codex-target',
+    name: 'Codex CLI',
+    scope: 'target',
+    status: 'new',
+    summary:
+      'First-class runtime target for native Codex sessions and Codex-routed CLIProxy flows.',
+    pillars: {
+      baseUrl:
+        'Native ~/.codex config for default mode, transient -c overrides for CCS-backed routes',
+      auth: 'Native Codex auth for default mode, env_key injection for CCS-backed routes',
+      model: 'Native Codex config or routed Codex model mapping from CLIProxy',
+    },
+    routes: [
+      { label: 'CLIProxy', path: '/cliproxy' },
+      { label: 'API Profiles', path: '/providers' },
+    ],
+    commands: ['ccs-codex', 'ccsx', 'ccs codex --target codex', 'ccs codex-api --target codex'],
+    notes:
+      'Runtime-only in v1. Saved default targets for API profiles and CLIProxy variants remain claude or droid.',
+  },
+  {
     id: 'codex-cliproxy',
     name: 'Codex via CLIProxy',
     scope: 'cliproxy',
@@ -200,7 +266,12 @@ export const CLI_SUPPORT_ENTRIES: CliSupportEntry[] = [
       { label: 'CLIProxy', path: '/cliproxy' },
       { label: 'Control Panel', path: '/cliproxy/control-panel' },
     ],
-    commands: ['ccs codex', 'ccs cliproxy create mycodex --provider codex'],
+    commands: [
+      'ccs codex',
+      'ccs codex --target codex',
+      'ccs cliproxy create mycodex --provider codex',
+      'ccs api create codex-api --cliproxy-provider codex',
+    ],
   },
   {
     id: 'gemini-cliproxy',

@@ -75,6 +75,13 @@ describe('api-command arg parser', () => {
     ]);
   });
 
+  test('rejects runtime-only codex as a persisted API target value', () => {
+    const parsed = parseApiCommandArgs(['my-api', '--target', 'codex']);
+
+    expect(parsed.target).toBeUndefined();
+    expect(parsed.errors).toEqual(['Invalid --target value "codex". Use: claude or droid']);
+  });
+
   test('collects missing-value error for --target with no value', () => {
     const parsed = parseApiCommandArgs(['my-api', '--target']);
 

@@ -23,6 +23,7 @@ import {
   validateApiName,
 } from '../../api/services';
 import { normalizeDroidProvider } from '../../targets/droid-provider';
+import { getPersistedTargetChoices } from '../../targets/target-metadata';
 import { isCLIProxyProvider } from '../../cliproxy/provider-capabilities';
 import { isAnthropicDirectProfile, updateSettingsFile, parseTarget } from './route-helpers';
 
@@ -100,7 +101,7 @@ router.post('/cliproxy-bridge', (req: Request, res: Response): void => {
 
   const target = parseTarget(shape.payload.target);
   if (shape.payload.target !== undefined && target === null) {
-    res.status(400).json({ error: 'Invalid target. Expected: claude or droid' });
+    res.status(400).json({ error: `Invalid target. Expected: ${getPersistedTargetChoices()}` });
     return;
   }
 
@@ -155,7 +156,7 @@ router.post('/', (req: Request, res: Response): void => {
 
   const parsedTarget = parseTarget(target);
   if (target !== undefined && parsedTarget === null) {
-    res.status(400).json({ error: 'Invalid target. Expected: claude or droid' });
+    res.status(400).json({ error: `Invalid target. Expected: ${getPersistedTargetChoices()}` });
     return;
   }
   if (providerHint !== undefined && parsedProvider === null) {
@@ -265,7 +266,7 @@ router.post('/orphans/register', (req: Request, res: Response): void => {
   const force = payload.force === true;
 
   if (payload.target !== undefined && target === null) {
-    res.status(400).json({ error: 'Invalid target. Expected: claude or droid' });
+    res.status(400).json({ error: `Invalid target. Expected: ${getPersistedTargetChoices()}` });
     return;
   }
 
@@ -306,7 +307,7 @@ router.post('/:name/copy', (req: Request, res: Response): void => {
     return;
   }
   if (shape.payload.target !== undefined && target === null) {
-    res.status(400).json({ error: 'Invalid target. Expected: claude or droid' });
+    res.status(400).json({ error: `Invalid target. Expected: ${getPersistedTargetChoices()}` });
     return;
   }
 
@@ -357,7 +358,7 @@ router.post('/import', (req: Request, res: Response): void => {
 
   const target = parseTarget(shape.payload.target);
   if (shape.payload.target !== undefined && target === null) {
-    res.status(400).json({ error: 'Invalid target. Expected: claude or droid' });
+    res.status(400).json({ error: `Invalid target. Expected: ${getPersistedTargetChoices()}` });
     return;
   }
 
@@ -368,7 +369,9 @@ router.post('/import', (req: Request, res: Response): void => {
   }
   const bundleTarget = (bundle as { profile?: { target?: unknown } }).profile?.target;
   if (bundleTarget !== undefined && parseTarget(bundleTarget) === null) {
-    res.status(400).json({ error: 'Invalid bundle profile target. Expected: claude or droid' });
+    res.status(400).json({
+      error: `Invalid bundle profile target. Expected: ${getPersistedTargetChoices()}`,
+    });
     return;
   }
 
@@ -418,7 +421,7 @@ router.put('/:name', (req: Request, res: Response): void => {
 
   const parsedTarget = parseTarget(target);
   if (target !== undefined && parsedTarget === null) {
-    res.status(400).json({ error: 'Invalid target. Expected: claude or droid' });
+    res.status(400).json({ error: `Invalid target. Expected: ${getPersistedTargetChoices()}` });
     return;
   }
   if (providerHint !== undefined && parsedProvider === null) {

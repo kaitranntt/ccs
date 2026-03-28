@@ -99,6 +99,18 @@ describe('help command parity', () => {
     expect(rendered.includes('return 429 extra-usage errors for long-context requests')).toBe(true);
   });
 
+  test('root help documents native Codex runtime alias and runtime-only scope', async () => {
+    const lines: string[] = [];
+    await handleHelpCommand((line) => lines.push(line));
+
+    const rendered = stripAnsi(lines.join('\n'));
+    expect(rendered.includes('ccs-codex <profile> [args]')).toBe(true);
+    expect(rendered.includes('ccsx <profile> [args]')).toBe(true);
+    expect(rendered.includes('ccs --target codex')).toBe(true);
+    expect(rendered.includes('ccs codex-api --target codex')).toBe(true);
+    expect(rendered.includes('codex (runtime-only)')).toBe(true);
+  });
+
   test('api help documents create-time Claude [1m] flags and entitlement warning', async () => {
     const lines: string[] = [];
     await showApiCommandHelp((line) => lines.push(line));
@@ -112,5 +124,15 @@ describe('help command parity', () => {
     expect(rendered.includes('some accounts can still return 429 for long-context requests')).toBe(
       true
     );
+  });
+
+  test('api help documents Codex bridge runtime launch separately from persisted targets', async () => {
+    const lines: string[] = [];
+    await showApiCommandHelp((line) => lines.push(line));
+
+    const rendered = stripAnsi(lines.join('\n'));
+    expect(rendered.includes('ccs api create codex-api --cliproxy-provider codex')).toBe(true);
+    expect(rendered.includes('ccs codex-api --target codex')).toBe(true);
+    expect(rendered.includes('Default target: claude or droid (create)')).toBe(true);
   });
 });

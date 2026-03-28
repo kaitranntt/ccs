@@ -28,6 +28,7 @@ export function ProviderInfoTab({
 }: ProviderInfoTabProps) {
   const resolvedTarget = defaultTarget || 'claude';
   const isDroidTarget = resolvedTarget === 'droid';
+  const isCodexProvider = provider === 'codex';
 
   return (
     <ScrollArea className="h-full">
@@ -88,6 +89,22 @@ export function ProviderInfoTab({
           <h3 className="text-sm font-medium mb-3">Quick Usage</h3>
           <div className="space-y-3 bg-card rounded-lg border p-4 shadow-sm">
             <UsageCommand label="Run with prompt" command={`ccs ${provider} "your prompt"`} />
+            {isCodexProvider && (
+              <>
+                <UsageCommand
+                  label="Run on native Codex (--target)"
+                  command={`ccs ${provider} --target codex "your prompt"`}
+                />
+                <UsageCommand
+                  label="Codex alias (explicit)"
+                  command={`ccs-codex ${provider} "your prompt"`}
+                />
+                <UsageCommand
+                  label="Codex alias (short)"
+                  command={`ccsx ${provider} "your prompt"`}
+                />
+              </>
+            )}
             <UsageCommand
               label={isDroidTarget ? 'Droid alias (explicit)' : 'Run on Droid'}
               command={`ccs-droid ${provider} "your prompt"`}
