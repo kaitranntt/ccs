@@ -13,7 +13,7 @@ import {
   getAllAuthStatus,
   CLIPROXY_DEFAULT_PORT,
 } from '../../cliproxy';
-import { getPortProcess, isCLIProxyProcess } from '../../utils/port-utils';
+import { detectRunningProxy } from '../../cliproxy/proxy-detector';
 import type { HealthCheck } from './types';
 import { CLIPROXY_MAX_STABLE_VERSION } from '../../cliproxy/platform-detector';
 import { isNewerVersion, isVersionFaulty } from '../../cliproxy/binary/version-checker';
@@ -130,36 +130,52 @@ export function checkOAuthProviders(): HealthCheck[] {
 
 /**
  * Check CLIProxy port status
+ *
+ * Uses unified proxy detection (HTTP check first, then session lock, then
+ * port-process). This works reliably inside Docker containers where OS-level
+ * port detection tools (lsof/ss) may be unavailable.
  */
 export async function checkCliproxyPort(): Promise<HealthCheck> {
-  const portProcess = await getPortProcess(CLIPROXY_DEFAULT_PORT);
+  const status = await detectRunningProxy(CLIPROXY_DEFAULT_PORT);
 
-  if (!portProcess) {
-    return {
-      id: 'cliproxy-port',
-      name: 'CLIProxy Port',
-      status: 'info',
-      message: `${CLIPROXY_DEFAULT_PORT} free`,
-      details: 'Proxy not running',
-    };
-  }
-
-  if (isCLIProxyProcess(portProcess)) {
+  if (status.running && status.verified) {
     return {
       id: 'cliproxy-port',
       name: 'CLIProxy Port',
       status: 'ok',
       message: 'CLIProxy running',
-      details: `PID ${portProcess.pid}`,
+      details: status.pid ? `PID ${status.pid}` : `Detected via ${status.method}`,
+    };
+  }
+
+  if (status.running) {
+    return {
+      id: 'cliproxy-port',
+      name: 'CLIProxy Port',
+      status: 'warning',
+      message: 'CLIProxy starting',
+      details: status.pid ? `PID ${status.pid}` : `Detected via ${status.method}`,
+    };
+  }
+
+  if (status.blocked) {
+    return {
+      id: 'cliproxy-port',
+      name: 'CLIProxy Port',
+      status: 'warning',
+      message: status.blocker
+        ? `Occupied by ${status.blocker.processName}`
+        : 'Port occupied by unknown process',
+      details: status.blocker ? `PID ${status.blocker.pid}` : undefined,
+      ...(status.blocker && { fix: `Kill process: kill ${status.blocker.pid}` }),
     };
   }
 
   return {
     id: 'cliproxy-port',
     name: 'CLIProxy Port',
-    status: 'warning',
-    message: `Occupied by ${portProcess.processName}`,
-    details: `PID ${portProcess.pid}`,
-    fix: `Kill process: kill ${portProcess.pid}`,
+    status: 'info',
+    message: `${CLIPROXY_DEFAULT_PORT} free`,
+    details: 'Proxy not running',
   };
 }
