@@ -1,6 +1,6 @@
 # Target Adapters
 
-Last Updated: 2026-02-16
+Last Updated: 2026-03-28
 
 Detailed documentation of the target adapter pattern and implementations.
 
@@ -20,8 +20,8 @@ Each CLI target implements the `TargetAdapter` contract:
 
 ```typescript
 export interface TargetAdapter {
-  readonly type: TargetType;                               // 'claude' | 'droid'
-  readonly displayName: string;                            // "Claude Code" | "Factory Droid"
+  readonly type: TargetType;                               // 'claude' | 'droid' | 'codex'
+  readonly displayName: string;                            // "Claude Code" | "Factory Droid" | "Codex CLI"
 
   /** Detect if the target CLI binary exists on system */
   detectBinary(): TargetBinaryInfo | null;
@@ -30,7 +30,15 @@ export interface TargetAdapter {
   prepareCredentials(creds: TargetCredentials): Promise<void>;
 
   /** Build spawn arguments for the target CLI */
-  buildArgs(profile: string, userArgs: string[]): string[];
+  buildArgs(
+    profile: string,
+    userArgs: string[],
+    options?: {
+      creds?: TargetCredentials;
+      profileType?: ProfileType;
+      binaryInfo?: TargetBinaryInfo;
+    }
+  ): string[];
 
   /** Build environment variables for the target CLI */
   buildEnv(creds: TargetCredentials, profileType: string): NodeJS.ProcessEnv;
@@ -46,7 +54,7 @@ export interface TargetAdapter {
 ### Type Definitions
 
 ```typescript
-export type TargetType = 'claude' | 'droid';
+export type TargetType = 'claude' | 'droid' | 'codex';
 
 export interface TargetCredentials {
   baseUrl: string;                                         // API endpoint
@@ -59,6 +67,8 @@ export interface TargetCredentials {
 export interface TargetBinaryInfo {
   path: string;                                            // Full path to binary
   needsShell: boolean;                                     // Windows .cmd/.bat/.ps1?
+  version?: string;                                        // Optional version string
+  features?: readonly string[];                            // Capability probes
 }
 ```
 
@@ -73,8 +83,10 @@ CCS resolves which adapter to use via priority-ordered checks:
 ```
 1. --target flag (CLI argument) — highest priority
    └─ ccs --target droid glm
+   └─ ccs --target codex
 
 2. Per-profile config (from ~/.ccs/config.yaml or settings.json)
+   └─ persisted targets are currently only `claude` and `droid`
    └─ profiles:
         glm:
           target: droid
@@ -82,6 +94,8 @@ CCS resolves which adapter to use via priority-ordered checks:
 3. argv[0] detection (runtime alias pattern) — binary name mapping
    └─ ccs-droid (explicit alias) → droid
    └─ ccsd (legacy shortcut) → droid
+   └─ ccs-codex (explicit alias) → codex
+   └─ ccsx (short alias) → codex
    └─ ccs (regular command) → default
 
 4. Fallback: 'claude' — lowest priority
@@ -105,6 +119,7 @@ export function resolveTargetType(
 
   // 2. Check profile config
   if (profileConfig?.target) {
+    // Persisted targets intentionally exclude runtime-only codex.
     return profileConfig.target;
   }
 
@@ -380,6 +395,103 @@ CCS_TARGET_ALIASES=droid=mydroid
 
 ---
 
+## Codex Adapter
+
+### Implementation
+
+The Codex adapter keeps CCS-backed Codex launches transient. It does not rewrite
+`~/.codex/config.toml`. Instead it:
+
+- passes through native default Codex sessions unchanged
+- probes the installed Codex binary for `--config <key=value>` support
+- injects CCS-backed provider credentials through temporary `-c` overrides
+- stores the routed API key only in process env via `CCS_CODEX_API_KEY`
+
+```typescript
+// src/targets/codex-adapter.ts
+
+export class CodexAdapter implements TargetAdapter {
+  readonly type: TargetType = 'codex';
+  readonly displayName = 'Codex CLI';
+
+  detectBinary(): TargetBinaryInfo | null {
+    return getCodexBinaryInfo();
+  }
+
+  async prepareCredentials(_creds: TargetCredentials): Promise<void> {
+    // No file writes. Codex uses transient -c overrides plus env_key injection.
+  }
+
+  buildArgs(profile: string, userArgs: string[], options?: BuildOptions): string[] {
+    if ((options?.profileType || 'default') === 'default') {
+      return userArgs;
+    }
+
+    if (!codexBinarySupportsConfigOverrides(options?.binaryInfo)) {
+      throw new Error('Upgrade Codex before using CCS-backed Codex profiles.');
+    }
+
+    return [
+      '-c',
+      'model_provider=\"ccs_runtime\"',
+      '-c',
+      'model_providers.ccs_runtime.base_url=\"http://127.0.0.1:8317/api/provider/codex\"',
+      '-c',
+      'model_providers.ccs_runtime.env_key=\"CCS_CODEX_API_KEY\"',
+      '-c',
+      'model_providers.ccs_runtime.wire_api=\"responses\"',
+      ...userArgs,
+    ];
+  }
+
+  buildEnv(creds: TargetCredentials, profileType: string): NodeJS.ProcessEnv {
+    const env = { ...stripAnthropicEnv(process.env) };
+    if (profileType !== 'default') {
+      env['CCS_CODEX_API_KEY'] = creds.apiKey;
+    }
+    return env;
+  }
+}
+```
+
+### Support Matrix
+
+Codex is a real runtime target, but it is intentionally narrower than Claude or Droid in v1:
+
+| Profile Type | Codex Target | Notes |
+|--------------|--------------|-------|
+| `default` | Yes | Uses existing native Codex auth/config |
+| `cliproxy` provider=`codex` | Yes | Routed through CLIProxy Codex Responses bridge |
+| `cliproxy` composite | No | Not proven native-Codex-safe |
+| `settings` with Codex bridge metadata | Yes | Only when the API profile resolves to a Codex CLIProxy bridge |
+| `settings` generic API profile | No | Claude/Droid only |
+| `account` | No | Claude-only account isolation concept |
+| `copilot` | No | Not a native Codex provider path |
+
+### Runtime Alias Pattern
+
+```bash
+# Built-in package bin aliases
+ccs-codex
+→ Target: codex (forced by runtime alias)
+
+ccsx codex
+→ Target: codex (forced by runtime alias)
+→ codex ...args
+```
+
+Runtime aliases can also be extended with `CCS_TARGET_ALIASES` or legacy
+`CCS_CODEX_ALIASES` after creating a matching launcher:
+
+```bash
+ln -s /path/to/ccs /path/to/mycodex
+CCS_TARGET_ALIASES='codex=mycodex'
+# Legacy fallback:
+CCS_CODEX_ALIASES='mycodex'
+```
+
+---
+
 ## Registry and Lookup
 
 The target registry is a simple map-based store for adapters:
@@ -415,6 +527,7 @@ At startup, adapters self-register:
 
 registerTarget(new ClaudeAdapter());
 registerTarget(new DroidAdapter());
+registerTarget(new CodexAdapter());
 ```
 
 ---
@@ -522,7 +635,7 @@ export class MyAiAdapter implements TargetAdapter {
 ```typescript
 // src/targets/target-adapter.ts
 
-export type TargetType = 'claude' | 'droid' | 'myai';
+export type TargetType = 'claude' | 'droid' | 'codex' | 'myai';
 ```
 
 ### 3. Register in ccs.ts
@@ -621,8 +734,13 @@ ccs --target claude help
 # Test Droid adapter (if installed)
 ccs --target droid help
 
+# Test Codex adapter (if installed)
+ccs --target codex
+ccs-codex
+
 # Test argv[0] detection
 ccs-droid help
+ccsx
 ```
 
 ---
