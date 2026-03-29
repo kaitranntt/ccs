@@ -2,10 +2,7 @@ import { useMemo } from 'react';
 import { parse as parseToml } from 'smol-toml';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiConflictError, withApiBase } from '@/lib/api-client';
-import type {
-  CodexDashboardDiagnostics,
-  CodexRawConfigResponse,
-} from '../../../src/web-server/services/compatible-cli-types';
+import type { CodexDashboardDiagnostics, CodexRawConfigResponse } from './use-codex-types';
 
 type CodexRawConfig = CodexRawConfigResponse;
 

@@ -5,10 +5,10 @@ import { CodexAdapter } from '../../../src/targets/codex-adapter';
 describe('CodexAdapter', () => {
   const adapter = new CodexAdapter();
 
-  test('supports default, settings, and cliproxy profile types', () => {
+  test('supports only adapter-level default and cliproxy profile types', () => {
     expect(adapter.supportsProfileType('default')).toBe(true);
-    expect(adapter.supportsProfileType('settings')).toBe(true);
     expect(adapter.supportsProfileType('cliproxy')).toBe(true);
+    expect(adapter.supportsProfileType('settings')).toBe(false);
     expect(adapter.supportsProfileType('account')).toBe(false);
     expect(adapter.supportsProfileType('copilot')).toBe(false);
   });

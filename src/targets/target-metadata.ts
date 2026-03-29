@@ -25,7 +25,7 @@ export const TARGET_METADATA: Record<TargetType, TargetMetadata> = {
     legacyAliasEnvVar: 'CCS_CODEX_ALIASES',
     persistedTarget: false,
   },
-};
+} satisfies Record<TargetType, TargetMetadata>;
 
 export const RUNTIME_TARGET_TYPES = Object.freeze(
   Object.keys(TARGET_METADATA) as TargetType[]

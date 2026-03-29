@@ -229,6 +229,8 @@ export class CodexAdapter implements TargetAdapter {
   }
 
   supportsProfileType(profileType: ProfileType): boolean {
-    return profileType === 'default' || profileType === 'settings' || profileType === 'cliproxy';
+    // Bridge-backed settings profiles need additional compatibility context that the
+    // adapter contract does not receive, so keep the adapter-level claim conservative.
+    return profileType === 'default' || profileType === 'cliproxy';
   }
 }

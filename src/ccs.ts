@@ -87,6 +87,11 @@ interface DetectedProfile {
   remainingArgs: string[];
 }
 
+interface RuntimeReasoningResolution {
+  argsWithoutReasoningFlags: string[];
+  reasoningOverride: string | number | undefined;
+}
+
 /**
  * Smart profile detection
  */
@@ -98,6 +103,42 @@ function detectProfile(args: string[]): DetectedProfile {
     // First arg doesn't start with '-' → treat as profile name
     return { profile: args[0], remainingArgs: args.slice(1) };
   }
+}
+
+function resolveRuntimeReasoningFlags(
+  args: string[],
+  envThinkingValue: string | undefined
+): RuntimeReasoningResolution {
+  const runtime = resolveDroidReasoningRuntime(args, envThinkingValue);
+
+  if (runtime.duplicateDisplays.length > 0) {
+    console.error(
+      warn(
+        `[!] Multiple reasoning flags detected. Using first occurrence: ${runtime.sourceDisplay || '<first-flag>'}`
+      )
+    );
+  }
+
+  return {
+    argsWithoutReasoningFlags: runtime.argsWithoutReasoningFlags,
+    reasoningOverride: runtime.reasoningOverride,
+  };
+}
+
+function exitWithRuntimeReasoningFlagError(
+  message: string,
+  options: {
+    codexAliasLevels: string;
+    includeDroidExecExample?: boolean;
+  }
+): never {
+  console.error(fail(message));
+  console.error('    Examples: --thinking low, --thinking 8192, --thinking off');
+  console.error(`    Codex alias: --effort ${options.codexAliasLevels}`);
+  if (options.includeDroidExecExample) {
+    console.error('    Droid exec: --reasoning-effort high');
+  }
+  process.exit(1);
 }
 
 // ========== Main Execution ==========
@@ -463,17 +504,9 @@ async function main(): Promise<void> {
         targetRemainingArgs = droidRoute.argsForDroid;
 
         if (droidRoute.mode === 'interactive') {
-          const runtime = resolveDroidReasoningRuntime(remainingArgs, process.env.CCS_THINKING);
+          const runtime = resolveRuntimeReasoningFlags(remainingArgs, process.env.CCS_THINKING);
           targetRemainingArgs = runtime.argsWithoutReasoningFlags;
           runtimeReasoningOverride = runtime.reasoningOverride;
-
-          if (runtime.duplicateDisplays.length > 0) {
-            console.error(
-              warn(
-                `[!] Multiple reasoning flags detected. Using first occurrence: ${runtime.sourceDisplay || '<first-flag>'}`
-              )
-            );
-          }
         } else {
           if (droidRoute.duplicateReasoningDisplays.length > 0) {
             console.error(
@@ -490,33 +523,23 @@ async function main(): Promise<void> {
         }
       } catch (error) {
         if (error instanceof DroidReasoningFlagError || error instanceof DroidCommandRouterError) {
-          console.error(fail(error.message));
-          console.error('    Examples: --thinking low, --thinking 8192, --thinking off');
-          console.error('    Codex alias: --effort medium|high|xhigh');
-          console.error('    Droid exec: --reasoning-effort high');
-          process.exit(1);
+          exitWithRuntimeReasoningFlagError(error.message, {
+            codexAliasLevels: 'medium|high|xhigh',
+            includeDroidExecExample: true,
+          });
         }
         throw error;
       }
     } else if (resolvedTarget === 'codex') {
       try {
-        const runtime = resolveDroidReasoningRuntime(remainingArgs, process.env.CCS_THINKING);
+        const runtime = resolveRuntimeReasoningFlags(remainingArgs, process.env.CCS_THINKING);
         targetRemainingArgs = runtime.argsWithoutReasoningFlags;
         runtimeReasoningOverride = runtime.reasoningOverride;
-
-        if (runtime.duplicateDisplays.length > 0) {
-          console.error(
-            warn(
-              `[!] Multiple reasoning flags detected. Using first occurrence: ${runtime.sourceDisplay || '<first-flag>'}`
-            )
-          );
-        }
       } catch (error) {
         if (error instanceof DroidReasoningFlagError) {
-          console.error(fail(error.message));
-          console.error('    Examples: --thinking low, --thinking 8192, --thinking off');
-          console.error('    Codex alias: --effort minimal|low|medium|high|xhigh');
-          process.exit(1);
+          exitWithRuntimeReasoningFlagError(error.message, {
+            codexAliasLevels: 'minimal|low|medium|high|xhigh',
+          });
         }
         throw error;
       }

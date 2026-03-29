@@ -60,6 +60,13 @@ describe('evaluateTargetRuntimeCompatibility', () => {
     });
     expect(compatibility.supported).toBe(false);
     expect(compatibility.reason).toMatch(/only supports CLIProxy Codex bridge profiles/);
+
+    const genericSettingsCompatibility = evaluateTargetRuntimeCompatibility({
+      target: 'codex',
+      profileType: 'settings',
+    });
+    expect(genericSettingsCompatibility.supported).toBe(false);
+    expect(genericSettingsCompatibility.reason).toMatch(/currently supports native default sessions/);
   });
 
   test('rejects account and copilot profiles on Codex target', () => {
