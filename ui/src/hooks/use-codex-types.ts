@@ -88,11 +88,14 @@ export interface CodexSupportMatrixEntry {
 
 export interface CodexUserConfigDiagnostics {
   model: string | null;
+  modelReasoningEffort: string | null;
   modelProvider: string | null;
   activeProfile: string | null;
   approvalPolicy: string | null;
   sandboxMode: string | null;
   webSearch: string | null;
+  toolOutputTokenLimit: number | null;
+  personality: string | null;
   topLevelKeys: string[];
   profileCount: number;
   profileNames: string[];
@@ -111,6 +114,7 @@ export interface CodexUserConfigDiagnostics {
 export interface CodexDashboardDiagnostics {
   binary: CodexBinaryDiagnostics;
   file: CodexConfigFileDiagnostics;
+  workspacePath: string;
   config: CodexUserConfigDiagnostics;
   supportMatrix: CodexSupportMatrixEntry[];
   warnings: string[];
@@ -125,4 +129,84 @@ export interface CodexRawConfigResponse {
   rawText: string;
   config: Record<string, unknown> | null;
   parseError: string | null;
+}
+
+export interface CodexTopLevelSettingsPatch {
+  model?: string | null;
+  modelReasoningEffort?: string | null;
+  modelProvider?: string | null;
+  approvalPolicy?: string | null;
+  sandboxMode?: string | null;
+  webSearch?: string | null;
+  toolOutputTokenLimit?: number | null;
+  personality?: string | null;
+}
+
+export type CodexProfilePatchValues = CodexTopLevelSettingsPatch;
+
+export interface CodexModelProviderPatchValues {
+  displayName?: string | null;
+  baseUrl?: string | null;
+  envKey?: string | null;
+  wireApi?: string | null;
+  requiresOpenaiAuth?: boolean | null;
+  supportsWebsockets?: boolean | null;
+}
+
+export interface CodexMcpServerPatchValues {
+  transport: 'stdio' | 'streamable-http';
+  command?: string | null;
+  args?: string[] | null;
+  url?: string | null;
+  enabled?: boolean | null;
+  required?: boolean | null;
+  startupTimeoutSec?: number | null;
+  toolTimeoutSec?: number | null;
+  enabledTools?: string[] | null;
+  disabledTools?: string[] | null;
+}
+
+export type CodexConfigPatchInput =
+  | {
+      kind: 'top-level';
+      expectedMtime?: number;
+      values: CodexTopLevelSettingsPatch;
+    }
+  | {
+      kind: 'project-trust';
+      expectedMtime?: number;
+      path: string;
+      trustLevel: string | null;
+    }
+  | {
+      kind: 'feature';
+      expectedMtime?: number;
+      feature: string;
+      enabled: boolean | null;
+    }
+  | {
+      kind: 'profile';
+      expectedMtime?: number;
+      action: 'set-active' | 'upsert' | 'delete';
+      name: string;
+      values?: CodexProfilePatchValues;
+      setAsActive?: boolean;
+    }
+  | {
+      kind: 'model-provider';
+      expectedMtime?: number;
+      action: 'upsert' | 'delete';
+      name: string;
+      values?: CodexModelProviderPatchValues;
+    }
+  | {
+      kind: 'mcp-server';
+      expectedMtime?: number;
+      action: 'upsert' | 'delete';
+      name: string;
+      values?: CodexMcpServerPatchValues;
+    };
+
+export interface CodexConfigPatchResult extends CodexRawConfigResponse {
+  success: true;
 }

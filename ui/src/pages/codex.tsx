@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { parse as parseToml } from 'smol-toml';
 import { toast } from 'sonner';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   ExternalLink,
-  FileWarning,
   Folder,
   GripVertical,
   Info,
@@ -19,7 +18,13 @@ import {
 import { useCodex } from '@/hooks/use-codex';
 import { isApiConflictError } from '@/lib/api-client';
 import { RawConfigEditorPanel } from '@/components/compatible-cli/raw-json-settings-editor-panel';
-import { UsageCommand } from '@/components/cliproxy/provider-editor/usage-command';
+import { CodexFeaturesCard } from '@/components/compatible-cli/codex-features-card';
+import { CodexMcpServersCard } from '@/components/compatible-cli/codex-mcp-servers-card';
+import { CodexModelProvidersCard } from '@/components/compatible-cli/codex-model-providers-card';
+import { CodexProfilesCard } from '@/components/compatible-cli/codex-profiles-card';
+import { CodexProjectTrustCard } from '@/components/compatible-cli/codex-project-trust-card';
+import { CodexTopLevelControlsCard } from '@/components/compatible-cli/codex-top-level-controls-card';
+import { QuickCommands } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -33,6 +38,15 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  KNOWN_CODEX_FEATURES,
+  readCodexFeatureState,
+  readCodexMcpServers,
+  readCodexModelProviders,
+  readCodexProfiles,
+  readCodexProjectTrust,
+  readCodexTopLevelSettings,
+} from '@/lib/codex-config';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_CODEX_DOC_LINKS = [
@@ -157,9 +171,12 @@ export function CodexPage() {
     refetchDiagnostics,
     rawConfig,
     rawConfigLoading,
+    rawConfigError,
     refetchRawConfig,
     saveRawConfigAsync,
     isSavingRawConfig,
+    patchConfigAsync,
+    isPatchingConfig,
   } = useCodex();
 
   const [rawDraftText, setRawDraftText] = useState<string | null>(null);
@@ -170,6 +187,34 @@ export function CodexPage() {
   const rawEditorValidation = rawEditorParsed.valid
     ? { valid: true as const }
     : { valid: false as const, error: rawEditorParsed.error };
+  const controlsConfig = rawConfig?.config ?? null;
+  const structuredControlsDisabled =
+    rawConfigLoading || !rawConfig || rawConfigDirty || rawConfig?.parseError !== null;
+  const controlsDisabledReason = rawConfigError
+    ? 'Structured controls unavailable: failed to load the current config.toml.'
+    : rawConfigDirty
+      ? rawEditorValidation.valid
+        ? 'Save or discard raw TOML edits before using structured controls.'
+        : 'Fix or discard raw TOML edits before using structured controls.'
+      : rawConfig?.parseError
+        ? `Structured controls disabled: ${rawConfig.parseError}`
+        : null;
+
+  const topLevelSettings = useMemo(
+    () => readCodexTopLevelSettings(controlsConfig),
+    [controlsConfig]
+  );
+  const projectTrustEntries = useMemo(
+    () => readCodexProjectTrust(controlsConfig),
+    [controlsConfig]
+  );
+  const profileEntries = useMemo(() => readCodexProfiles(controlsConfig), [controlsConfig]);
+  const modelProviderEntries = useMemo(
+    () => readCodexModelProviders(controlsConfig),
+    [controlsConfig]
+  );
+  const mcpServerEntries = useMemo(() => readCodexMcpServers(controlsConfig), [controlsConfig]);
+  const featureState = useMemo(() => readCodexFeatureState(controlsConfig), [controlsConfig]);
 
   const setRawEditorDraftText = (nextText: string) => {
     if (nextText === rawBaseText) {
@@ -202,6 +247,26 @@ export function CodexPage() {
         toast.error('config.toml changed externally. Refresh and retry.');
       } else {
         toast.error((error as Error).message || 'Failed to save Codex config.toml.');
+      }
+    }
+  };
+
+  const runConfigPatch = async (
+    patch: Parameters<typeof patchConfigAsync>[0],
+    successMessage: string
+  ) => {
+    try {
+      await patchConfigAsync({
+        ...patch,
+        expectedMtime: rawConfig?.exists ? rawConfig.mtime : undefined,
+      });
+      setRawDraftText(null);
+      toast.success(successMessage);
+    } catch (error) {
+      if (isApiConflictError(error)) {
+        toast.error('config.toml changed externally. Refresh and retry.');
+      } else {
+        toast.error((error as Error).message || 'Failed to update Codex config.');
       }
     }
   };
@@ -242,7 +307,7 @@ export function CodexPage() {
         <div className="shrink-0 px-4 pt-4">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="routing">Runtime &amp; Routing</TabsTrigger>
+            <TabsTrigger value="controls">Control Center</TabsTrigger>
             <TabsTrigger value="docs">Docs</TabsTrigger>
           </TabsList>
         </div>
@@ -424,30 +489,31 @@ export function CodexPage() {
                   </CardContent>
                 </Card>
 
-                {diagnostics.warnings.length > 0 && (
-                  <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <AlertTriangle className="h-4 w-4 text-amber-600" />
-                        Warnings
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-1.5">
-                      {diagnostics.warnings.map((warning) => (
-                        <p key={warning} className="text-sm text-amber-800 dark:text-amber-300">
-                          - {warning}
-                        </p>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </ScrollArea>
-          </TabsContent>
+                <QuickCommands
+                  snippets={[
+                    {
+                      label: 'Native Codex',
+                      command: 'ccs-codex',
+                      description: 'Launch the native Codex runtime alias.',
+                    },
+                    {
+                      label: 'Short alias',
+                      command: 'ccsx',
+                      description: 'Launch the short Codex runtime alias.',
+                    },
+                    {
+                      label: 'Target override',
+                      command: 'ccs codex --target codex "your prompt"',
+                      description: 'Run a CCS profile on the native Codex target.',
+                    },
+                    {
+                      label: 'Workspace trust',
+                      command: `codex --profile ${diagnostics.config.activeProfile || 'default'}`,
+                      description: 'Inspect the active profile directly in native Codex.',
+                    },
+                  ]}
+                />
 
-          <TabsContent value="routing" className={tabContentClassName}>
-            <ScrollArea className="h-full">
-              <div className="space-y-4 pr-1">
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="flex items-center gap-2 text-base">
@@ -507,46 +573,146 @@ export function CodexPage() {
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base">Quick usage</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <UsageCommand label="Codex alias (explicit)" command="ccs-codex" />
-                    <UsageCommand label="Codex alias (short)" command="ccsx" />
-                    <UsageCommand
-                      label="Run a profile on native Codex"
-                      command='ccs codex --target codex "your prompt"'
-                    />
-                    <UsageCommand
-                      label="Routed profile example"
-                      command='ccs mycodex --target codex "your prompt"'
-                    />
-                  </CardContent>
-                </Card>
+                {diagnostics.warnings.length > 0 && (
+                  <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        Warnings
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-1.5">
+                      {diagnostics.warnings.map((warning) => (
+                        <p key={warning} className="text-sm text-amber-800 dark:text-amber-300">
+                          - {warning}
+                        </p>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </ScrollArea>
+          </TabsContent>
 
+          <TabsContent value="controls" className={tabContentClassName}>
+            <ScrollArea className="h-full">
+              <div className="space-y-4 pr-1">
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="flex items-center gap-2 text-base">
-                      <FileWarning className="h-4 w-4" />
-                      What this editor affects
+                      <Route className="h-4 w-4" />
+                      Structured controls boundary
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2 text-sm text-muted-foreground">
                     <p>
-                      Edits here affect native Codex sessions first because this is the user-layer{' '}
-                      <code>config.toml</code>.
+                      Guided controls write only the user-layer <code>config.toml</code>. They do
+                      not model the full effective Codex runtime once trusted repo layers and CCS
+                      transient <code>-c</code> overrides are involved.
                     </p>
                     <p>
-                      CCS-routed Codex launches may override provider-related keys transiently and
-                      inject <code>CCS_CODEX_API_KEY</code>.
-                    </p>
-                    <p>
-                      That means the file is not a complete source of truth for every routed Codex
-                      launch you start from CCS.
+                      Structured saves normalize TOML formatting and strip comments. Use the raw
+                      editor on the right when exact layout matters.
                     </p>
                   </CardContent>
                 </Card>
+
+                <CodexTopLevelControlsCard
+                  values={topLevelSettings}
+                  providerNames={modelProviderEntries.map((entry) => entry.name)}
+                  disabled={structuredControlsDisabled}
+                  disabledReason={controlsDisabledReason}
+                  saving={isPatchingConfig}
+                  onSave={(values) =>
+                    runConfigPatch({ kind: 'top-level', values }, 'Saved top-level Codex settings.')
+                  }
+                />
+
+                <CodexProjectTrustCard
+                  workspacePath={diagnostics.workspacePath}
+                  entries={projectTrustEntries}
+                  disabled={structuredControlsDisabled}
+                  disabledReason={controlsDisabledReason}
+                  saving={isPatchingConfig}
+                  onSave={(projectPath, trustLevel) =>
+                    runConfigPatch(
+                      { kind: 'project-trust', path: projectPath, trustLevel },
+                      trustLevel ? 'Saved project trust entry.' : 'Removed project trust entry.'
+                    )
+                  }
+                />
+
+                <CodexProfilesCard
+                  activeProfile={diagnostics.config.activeProfile}
+                  entries={profileEntries}
+                  providerNames={modelProviderEntries.map((entry) => entry.name)}
+                  disabled={structuredControlsDisabled}
+                  disabledReason={controlsDisabledReason}
+                  saving={isPatchingConfig}
+                  onSave={(name, values, setAsActive) =>
+                    runConfigPatch(
+                      { kind: 'profile', action: 'upsert', name, values, setAsActive },
+                      'Saved profile.'
+                    )
+                  }
+                  onDelete={(name) =>
+                    runConfigPatch({ kind: 'profile', action: 'delete', name }, 'Deleted profile.')
+                  }
+                  onSetActive={(name) =>
+                    runConfigPatch(
+                      { kind: 'profile', action: 'set-active', name },
+                      'Set active profile.'
+                    )
+                  }
+                />
+
+                <CodexModelProvidersCard
+                  entries={modelProviderEntries}
+                  disabled={structuredControlsDisabled}
+                  disabledReason={controlsDisabledReason}
+                  saving={isPatchingConfig}
+                  onSave={(name, values) =>
+                    runConfigPatch(
+                      { kind: 'model-provider', action: 'upsert', name, values },
+                      'Saved model provider.'
+                    )
+                  }
+                  onDelete={(name) =>
+                    runConfigPatch(
+                      { kind: 'model-provider', action: 'delete', name },
+                      'Deleted model provider.'
+                    )
+                  }
+                />
+
+                <CodexMcpServersCard
+                  entries={mcpServerEntries}
+                  disabled={structuredControlsDisabled}
+                  disabledReason={controlsDisabledReason}
+                  saving={isPatchingConfig}
+                  onSave={(name, values) =>
+                    runConfigPatch(
+                      { kind: 'mcp-server', action: 'upsert', name, values },
+                      'Saved MCP server.'
+                    )
+                  }
+                  onDelete={(name) =>
+                    runConfigPatch(
+                      { kind: 'mcp-server', action: 'delete', name },
+                      'Deleted MCP server.'
+                    )
+                  }
+                />
+
+                <CodexFeaturesCard
+                  catalog={KNOWN_CODEX_FEATURES}
+                  state={featureState}
+                  disabled={structuredControlsDisabled}
+                  disabledReason={controlsDisabledReason}
+                  onToggle={(feature, enabled) =>
+                    runConfigPatch({ kind: 'feature', feature, enabled }, 'Saved feature toggle.')
+                  }
+                />
               </div>
             </ScrollArea>
           </TabsContent>

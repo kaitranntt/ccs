@@ -2,7 +2,12 @@ import { useMemo } from 'react';
 import { parse as parseToml } from 'smol-toml';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiConflictError, withApiBase } from '@/lib/api-client';
-import type { CodexDashboardDiagnostics, CodexRawConfigResponse } from './use-codex-types';
+import type {
+  CodexConfigPatchInput,
+  CodexConfigPatchResult,
+  CodexDashboardDiagnostics,
+  CodexRawConfigResponse,
+} from './use-codex-types';
 
 type CodexRawConfig = CodexRawConfigResponse;
 
@@ -15,6 +20,8 @@ interface SaveCodexRawConfigResponse {
   success: true;
   mtime: number;
 }
+
+type PatchCodexConfigResponse = CodexConfigPatchResult;
 
 function parseCodexRawConfigText(rawText: string): {
   config: Record<string, unknown> | null;
@@ -69,6 +76,21 @@ async function saveCodexRawConfig(
   return res.json();
 }
 
+async function patchCodexConfig(data: CodexConfigPatchInput): Promise<PatchCodexConfigResponse> {
+  const res = await fetch(withApiBase('/codex/config/patch'), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 409) throw new ApiConflictError('Codex config changed externally');
+
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error || 'Failed to patch Codex config');
+  }
+  return res.json();
+}
+
 export function useCodex() {
   const queryClient = useQueryClient();
 
@@ -105,6 +127,14 @@ export function useCodex() {
     },
   });
 
+  const patchConfigMutation = useMutation({
+    mutationFn: patchCodexConfig,
+    onSuccess: (result) => {
+      queryClient.setQueryData<CodexRawConfig>(['codex-raw-config'], result);
+      queryClient.invalidateQueries({ queryKey: ['codex-diagnostics'] });
+    },
+  });
+
   return useMemo(
     () => ({
       diagnostics: diagnosticsQuery.data,
@@ -120,6 +150,9 @@ export function useCodex() {
       saveRawConfig: saveRawConfigMutation.mutate,
       saveRawConfigAsync: saveRawConfigMutation.mutateAsync,
       isSavingRawConfig: saveRawConfigMutation.isPending,
+      patchConfig: patchConfigMutation.mutate,
+      patchConfigAsync: patchConfigMutation.mutateAsync,
+      isPatchingConfig: patchConfigMutation.isPending,
     }),
     [
       diagnosticsQuery.data,
@@ -133,6 +166,9 @@ export function useCodex() {
       saveRawConfigMutation.mutate,
       saveRawConfigMutation.mutateAsync,
       saveRawConfigMutation.isPending,
+      patchConfigMutation.mutate,
+      patchConfigMutation.mutateAsync,
+      patchConfigMutation.isPending,
     ]
   );
 }

@@ -7,6 +7,7 @@ import {
   CodexRawConfigValidationError,
   getCodexDashboardDiagnostics,
   getCodexRawConfig,
+  patchCodexConfig,
   resolveCodexConfigPaths,
   saveCodexRawConfig,
   summarizeCodexFeatureFlags,
@@ -261,5 +262,173 @@ bearer_token = "secret"
         expectedMtime: 1,
       })
     ).rejects.toThrow(CodexRawConfigConflictError);
+  });
+
+  it('patches top-level settings and project trust through structured controls', async () => {
+    const result = await patchCodexConfig({
+      kind: 'top-level',
+      values: {
+        model: 'gpt-5.4',
+        modelReasoningEffort: 'high',
+        approvalPolicy: 'never',
+        sandboxMode: 'workspace-write',
+        webSearch: 'cached',
+        toolOutputTokenLimit: 12000,
+        personality: 'pragmatic',
+      },
+    });
+
+    await patchCodexConfig({
+      kind: 'project-trust',
+      path: '/tmp/workspace-a',
+      trustLevel: 'trusted',
+      expectedMtime: result.mtime,
+    });
+
+    const diagnostics = await getCodexDashboardDiagnostics();
+    expect(diagnostics.config.model).toBe('gpt-5.4');
+    expect(diagnostics.config.modelReasoningEffort).toBe('high');
+    expect(diagnostics.config.toolOutputTokenLimit).toBe(12000);
+    expect(diagnostics.config.personality).toBe('pragmatic');
+    expect(diagnostics.config.projectTrust[0]?.path).toBe('/tmp/workspace-a');
+    expect(result.rawText).toContain('model = "gpt-5.4"');
+    expect(result.config?.model).toBe('gpt-5.4');
+  });
+
+  it('expands home paths for project trust and rejects relative paths', async () => {
+    const homeWorkspacePath = path.join(os.homedir(), 'codex-workspace');
+    const expanded = await patchCodexConfig({
+      kind: 'project-trust',
+      path: '~/codex-workspace',
+      trustLevel: 'trusted',
+    });
+
+    expect(expanded.rawText).toContain(`[projects."${homeWorkspacePath}"]`);
+
+    await expect(
+      patchCodexConfig({
+        kind: 'project-trust',
+        path: './relative-workspace',
+        trustLevel: 'trusted',
+      })
+    ).rejects.toThrow(CodexRawConfigValidationError);
+  });
+
+  it('patches profiles, providers, and mcp servers through structured controls', async () => {
+    const providerResult = await patchCodexConfig({
+      kind: 'model-provider',
+      action: 'upsert',
+      name: 'cliproxy',
+      values: {
+        displayName: 'CLIProxy',
+        baseUrl: 'http://127.0.0.1:8317/api/provider/codex',
+        envKey: 'CLIPROXY_API_KEY',
+        wireApi: 'responses',
+      },
+    });
+
+    const profileResult = await patchCodexConfig({
+      kind: 'profile',
+      action: 'upsert',
+      name: 'deep-review',
+      values: {
+        model: 'gpt-5.4',
+        modelProvider: 'cliproxy',
+        modelReasoningEffort: 'xhigh',
+      },
+      setAsActive: true,
+      expectedMtime: providerResult.mtime,
+    });
+
+    await patchCodexConfig({
+      kind: 'mcp-server',
+      action: 'upsert',
+      name: 'playwright',
+      values: {
+        transport: 'stdio',
+        command: 'npx',
+        args: ['@playwright/mcp@latest'],
+        enabled: true,
+        required: false,
+        startupTimeoutSec: 15,
+        toolTimeoutSec: 30,
+      },
+      expectedMtime: profileResult.mtime,
+    });
+
+    const diagnostics = await getCodexDashboardDiagnostics();
+    expect(diagnostics.config.activeProfile).toBe('deep-review');
+    expect(diagnostics.config.modelProviderCount).toBe(1);
+    expect(diagnostics.config.mcpServerCount).toBe(1);
+
+    const raw = await getCodexRawConfig();
+    expect(raw.rawText).toContain('[profiles.deep-review]');
+    expect(raw.rawText).toContain('[model_providers.cliproxy]');
+    expect(raw.rawText).toContain('[mcp_servers.playwright]');
+    expect(profileResult.rawText).toContain('[profiles.deep-review]');
+    expect(profileResult.config?.profile).toBe('deep-review');
+  });
+
+  it('rejects structured patches when config.toml is invalid', async () => {
+    fs.writeFileSync(path.join(codexHome, 'config.toml'), 'model = "gpt-5.4"\n[features\n');
+
+    await expect(
+      patchCodexConfig({
+        kind: 'feature',
+        feature: 'multi_agent',
+        enabled: true,
+      })
+    ).rejects.toThrow(CodexRawConfigValidationError);
+  });
+
+  it('removes feature overrides when a feature is reset to inherited state', async () => {
+    const enabled = await patchCodexConfig({
+      kind: 'feature',
+      feature: 'multi_agent',
+      enabled: true,
+    });
+
+    expect(enabled.rawText).toContain('[features]');
+    expect(enabled.rawText).toContain('multi_agent = true');
+
+    const reset = await patchCodexConfig({
+      kind: 'feature',
+      feature: 'multi_agent',
+      enabled: null,
+      expectedMtime: enabled.mtime,
+    });
+
+    expect(reset.rawText).not.toContain('[features]');
+    expect(reset.config?.features).toBeUndefined();
+  });
+
+  it('rejects malformed structured patch payloads at runtime', async () => {
+    await expect(
+      patchCodexConfig({
+        kind: 'feature',
+        feature: 'multi_agent',
+        enabled: 'true' as unknown as boolean | null,
+      })
+    ).rejects.toThrow(CodexRawConfigValidationError);
+
+    await expect(
+      patchCodexConfig({
+        kind: 'project-trust',
+        path: '~/codex-workspace',
+        trustLevel: 'always',
+      })
+    ).rejects.toThrow(CodexRawConfigValidationError);
+
+    await expect(
+      patchCodexConfig({
+        kind: 'mcp-server',
+        action: 'upsert',
+        name: 'remote',
+        values: {
+          transport: 'http' as 'stdio' | 'streamable-http',
+          url: 'https://example.test/mcp',
+        },
+      })
+    ).rejects.toThrow(CodexRawConfigValidationError);
   });
 });

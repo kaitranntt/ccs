@@ -5,6 +5,7 @@ import {
   CodexRawConfigValidationError,
   getCodexDashboardDiagnostics,
   getCodexRawConfig,
+  patchCodexConfig,
   saveCodexRawConfig,
 } from '../services/codex-dashboard-service';
 
@@ -43,6 +44,35 @@ router.put('/config/raw', async (req: Request, res: Response): Promise<void> => 
     }
 
     res.json(await saveCodexRawConfig({ rawText, expectedMtime }));
+  } catch (error) {
+    if (error instanceof CodexRawConfigValidationError) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+    if (error instanceof CodexRawConfigConflictError) {
+      res.status(409).json({ error: error.message, mtime: error.mtime });
+      return;
+    }
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+router.patch('/config/patch', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const body = req.body ?? {};
+    if (typeof body.kind !== 'string' || body.kind.trim().length === 0) {
+      res.status(400).json({ error: 'kind is required.' });
+      return;
+    }
+    if (
+      body.expectedMtime !== undefined &&
+      (typeof body.expectedMtime !== 'number' || !Number.isFinite(body.expectedMtime))
+    ) {
+      res.status(400).json({ error: 'expectedMtime must be a finite number when provided.' });
+      return;
+    }
+
+    res.json(await patchCodexConfig(body));
   } catch (error) {
     if (error instanceof CodexRawConfigValidationError) {
       res.status(400).json({ error: error.message });

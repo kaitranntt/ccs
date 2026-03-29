@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import { parse } from 'smol-toml';
+import { parse, stringify } from 'smol-toml';
 
 export interface TomlFileDiagnostics {
   label: string;
@@ -90,6 +90,15 @@ export function parseTomlObjectText(
   }
 
   return parsed;
+}
+
+export function stringifyTomlObject(config: Record<string, unknown>): string {
+  if (!isObject(config)) {
+    throw new TomlFileValidationError('config TOML root must be a table.');
+  }
+
+  const text = stringify(config).trimEnd();
+  return text ? `${text}\n` : '';
 }
 
 export async function probeTomlObjectFile(
