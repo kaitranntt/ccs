@@ -271,10 +271,21 @@ Not supported in v1:
 Dashboard parity: `ccs config` -> `Compatible` -> `Codex CLI`
 
 The dedicated Codex dashboard reads and writes the user layer only: `~/.codex/config.toml`
-(or `$CODEX_HOME/config.toml`). It shows binary detection, a user-layer summary, support
-matrix guidance, and upstream docs, while warning that transient CCS runtime overrides such as
+(or `$CODEX_HOME/config.toml`). It now ships as a split-view control center:
+
+- left pane: guided controls for top-level runtime defaults, project trust, profiles,
+  model providers, MCP servers, and supported feature toggles
+- right pane: raw `config.toml` editor for unsupported or exact-fidelity edits
+- overview/docs tabs: binary detection, user-layer summary, support matrix guidance, and
+  upstream OpenAI references
+
+Structured saves intentionally normalize TOML formatting and drop comments. Use the raw editor
+when exact layout matters. Structured edits also refresh the raw snapshot immediately. Guided
+controls stay disabled while the raw editor has unsaved or invalid TOML, project trust paths must
+be absolute or start with `~/`, and supported feature flags can be cleared back to Codex defaults
+with `Use default`. CCS also keeps warning that transient runtime overrides such as
 `codex -c key=value` and `CCS_CODEX_API_KEY` can change the effective runtime without persisting
-back into that file.
+back into the user config file.
 
 ### Per-Profile Target Defaults
 

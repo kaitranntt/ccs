@@ -471,10 +471,17 @@ Codex is a real runtime target, but it is intentionally narrower than Claude or 
 ### Codex Dashboard Surface
 
 CCS also exposes a dedicated dashboard route at `ccs config` -> `Compatible` -> `Codex CLI`.
-That page is intentionally narrower than the Droid dashboard:
+That page is intentionally narrower than the Droid dashboard in overall scope, but it is no
+longer read-mostly:
 
 - reads and writes only the user config layer: `~/.codex/config.toml` or `$CODEX_HOME/config.toml`
+- provides guided controls for top-level settings, project trust, profiles, model providers,
+  MCP servers, and supported feature flags
+- keeps a raw `config.toml` editor as the escape hatch for unsupported or fidelity-sensitive edits
 - shows binary detection, user-layer config summaries, support-matrix guidance, and upstream docs
+- normalizes TOML formatting and drops comments on structured saves
+- keeps structured controls disabled while raw TOML is dirty or invalid, validates project trust
+  paths as absolute or `~/...`, and lets feature flags reset back to Codex defaults
 - warns that transient CCS runtime overrides such as `codex -c key=value` and
   `CCS_CODEX_API_KEY` can change the effective runtime without persisting into the file editor
 

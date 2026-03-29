@@ -719,5 +719,5 @@ This pattern is used in:
 ## Related Documentation
 
 - [Codebase Summary](./codebase-summary.md) - Full directory structure
-- [System Architecture](./system-architecture.md) - Architecture diagrams
+- [System Architecture](./system-architecture/index.md) - Architecture diagrams
 - [CLAUDE.md](../CLAUDE.md) - AI-facing development guidance

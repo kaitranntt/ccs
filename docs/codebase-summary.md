@@ -252,6 +252,9 @@ src/
 - Metadata boundary: `src/targets/target-metadata.ts` keeps Codex runtime-only in v1, so persisted default targets remain `claude | droid`.
 - Compatibility guardrails: `src/targets/target-runtime-compatibility.ts` centralizes which profile types can execute on Codex.
 - Adapter behavior: `src/targets/codex-adapter.ts` and `src/targets/codex-detector.ts` launch native Codex without rewriting `~/.codex/config.toml`; CCS-backed routes use transient `codex -c key=value` overrides and env-key injection.
+- Dashboard control center: `src/web-server/services/codex-dashboard-service.ts`, `src/web-server/routes/codex-routes.ts`, `ui/src/pages/codex.tsx`, and `ui/src/components/compatible-cli/codex-*.tsx` expose a split-view Codex dashboard with guided editors for top-level settings, trust, profiles, providers, MCP servers, and feature flags plus a raw TOML fallback.
+- Structured-edit boundary: guided Codex saves intentionally reserialize the whole TOML document, so comments/formatting are normalized and the raw editor remains the fidelity-preserving escape hatch.
+- Follow-up behavior: structured saves refresh the raw snapshot immediately, structured controls stay disabled while raw TOML is dirty or invalid, project trust paths must be absolute or `~/...`, and feature flags can be reset to default.
 - Supported Codex flows in v1:
   - `default`
   - CLIProxy provider `codex`
@@ -268,12 +271,11 @@ The targets module provides an extensible interface for dispatching profiles to 
 **Key components:**
 
 1. **TargetAdapter Interface** - Contract that each CLI implementation must fulfill:
-   - `detectBinary()` - Find CLI binary on system (platform-specific)
-   - `prepareCredentials()` - Deliver credentials (env vars vs config file writes)
-   - `buildArgs()` - Construct target-specific argument list
-   - `buildEnv()` - Construct environment for target CLI
-   - `exec()` - Spawn target process (cross-platform)
-   - `supportsProfileType()` - Verify profile compatibility
+   - binary detection
+   - credential preparation
+   - target-specific args/env construction
+   - process execution
+   - profile compatibility checks
 
 2. **Target Resolution** - Priority order:
    - `--target <cli>` flag (CLI argument)
@@ -627,7 +629,7 @@ tests/
 ## Related Documentation
 
 - [Code Standards](./code-standards.md) - Modularization patterns, file size rules
-- [System Architecture](./system-architecture.md) - High-level architecture diagrams
+- [System Architecture](./system-architecture/index.md) - High-level architecture diagrams
 - [Project Roadmap](./project-roadmap.md) - Modularization phases and future work
 - [WebSearch](./websearch.md) - WebSearch feature documentation
 - [CLAUDE.md](../CLAUDE.md) - AI-facing development guidance
