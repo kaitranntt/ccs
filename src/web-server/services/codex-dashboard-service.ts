@@ -134,8 +134,7 @@ function setEnumStringField(
   }
 
   const normalized = value.trim();
-  const currentValue = asString(target[key]);
-  if (!allowedValues.has(normalized) && normalized !== currentValue) {
+  if (!allowedValues.has(normalized)) {
     throw new TomlFileValidationError(
       `${label} must be one of: ${Array.from(allowedValues).join(', ')}.`
     );

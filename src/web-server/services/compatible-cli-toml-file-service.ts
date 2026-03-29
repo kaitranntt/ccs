@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import { parse, stringify } from 'smol-toml';
+import { stringify } from 'smol-toml';
+import { parseTomlObject } from '../../shared/toml-object';
 
 export interface TomlFileDiagnostics {
   label: string;
@@ -67,6 +68,111 @@ async function statPath(filePath: string): Promise<import('fs').Stats | null> {
   }
 }
 
+async function resolveConflictMtime(filePath: string): Promise<number> {
+  const stat = await statPath(filePath);
+  return stat?.mtimeMs ?? Date.now();
+}
+
+async function acquireWriteLock(
+  lockPath: string,
+  targetPath: string,
+  fileLabel: string
+): Promise<() => Promise<void>> {
+  let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
+  try {
+    handle = await fs.open(lockPath, 'wx', 0o600);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'EEXIST') {
+      const existingLock = await statPath(lockPath);
+      if (existingLock?.isSymbolicLink()) {
+        throw new Error(`Refusing to write: ${fileLabel}.lock is a symlink.`);
+      }
+      if (existingLock && !existingLock.isFile()) {
+        throw new Error(`Refusing to write: ${fileLabel}.lock is not a regular file.`);
+      }
+      throw new TomlFileConflictError(
+        'File is currently being written by another request. Refresh and retry.',
+        await resolveConflictMtime(targetPath)
+      );
+    }
+    throw error;
+  }
+
+  return async () => {
+    if (!handle) return;
+    try {
+      await handle.close();
+    } finally {
+      try {
+        await fs.unlink(lockPath);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error;
+        }
+      }
+    }
+  };
+}
+
+function ensureWritableTarget(
+  targetStat: import('fs').Stats | null,
+  fileLabel: string
+): import('fs').Stats | null {
+  if (!targetStat) return null;
+  if (targetStat.isSymbolicLink()) {
+    throw new Error(`Refusing to write: ${fileLabel} is a symlink.`);
+  }
+  if (!targetStat.isFile()) {
+    throw new Error(`Refusing to write: ${fileLabel} is not a regular file.`);
+  }
+  return targetStat;
+}
+
+function assertExpectedMtime(
+  targetStat: import('fs').Stats | null,
+  expectedMtime: number | undefined
+): void {
+  if (!targetStat) {
+    if (expectedMtime !== undefined) {
+      throw new TomlFileConflictError('File modified externally.', Date.now());
+    }
+    return;
+  }
+
+  if (typeof expectedMtime !== 'number' || !Number.isFinite(expectedMtime)) {
+    throw new TomlFileConflictError(
+      'File metadata not loaded. Refresh and retry.',
+      targetStat.mtimeMs
+    );
+  }
+  if (targetStat.mtimeMs !== expectedMtime) {
+    throw new TomlFileConflictError('File modified externally.', targetStat.mtimeMs);
+  }
+}
+
+async function verifyTargetUnchanged(
+  targetPath: string,
+  initialTargetStat: import('fs').Stats | null,
+  fileLabel: string
+): Promise<void> {
+  const currentTargetStat = ensureWritableTarget(await statPath(targetPath), fileLabel);
+
+  if (!initialTargetStat) {
+    if (currentTargetStat) {
+      throw new TomlFileConflictError('File modified externally.', currentTargetStat.mtimeMs);
+    }
+    return;
+  }
+
+  if (!currentTargetStat || currentTargetStat.mtimeMs !== initialTargetStat.mtimeMs) {
+    throw new TomlFileConflictError(
+      'File modified externally.',
+      currentTargetStat?.mtimeMs ?? Date.now()
+    );
+  }
+}
+
 export function parseTomlObjectText(
   rawText: string,
   fieldName = 'rawText'
@@ -75,21 +181,15 @@ export function parseTomlObjectText(
     throw new TomlFileValidationError(`${fieldName} must be a string.`);
   }
 
-  const trimmed = rawText.trim();
-  if (!trimmed) return {};
-
-  let parsed: unknown;
   try {
-    parsed = parse(rawText);
+    return parseTomlObject(rawText);
   } catch (error) {
-    throw new TomlFileValidationError(`Invalid TOML in ${fieldName}: ${(error as Error).message}`);
+    const message = (error as Error).message;
+    if (message === 'TOML root must be a table.') {
+      throw new TomlFileValidationError(`${fieldName} TOML root must be a table.`);
+    }
+    throw new TomlFileValidationError(`Invalid TOML in ${fieldName}: ${message}`);
   }
-
-  if (!isObject(parsed)) {
-    throw new TomlFileValidationError(`${fieldName} TOML root must be a table.`);
-  }
-
-  return parsed;
 }
 
 export function stringifyTomlObject(config: Record<string, unknown>): string {
@@ -170,45 +270,21 @@ export async function writeTomlFileAtomic(input: WriteTomlFileInput): Promise<Wr
 
   const targetPath = input.filePath;
   const targetDir = path.dirname(targetPath);
-  const tempPath = targetPath + '.tmp';
+  const tempPath = `${targetPath}.${process.pid}.${Date.now()}.tmp`;
+  const lockPath = `${targetPath}.lock`;
   const dirMode = input.dirMode ?? 0o700;
   const fileMode = input.fileMode ?? 0o600;
 
   await fs.mkdir(targetDir, { recursive: true, mode: dirMode });
 
-  const targetStat = await statPath(targetPath);
-  if (targetStat) {
-    if (targetStat.isSymbolicLink()) {
-      throw new Error(`Refusing to write: ${fileLabel} is a symlink.`);
-    }
-    if (!targetStat.isFile()) {
-      throw new Error(`Refusing to write: ${fileLabel} is not a regular file.`);
-    }
-
-    if (typeof input.expectedMtime !== 'number' || !Number.isFinite(input.expectedMtime)) {
-      throw new TomlFileConflictError(
-        'File metadata not loaded. Refresh and retry.',
-        targetStat.mtimeMs
-      );
-    }
-    if (Math.abs(targetStat.mtimeMs - input.expectedMtime) > 1000) {
-      throw new TomlFileConflictError('File modified externally.', targetStat.mtimeMs);
-    }
-  }
+  const releaseLock = await acquireWriteLock(lockPath, targetPath, fileLabel);
 
   let wroteTemp = false;
   try {
-    const existingTempStat = await statPath(tempPath);
-    if (existingTempStat) {
-      if (existingTempStat.isSymbolicLink()) {
-        throw new Error(`Refusing to write: ${fileLabel}.tmp is a symlink.`);
-      }
-      if (!existingTempStat.isFile()) {
-        throw new Error(`Refusing to write: ${fileLabel}.tmp is not a regular file.`);
-      }
-    }
+    const targetStat = ensureWritableTarget(await statPath(targetPath), fileLabel);
+    assertExpectedMtime(targetStat, input.expectedMtime);
 
-    await fs.writeFile(tempPath, input.rawText, { mode: fileMode });
+    await fs.writeFile(tempPath, input.rawText, { mode: fileMode, flag: 'wx' });
     wroteTemp = true;
 
     const tempStat = await fs.lstat(tempPath);
@@ -219,6 +295,7 @@ export async function writeTomlFileAtomic(input: WriteTomlFileInput): Promise<Wr
       throw new Error(`Refusing to write: ${fileLabel}.tmp is not a regular file.`);
     }
 
+    await verifyTargetUnchanged(targetPath, targetStat, fileLabel);
     await fs.rename(tempPath, targetPath);
     wroteTemp = false;
 
@@ -240,5 +317,7 @@ export async function writeTomlFileAtomic(input: WriteTomlFileInput): Promise<Wr
         }
       }
     }
+
+    await releaseLock();
   }
 }

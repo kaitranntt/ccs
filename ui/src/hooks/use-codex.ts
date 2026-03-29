@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
-import { parse as parseToml } from 'smol-toml';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiConflictError, withApiBase } from '@/lib/api-client';
+import { safeParseTomlObject } from '@shared/toml-object';
 import type {
   CodexConfigPatchInput,
   CodexConfigPatchResult,
@@ -22,30 +22,6 @@ interface SaveCodexRawConfigResponse {
 }
 
 type PatchCodexConfigResponse = CodexConfigPatchResult;
-
-function parseCodexRawConfigText(rawText: string): {
-  config: Record<string, unknown> | null;
-  parseError: string | null;
-} {
-  try {
-    const parsed = rawText.trim() ? parseToml(rawText) : {};
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return {
-        config: null,
-        parseError: 'TOML root must be a table.',
-      };
-    }
-    return {
-      config: parsed as Record<string, unknown>,
-      parseError: null,
-    };
-  } catch (error) {
-    return {
-      config: null,
-      parseError: (error as Error).message,
-    };
-  }
-}
 
 async function fetchCodexDiagnostics(): Promise<CodexDashboardDiagnostics> {
   const res = await fetch(withApiBase('/codex/diagnostics'));
@@ -111,7 +87,7 @@ export function useCodex() {
       queryClient.setQueryData<CodexRawConfig>(['codex-raw-config'], (current) => {
         const path = current?.path ?? '$CODEX_HOME/config.toml';
         const resolvedPath = current?.resolvedPath ?? path;
-        const parsed = parseCodexRawConfigText(variables.rawText);
+        const parsed = safeParseTomlObject(variables.rawText);
 
         return {
           path,

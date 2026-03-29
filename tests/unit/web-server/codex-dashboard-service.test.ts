@@ -21,7 +21,8 @@ const codexHome = path.join(testRoot, '.codex-home');
 const codexStubPath = path.join(testRoot, 'codex');
 
 function writeCodexStub(options?: { helpText?: string; version?: string }) {
-  const helpText = options?.helpText ?? '  -c, --config <key=value>\n  -p, --profile <CONFIG_PROFILE>\n';
+  const helpText =
+    options?.helpText ?? '  -c, --config <key=value>\n  -p, --profile <CONFIG_PROFILE>\n';
   const version = options?.version ?? 'codex-cli 0.118.0-alpha.3';
 
   fs.writeFileSync(
@@ -264,6 +265,20 @@ bearer_token = "secret"
     ).rejects.toThrow(CodexRawConfigConflictError);
   });
 
+  it('rejects writes when expectedMtime differs by even 1ms', async () => {
+    const configPath = path.join(codexHome, 'config.toml');
+    fs.writeFileSync(configPath, 'model = "gpt-5.4"\n');
+
+    const current = await getCodexRawConfig();
+
+    await expect(
+      saveCodexRawConfig({
+        rawText: 'model = "gpt-5.4"\nprofile = "work"\n',
+        expectedMtime: current.mtime + 1,
+      })
+    ).rejects.toThrow(CodexRawConfigConflictError);
+  });
+
   it('patches top-level settings and project trust through structured controls', async () => {
     const result = await patchCodexConfig({
       kind: 'top-level',
@@ -369,6 +384,39 @@ bearer_token = "secret"
     expect(profileResult.config?.profile).toBe('deep-review');
   });
 
+  it('patches streamable-http mcp servers through structured controls', async () => {
+    const result = await patchCodexConfig({
+      kind: 'mcp-server',
+      action: 'upsert',
+      name: 'remote',
+      values: {
+        transport: 'streamable-http',
+        url: 'https://example.test/mcp',
+        enabled: true,
+        required: true,
+        toolTimeoutSec: 45,
+        enabledTools: ['browser_snapshot'],
+        disabledTools: ['slow_tool'],
+      },
+    });
+
+    expect(result.rawText).toContain('[mcp_servers.remote]');
+    expect(result.rawText).toContain('url = "https://example.test/mcp"');
+    expect(result.rawText).toContain('required = true');
+
+    const diagnostics = await getCodexDashboardDiagnostics();
+    expect(diagnostics.config.mcpServers).toEqual([
+      expect.objectContaining({
+        name: 'remote',
+        transport: 'streamable-http',
+        required: true,
+        toolTimeoutSec: 45,
+        enabledToolsCount: 1,
+        disabledToolsCount: 1,
+      }),
+    ]);
+  });
+
   it('rejects structured patches when config.toml is invalid', async () => {
     fs.writeFileSync(path.join(codexHome, 'config.toml'), 'model = "gpt-5.4"\n[features\n');
 
@@ -427,6 +475,22 @@ bearer_token = "secret"
         values: {
           transport: 'http' as 'stdio' | 'streamable-http',
           url: 'https://example.test/mcp',
+        },
+      })
+    ).rejects.toThrow(CodexRawConfigValidationError);
+  });
+
+  it('rejects invalid enum values even when they already exist in config.toml', async () => {
+    fs.writeFileSync(
+      path.join(codexHome, 'config.toml'),
+      'model = "gpt-5.4"\napproval_policy = "legacy"\n'
+    );
+
+    await expect(
+      patchCodexConfig({
+        kind: 'top-level',
+        values: {
+          approvalPolicy: 'legacy' as unknown as 'on-request' | 'never' | 'untrusted' | null,
         },
       })
     ).rejects.toThrow(CodexRawConfigValidationError);
