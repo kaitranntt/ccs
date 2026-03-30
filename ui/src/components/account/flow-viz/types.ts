@@ -18,6 +18,7 @@ export interface AccountData {
   email: string;
   tokenFile?: string;
   provider: string;
+  isDefault?: boolean;
   successCount: number;
   failureCount: number;
   lastUsedAt?: string;
