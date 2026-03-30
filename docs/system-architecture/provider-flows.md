@@ -1,6 +1,6 @@
 # Provider Integration Flows
 
-Last Updated: 2026-02-16
+Last Updated: 2026-03-30
 
 Detailed provider integration flows including CLIProxyAPI, legacy GLMT compatibility transforms, remote CLIProxy, quota management, and authentication.
 
@@ -75,6 +75,18 @@ CLIProxyAPI is a local OAuth proxy binary that enables seamless integration with
 | Antigravity | `agy` | Authorization Code | 9876 | CLIProxyAPI |
 | Kiro (AWS) | `kiro` | Method-aware (default: Device Code) | 9876 | CLIProxyAPIPlus |
 | GitHub Copilot | `ghcp` | Device Code | none | CLIProxyAPIPlus |
+
+### Codex Duplicate-Email Account Identity
+
+Codex can legitimately produce multiple auth files for the same email when the user has both a team/business login and a personal/free login. CCS now treats those as separate accounts instead of collapsing them by email.
+
+- Internal account IDs stay duplicate-aware for Codex only: `email#variant`
+- Variant keys are derived from the auth filename, for example `kaidu.kd@gmail.com#04a0f049-team` and `kaidu.kd@gmail.com#free`
+- Dashboard surfaces continue to show the canonical email, with a compact variant badge such as `Team` or `Free`
+- Quota fetch resolves the exact registry `tokenFile` for the selected account instead of scanning by email and taking the first match
+- Live usage/account monitor stats key by `provider + account identity`, so duplicate Codex emails no longer merge into one runtime bucket
+
+This preserves the user-visible distinction between business and personal Codex sessions while keeping other providers on their existing email-backed identity model.
 
 ### Hardcoded Provider Detection
 
