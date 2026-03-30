@@ -242,25 +242,18 @@ export function AccountCard({
               </span>
             )}
           </div>
-          {(identity.audienceLabel || identity.compactDetailLabel) && (
+          {identity.audienceLabel && (
             <div className="mt-1 flex items-center gap-1 flex-wrap">
-              {identity.audienceLabel && (
-                <span
-                  className={cn(
-                    'text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0',
-                    identity.audience === 'business'
-                      ? 'bg-sky-500/15 text-sky-700 dark:bg-sky-500/25 dark:text-sky-300'
-                      : 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/25 dark:text-emerald-300'
-                  )}
-                >
-                  {identity.audienceLabel}
-                </span>
-              )}
-              {identity.compactDetailLabel && (
-                <span className="text-[7px] font-bold tracking-wide px-1 py-px rounded shrink-0 bg-muted text-muted-foreground">
-                  {identity.compactDetailLabel}
-                </span>
-              )}
+              <span
+                className={cn(
+                  'text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0',
+                  identity.audience === 'business'
+                    ? 'bg-sky-500/15 text-sky-700 dark:bg-sky-500/25 dark:text-sky-300'
+                    : 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/25 dark:text-emerald-300'
+                )}
+              >
+                {identity.audienceLabel}
+              </span>
             </div>
           )}
         </div>
