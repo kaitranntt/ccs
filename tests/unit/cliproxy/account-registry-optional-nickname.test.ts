@@ -116,4 +116,41 @@ describe('registerAccount optional nickname flow', () => {
 
     expect(match).toBeNull();
   });
+
+  it('treats duplicate Codex emails as distinct accounts and rejects bare-email lookups', async () => {
+    const result = await withIsolatedHome(async (homeDir) => {
+      writeTokenFile(homeDir, 'codex-04a0f049-kaidu.kd@gmail.com-team.json');
+      writeTokenFile(homeDir, 'codex-kaidu.kd@gmail.com-free.json');
+      const { registerAccount, getProviderAccounts, findAccountByQuery } = await loadAccountManager();
+      const team = registerAccount(
+        'codex',
+        'codex-04a0f049-kaidu.kd@gmail.com-team.json',
+        'kaidu.kd@gmail.com'
+      );
+      const free = registerAccount(
+        'codex',
+        'codex-kaidu.kd@gmail.com-free.json',
+        'kaidu.kd@gmail.com'
+      );
+
+      return {
+        team,
+        free,
+        accounts: getProviderAccounts('codex'),
+        ambiguousLookup: findAccountByQuery('codex', 'kaidu.kd@gmail.com'),
+        teamLookup: findAccountByQuery('codex', 'kaidu.kd@gmail.com#04a0f049-team'),
+        freeLookup: findAccountByQuery('codex', free.id),
+      };
+    });
+
+    expect(result.team.id).toBe('kaidu.kd@gmail.com');
+    expect(result.free.id).toBe('kaidu.kd@gmail.com#free');
+    expect(result.accounts.map((account) => account.id).sort()).toEqual([
+      'kaidu.kd@gmail.com#04a0f049-team',
+      'kaidu.kd@gmail.com#free',
+    ]);
+    expect(result.ambiguousLookup).toBeNull();
+    expect(result.teamLookup?.id).toBe('kaidu.kd@gmail.com#04a0f049-team');
+    expect(result.freeLookup?.id).toBe('kaidu.kd@gmail.com#free');
+  });
 });

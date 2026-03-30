@@ -17,6 +17,7 @@ let buildCodexQuotaWindows: typeof import('../../../src/cliproxy/quota-fetcher-c
 let buildCodexCoreUsageSummary: typeof import('../../../src/cliproxy/quota-fetcher-codex').buildCodexCoreUsageSummary;
 let fetchCodexQuota: typeof import('../../../src/cliproxy/quota-fetcher-codex').fetchCodexQuota;
 let getUnknownCodexWindowLabels: typeof import('../../../src/cliproxy/quota-fetcher-codex').getUnknownCodexWindowLabels;
+let registerAccount: typeof import('../../../src/cliproxy/account-manager').registerAccount;
 
 function createCodexAccount(
   accountId: string,
@@ -40,6 +41,7 @@ beforeEach(async () => {
   );
   mock.module('../../../src/cliproxy/config-generator', () => configGenerator);
   mock.module('../../../src/cliproxy/account-manager', () => accountManager);
+  ({ registerAccount } = accountManager);
 
   ({
     buildCodexQuotaWindows,
@@ -407,6 +409,55 @@ describe('Codex Quota Fetcher', () => {
       expect(result.errorCode).toBe('reauth_required');
       expect(result.needsReauth).toBe(true);
       expect(result.actionHint).toContain('ccs cliproxy auth codex');
+    });
+
+    it('uses the registry token file for duplicate-email Codex accounts', async () => {
+      createValidCodexAccount(
+        'kaidu.kd@gmail.com',
+        'workspace-team',
+        'codex-04a0f049-kaidu.kd@gmail.com-team.json'
+      );
+      createValidCodexAccount(
+        'kaidu.kd@gmail.com',
+        'workspace-free',
+        'codex-kaidu.kd@gmail.com-free.json'
+      );
+
+      registerAccount(
+        'codex',
+        'codex-04a0f049-kaidu.kd@gmail.com-team.json',
+        'kaidu.kd@gmail.com'
+      );
+      const freeAccount = registerAccount(
+        'codex',
+        'codex-kaidu.kd@gmail.com-free.json',
+        'kaidu.kd@gmail.com'
+      );
+
+      const fetchSpy = mock((input: RequestInfo | URL, init?: RequestInit) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              plan_type: 'free',
+              rate_limit: {
+                primary_window: { used_percent: 10, reset_after_seconds: 3600 },
+              },
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        )
+      ) as typeof fetch;
+      global.fetch = fetchSpy;
+
+      const result = await fetchCodexQuota(freeAccount.id);
+      const requestInit = fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined;
+      const headers = new Headers(requestInit?.headers);
+
+      expect(result.success).toBe(true);
+      expect(headers.get('ChatGPT-Account-Id')).toBe('workspace-free');
     });
 
     it('maps 403 responses to forbidden metadata', async () => {

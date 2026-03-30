@@ -51,6 +51,7 @@ import {
   renameAccount,
   getDefaultAccount,
 } from '../account-manager';
+import { formatAccountDisplayName } from '../accounts/email-account-identity';
 import {
   ensureMcpWebSearch,
   installWebSearchHook,
@@ -422,7 +423,7 @@ export async function execClaudeWithCLIProxy(
       for (const acct of accounts) {
         const defaultMark = acct.isDefault ? ' (default)' : '';
         const nickname = acct.nickname ? `[${acct.nickname}]` : '';
-        console.log(`  ${nickname.padEnd(12)} ${acct.email || acct.id}${defaultMark}`);
+        console.log(`  ${nickname.padEnd(12)} ${formatAccountDisplayName(acct)}${defaultMark}`);
       }
       console.log(`\n  Use "ccs ${provider} --use <nickname-or-id>" to switch accounts`);
     }
@@ -438,14 +439,19 @@ export async function execClaudeWithCLIProxy(
       if (accounts.length > 0) {
         console.error(`    Available accounts:`);
         for (const acct of accounts) {
-          console.error(`      - ${acct.nickname || acct.id} (${acct.email || 'no email'})`);
+          const displayName = formatAccountDisplayName(acct);
+          const label = acct.nickname ? `${acct.nickname} (${displayName})` : displayName;
+          console.error(`      - ${label}`);
         }
       }
       process.exit(1);
     }
     setDefaultAccount(provider, account.id);
     touchAccount(provider, account.id);
-    console.log(ok(`Switched to account: ${account.nickname || account.email || account.id}`));
+    const switchedLabel = account.nickname
+      ? `${account.nickname} (${formatAccountDisplayName(account)})`
+      : formatAccountDisplayName(account);
+    console.log(ok(`Switched to account: ${switchedLabel}`));
   }
 
   // Handle --nickname (rename account)

@@ -8,9 +8,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { getAuthDir } from './config-generator';
-import { getProviderAccounts, getPausedDir } from './account-manager';
+import { getAccount, getProviderAccounts, getPausedDir } from './account-manager';
 import { sanitizeEmail, isTokenExpired } from './auth-utils';
 import type { CodexQuotaResult, CodexQuotaWindow, CodexCoreUsageSummary } from './quota-types';
+import { extractCanonicalEmailFromAccountId } from './accounts/email-account-identity';
 
 /** ChatGPT backend API base URL */
 const CODEX_API_BASE = 'https://chatgpt.com/backend-api';
@@ -174,9 +175,44 @@ export function buildCodexCoreUsageSummary(windows: CodexQuotaWindow[]): CodexCo
 /**
  * Read auth data from Codex auth file
  */
+function readCodexAuthFile(filePath: string): CodexAuthData | null {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const data = JSON.parse(content);
+    if (!data.access_token) {
+      return null;
+    }
+
+    return {
+      accessToken: data.access_token,
+      accountId: data.account_id || data.accountId || '',
+      isExpired: isTokenExpired(data.expired),
+      expiresAt: data.expired || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function readCodexAuthData(accountId: string): CodexAuthData | null {
   const authDirs = [getAuthDir(), getPausedDir()];
-  const sanitizedId = sanitizeEmail(accountId);
+  const registryAccount = getAccount('codex', accountId);
+  if (registryAccount?.tokenFile) {
+    for (const authDir of authDirs) {
+      const filePath = path.join(authDir, registryAccount.tokenFile);
+      if (!fs.existsSync(filePath)) {
+        continue;
+      }
+
+      const authData = readCodexAuthFile(filePath);
+      if (authData) {
+        return authData;
+      }
+    }
+  }
+
+  const legacyEmail = extractCanonicalEmailFromAccountId(accountId) ?? accountId;
+  const sanitizedId = sanitizeEmail(legacyEmail);
   const expectedFile = `codex-${sanitizedId}.json`;
 
   for (const authDir of authDirs) {
@@ -184,19 +220,9 @@ function readCodexAuthData(accountId: string): CodexAuthData | null {
 
     const filePath = path.join(authDir, expectedFile);
     if (fs.existsSync(filePath)) {
-      try {
-        const content = fs.readFileSync(filePath, 'utf-8');
-        const data = JSON.parse(content);
-        if (!data.access_token) continue;
-
-        return {
-          accessToken: data.access_token,
-          accountId: data.account_id || data.accountId || '',
-          isExpired: isTokenExpired(data.expired),
-          expiresAt: data.expired || null,
-        };
-      } catch {
-        continue;
+      const authData = readCodexAuthFile(filePath);
+      if (authData) {
+        return authData;
       }
     }
 
@@ -208,7 +234,7 @@ function readCodexAuthData(accountId: string): CodexAuthData | null {
         try {
           const content = fs.readFileSync(candidatePath, 'utf-8');
           const data = JSON.parse(content);
-          if (data.email === accountId && data.access_token) {
+          if (data.email === legacyEmail && data.access_token) {
             return {
               accessToken: data.access_token,
               accountId: data.account_id || data.accountId || '',

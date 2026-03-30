@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useCreateVariant, useCliproxyAuth } from '@/hooks/use-cliproxy';
 import { usePrivacy } from '@/contexts/privacy-context';
+import { formatAccountDisplayName } from '@/lib/account-identity';
 import { CLIPROXY_PROVIDERS, getProviderDisplayName } from '@/lib/provider-config';
 import { isDeniedAgyModelId } from '@/lib/utils';
 
@@ -220,7 +221,7 @@ export function CliproxyDialog({ open, onClose }: CliproxyDialogProps) {
                     <option value="">{t('cliproxyDialog.useDefaultAccount')}</option>
                     {providerAccounts.map((acc) => (
                       <option key={acc.id} value={acc.id}>
-                        {privacyMode ? '••••••' : acc.email || acc.id}
+                        {privacyMode ? '••••••' : formatAccountDisplayName(acc.id, acc.email)}
                         {acc.isDefault ? ` ${t('cliproxyDialog.defaultSuffix')}` : ''}
                       </option>
                     ))}

@@ -40,6 +40,7 @@ import {
   isClaudeQuotaResult,
   isCodexQuotaResult,
 } from '@/lib/utils';
+import { formatAccountVariantLabel } from '@/lib/account-identity';
 import { getAccountStats } from '@/lib/cliproxy-account-stats';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import { useAccountQuota, useCliproxyStats } from '@/hooks/use-cliproxy-stats';
@@ -187,6 +188,7 @@ export function AccountItem({
       : failureInfo?.tone === 'destructive'
         ? 'border-destructive/50 text-destructive'
         : 'border-muted-foreground/50 text-muted-foreground';
+  const variantLabel = formatAccountVariantLabel(account.id, account.email);
 
   return (
     <div
@@ -274,6 +276,11 @@ export function AccountItem({
               >
                 {account.email || account.id}
               </span>
+              {variantLabel && (
+                <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                  {variantLabel}
+                </Badge>
+              )}
               {account.isDefault && (
                 <Badge variant="secondary" className="text-[10px] h-4 px-1.5 gap-0.5">
                   <Star className="w-2.5 h-2.5 fill-current" />

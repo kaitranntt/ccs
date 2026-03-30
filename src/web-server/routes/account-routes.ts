@@ -18,6 +18,7 @@ import {
   bulkResumeAccounts,
   soloAccount,
 } from '../../cliproxy/account-manager';
+import { formatAccountDisplayName } from '../../cliproxy/accounts/email-account-identity';
 import { isCLIProxyProvider } from '../../cliproxy/provider-capabilities';
 import {
   DEFAULT_ACCOUNT_CONTINUITY_MODE,
@@ -122,7 +123,7 @@ router.get('/', (_req: Request, res: Response): void => {
           continue;
         }
         // Use unique ID for key to prevent collisions between accounts with same nickname/email
-        const displayName = acct.nickname || acct.email || acct.id;
+        const displayName = acct.nickname || formatAccountDisplayName(acct);
         const rawKey = `${provider}:${acct.id}`;
         const key = buildCliproxyAccountKey(rawKey, merged);
         if (!key) {

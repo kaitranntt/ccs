@@ -4,12 +4,13 @@
 
 import type React from 'react';
 import { ChevronRight, AlertTriangle } from 'lucide-react';
+import { formatAccountDisplayName } from '@/lib/account-identity';
 import { cn, STATUS_COLORS } from '@/lib/utils';
 import { PROVIDER_COLORS } from '@/lib/provider-config';
 import { ProviderIcon } from '@/components/shared/provider-icon';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ProviderStats } from '../types';
-import { getSuccessRate, cleanEmail } from '../utils';
+import { getSuccessRate } from '../utils';
 import { InlineStatsBadge } from './inline-stats-badge';
 
 interface ProviderCardProps {
@@ -112,7 +113,7 @@ export function ProviderCard({
               <div
                 className={cn('w-2 h-2 rounded-full', acc.paused && 'opacity-50')}
                 style={{ backgroundColor: acc.color }}
-                title={privacyMode ? '••••••' : cleanEmail(acc.email)}
+                title={privacyMode ? '••••••' : formatAccountDisplayName(acc.id, acc.email)}
               />
               {isMissingProjectId && (
                 <TooltipProvider>

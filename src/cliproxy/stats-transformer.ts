@@ -1,5 +1,6 @@
 import { buildQualifiedAccountStatsKey } from './account-stats-key';
 import { mapExternalProviderName } from './provider-capabilities';
+import { buildEmailBackedAccountId } from './accounts/email-account-identity';
 import type {
   AccountUsageStats,
   CliproxyManagementAuthFile,
@@ -15,6 +16,9 @@ interface BuildCliproxyStatsOptions {
 interface ResolvedAuthFile {
   provider?: string;
   source?: string;
+  email?: string;
+  name?: string;
+  duplicateEmailCount?: number;
 }
 
 function normalizeProvider(provider: string): string {
@@ -30,6 +34,16 @@ function buildAuthIndexLookup(
   authFiles: CliproxyManagementAuthFile[] | undefined
 ): ReadonlyMap<string, ResolvedAuthFile> {
   const lookup = new Map<string, ResolvedAuthFile>();
+  const duplicateEmailCounts = new Map<string, number>();
+
+  for (const authFile of authFiles ?? []) {
+    if (!authFile.provider || !authFile.email) {
+      continue;
+    }
+
+    const key = `${normalizeProvider(authFile.provider)}:${authFile.email.trim().toLowerCase()}`;
+    duplicateEmailCounts.set(key, (duplicateEmailCounts.get(key) ?? 0) + 1);
+  }
 
   for (const authFile of authFiles ?? []) {
     if (authFile.auth_index === undefined || authFile.auth_index === null) {
@@ -37,6 +51,8 @@ function buildAuthIndexLookup(
     }
 
     const provider = authFile.provider ? normalizeProvider(authFile.provider) : undefined;
+    const email = authFile.email?.trim() || undefined;
+    const name = authFile.name?.trim() || undefined;
     const source = authFile.email?.trim() || authFile.name?.trim() || undefined;
     if (!provider && !source) {
       continue;
@@ -45,6 +61,12 @@ function buildAuthIndexLookup(
     lookup.set(String(authFile.auth_index), {
       provider,
       source,
+      email,
+      name,
+      duplicateEmailCount:
+        provider && email
+          ? (duplicateEmailCounts.get(`${provider}:${email.toLowerCase()}`) ?? 1)
+          : 1,
     });
   }
 
@@ -65,15 +87,29 @@ function resolveProviderForDetail(
 }
 
 function resolveSourceForDetail(
+  resolvedProvider: string,
   detail: CliproxyRequestDetail,
   authIndexLookup: ReadonlyMap<string, ResolvedAuthFile>
 ): string {
+  const resolvedAuthFile = authIndexLookup.get(String(detail.auth_index));
+  if (resolvedAuthFile?.email && resolvedAuthFile?.name) {
+    const derivedSource = buildEmailBackedAccountId(
+      resolvedProvider,
+      resolvedAuthFile.name,
+      resolvedAuthFile.email,
+      resolvedAuthFile.duplicateEmailCount ?? 1
+    );
+    if (derivedSource) {
+      return derivedSource;
+    }
+  }
+
   const source = detail.source?.trim();
   if (source) {
     return source;
   }
 
-  return authIndexLookup.get(String(detail.auth_index))?.source ?? 'unknown';
+  return resolvedAuthFile?.source ?? 'unknown';
 }
 
 export function buildCliproxyStatsFromUsageResponse(
@@ -110,8 +146,8 @@ export function buildCliproxyStatsFromUsageResponse(
         for (const detail of modelData.details) {
           sawAnyDetail = true;
           sawProviderDetail = true;
-          const source = resolveSourceForDetail(detail, authIndexLookup);
           const resolvedProvider = resolveProviderForDetail(provider, detail, authIndexLookup);
+          const source = resolveSourceForDetail(resolvedProvider, detail, authIndexLookup);
           const accountKey = buildQualifiedAccountStatsKey(resolvedProvider, source);
           requestsByProvider[resolvedProvider] = (requestsByProvider[resolvedProvider] ?? 0) + 1;
 

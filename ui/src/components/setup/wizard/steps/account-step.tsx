@@ -4,6 +4,7 @@
 
 import { Button } from '@/components/ui/button';
 import { ChevronRight, ArrowLeft, User, ExternalLink } from 'lucide-react';
+import { formatAccountDisplayName } from '@/lib/account-identity';
 import { cn } from '@/lib/utils';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import type { AccountStepProps } from '../types';
@@ -37,7 +38,7 @@ export function AccountStep({
               </div>
               <div>
                 <div className={cn('font-medium', privacyMode && PRIVACY_BLUR_CLASS)}>
-                  {acc.email || acc.id}
+                  {formatAccountDisplayName(acc.id, acc.email)}
                 </div>
                 {acc.isDefault && (
                   <div className="text-xs text-muted-foreground">Default account</div>

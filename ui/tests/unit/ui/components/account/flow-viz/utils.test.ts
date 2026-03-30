@@ -22,7 +22,9 @@ function mockRandom(): void {
   });
 }
 
-function makeAccount(overrides: Partial<AccountData> & Pick<AccountData, 'id' | 'email'>): AccountData {
+function makeAccount(
+  overrides: Partial<AccountData> & Pick<AccountData, 'id' | 'email'>
+): AccountData {
   return {
     provider: 'agy',
     successCount: 0,
@@ -170,9 +172,7 @@ describe('generateConnectionEvents()', () => {
 
   it('all generated timestamps are not in the future', () => {
     const now = new Date();
-    const accounts: AccountData[] = [
-      makeAccount({ id: 'a1', email: 'a@x.com', successCount: 10 }),
-    ];
+    const accounts: AccountData[] = [makeAccount({ id: 'a1', email: 'a@x.com', successCount: 10 })];
 
     const events = generateConnectionEvents(accounts);
 

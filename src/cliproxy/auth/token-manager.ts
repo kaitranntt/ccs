@@ -12,6 +12,7 @@ import { CLIPROXY_PROFILES } from '../../auth/profile-detector';
 import { getProviderAuthDir } from '../config-generator';
 import { getProviderAccounts, getDefaultAccount } from '../account-manager';
 import { deleteTokenFile, extractAccountIdFromTokenFile } from '../accounts/token-file-ops';
+import { buildEmailBackedAccountId } from '../accounts/email-account-identity';
 import {
   AuthStatus,
   PROVIDER_AUTH_PREFIXES,
@@ -215,6 +216,7 @@ export function registerAccountFromToken(
     mtimeMs: number;
     alreadyRegistered: boolean;
   };
+  type RawTokenCandidate = Omit<TokenCandidate, 'accountId'>;
 
   const { registerAccount } = require('../account-manager');
   let selectedCandidate: Omit<TokenCandidate, 'mtimeMs'> | null = null;
@@ -222,33 +224,71 @@ export function registerAccountFromToken(
     const files = fs.readdirSync(tokenDir);
     const jsonFiles = files.filter((f: string) => f.endsWith('.json'));
     const existingAccounts = getProviderAccounts(provider);
-    const candidates: TokenCandidate[] = jsonFiles
-      .map((file): TokenCandidate | null => {
-        const filePath = path.join(tokenDir, file);
-        if (!isTokenFileForProvider(filePath, provider)) return null;
+    const rawCandidates: RawTokenCandidate[] = jsonFiles.flatMap((file) => {
+      const filePath = path.join(tokenDir, file);
+      if (!isTokenFileForProvider(filePath, provider)) return [];
 
-        const content = fs.readFileSync(filePath, 'utf-8');
-        const data = JSON.parse(content) as { email?: string; project_id?: string };
-        const email = data.email || undefined;
-        const projectId = data.project_id || undefined;
-        const accountId = extractAccountIdFromTokenFile(file, email);
-        const stats = fs.statSync(filePath);
-        return {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const data = JSON.parse(content) as { email?: string; project_id?: string };
+      const email = data.email || undefined;
+      const projectId = data.project_id || undefined;
+      const stats = fs.statSync(filePath);
+
+      return [
+        {
           file,
           filePath,
           email,
           projectId,
-          accountId,
           mtimeMs: stats.mtimeMs,
           alreadyRegistered: existingAccounts.some((account) => account.tokenFile === file),
+        },
+      ];
+    });
+    const duplicateEmailCounts = new Map<string, number>();
+    const duplicateEmailTokenSets = new Map<string, Set<string>>();
+    for (const account of existingAccounts) {
+      if (!account.email) continue;
+      const key = account.email.toLowerCase();
+      const tokenSet = duplicateEmailTokenSets.get(key) ?? new Set<string>();
+      tokenSet.add(account.tokenFile);
+      duplicateEmailTokenSets.set(key, tokenSet);
+    }
+    for (const candidate of rawCandidates) {
+      if (!candidate.email) continue;
+      const key = candidate.email.toLowerCase();
+      const tokenSet = duplicateEmailTokenSets.get(key) ?? new Set<string>();
+      tokenSet.add(candidate.file);
+      duplicateEmailTokenSets.set(key, tokenSet);
+    }
+    for (const [key, tokenSet] of duplicateEmailTokenSets) {
+      duplicateEmailCounts.set(key, tokenSet.size);
+    }
+    const candidates: TokenCandidate[] = rawCandidates
+      .map((rawCandidate) => {
+        const duplicateEmailCount = rawCandidate.email
+          ? (duplicateEmailCounts.get(rawCandidate.email.toLowerCase()) ?? 1)
+          : 1;
+        const accountId = rawCandidate.email
+          ? buildEmailBackedAccountId(
+              provider,
+              rawCandidate.file,
+              rawCandidate.email,
+              duplicateEmailCount
+            )
+          : extractAccountIdFromTokenFile(rawCandidate.file, rawCandidate.email);
+
+        return {
+          ...rawCandidate,
+          accountId,
         };
       })
-      .filter((candidate): candidate is TokenCandidate => candidate !== null)
       .sort((a, b) => b.mtimeMs - a.mtimeMs);
 
     if (expectedAccountId) {
       selectedCandidate =
         candidates.find((candidate) => candidate.accountId === expectedAccountId) ||
+        candidates.find((candidate) => candidate.file === expectedAccountId) ||
         candidates.find((candidate) => {
           const existingAccount = existingAccounts.find(
             (account) => account.id === expectedAccountId

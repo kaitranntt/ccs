@@ -35,6 +35,7 @@ import {
   QUOTA_SUPPORTED_PROVIDER_IDS,
   type QuotaSupportedProvider,
 } from '../../cliproxy/provider-capabilities';
+import { formatAccountDisplayName } from '../../cliproxy/accounts/email-account-identity';
 import { initUI, header, subheader, color, dim, ok, fail, warn, info, table } from '../../utils/ui';
 
 interface CliproxyProfileArgs {
@@ -95,6 +96,11 @@ function formatResetTimeISO(isoTime: string): string {
   if (isNaN(resetDate.getTime())) return 'unknown';
   const seconds = Math.max(0, Math.round((resetDate.getTime() - Date.now()) / 1000));
   return formatResetTime(seconds);
+}
+
+function formatCliAccountLabel(account: { id: string; email?: string; nickname?: string }): string {
+  const displayName = formatAccountDisplayName(account);
+  return account.nickname ? `${account.nickname} (${displayName})` : displayName;
 }
 
 interface QuotaFailureDisplayEntry {
@@ -360,13 +366,7 @@ function displayAntigravityQuotaSection(
     const tier = account.tier || 'unknown';
     const status = statusParts.join(', ');
 
-    rows.push([
-      defaultMark,
-      account.nickname || account.email || account.id,
-      tier,
-      avgQuota,
-      status,
-    ]);
+    rows.push([defaultMark, formatCliAccountLabel(account), tier, avgQuota, status]);
   }
 
   console.log(
@@ -384,10 +384,11 @@ function displayCodexQuotaSection(results: { account: string; quota: CodexQuotaR
 
   for (const { account, quota } of results) {
     const accountInfo = findAccountByQuery('codex', account);
+    const accountLabel = accountInfo ? formatCliAccountLabel(accountInfo) : account;
     const defaultMark = accountInfo?.isDefault ? color(' (default)', 'info') : '';
 
     if (!quota.success) {
-      console.log(`  ${fail(account)}${defaultMark}`);
+      console.log(`  ${fail(accountLabel)}${defaultMark}`);
       displayQuotaFailure(quota);
       console.log('');
       continue;
@@ -406,7 +407,7 @@ function displayCodexQuotaSection(results: { account: string; quota: CodexQuotaR
     const statusIcon = avgQuota > 50 ? ok('') : avgQuota > 10 ? warn('') : fail('');
     const planBadge = quota.planType ? color(` [${quota.planType}]`, 'info') : '';
 
-    console.log(`  ${statusIcon}${account}${defaultMark}${planBadge}`);
+    console.log(`  ${statusIcon}${accountLabel}${defaultMark}${planBadge}`);
 
     const coreUsageSummary = quota.coreUsage ?? {
       fiveHour: fiveHourWindow
@@ -539,10 +540,11 @@ function displayClaudeQuotaSection(results: { account: string; quota: ClaudeQuot
 
   for (const { account, quota } of results) {
     const accountInfo = findAccountByQuery('claude', account);
+    const accountLabel = accountInfo ? formatCliAccountLabel(accountInfo) : account;
     const defaultMark = accountInfo?.isDefault ? color(' (default)', 'info') : '';
 
     if (!quota.success) {
-      console.log(`  ${fail(account)}${defaultMark}`);
+      console.log(`  ${fail(accountLabel)}${defaultMark}`);
       displayQuotaFailure(quota);
       console.log('');
       continue;
@@ -562,7 +564,7 @@ function displayClaudeQuotaSection(results: { account: string; quota: ClaudeQuot
     const statusIcon =
       minQuota === null ? info('') : minQuota > 50 ? ok('') : minQuota > 10 ? warn('') : fail('');
 
-    console.log(`  ${statusIcon}${account}${defaultMark}`);
+    console.log(`  ${statusIcon}${accountLabel}${defaultMark}`);
 
     const resetParts: string[] = [];
     if (fiveHourWindow?.resetAt)
@@ -616,10 +618,11 @@ function displayGeminiCliQuotaSection(
 
   for (const { account, quota } of results) {
     const accountInfo = findAccountByQuery('gemini', account);
+    const accountLabel = accountInfo ? formatCliAccountLabel(accountInfo) : account;
     const defaultMark = accountInfo?.isDefault ? color(' (default)', 'info') : '';
 
     if (!quota.success) {
-      console.log(`  ${fail(account)}${defaultMark}`);
+      console.log(`  ${fail(accountLabel)}${defaultMark}`);
       displayQuotaFailure(quota);
       console.log('');
       continue;
@@ -631,7 +634,7 @@ function displayGeminiCliQuotaSection(
         : 0;
     const statusIcon = avgQuota > 50 ? ok('') : avgQuota > 10 ? warn('') : fail('');
 
-    console.log(`  ${statusIcon}${account}${defaultMark}`);
+    console.log(`  ${statusIcon}${accountLabel}${defaultMark}`);
     if (quota.projectId) {
       console.log(`    Project: ${dim(quota.projectId)}`);
     }
@@ -667,10 +670,11 @@ function displayGhcpQuotaSection(results: { account: string; quota: GhcpQuotaRes
 
   for (const { account, quota } of results) {
     const accountInfo = findAccountByQuery('ghcp', account);
+    const accountLabel = accountInfo ? formatCliAccountLabel(accountInfo) : account;
     const defaultMark = accountInfo?.isDefault ? color(' (default)', 'info') : '';
 
     if (!quota.success) {
-      console.log(`  ${fail(account)}${defaultMark}`);
+      console.log(`  ${fail(accountLabel)}${defaultMark}`);
       displayQuotaFailure(quota);
       console.log('');
       continue;
@@ -685,7 +689,7 @@ function displayGhcpQuotaSection(results: { account: string; quota: GhcpQuotaRes
     const statusIcon = minQuota > 50 ? ok('') : minQuota > 10 ? warn('') : fail('');
     const planBadge = quota.planType ? color(` [${quota.planType}]`, 'info') : '';
 
-    console.log(`  ${statusIcon}${account}${defaultMark}${planBadge}`);
+    console.log(`  ${statusIcon}${accountLabel}${defaultMark}${planBadge}`);
     if (quota.quotaResetDate) {
       console.log(`    ${dim(`Resets ${formatResetTimeISO(quota.quotaResetDate)}`)}`);
     }
@@ -840,7 +844,7 @@ export async function handleDoctor(verbose = false): Promise<void> {
   const quotaResult = await fetchAllProviderQuotas(provider, verbose);
 
   for (const { account, quota } of quotaResult.accounts) {
-    const accountLabel = account.email || account.id || 'Unknown Account';
+    const accountLabel = formatCliAccountLabel(account);
     const defaultBadge = account.isDefault ? color(' (default)', 'info') : '';
 
     if (!quota.success) {
@@ -933,7 +937,7 @@ export async function handleSetDefault(args: string[]): Promise<void> {
       console.log('Available accounts:');
       for (const acc of accounts) {
         const badge = acc.isDefault ? color(' (current default)', 'info') : '';
-        console.log(`  - ${acc.email || acc.id}${badge}`);
+        console.log(`  - ${formatCliAccountLabel(acc)}${badge}`);
       }
     } else {
       console.log(`No accounts found for provider: ${provider}`);
@@ -945,7 +949,7 @@ export async function handleSetDefault(args: string[]): Promise<void> {
   const success = setDefaultAccount(provider, account.id);
 
   if (success) {
-    console.log(ok(`Default account set to: ${account.email || account.id}`));
+    console.log(ok(`Default account set to: ${formatCliAccountLabel(account)}`));
     console.log(info(`Provider: ${provider}`));
   } else {
     console.log(fail('Failed to set default account'));
@@ -973,7 +977,7 @@ export async function handlePauseAccount(args: string[]): Promise<void> {
   }
 
   if (account.paused) {
-    console.log(warn(`Account already paused: ${account.email || account.id}`));
+    console.log(warn(`Account already paused: ${formatCliAccountLabel(account)}`));
     console.log(info(`Paused at: ${account.pausedAt || 'unknown'}`));
     return;
   }
@@ -981,7 +985,7 @@ export async function handlePauseAccount(args: string[]): Promise<void> {
   const success = pauseAccount(provider, account.id);
 
   if (success) {
-    console.log(ok(`Account paused: ${account.email || account.id}`));
+    console.log(ok(`Account paused: ${formatCliAccountLabel(account)}`));
     console.log(info('Account will be skipped in quota rotation'));
   } else {
     console.log(fail('Failed to pause account'));
@@ -1009,14 +1013,14 @@ export async function handleResumeAccount(args: string[]): Promise<void> {
   }
 
   if (!account.paused) {
-    console.log(warn(`Account is not paused: ${account.email || account.id}`));
+    console.log(warn(`Account is not paused: ${formatCliAccountLabel(account)}`));
     return;
   }
 
   const success = resumeAccount(provider, account.id);
 
   if (success) {
-    console.log(ok(`Account resumed: ${account.email || account.id}`));
+    console.log(ok(`Account resumed: ${formatCliAccountLabel(account)}`));
     console.log(info('Account is now active in quota rotation'));
   } else {
     console.log(fail('Failed to resume account'));

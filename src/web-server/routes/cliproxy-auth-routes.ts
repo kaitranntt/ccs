@@ -24,7 +24,6 @@ import {
   pauseAccount as pauseAccountFn,
   resumeAccount as resumeAccountFn,
   touchAccount,
-  extractAccountIdFromTokenFile,
   hasAccountNameConflict,
   PROVIDERS_WITHOUT_EMAIL,
   validateNickname,
@@ -932,7 +931,7 @@ router.get('/:provider/status', async (req: Request, res: Response): Promise<voi
         getProviderTokenDir(localProvider),
         pendingAuth.nickname,
         false,
-        extractAccountIdFromTokenFile(tokenSnapshot.file, tokenSnapshot.email)
+        tokenSnapshot.file
       );
 
       if (!account) {

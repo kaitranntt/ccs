@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { formatAccountDisplayName } from '@/lib/account-identity';
 import {
   Select,
   SelectContent,
@@ -63,7 +64,7 @@ export function VariantStep({
           <span>
             {t('setupVariant.using')}{' '}
             <span className={cn(privacyMode && PRIVACY_BLUR_CLASS)}>
-              {selectedAccount.email || selectedAccount.id}
+              {formatAccountDisplayName(selectedAccount.id, selectedAccount.email)}
             </span>
           </span>
         </div>

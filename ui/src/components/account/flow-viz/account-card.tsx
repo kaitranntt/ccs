@@ -12,6 +12,7 @@ import {
   isClaudeQuotaResult,
   isCodexQuotaResult,
 } from '@/lib/utils';
+import { formatAccountVariantLabel } from '@/lib/account-identity';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import {
   GripVertical,
@@ -188,6 +189,7 @@ export function AccountCard({
     account.tier &&
     account.tier !== 'unknown' &&
     account.tier !== 'free';
+  const variantLabel = formatAccountVariantLabel(account.id, account.email);
 
   return (
     <div
@@ -226,6 +228,11 @@ export function AccountCard({
           >
             {cleanEmail(account.email)}
           </span>
+          {variantLabel && (
+            <span className="text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0 bg-muted text-muted-foreground">
+              {variantLabel}
+            </span>
+          )}
           {showTierBadge && (
             <span
               className={cn(

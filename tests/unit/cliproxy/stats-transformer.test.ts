@@ -288,4 +288,45 @@ describe('buildCliproxyStatsFromUsageResponse', () => {
     });
     expect(stats.requestsByProvider).toEqual({ codex: 1, 'ccs-internal-managed': 2 });
   });
+
+  it('derives duplicate-email Codex account ids from auth file metadata', () => {
+    const usage = createInternallyBucketedUsage([
+      createDetail({ auth_index: 'codex-team', source: 'kaidu.kd@gmail.com' }),
+      createDetail({
+        auth_index: 'codex-free',
+        source: 'kaidu.kd@gmail.com',
+        timestamp: '2025-03-26T10:01:00.000Z',
+        failed: true,
+      }),
+    ]);
+    const authFiles: CliproxyManagementAuthFile[] = [
+      {
+        auth_index: 'codex-team',
+        provider: 'codex',
+        email: 'kaidu.kd@gmail.com',
+        name: 'codex-04a0f049-kaidu.kd@gmail.com-team.json',
+      },
+      {
+        auth_index: 'codex-free',
+        provider: 'codex',
+        email: 'kaidu.kd@gmail.com',
+        name: 'codex-kaidu.kd@gmail.com-free.json',
+      },
+    ];
+
+    const stats = buildCliproxyStatsFromUsageResponse(usage, { authFiles });
+
+    expect(stats.accountStats['codex:kaidu.kd@gmail.com#04a0f049-team']).toMatchObject({
+      provider: 'codex',
+      source: 'kaidu.kd@gmail.com#04a0f049-team',
+      successCount: 1,
+      failureCount: 0,
+    });
+    expect(stats.accountStats['codex:kaidu.kd@gmail.com#free']).toMatchObject({
+      provider: 'codex',
+      source: 'kaidu.kd@gmail.com#free',
+      successCount: 0,
+      failureCount: 1,
+    });
+  });
 });

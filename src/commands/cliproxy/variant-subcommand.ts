@@ -28,6 +28,7 @@ import {
 } from '../../cliproxy/services';
 import { DEFAULT_BACKEND } from '../../cliproxy/platform-detector';
 import { CompositeTierConfig } from '../../config/unified-config-types';
+import { formatAccountDisplayName } from '../../cliproxy/accounts/email-account-identity';
 
 interface CliproxyProfileArgs {
   name?: string;
@@ -118,6 +119,15 @@ function getBackendLabel(backend: CLIProxyBackend): string {
   return backend === 'plus' ? 'CLIProxy Plus' : 'CLIProxy';
 }
 
+function formatVariantAccountLabel(account: {
+  id: string;
+  email?: string;
+  nickname?: string;
+}): string {
+  const displayName = formatAccountDisplayName(account);
+  return account.nickname ? `${account.nickname} (${displayName})` : displayName;
+}
+
 /**
  * Interactive prompt to select provider + model for a single tier.
  * Returns a CompositeTierConfig, or null if user cancelled auth.
@@ -158,7 +168,7 @@ async function selectTierConfig(
       console.log(fail('Authentication failed'));
       process.exit(1);
     }
-    console.log(ok(`Authenticated as ${newAccount.email || newAccount.id}`));
+    console.log(ok(`Authenticated as ${formatVariantAccountLabel(newAccount)}`));
   }
 
   // Select model
@@ -364,7 +374,7 @@ export async function handleCreate(
       }
       account = newAccount.id;
       console.log('');
-      console.log(ok(`Authenticated as ${newAccount.email || newAccount.id}`));
+      console.log(ok(`Authenticated as ${formatVariantAccountLabel(newAccount)}`));
     } else if (providerAccounts.length === 1) {
       account = providerAccounts[0].id;
     } else {
@@ -372,7 +382,7 @@ export async function handleCreate(
       const accountOptions = [
         ...providerAccounts.map((acc) => ({
           id: acc.id,
-          label: `${acc.email || acc.id}${acc.isDefault ? ' (default)' : ''}`,
+          label: `${formatVariantAccountLabel(acc)}${acc.isDefault ? ' (default)' : ''}`,
         })),
         { id: ADD_NEW_ID, label: color('[+ Add new account...]', 'info') },
       ];
@@ -394,7 +404,7 @@ export async function handleCreate(
         }
         account = newAccount.id;
         console.log('');
-        console.log(ok(`Authenticated as ${newAccount.email || newAccount.id}`));
+        console.log(ok(`Authenticated as ${formatVariantAccountLabel(newAccount)}`));
       } else {
         account = selectedAccount;
       }
@@ -406,7 +416,7 @@ export async function handleCreate(
       console.log('');
       console.log('Available accounts:');
       providerAccounts.forEach((a) =>
-        console.log(`  - ${a.email || a.id}${a.isDefault ? ' (default)' : ''}`)
+        console.log(`  - ${formatVariantAccountLabel(a)}${a.isDefault ? ' (default)' : ''}`)
       );
       process.exit(1);
     }
@@ -450,9 +460,13 @@ export async function handleCreate(
     ? '~/.ccs/config.yaml'
     : `~/.ccs/${path.basename(result.settingsPath || '')}`;
   const portInfo = result.variant?.port ? `Port:     ${result.variant.port}\n` : '';
+  const selectedAccount =
+    account && provider
+      ? getProviderAccounts(provider as CLIProxyProvider).find((acc) => acc.id === account)
+      : null;
   console.log(
     infoBox(
-      `Variant:  ${name}\nProvider: ${provider}\nModel:    ${model}\nTarget:   ${resolvedTarget}\n${portInfo}${account ? `Account:  ${account}\n` : ''}${isUnifiedMode() ? 'Config' : 'Settings'}:   ${settingsDisplay}`,
+      `Variant:  ${name}\nProvider: ${provider}\nModel:    ${model}\nTarget:   ${resolvedTarget}\n${portInfo}${selectedAccount ? `Account:  ${formatVariantAccountLabel(selectedAccount)}\n` : account ? `Account:  ${account}\n` : ''}${isUnifiedMode() ? 'Config' : 'Settings'}:   ${settingsDisplay}`,
       configType
     )
   );
