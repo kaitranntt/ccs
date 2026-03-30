@@ -140,14 +140,14 @@ export function AccountCard({
       )
     : [];
 
-  const groupedIdentityMarker = hasGroupedVariants ? (
-    <div
-      className="flex shrink-0 items-center pt-0.5"
-      title={groupedHeaderVariants
-        .map((variant) => variant.audienceLabel ?? variant.detailLabel ?? 'Variant')
-        .join(' • ')}
-    >
-      <div className="inline-flex items-center overflow-hidden rounded-full border border-border/60 bg-muted/60 shadow-sm shadow-black/5 dark:bg-zinc-900/80">
+  const compactMetaBadges = hasGroupedVariants ? (
+    <>
+      <div
+        className="inline-flex shrink-0 items-center overflow-hidden rounded-full border border-border/60 bg-muted/60 shadow-sm shadow-black/5 dark:bg-zinc-900/80"
+        title={groupedHeaderVariants
+          .map((variant) => variant.audienceLabel ?? variant.detailLabel ?? 'Variant')
+          .join(' • ')}
+      >
         {groupedHeaderVariants.map((variant, index) => (
           <span
             key={variant.id}
@@ -168,16 +168,6 @@ export function AccountCard({
           </span>
         ))}
       </div>
-    </div>
-  ) : undefined;
-
-  const compactMetaBadges = hasGroupedVariants ? (
-    <>
-      {account.isDefault && (
-        <span className="text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0 bg-primary/10 text-primary">
-          Default
-        </span>
-      )}
       {account.paused && (
         <span className="text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0 bg-amber-500/15 text-amber-700 dark:bg-amber-500/25 dark:text-amber-300">
           Paused
@@ -302,7 +292,6 @@ export function AccountCard({
         quota={quota}
         quotaLoading={quotaLoading}
         runtimeLastUsed={account.lastUsedAt}
-        beforeIdentity={groupedIdentityMarker}
         headerEnd={headerEnd}
         compactMetaBadges={compactMetaBadges}
         footerSlot={

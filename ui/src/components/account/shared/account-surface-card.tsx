@@ -53,6 +53,12 @@ function getTierBadgeClass(tier: AccountTier | undefined) {
     : 'bg-yellow-500/15 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400';
 }
 
+function getCompactAudienceBadgeLabel(audience: 'business' | 'personal' | 'unknown') {
+  if (audience === 'business') return 'B';
+  if (audience === 'personal') return 'P';
+  return '?';
+}
+
 export function AccountSurfaceCard({
   mode,
   provider,
@@ -99,6 +105,7 @@ export function AccountSurfaceCard({
       )}
       {identity.audienceLabel && (
         <span
+          title={identity.audienceLabel}
           className={cn(
             'text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0',
             identity.audience === 'business'
@@ -106,12 +113,7 @@ export function AccountSurfaceCard({
               : 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/25 dark:text-emerald-300'
           )}
         >
-          {identity.audienceLabel}
-        </span>
-      )}
-      {isDefault && (
-        <span className="text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0 bg-primary/10 text-primary">
-          Default
+          {getCompactAudienceBadgeLabel(identity.audience)}
         </span>
       )}
       {paused && (
