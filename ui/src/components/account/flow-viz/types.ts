@@ -14,6 +14,7 @@ export interface DragOffset {
 export interface AccountData {
   id: string;
   email: string;
+  tokenFile?: string;
   provider: string;
   successCount: number;
   failureCount: number;

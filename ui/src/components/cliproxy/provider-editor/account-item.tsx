@@ -40,7 +40,7 @@ import {
   isClaudeQuotaResult,
   isCodexQuotaResult,
 } from '@/lib/utils';
-import { formatAccountVariantLabel } from '@/lib/account-identity';
+import { getAccountIdentityPresentation } from '@/lib/account-identity';
 import { getAccountStats } from '@/lib/cliproxy-account-stats';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import { useAccountQuota, useCliproxyStats } from '@/hooks/use-cliproxy-stats';
@@ -188,7 +188,7 @@ export function AccountItem({
       : failureInfo?.tone === 'destructive'
         ? 'border-destructive/50 text-destructive'
         : 'border-muted-foreground/50 text-muted-foreground';
-  const variantLabel = formatAccountVariantLabel(account.id, account.email);
+  const identity = getAccountIdentityPresentation(account.id, account.email, account.tokenFile);
 
   return (
     <div
@@ -276,9 +276,22 @@ export function AccountItem({
               >
                 {account.email || account.id}
               </span>
-              {variantLabel && (
+              {identity.audienceLabel && (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    'text-[10px] h-4 px-1.5 border-transparent',
+                    identity.audience === 'business'
+                      ? 'bg-sky-500/12 text-sky-700 dark:text-sky-300'
+                      : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300'
+                  )}
+                >
+                  {identity.audienceLabel}
+                </Badge>
+              )}
+              {identity.detailLabel && (
                 <Badge variant="outline" className="text-[10px] h-4 px-1.5">
-                  {variantLabel}
+                  {identity.detailLabel}
                 </Badge>
               )}
               {account.isDefault && (

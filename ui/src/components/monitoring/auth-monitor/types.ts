@@ -8,6 +8,7 @@ export type AccountTier = 'free' | 'pro' | 'ultra' | 'unknown';
 export interface AccountRow {
   id: string;
   email: string;
+  tokenFile: string;
   provider: string;
   displayName: string;
   isDefault: boolean;

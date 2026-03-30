@@ -3,10 +3,11 @@
  */
 
 import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { formatAccountDisplayName } from '@/lib/account-identity';
+import { getAccountIdentityPresentation } from '@/lib/account-identity';
 import {
   Select,
   SelectContent,
@@ -45,6 +46,13 @@ export function VariantStep({
     selectedProvider === 'agy' && modelName.trim().length > 0
       ? isDeniedAgyModelId(modelName)
       : false;
+  const selectedAccountIdentity = selectedAccount
+    ? getAccountIdentityPresentation(
+        selectedAccount.id,
+        selectedAccount.email,
+        selectedAccount.tokenFile
+      )
+    : null;
 
   const handleModelSelect = (value: string) => {
     if (value === CUSTOM_MODEL_VALUE) {
@@ -59,14 +67,38 @@ export function VariantStep({
   return (
     <div className="space-y-4">
       {selectedAccount && (
-        <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-md text-sm">
+        <div className="flex items-start gap-2 p-2 bg-muted/50 rounded-md text-sm">
           <User className="w-4 h-4" />
-          <span>
-            {t('setupVariant.using')}{' '}
-            <span className={cn(privacyMode && PRIVACY_BLUR_CLASS)}>
-              {formatAccountDisplayName(selectedAccount.id, selectedAccount.email)}
+          <div className="space-y-1">
+            <span>
+              {t('setupVariant.using')}{' '}
+              <span className={cn(privacyMode && PRIVACY_BLUR_CLASS)}>
+                {selectedAccountIdentity?.email}
+              </span>
             </span>
-          </span>
+            {(selectedAccountIdentity?.audienceLabel || selectedAccountIdentity?.detailLabel) && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {selectedAccountIdentity?.audienceLabel && (
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'text-[10px] h-4 px-1.5 border-transparent',
+                      selectedAccountIdentity.audience === 'business'
+                        ? 'bg-sky-500/12 text-sky-700 dark:text-sky-300'
+                        : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300'
+                    )}
+                  >
+                    {selectedAccountIdentity.audienceLabel}
+                  </Badge>
+                )}
+                {selectedAccountIdentity?.detailLabel && (
+                  <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                    {selectedAccountIdentity.detailLabel}
+                  </Badge>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

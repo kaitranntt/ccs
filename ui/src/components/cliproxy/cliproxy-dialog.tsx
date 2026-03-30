@@ -221,7 +221,9 @@ export function CliproxyDialog({ open, onClose }: CliproxyDialogProps) {
                     <option value="">{t('cliproxyDialog.useDefaultAccount')}</option>
                     {providerAccounts.map((acc) => (
                       <option key={acc.id} value={acc.id}>
-                        {privacyMode ? '••••••' : formatAccountDisplayName(acc.id, acc.email)}
+                        {privacyMode
+                          ? '••••••'
+                          : formatAccountDisplayName(acc.id, acc.email, acc.tokenFile)}
                         {acc.isDefault ? ` ${t('cliproxyDialog.defaultSuffix')}` : ''}
                       </option>
                     ))}

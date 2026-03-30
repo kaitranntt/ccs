@@ -86,6 +86,7 @@ export function useAuthMonitorData(): AuthMonitorData {
         const row: AccountRow = {
           id: account.id,
           email: account.email || account.id,
+          tokenFile: account.tokenFile,
           provider: status.provider,
           displayName: status.displayName,
           isDefault: account.isDefault,

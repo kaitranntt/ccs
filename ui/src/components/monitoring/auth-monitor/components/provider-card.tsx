@@ -113,7 +113,11 @@ export function ProviderCard({
               <div
                 className={cn('w-2 h-2 rounded-full', acc.paused && 'opacity-50')}
                 style={{ backgroundColor: acc.color }}
-                title={privacyMode ? '••••••' : formatAccountDisplayName(acc.id, acc.email)}
+                title={
+                  privacyMode
+                    ? '••••••'
+                    : formatAccountDisplayName(acc.id, acc.email, acc.tokenFile)
+                }
               />
               {isMissingProjectId && (
                 <TooltipProvider>

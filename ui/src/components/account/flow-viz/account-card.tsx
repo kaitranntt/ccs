@@ -12,7 +12,7 @@ import {
   isClaudeQuotaResult,
   isCodexQuotaResult,
 } from '@/lib/utils';
-import { formatAccountVariantLabel } from '@/lib/account-identity';
+import { getAccountIdentityPresentation } from '@/lib/account-identity';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import {
   GripVertical,
@@ -189,7 +189,7 @@ export function AccountCard({
     account.tier &&
     account.tier !== 'unknown' &&
     account.tier !== 'free';
-  const variantLabel = formatAccountVariantLabel(account.id, account.email);
+  const identity = getAccountIdentityPresentation(account.id, account.email, account.tokenFile);
 
   return (
     <div
@@ -216,34 +216,52 @@ export function AccountCard({
         transform: `translate(${offset.x}px, ${offset.y}px)${isDragging ? ' scale(1.05)' : ''}`,
       }}
     >
-      {/* Header row: Email + Tier | Pause button | Drag handle */}
+      {/* Header row: Email + state chips | Pause button | Drag handle */}
       <div className="flex items-center gap-1.5 mb-1">
         {/* Email with tier badge inline */}
-        <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <span
-            className={cn(
-              'text-xs font-semibold text-foreground tracking-tight truncate',
-              privacyMode && PRIVACY_BLUR_CLASS
-            )}
-          >
-            {cleanEmail(account.email)}
-          </span>
-          {variantLabel && (
-            <span className="text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0 bg-muted text-muted-foreground">
-              {variantLabel}
-            </span>
-          )}
-          {showTierBadge && (
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
             <span
               className={cn(
-                'text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0',
-                account.tier === 'ultra'
-                  ? 'bg-violet-500/15 text-violet-600 dark:bg-violet-500/25 dark:text-violet-300'
-                  : 'bg-yellow-500/15 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400'
+                'text-xs font-semibold text-foreground tracking-tight truncate',
+                privacyMode && PRIVACY_BLUR_CLASS
               )}
             >
-              {account.tier}
+              {cleanEmail(account.email)}
             </span>
+            {showTierBadge && (
+              <span
+                className={cn(
+                  'text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0',
+                  account.tier === 'ultra'
+                    ? 'bg-violet-500/15 text-violet-600 dark:bg-violet-500/25 dark:text-violet-300'
+                    : 'bg-yellow-500/15 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400'
+                )}
+              >
+                {account.tier}
+              </span>
+            )}
+          </div>
+          {(identity.audienceLabel || identity.compactDetailLabel) && (
+            <div className="mt-1 flex items-center gap-1 flex-wrap">
+              {identity.audienceLabel && (
+                <span
+                  className={cn(
+                    'text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0',
+                    identity.audience === 'business'
+                      ? 'bg-sky-500/15 text-sky-700 dark:bg-sky-500/25 dark:text-sky-300'
+                      : 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/25 dark:text-emerald-300'
+                  )}
+                >
+                  {identity.audienceLabel}
+                </span>
+              )}
+              {identity.compactDetailLabel && (
+                <span className="text-[7px] font-bold tracking-wide px-1 py-px rounded shrink-0 bg-muted text-muted-foreground">
+                  {identity.compactDetailLabel}
+                </span>
+              )}
+            </div>
           )}
         </div>
 
