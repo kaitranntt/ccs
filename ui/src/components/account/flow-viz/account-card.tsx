@@ -88,6 +88,26 @@ function getVariantMarkerLabel(audience: string, fallbackLabel?: string | null) 
   return normalizedFallback?.[0]?.toUpperCase() ?? '?';
 }
 
+function getGroupedVariantSummaryLabel(
+  variants: Array<{ audience: string; audienceLabel?: string | null; detailLabel?: string | null }>
+) {
+  const audiences = new Set(variants.map((variant) => variant.audience));
+
+  if (audiences.size === 2 && audiences.has('business') && audiences.has('personal')) {
+    return 'B|P';
+  }
+
+  if (variants.length === 1) {
+    const [variant] = variants;
+    return getVariantMarkerLabel(
+      variant.audience,
+      variant.audienceLabel ?? variant.detailLabel ?? null
+    );
+  }
+
+  return null;
+}
+
 export function AccountCard({
   account,
   zone,
@@ -139,6 +159,7 @@ export function AccountCard({
         ).values()
       )
     : [];
+  const groupedVariantSummaryLabel = getGroupedVariantSummaryLabel(groupedHeaderVariants);
 
   const compactMetaBadges = hasGroupedVariants ? (
     <>
@@ -148,25 +169,31 @@ export function AccountCard({
           .map((variant) => variant.audienceLabel ?? variant.detailLabel ?? 'Variant')
           .join(' • ')}
       >
-        {groupedHeaderVariants.map((variant, index) => (
-          <span
-            key={variant.id}
-            className={cn(
-              'inline-flex min-w-[1.9rem] items-center justify-center px-1.5 py-1 text-[9px] font-semibold leading-none',
-              index > 0 && 'border-l border-border/50',
-              variant.audience === 'business'
-                ? 'bg-sky-500/12 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300'
-                : variant.audience === 'personal'
-                  ? 'bg-emerald-500/12 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
-                  : 'bg-muted text-muted-foreground'
-            )}
-          >
-            {getVariantMarkerLabel(
-              variant.audience,
-              variant.audienceLabel ?? variant.detailLabel ?? null
-            )}
+        {groupedVariantSummaryLabel ? (
+          <span className="inline-flex min-w-[2.2rem] items-center justify-center px-1.5 py-1 text-[9px] font-semibold leading-none text-foreground/80">
+            {groupedVariantSummaryLabel}
           </span>
-        ))}
+        ) : (
+          groupedHeaderVariants.map((variant, index) => (
+            <span
+              key={variant.id}
+              className={cn(
+                'inline-flex min-w-[1.9rem] items-center justify-center px-1.5 py-1 text-[9px] font-semibold leading-none',
+                index > 0 && 'border-l border-border/50',
+                variant.audience === 'business'
+                  ? 'bg-sky-500/12 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300'
+                  : variant.audience === 'personal'
+                    ? 'bg-emerald-500/12 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                    : 'bg-muted text-muted-foreground'
+              )}
+            >
+              {getVariantMarkerLabel(
+                variant.audience,
+                variant.audienceLabel ?? variant.detailLabel ?? null
+              )}
+            </span>
+          ))
+        )}
       </div>
       {account.paused && (
         <span className="text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0 bg-amber-500/15 text-amber-700 dark:bg-amber-500/25 dark:text-amber-300">
