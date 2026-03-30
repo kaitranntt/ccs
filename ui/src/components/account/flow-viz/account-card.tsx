@@ -81,8 +81,8 @@ function getCompactQuotaColor(percentage: number) {
 }
 
 function getVariantMarkerLabel(audience: string, fallbackLabel?: string | null) {
-  if (audience === 'business') return 'B';
-  if (audience === 'personal') return 'P';
+  if (audience === 'business') return 'Biz';
+  if (audience === 'personal') return 'Pers';
 
   const normalizedFallback = fallbackLabel?.trim();
   return normalizedFallback?.[0]?.toUpperCase() ?? '?';
@@ -143,7 +143,7 @@ export function AccountCard({
   const compactMetaBadges = hasGroupedVariants ? (
     <>
       <div
-        className="inline-flex shrink-0 items-center overflow-hidden rounded-full border border-border/60 bg-muted/60 shadow-sm shadow-black/5 dark:bg-zinc-900/80"
+        className="inline-flex shrink-0 items-center overflow-hidden rounded-md border border-border/60 bg-muted/60 shadow-sm shadow-black/5 dark:bg-zinc-900/80"
         title={groupedHeaderVariants
           .map((variant) => variant.audienceLabel ?? variant.detailLabel ?? 'Variant')
           .join(' • ')}
@@ -152,7 +152,7 @@ export function AccountCard({
           <span
             key={variant.id}
             className={cn(
-              'inline-flex min-w-4 items-center justify-center px-1 py-[3px] text-[8px] font-bold leading-none',
+              'inline-flex min-w-[1.9rem] items-center justify-center px-1.5 py-1 text-[9px] font-semibold leading-none',
               index > 0 && 'border-l border-border/50',
               variant.audience === 'business'
                 ? 'bg-sky-500/12 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300'

@@ -54,8 +54,8 @@ function getTierBadgeClass(tier: AccountTier | undefined) {
 }
 
 function getCompactAudienceBadgeLabel(audience: 'business' | 'personal' | 'unknown') {
-  if (audience === 'business') return 'B';
-  if (audience === 'personal') return 'P';
+  if (audience === 'business') return 'Biz';
+  if (audience === 'personal') return 'Pers';
   return '?';
 }
 
@@ -96,7 +96,7 @@ export function AccountSurfaceCard({
       {showTierBadge && (
         <span
           className={cn(
-            'text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0',
+            'text-[8px] font-semibold px-1.5 py-0.5 rounded-md shrink-0',
             getTierBadgeClass(tier)
           )}
         >
@@ -107,7 +107,7 @@ export function AccountSurfaceCard({
         <span
           title={identity.audienceLabel}
           className={cn(
-            'text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0',
+            'text-[8px] font-semibold px-1.5 py-0.5 rounded-md shrink-0',
             identity.audience === 'business'
               ? 'bg-sky-500/15 text-sky-700 dark:bg-sky-500/25 dark:text-sky-300'
               : 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/25 dark:text-emerald-300'
@@ -117,7 +117,7 @@ export function AccountSurfaceCard({
         </span>
       )}
       {paused && (
-        <span className="text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0 bg-amber-500/15 text-amber-700 dark:bg-amber-500/25 dark:text-amber-300">
+        <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-md shrink-0 bg-amber-500/15 text-amber-700 dark:bg-amber-500/25 dark:text-amber-300">
           Paused
         </span>
       )}
