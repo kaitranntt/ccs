@@ -28,6 +28,7 @@ interface AccountSurfaceCardProps {
   runtimeLastUsed?: string;
   beforeIdentity?: ReactNode;
   headerEnd?: ReactNode;
+  compactMetaBadges?: ReactNode;
   bodySlot?: ReactNode;
   footerSlot?: ReactNode;
   quotaInsetClassName?: string;
@@ -69,6 +70,7 @@ export function AccountSurfaceCard({
   runtimeLastUsed,
   beforeIdentity,
   headerEnd,
+  compactMetaBadges,
   bodySlot,
   footerSlot,
   quotaInsetClassName,
@@ -83,11 +85,47 @@ export function AccountSurfaceCard({
     tier !== 'unknown' &&
     tier !== 'free';
   const isCompact = mode === 'compact';
+  const defaultCompactMetaBadges = (
+    <>
+      {showTierBadge && (
+        <span
+          className={cn(
+            'text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0',
+            getTierBadgeClass(tier)
+          )}
+        >
+          {tier}
+        </span>
+      )}
+      {identity.audienceLabel && (
+        <span
+          className={cn(
+            'text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0',
+            identity.audience === 'business'
+              ? 'bg-sky-500/15 text-sky-700 dark:bg-sky-500/25 dark:text-sky-300'
+              : 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/25 dark:text-emerald-300'
+          )}
+        >
+          {identity.audienceLabel}
+        </span>
+      )}
+      {isDefault && (
+        <span className="text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0 bg-primary/10 text-primary">
+          Default
+        </span>
+      )}
+      {paused && (
+        <span className="text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0 bg-amber-500/15 text-amber-700 dark:bg-amber-500/25 dark:text-amber-300">
+          Paused
+        </span>
+      )}
+    </>
+  );
 
   return (
     <div className={cn('flex flex-col gap-2', className)}>
       <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 flex-1 gap-3">
+        <div className={cn('flex min-w-0 flex-1', isCompact ? 'gap-2' : 'gap-3')}>
           {beforeIdentity}
           {!isCompact && (
             <div className="relative shrink-0">
@@ -119,25 +157,17 @@ export function AccountSurfaceCard({
               className={cn('flex items-center min-w-0', isCompact ? 'gap-1.5' : 'gap-2 flex-wrap')}
             >
               <span
+                title={title}
                 className={cn(
                   isCompact
-                    ? 'text-xs font-semibold tracking-tight truncate'
+                    ? 'flex-1 min-w-0 text-xs font-semibold tracking-tight truncate leading-none'
                     : 'font-medium text-sm truncate',
                   privacyMode && PRIVACY_BLUR_CLASS
                 )}
               >
                 {title}
               </span>
-              {isCompact && showTierBadge && (
-                <span
-                  className={cn(
-                    'text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0',
-                    getTierBadgeClass(tier)
-                  )}
-                >
-                  {tier}
-                </span>
-              )}
+              {isCompact && (compactMetaBadges ?? defaultCompactMetaBadges)}
               {!isCompact && identity.audienceLabel && (
                 <Badge
                   variant="outline"
@@ -171,38 +201,15 @@ export function AccountSurfaceCard({
               )}
             </div>
 
-            {isCompact && (identity.audienceLabel || isDefault || paused) && (
-              <div className="mt-1 flex items-center gap-1 flex-wrap">
-                {identity.audienceLabel && (
-                  <span
-                    className={cn(
-                      'text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0',
-                      identity.audience === 'business'
-                        ? 'bg-sky-500/15 text-sky-700 dark:bg-sky-500/25 dark:text-sky-300'
-                        : 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/25 dark:text-emerald-300'
-                    )}
-                  >
-                    {identity.audienceLabel}
-                  </span>
-                )}
-                {isDefault && (
-                  <span className="text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0 bg-primary/10 text-primary">
-                    Default
-                  </span>
-                )}
-                {paused && (
-                  <span className="text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0 bg-amber-500/15 text-amber-700 dark:bg-amber-500/25 dark:text-amber-300">
-                    Paused
-                  </span>
-                )}
-              </div>
-            )}
-
             {bodySlot && <div className="mt-1">{bodySlot}</div>}
           </div>
         </div>
 
-        {headerEnd && <div className="flex items-center gap-1 shrink-0">{headerEnd}</div>}
+        {headerEnd && (
+          <div className={cn('flex items-center shrink-0', isCompact ? 'gap-0.5' : 'gap-1')}>
+            {headerEnd}
+          </div>
+        )}
       </div>
 
       {footerSlot}

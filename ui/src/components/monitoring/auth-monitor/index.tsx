@@ -10,7 +10,12 @@ import { STATUS_COLORS } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AccountFlowViz } from '@/components/account-flow-viz';
 import { usePrivacy } from '@/contexts/privacy-context';
-import { usePauseAccount, useResumeAccount } from '@/hooks/use-cliproxy';
+import {
+  useBulkPauseAccounts,
+  useBulkResumeAccounts,
+  usePauseAccount,
+  useResumeAccount,
+} from '@/hooks/use-cliproxy';
 import { Activity, CheckCircle2, XCircle, Radio } from 'lucide-react';
 
 import { useAuthMonitorData } from './hooks';
@@ -66,14 +71,37 @@ export function AuthMonitor() {
   // Account control mutations for flow viz
   const pauseMutation = usePauseAccount();
   const resumeMutation = useResumeAccount();
+  const bulkPauseMutation = useBulkPauseAccounts();
+  const bulkResumeMutation = useBulkResumeAccounts();
 
   // Get selected provider data for detail view
   const selectedProviderData = effectiveProvider
     ? providerStats.find((ps) => ps.provider === effectiveProvider)
     : null;
 
-  const handlePauseToggle = (accountId: string, paused: boolean) => {
-    if (!effectiveProvider || pauseMutation.isPending || resumeMutation.isPending) return;
+  const handlePauseToggle = (accountIds: string[], paused: boolean) => {
+    if (
+      !effectiveProvider ||
+      pauseMutation.isPending ||
+      resumeMutation.isPending ||
+      bulkPauseMutation.isPending ||
+      bulkResumeMutation.isPending
+    ) {
+      return;
+    }
+
+    if (accountIds.length > 1) {
+      if (paused) {
+        bulkPauseMutation.mutate({ provider: effectiveProvider, accountIds });
+      } else {
+        bulkResumeMutation.mutate({ provider: effectiveProvider, accountIds });
+      }
+      return;
+    }
+
+    const [accountId] = accountIds;
+    if (!accountId) return;
+
     if (paused) {
       pauseMutation.mutate({ provider: effectiveProvider, accountId });
     } else {
@@ -165,7 +193,12 @@ export function AuthMonitor() {
             providerData={selectedProviderData}
             onBack={() => setSelectedProvider(null)}
             onPauseToggle={handlePauseToggle}
-            isPausingAccount={pauseMutation.isPending || resumeMutation.isPending}
+            isPausingAccount={
+              pauseMutation.isPending ||
+              resumeMutation.isPending ||
+              bulkPauseMutation.isPending ||
+              bulkResumeMutation.isPending
+            }
           />
         ) : (
           <div className="p-6">

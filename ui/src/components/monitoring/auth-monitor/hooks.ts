@@ -5,8 +5,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useCliproxyAuth } from '@/hooks/use-cliproxy';
 import { useCliproxyStats } from '@/hooks/use-cliproxy-stats';
+import { buildAccountVisualGroups } from '@/lib/account-visual-groups';
 import { getProviderDisplayName } from '@/lib/provider-config';
-import { getAccountStats } from '@/lib/cliproxy-account-stats';
 import type { AuthStatus, OAuthAccount } from '@/lib/api-client';
 import type { AccountRow, ProviderStats } from './types';
 import { ACCOUNT_COLORS } from './utils';
@@ -74,29 +74,33 @@ export function useAuthMonitorData(): AuthMonitorData {
       const providerData = providerMap.get(providerKey);
       if (!providerData) return;
 
-      status.accounts?.forEach((account: OAuthAccount) => {
-        const realStats = getAccountStats(statsData, account);
-        const success = realStats?.successCount ?? 0;
-        const failure = realStats?.failureCount ?? 0;
-        tSuccess += success;
-        tFailure += failure;
-        providerData.success += success;
-        providerData.failure += failure;
+      const normalizedAccounts = (status.accounts ?? []).map((account: OAuthAccount) => ({
+        ...account,
+        provider: account.provider || status.provider,
+      }));
+
+      buildAccountVisualGroups(normalizedAccounts, statsData).forEach((groupedAccount) => {
+        tSuccess += groupedAccount.successCount;
+        tFailure += groupedAccount.failureCount;
+        providerData.success += groupedAccount.successCount;
+        providerData.failure += groupedAccount.failureCount;
 
         const row: AccountRow = {
-          id: account.id,
-          email: account.email || account.id,
-          tokenFile: account.tokenFile,
+          id: groupedAccount.id,
+          email: groupedAccount.email,
+          tokenFile: groupedAccount.tokenFile,
           provider: status.provider,
           displayName: status.displayName,
-          isDefault: account.isDefault,
-          successCount: success,
-          failureCount: failure,
-          lastUsedAt: realStats?.lastUsedAt ?? account.lastUsedAt,
+          isDefault: groupedAccount.isDefault,
+          successCount: groupedAccount.successCount,
+          failureCount: groupedAccount.failureCount,
+          lastUsedAt: groupedAccount.lastUsedAt,
           color: ACCOUNT_COLORS[colorIndex % ACCOUNT_COLORS.length],
-          projectId: account.projectId,
-          paused: account.paused,
-          tier: account.tier,
+          projectId: groupedAccount.projectId,
+          paused: groupedAccount.paused,
+          tier: groupedAccount.tier,
+          memberIds: groupedAccount.memberIds,
+          variants: groupedAccount.variants,
         };
         accountsList.push(row);
         providerData.accounts.push(row);

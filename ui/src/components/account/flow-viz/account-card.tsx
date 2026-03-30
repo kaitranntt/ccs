@@ -5,9 +5,13 @@
 import { AccountSurfaceCard } from '@/components/account/shared/account-surface-card';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { formatQuotaPercent, getProviderMinQuota, getQuotaFailureInfo, cn } from '@/lib/utils';
 import { GripVertical, Loader2, Pause, Play } from 'lucide-react';
-import { useAccountQuota, QUOTA_SUPPORTED_PROVIDERS } from '@/hooks/use-cliproxy-stats';
+import {
+  useAccountQuota,
+  useAccountQuotas,
+  QUOTA_SUPPORTED_PROVIDERS,
+} from '@/hooks/use-cliproxy-stats';
 import type { QuotaSupportedProvider } from '@/hooks/use-cliproxy-stats';
 import { useTranslation } from 'react-i18next';
 
@@ -39,7 +43,7 @@ interface AccountCardProps {
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerMove: (e: React.PointerEvent) => void;
   onPointerUp: () => void;
-  onPauseToggle?: (accountId: string, paused: boolean) => void;
+  onPauseToggle?: (accountIds: string[], paused: boolean) => void;
   isPausingAccount?: boolean;
 }
 
@@ -70,6 +74,20 @@ function getBorderColorStyle(zone: Zone, color: string): React.CSSProperties {
   }
 }
 
+function getCompactQuotaColor(percentage: number) {
+  if (percentage > 50) return 'bg-emerald-500';
+  if (percentage > 20) return 'bg-amber-500';
+  return 'bg-red-500';
+}
+
+function getVariantMarkerLabel(audience: string, fallbackLabel?: string | null) {
+  if (audience === 'business') return 'B';
+  if (audience === 'personal') return 'P';
+
+  const normalizedFallback = fallbackLabel?.trim();
+  return normalizedFallback?.[0]?.toUpperCase() ?? '?';
+}
+
 export function AccountCard({
   account,
   zone,
@@ -95,11 +113,116 @@ export function AccountCard({
   const showQuota =
     QUOTA_SUPPORTED_PROVIDERS.includes(normalizedProvider as QuotaSupportedProvider) ||
     QUOTA_PROVIDER_ALIASES.includes(normalizedProvider);
+  const hasGroupedVariants = (account.variants?.length ?? 0) > 1;
   const { data: quota, isLoading: quotaLoading } = useAccountQuota(
     normalizedProvider,
     account.id,
-    showQuota
+    showQuota && !hasGroupedVariants
   );
+  const variantQuotaQueries = useAccountQuotas(
+    (account.variants ?? []).map((variant) => ({
+      provider: account.provider,
+      accountId: variant.id,
+    })),
+    showQuota && hasGroupedVariants
+  );
+  const groupedHeaderVariants = hasGroupedVariants
+    ? Array.from(
+        new Map(
+          (account.variants ?? [])
+            .slice()
+            .sort((left, right) => {
+              const order = { business: 0, personal: 1, unknown: 2 } as const;
+              return order[left.audience] - order[right.audience];
+            })
+            .map((variant) => [variant.audienceLabel ?? variant.detailLabel ?? variant.id, variant])
+        ).values()
+      )
+    : [];
+
+  const groupedIdentityMarker = hasGroupedVariants ? (
+    <div
+      className="flex shrink-0 items-center pt-0.5"
+      title={groupedHeaderVariants
+        .map((variant) => variant.audienceLabel ?? variant.detailLabel ?? 'Variant')
+        .join(' • ')}
+    >
+      <div className="inline-flex items-center overflow-hidden rounded-full border border-border/60 bg-muted/60 shadow-sm shadow-black/5 dark:bg-zinc-900/80">
+        {groupedHeaderVariants.map((variant, index) => (
+          <span
+            key={variant.id}
+            className={cn(
+              'inline-flex min-w-4 items-center justify-center px-1 py-[3px] text-[8px] font-bold leading-none',
+              index > 0 && 'border-l border-border/50',
+              variant.audience === 'business'
+                ? 'bg-sky-500/12 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300'
+                : variant.audience === 'personal'
+                  ? 'bg-emerald-500/12 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                  : 'bg-muted text-muted-foreground'
+            )}
+          >
+            {getVariantMarkerLabel(
+              variant.audience,
+              variant.audienceLabel ?? variant.detailLabel ?? null
+            )}
+          </span>
+        ))}
+      </div>
+    </div>
+  ) : undefined;
+
+  const compactMetaBadges = hasGroupedVariants ? (
+    <>
+      {account.isDefault && (
+        <span className="text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0 bg-primary/10 text-primary">
+          Default
+        </span>
+      )}
+      {account.paused && (
+        <span className="text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0 bg-amber-500/15 text-amber-700 dark:bg-amber-500/25 dark:text-amber-300">
+          Paused
+        </span>
+      )}
+    </>
+  ) : undefined;
+
+  const groupedQuotaRows =
+    hasGroupedVariants && showQuota
+      ? (account.variants ?? []).map((variant, index) => {
+          const quotaQuery = variantQuotaQueries[index];
+          const minQuota = getProviderMinQuota(account.provider, quotaQuery?.data);
+          const quotaLabel = minQuota !== null ? formatQuotaPercent(minQuota) : null;
+          const quotaValue = quotaLabel !== null ? Number(quotaLabel) : null;
+          const failureInfo = getQuotaFailureInfo(quotaQuery?.data);
+          const label = variant.audienceLabel ?? variant.detailLabel ?? cleanEmail(variant.email);
+
+          return (
+            <div key={variant.id} className="space-y-0.5">
+              <div className="flex items-center justify-between gap-2 text-[8px]">
+                <span className="text-muted-foreground/80 truncate">{label}</span>
+                <span className="font-mono text-foreground/80 shrink-0">
+                  {quotaQuery?.isLoading
+                    ? t('accountCard.quotaLoading')
+                    : quotaValue !== null
+                      ? `${quotaLabel}%`
+                      : failureInfo?.label || t('accountCard.quotaUnavailable')}
+                </span>
+              </div>
+              {quotaValue !== null && (
+                <div className="w-full bg-muted dark:bg-zinc-800/50 h-1 rounded-full overflow-hidden">
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-all',
+                      getCompactQuotaColor(quotaValue)
+                    )}
+                    style={{ width: `${quotaValue}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })
+      : null;
 
   const headerEnd = (
     <>
@@ -116,7 +239,7 @@ export function AccountCard({
                 )}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onPauseToggle(account.id, !account.paused);
+                  onPauseToggle(account.memberIds ?? [account.id], !account.paused);
                 }}
                 disabled={isPausingAccount}
               >
@@ -172,19 +295,25 @@ export function AccountCard({
         displayEmail={cleanEmail(account.email)}
         tokenFile={account.tokenFile}
         tier={account.tier}
+        isDefault={account.isDefault}
         paused={account.paused}
         privacyMode={privacyMode}
-        showQuota={showQuota}
+        showQuota={showQuota && !hasGroupedVariants}
         quota={quota}
         quotaLoading={quotaLoading}
         runtimeLastUsed={account.lastUsedAt}
+        beforeIdentity={groupedIdentityMarker}
         headerEnd={headerEnd}
+        compactMetaBadges={compactMetaBadges}
         footerSlot={
-          <AccountCardStats
-            success={account.successCount}
-            failure={account.failureCount}
-            showDetails={showDetails}
-          />
+          <>
+            <AccountCardStats
+              success={account.successCount}
+              failure={account.failureCount}
+              showDetails={showDetails}
+            />
+            {groupedQuotaRows && <div className="mt-2 px-0.5 space-y-1">{groupedQuotaRows}</div>}
+          </>
         }
       />
 
