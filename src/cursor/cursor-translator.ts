@@ -55,6 +55,7 @@ interface OpenAIRequestBody {
 const MAX_TOOL_RESULT_CHARS = 12_000;
 const TOOL_RESULT_SERIALIZATION_FALLBACK = '[unserializable content]';
 const TOOL_USE_ARGUMENTS_FALLBACK = '{}';
+const TOOL_CALL_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 function isTextPart(part: OpenAIContentPart): part is OpenAITextPart {
   return part.type === 'text';
@@ -68,19 +69,19 @@ function isToolResultPart(part: OpenAIContentPart): part is OpenAIToolResultPart
   return part.type === 'tool_result';
 }
 
-function extractTextContent(content: OpenAIMessage['content']): string {
+function extractTextContent(content: OpenAIMessage['content'], separator = ''): string {
   if (typeof content === 'string') {
     return content;
   }
 
-  let text = '';
+  const parts: string[] = [];
   for (const part of content) {
     if (isTextPart(part) && part.text) {
-      text += part.text;
+      parts.push(part.text);
     }
   }
 
-  return text;
+  return parts.join(separator);
 }
 
 function stringifyUnknown(value: unknown, fallback = ''): string {
@@ -101,16 +102,16 @@ function truncateToolResultText(text: string): string {
     return text;
   }
 
-  let suffix = '\n[truncated]';
-  let keepLength = Math.max(MAX_TOOL_RESULT_CHARS - suffix.length, 0);
-  let omittedChars = text.length - keepLength;
-
-  suffix = `\n[truncated ${omittedChars} chars]`;
-  keepLength = Math.max(MAX_TOOL_RESULT_CHARS - suffix.length, 0);
-  omittedChars = text.length - keepLength;
-  suffix = `\n[truncated ${omittedChars} chars]`;
-
-  return `${text.slice(0, keepLength)}${suffix}`;
+  let omittedChars = text.length - MAX_TOOL_RESULT_CHARS;
+  while (true) {
+    const suffix = `\n[truncated ${omittedChars} chars]`;
+    const keepLength = Math.max(MAX_TOOL_RESULT_CHARS - suffix.length, 0);
+    const nextOmittedChars = text.length - keepLength;
+    if (nextOmittedChars === omittedChars) {
+      return `${text.slice(0, keepLength)}${suffix}`;
+    }
+    omittedChars = nextOmittedChars;
+  }
 }
 
 function escapeXml(text: string): string {
@@ -133,6 +134,19 @@ function normalizeToolCallId(toolCallId: string | undefined): string {
   return typeof toolCallId === 'string' ? toolCallId.split('\n')[0] : '';
 }
 
+function sanitizeToolCallId(toolCallId: string | undefined): string {
+  const normalizedId = normalizeToolCallId(toolCallId).trim();
+  if (!normalizedId) {
+    return '';
+  }
+
+  if (TOOL_CALL_ID_PATTERN.test(normalizedId)) {
+    return normalizedId;
+  }
+
+  return normalizedId.replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
 function extractToolResultText(content: unknown): string {
   if (content === undefined) {
     return '';
@@ -146,7 +160,7 @@ function extractToolResultText(content: unknown): string {
     return content
       .filter(isTextPart)
       .map((part) => part.text || '')
-      .join('');
+      .join('\n');
   }
 
   return stringifyUnknown(content, TOOL_RESULT_SERIALIZATION_FALLBACK);
@@ -161,9 +175,34 @@ function resolveToolUseId(
   messageIndex: number,
   partIndex: number
 ): string {
-  return typeof part.id === 'string' && part.id.length > 0
-    ? part.id
-    : createFallbackToolUseId(messageIndex, partIndex);
+  const sanitizedId = sanitizeToolCallId(part.id);
+  return sanitizedId || createFallbackToolUseId(messageIndex, partIndex);
+}
+
+function requireToolResultId(toolCallId: string | undefined, location: string): string {
+  const sanitizedId = sanitizeToolCallId(toolCallId);
+  if (sanitizedId) {
+    return sanitizedId;
+  }
+
+  throw new Error(`${location} must include a valid tool result id`);
+}
+
+function normalizeAssistantToolCalls(
+  toolCalls: NonNullable<OpenAIMessage['tool_calls']>,
+  messageIndex: number
+): NonNullable<OpenAIMessage['tool_calls']> {
+  return toolCalls.map((toolCall, toolCallIndex) => ({
+    ...toolCall,
+    id: sanitizeToolCallId(toolCall.id) || createFallbackToolUseId(messageIndex, toolCallIndex),
+    function: {
+      name: toolCall.function?.name || 'tool',
+      arguments:
+        typeof toolCall.function?.arguments === 'string'
+          ? toolCall.function.arguments
+          : stringifyUnknown(toolCall.function?.arguments ?? {}, TOOL_USE_ARGUMENTS_FALLBACK),
+    },
+  }));
 }
 
 function rememberToolCallMeta(
@@ -259,7 +298,8 @@ function mergeAssistantToolCalls(
 
 function renderUserContent(
   content: OpenAIMessage['content'],
-  toolCallMetaMap: Map<string, { name: string }>
+  toolCallMetaMap: Map<string, { name: string }>,
+  messageIndex: number
 ): string {
   if (typeof content === 'string') {
     return content;
@@ -267,7 +307,8 @@ function renderUserContent(
 
   const parts: string[] = [];
   let textBuffer = '';
-  for (const part of content) {
+  for (let partIndex = 0; partIndex < content.length; partIndex++) {
+    const part = content[partIndex];
     if (isTextPart(part) && part.text) {
       textBuffer += part.text;
       continue;
@@ -282,7 +323,10 @@ function renderUserContent(
       textBuffer = '';
     }
 
-    const toolCallId = part.tool_use_id || '';
+    const toolCallId = requireToolResultId(
+      part.tool_use_id,
+      `messages[${messageIndex}].content[${partIndex}]`
+    );
     const normalizedId = normalizeToolCallId(toolCallId);
     const toolName =
       toolCallMetaMap.get(toolCallId)?.name || toolCallMetaMap.get(normalizedId)?.name || 'tool';
@@ -317,7 +361,10 @@ function convertMessages(messages: OpenAIMessage[]): CursorMessage[] {
     }
 
     if (msg.role === 'tool') {
-      const toolCallId = msg.tool_call_id || '';
+      const toolCallId = requireToolResultId(
+        msg.tool_call_id,
+        `messages[${messageIndex}].tool_call_id`
+      );
       const normalizedToolCallId = normalizeToolCallId(toolCallId);
       const rememberedToolName =
         toolCallMetaMap.get(toolCallId)?.name || toolCallMetaMap.get(normalizedToolCallId)?.name;
@@ -325,19 +372,20 @@ function convertMessages(messages: OpenAIMessage[]): CursorMessage[] {
 
       result.push({
         role: 'user',
-        content: buildToolResultBlock(toolName, toolCallId, extractTextContent(msg.content)),
+        content: buildToolResultBlock(toolName, toolCallId, extractTextContent(msg.content, '\n')),
       });
       continue;
     }
 
     if (msg.role === 'user' || msg.role === 'assistant') {
       if (msg.role === 'assistant') {
+        const normalizedToolCalls = normalizeAssistantToolCalls(msg.tool_calls || [], messageIndex);
         const assistantToolCalls = mergeAssistantToolCalls(
-          msg.tool_calls || [],
+          normalizedToolCalls,
           extractToolCallsFromContent(msg.content, messageIndex)
         );
-        if (msg.tool_calls?.length) {
-          rememberToolCallMeta(toolCallMetaMap, msg.tool_calls);
+        if (normalizedToolCalls.length > 0) {
+          rememberToolCallMeta(toolCallMetaMap, normalizedToolCalls);
         }
         rememberToolUseParts(toolCallMetaMap, msg.content, messageIndex);
 
@@ -355,7 +403,7 @@ function convertMessages(messages: OpenAIMessage[]): CursorMessage[] {
           });
         }
       } else {
-        const content = renderUserContent(msg.content, toolCallMetaMap);
+        const content = renderUserContent(msg.content, toolCallMetaMap, messageIndex);
         if (content) {
           result.push({
             role: 'user',

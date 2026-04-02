@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { initUI, box, color, dim, sectionHeader, subheader } from '../utils/ui';
 import { isUnifiedMode } from '../config/unified-config-loader';
-import { getCcsDir, getCcsDirSource } from '../utils/config-manager';
+import { getCcsDirDisplay } from '../utils/config-manager';
 import { CLIPROXY_DEFAULT_PORT } from '../cliproxy/config/port-manager';
 import { getOfficialChannelsSupportMessage } from '../channels/official-channels-runtime';
 
@@ -129,8 +129,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   writeLine('');
 
   // Resolve display path for dynamic sections
-  const [dirSource] = getCcsDirSource();
-  const dirDisplay = dirSource === 'default' ? '~/.ccs' : getCcsDir();
+  const dirDisplay = getCcsDirDisplay();
 
   // Usage section
   writeLine(subheader('Usage:'));
@@ -288,7 +287,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
       'Auto-detects token from Cursor installation',
     ],
     [
-      ['ccs cursor <cmd>', 'Use Cursor IDE integration'],
+      ['ccs cursor', 'Cursor status + local daemon connection details'],
       ['ccs cursor auth', 'Import Cursor token'],
       ['ccs cursor auth --manual --token <t> --machine-id <id>', 'Manual token import'],
       ['ccs cursor status', 'Show connection status'],

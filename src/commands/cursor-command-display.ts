@@ -1,5 +1,6 @@
 import type { CursorAuthStatus, CursorDaemonStatus, CursorModel } from '../cursor/types';
 import type { CursorConfig } from '../config/unified-config-types';
+import { getCcsDirDisplay } from '../utils/config-manager';
 import { color } from '../utils/ui';
 
 function printLines(lines: string[]): void {
@@ -47,6 +48,7 @@ export function renderCursorStatus(
   daemonStatus: CursorDaemonStatus
 ): void {
   const localBaseUrl = `http://127.0.0.1:${cursorConfig.port}`;
+  const dirDisplay = getCcsDirDisplay();
   const isReady =
     cursorConfig.enabled && authStatus.authenticated && !authStatus.expired && daemonStatus.running;
 
@@ -90,7 +92,7 @@ export function renderCursorStatus(
   console.log(`  Models route:    ${localBaseUrl}/v1/models`);
   console.log('');
   console.log('Client setup:');
-  console.log('  Raw settings:    ~/.ccs/cursor.settings.json');
+  console.log(`  Raw settings:    ${dirDisplay}/cursor.settings.json`);
   console.log('  Subcommands:     ccs cursor help');
 
   if (isReady) {

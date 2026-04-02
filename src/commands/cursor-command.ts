@@ -1,7 +1,7 @@
 /**
  * Cursor CLI Command
  *
- * Handles `ccs cursor <subcommand>` commands.
+ * Handles `ccs cursor [subcommand]` commands.
  */
 
 import {

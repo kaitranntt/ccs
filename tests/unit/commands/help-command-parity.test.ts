@@ -88,6 +88,15 @@ describe('help command parity', () => {
     ).toBe(true);
   });
 
+  test('root help documents bare cursor as the status entrypoint', async () => {
+    const lines: string[] = [];
+    await handleHelpCommand((line) => lines.push(line));
+
+    const rendered = stripAnsi(lines.join('\n'));
+    expect(rendered.includes('ccs cursor <cmd>')).toBe(false);
+    expect(rendered.includes('Cursor status + local daemon connection details')).toBe(true);
+  });
+
   test('root help explains Claude [1m] as an explicit CCS suffix with upstream limits', async () => {
     const lines: string[] = [];
     await handleHelpCommand((line) => lines.push(line));

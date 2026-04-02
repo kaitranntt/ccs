@@ -223,7 +223,7 @@ describe('Message Translation', () => {
       expect(result.messages[0].tool_calls![0].function.name).toBe('get_weather');
     });
 
-    it('should accumulate tool results', () => {
+    it('should flatten tool results into user tool_result blocks', () => {
       const result = buildCursorRequest(
         'gpt-4',
         {
@@ -258,6 +258,56 @@ describe('Message Translation', () => {
       expect(result.messages[1].content).toContain('<tool_name>get_weather</tool_name>');
       expect(result.messages[1].content).toContain('<tool_call_id>call_123</tool_call_id>');
       expect(result.messages[2]).toEqual({ role: 'user', content: 'What is the weather?' });
+    });
+
+    it('should preserve consecutive tool messages as separate user turns', () => {
+      const result = buildCursorRequest(
+        'gpt-4',
+        {
+          messages: [
+            {
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                {
+                  id: 'call_one',
+                  type: 'function',
+                  function: { name: 'search_docs', arguments: '{"q":"cursor"}' },
+                },
+                {
+                  id: 'call_two',
+                  type: 'function',
+                  function: { name: 'read_file', arguments: '{"path":"README.md"}' },
+                },
+              ],
+            },
+            {
+              role: 'tool',
+              content: 'first result',
+              tool_call_id: 'call_one',
+            },
+            {
+              role: 'tool',
+              content: 'second result',
+              tool_call_id: 'call_two',
+            },
+            { role: 'user', content: 'Summarize both results.' },
+          ],
+        },
+        false,
+        {}
+      );
+
+      expect(result.messages).toHaveLength(4);
+      expect(result.messages[1]).toEqual({
+        role: 'user',
+        content: expect.stringContaining('<tool_call_id>call_one</tool_call_id>'),
+      });
+      expect(result.messages[2]).toEqual({
+        role: 'user',
+        content: expect.stringContaining('<tool_call_id>call_two</tool_call_id>'),
+      });
+      expect(result.messages[3]).toEqual({ role: 'user', content: 'Summarize both results.' });
     });
 
     it('should recover tool names for tool results without a name field', () => {
@@ -332,6 +382,45 @@ describe('Message Translation', () => {
       expect(result.messages[1].content).toContain('{"answer":"Cursor integration ready"}');
     });
 
+    it('should preserve line breaks for multipart tool_result text content', () => {
+      const result = buildCursorRequest(
+        'gpt-4',
+        {
+          messages: [
+            {
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                {
+                  id: 'call_lines',
+                  type: 'function',
+                  function: { name: 'read_file', arguments: '{"path":"notes.txt"}' },
+                },
+              ],
+            },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'tool_result',
+                  tool_use_id: 'call_lines',
+                  content: [
+                    { type: 'text', text: 'first line' },
+                    { type: 'text', text: 'second line' },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        false,
+        {}
+      );
+
+      expect(result.messages).toHaveLength(2);
+      expect(result.messages[1].content).toContain('<result>first line\nsecond line</result>');
+    });
+
     it('should convert assistant tool_use content blocks into tool_calls', () => {
       const result = buildCursorRequest(
         'gpt-4',
@@ -391,6 +480,38 @@ describe('Message Translation', () => {
       expect(result.messages).toHaveLength(1);
       expect(result.messages[0].tool_calls).toHaveLength(1);
       expect(result.messages[0].tool_calls![0].id).toBe('toolu_cursor_fallback_0_0');
+    });
+
+    it('should normalize invalid assistant tool call ids before emitting tool results', () => {
+      const result = buildCursorRequest(
+        'gpt-4',
+        {
+          messages: [
+            {
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                {
+                  id: 'call_bad\nline two',
+                  type: 'function',
+                  function: { name: 'search_docs', arguments: '{"q":"cursor"}' },
+                },
+              ],
+            },
+            {
+              role: 'tool',
+              content: 'done',
+              tool_call_id: 'call_bad\nline two',
+            },
+          ],
+        },
+        false,
+        {}
+      );
+
+      expect(result.messages).toHaveLength(2);
+      expect(result.messages[0].tool_calls![0].id).toBe('call_bad');
+      expect(result.messages[1].content).toContain('<tool_call_id>call_bad</tool_call_id>');
     });
 
     it('should dedupe tool calls when assistant messages contain both tool_calls and tool_use blocks', () => {
@@ -463,6 +584,10 @@ describe('Message Translation', () => {
       expect(result.messages).toHaveLength(2);
       expect(result.messages[1].content).toContain('[truncated ');
       expect(result.messages[1].content.length).toBeLessThan(12_250);
+
+      const resultMatch = result.messages[1].content.match(/<result>([\s\S]*)<\/result>/);
+      expect(resultMatch).not.toBeNull();
+      expect(resultMatch?.[1].length).toBeLessThanOrEqual(12_000);
     });
 
     it('should mark unserializable structured tool results explicitly', () => {
@@ -502,6 +627,47 @@ describe('Message Translation', () => {
 
       expect(result.messages).toHaveLength(2);
       expect(result.messages[1].content).toContain('[unserializable content]');
+    });
+
+    it('should reject tool_result blocks without a valid tool_use_id', () => {
+      expect(() =>
+        buildCursorRequest(
+          'gpt-4',
+          {
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'tool_result',
+                    content: 'done',
+                  },
+                ],
+              },
+            ],
+          },
+          false,
+          {}
+        )
+      ).toThrow('messages[0].content[0] must include a valid tool result id');
+    });
+
+    it('should reject tool role messages without a valid tool_call_id', () => {
+      expect(() =>
+        buildCursorRequest(
+          'gpt-4',
+          {
+            messages: [
+              {
+                role: 'tool',
+                content: 'done',
+              },
+            ],
+          },
+          false,
+          {}
+        )
+      ).toThrow('messages[0].tool_call_id must include a valid tool result id');
     });
 
     it('should handle array content format', () => {

@@ -103,6 +103,15 @@ export function getCcsDirSource(): [string, string] {
 }
 
 /**
+ * Get the CCS directory as a user-facing display path.
+ * Keeps the default path concise while preserving explicit overrides.
+ */
+export function getCcsDirDisplay(): string {
+  const [source, dir] = getCcsDirSource();
+  return source === 'default' ? '~/.ccs' : dir;
+}
+
+/**
  * Cloud sync folder patterns for security warning.
  */
 const CLOUD_SYNC_PATTERNS = [
