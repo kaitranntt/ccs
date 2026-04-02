@@ -303,7 +303,7 @@ describe('stopDaemon', () => {
 });
 
 describe('handleCursorCommand', () => {
-  it('treats bare ccs cursor as a status entrypoint instead of help', async () => {
+  it('shows help when invoked without an admin subcommand', async () => {
     const originalLog = console.log;
     const originalError = console.error;
     const logs: string[] = [];
@@ -321,10 +321,8 @@ describe('handleCursorCommand', () => {
 
       expect(exitCode).toBe(0);
       expect(errors).toHaveLength(0);
-      expect(logs.some((line) => line.includes('Cursor IDE Status'))).toBe(true);
-      expect(logs.some((line) => line.includes('Usage: ccs cursor <subcommand> [options]'))).toBe(
-        false
-      );
+      expect(logs.some((line) => line.includes('Cursor IDE Integration'))).toBe(true);
+      expect(logs.some((line) => line.includes('Usage: ccs cursor <subcommand>'))).toBe(true);
     } finally {
       console.log = originalLog;
       console.error = originalError;
@@ -473,7 +471,7 @@ describe('renderCursorStatus', () => {
 });
 
 describe('renderCursorHelp', () => {
-  it('shows bare ccs cursor as an optional entrypoint', () => {
+  it('shows bare ccs cursor as the runtime entrypoint', () => {
     const originalLog = console.log;
     const logs: string[] = [];
 
@@ -485,11 +483,9 @@ describe('renderCursorHelp', () => {
       const exitCode = renderCursorHelp();
 
       expect(exitCode).toBe(0);
-      expect(logs.some((line) => line.includes('Usage: ccs cursor [subcommand] [options]'))).toBe(
-        true
-      );
+      expect(logs.some((line) => line.includes('Usage: ccs cursor <subcommand>'))).toBe(true);
       expect(
-        logs.some((line) => line.includes('4. ccs cursor          # Show status and runtime connection details'))
+        logs.some((line) => line.includes('ccs cursor [claude args]'))
       ).toBe(true);
     } finally {
       console.log = originalLog;

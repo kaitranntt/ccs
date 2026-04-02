@@ -3,6 +3,27 @@ import { describe, expect, test } from 'bun:test';
 import { evaluateTargetRuntimeCompatibility } from '../../../src/targets/target-runtime-compatibility';
 
 describe('evaluateTargetRuntimeCompatibility', () => {
+  test('rejects account, copilot, and cursor profiles on Droid target', () => {
+    expect(
+      evaluateTargetRuntimeCompatibility({
+        target: 'droid',
+        profileType: 'account',
+      }).supported
+    ).toBe(false);
+    expect(
+      evaluateTargetRuntimeCompatibility({
+        target: 'droid',
+        profileType: 'copilot',
+      }).supported
+    ).toBe(false);
+    expect(
+      evaluateTargetRuntimeCompatibility({
+        target: 'droid',
+        profileType: 'cursor',
+      }).supported
+    ).toBe(false);
+  });
+
   test('supports native Codex default sessions', () => {
     expect(
       evaluateTargetRuntimeCompatibility({
@@ -69,7 +90,7 @@ describe('evaluateTargetRuntimeCompatibility', () => {
     expect(genericSettingsCompatibility.reason).toMatch(/currently supports native default sessions/);
   });
 
-  test('rejects account and copilot profiles on Codex target', () => {
+  test('rejects account, copilot, and cursor profiles on Codex target', () => {
     expect(
       evaluateTargetRuntimeCompatibility({
         target: 'codex',
@@ -80,6 +101,12 @@ describe('evaluateTargetRuntimeCompatibility', () => {
       evaluateTargetRuntimeCompatibility({
         target: 'codex',
         profileType: 'copilot',
+      }).supported
+    ).toBe(false);
+    expect(
+      evaluateTargetRuntimeCompatibility({
+        target: 'codex',
+        profileType: 'cursor',
       }).supported
     ).toBe(false);
   });

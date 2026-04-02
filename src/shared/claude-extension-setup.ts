@@ -11,6 +11,7 @@ import {
 import { CLIPROXY_DEFAULT_PORT } from '../cliproxy/config/port-manager';
 import { getProxyTarget } from '../cliproxy/proxy-target-resolver';
 import { generateCopilotEnv } from '../copilot/copilot-executor';
+import { generateCursorEnv } from '../cursor';
 import InstanceManager from '../management/instance-manager';
 import SharedManager from '../management/shared-manager';
 import { expandPath } from '../utils/helpers';
@@ -97,6 +98,7 @@ function describeProfile(profileName: string, result: ProfileDetectionResult): s
   if (result.type === 'account')
     return 'Claude account instance isolated through CLAUDE_CONFIG_DIR.';
   if (result.type === 'copilot') return 'GitHub Copilot profile routed through copilot-api.';
+  if (result.type === 'cursor') return 'Cursor profile routed through the local cursor daemon.';
   return 'Native Claude profile resolution.';
 }
 
@@ -128,6 +130,12 @@ export function listClaudeExtensionProfiles(): ClaudeExtensionProfileOption[] {
     deduped.push('copilot');
   } catch {
     // Copilot disabled; skip from setup UI.
+  }
+  try {
+    detector.detectProfileType('cursor');
+    deduped.push('cursor');
+  } catch {
+    // Cursor disabled; skip from setup UI.
   }
 
   return deduped
@@ -201,40 +209,47 @@ async function resolveExtensionEnv(
             }
             return generateCopilotEnv(result.copilotConfig, continuity.claudeConfigDir);
           })()
-        : (() => {
-            if (!result.provider) {
-              throw new Error(
-                `Profile "${requestedProfile}" is missing CLIProxy provider metadata.`
-              );
-            }
-            const proxyTarget = getProxyTarget();
-            const port = result.port || CLIPROXY_DEFAULT_PORT;
-            if (proxyTarget.isRemote) {
+        : result.type === 'cursor'
+          ? (() => {
+              if (!result.cursorConfig) {
+                throw new Error(`Profile "${requestedProfile}" is missing cursor configuration.`);
+              }
+              return generateCursorEnv(result.cursorConfig, continuity.claudeConfigDir);
+            })()
+          : (() => {
+              if (!result.provider) {
+                throw new Error(
+                  `Profile "${requestedProfile}" is missing CLIProxy provider metadata.`
+                );
+              }
+              const proxyTarget = getProxyTarget();
+              const port = result.port || CLIPROXY_DEFAULT_PORT;
+              if (proxyTarget.isRemote) {
+                warnings.push(
+                  `CLIProxy is configured for remote routing via ${proxyTarget.protocol}://${proxyTarget.host}:${proxyTarget.port}.`
+                );
+                return result.isComposite && result.compositeTiers && result.compositeDefaultTier
+                  ? getCompositeEnvVars(
+                      result.compositeTiers,
+                      result.compositeDefaultTier,
+                      port,
+                      result.settingsPath,
+                      proxyTarget
+                    )
+                  : getRemoteEnvVars(result.provider, proxyTarget, result.settingsPath);
+              }
               warnings.push(
-                `CLIProxy is configured for remote routing via ${proxyTarget.protocol}://${proxyTarget.host}:${proxyTarget.port}.`
+                'CLIProxy-backed profiles require the local or remote proxy endpoint to be reachable.'
               );
               return result.isComposite && result.compositeTiers && result.compositeDefaultTier
                 ? getCompositeEnvVars(
                     result.compositeTiers,
                     result.compositeDefaultTier,
                     port,
-                    result.settingsPath,
-                    proxyTarget
+                    result.settingsPath
                   )
-                : getRemoteEnvVars(result.provider, proxyTarget, result.settingsPath);
-            }
-            warnings.push(
-              'CLIProxy-backed profiles require the local or remote proxy endpoint to be reachable.'
-            );
-            return result.isComposite && result.compositeTiers && result.compositeDefaultTier
-              ? getCompositeEnvVars(
-                  result.compositeTiers,
-                  result.compositeDefaultTier,
-                  port,
-                  result.settingsPath
-                )
-              : getEffectiveEnvVars(result.provider, port, result.settingsPath);
-          })();
+                : getEffectiveEnvVars(result.provider, port, result.settingsPath);
+            })();
 
   if (result.type === 'settings' && isDeprecatedGlmtProfileName(requestedProfile)) {
     const normalized = normalizeDeprecatedGlmtEnv(sortEnvRecord(env));
@@ -255,6 +270,11 @@ async function resolveExtensionEnv(
   if (result.type === 'copilot') {
     warnings.push(
       'copilot-api must stay reachable for this profile to work inside the IDE extension.'
+    );
+  }
+  if (result.type === 'cursor') {
+    warnings.push(
+      'The local Cursor daemon must stay reachable for this profile to work inside the IDE extension.'
     );
   }
   if (Object.keys(env).length === 0) {

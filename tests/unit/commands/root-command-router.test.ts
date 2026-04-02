@@ -74,6 +74,15 @@ describe('root-command-router', () => {
     expect(calls).toEqual([]);
   });
 
+  it('does not capture cursor so bare cursor can fall through to profile routing', async () => {
+    const tryHandleRootCommand = await loadTryHandleRootCommand();
+
+    await expect(tryHandleRootCommand(['cursor'])).resolves.toBe(false);
+    await expect(tryHandleRootCommand(['cursor', 'status'])).resolves.toBe(false);
+
+    expect(calls).toEqual([]);
+  });
+
   it('prints update help without invoking the updater', async () => {
     const tryHandleRootCommand = await loadTryHandleRootCommand();
 

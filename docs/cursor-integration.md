@@ -43,20 +43,26 @@ ccs cursor auth --manual --token <token> --machine-id <machine-id>
 ccs cursor start
 ```
 
-### 4) Verify status
+### 4) Run Cursor-backed Claude
+
+```bash
+ccs cursor "explain this repo"
+```
+
+### 5) Verify status
 
 ```bash
 ccs cursor status
 ```
 
-Or use the bare command to see the same status view plus the local endpoint details
-needed for OpenAI-compatible and Anthropic-compatible clients:
+Use `ccs cursor` with bare or normal Claude args to run through the local Cursor proxy.
+The admin namespace remains available for setup and inspection:
 
 ```bash
-ccs cursor
+ccs cursor help
 ```
 
-### 5) Stop daemon
+### 6) Stop daemon
 
 ```bash
 ccs cursor stop

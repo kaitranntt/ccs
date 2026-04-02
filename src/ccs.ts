@@ -450,6 +450,20 @@ async function main(): Promise<void> {
     }
   }
 
+  // Special case: cursor command (Cursor local proxy integration)
+  // Route known admin subcommands to the command handler, keep all other args as profile passthrough.
+  if (firstArg === 'cursor' && args.length > 1) {
+    const { isCursorSubcommandToken, handleCursorCommand } = await import(
+      './commands/cursor-command'
+    );
+    const cursorToken = args[1];
+
+    if (isCursorSubcommandToken(cursorToken)) {
+      const exitCode = await handleCursorCommand(args.slice(1));
+      process.exit(exitCode);
+    }
+  }
+
   // First-time install: offer setup wizard for interactive users
   // Check independently of recovery status (user may have empty config.yaml)
   // Skip if headless, CI, or non-TTY environment
@@ -875,6 +889,40 @@ async function main(): Promise<void> {
       }
       const exitCode = await executeCopilotProfile(
         copilotConfig,
+        remainingArgs,
+        continuityInheritance.claudeConfigDir,
+        claudeCli
+      );
+      process.exit(exitCode);
+    } else if (profileInfo.type === 'cursor') {
+      // CURSOR FLOW: local Cursor daemon profile
+      ensureWebSearchMcpOrThrow();
+      installImageAnalyzerHook();
+      ensureImageAnalyzerHooks({
+        profileName: profileInfo.name,
+        profileType: profileInfo.type,
+      });
+
+      const { executeCursorProfile } = await import('./cursor');
+      const cursorConfig = profileInfo.cursorConfig;
+      if (!cursorConfig) {
+        console.error(fail('Cursor configuration not found'));
+        process.exit(1);
+      }
+      const continuityInheritance = await resolveProfileContinuityInheritance({
+        profileName: profileInfo.name,
+        profileType: profileInfo.type,
+        target: resolvedTarget,
+      });
+      if (continuityInheritance.sourceAccount && process.env.CCS_DEBUG) {
+        console.error(
+          info(
+            `Continuity inheritance active: profile "${profileInfo.name}" -> account "${continuityInheritance.sourceAccount}"`
+          )
+        );
+      }
+      const exitCode = await executeCursorProfile(
+        cursorConfig,
         remainingArgs,
         continuityInheritance.claudeConfigDir,
         claudeCli

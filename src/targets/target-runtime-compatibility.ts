@@ -37,6 +37,9 @@ export function evaluateTargetRuntimeCompatibility(
     if (input.profileType === 'copilot') {
       return unsupported('Factory Droid does not support Copilot profiles.');
     }
+    if (input.profileType === 'cursor') {
+      return unsupported('Factory Droid does not support Cursor local-proxy profiles.');
+    }
     return { supported: true };
   }
 
@@ -49,6 +52,10 @@ export function evaluateTargetRuntimeCompatibility(
 
   if (input.profileType === 'copilot') {
     return unsupported('Codex CLI does not support Copilot profiles.');
+  }
+
+  if (input.profileType === 'cursor') {
+    return unsupported('Codex CLI does not support Cursor local-proxy profiles.');
   }
 
   if (input.profileType === 'default') {

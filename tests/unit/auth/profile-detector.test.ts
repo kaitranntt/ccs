@@ -195,5 +195,58 @@ describe('ProfileDetector', () => {
         existsSyncSpy.mockRestore();
       }
     });
+
+    it('should detect cursor as a first-class runtime profile when enabled', () => {
+      const mockUnifiedConfig = {
+        version: 2,
+        cursor: {
+          enabled: true,
+          port: 20129,
+          auto_start: true,
+          ghost_mode: true,
+          model: 'gpt-5.3-codex',
+        },
+      };
+
+      const isUnifiedModeSpy = spyOn(unifiedConfigLoader, 'isUnifiedMode').mockReturnValue(true);
+      const loadUnifiedConfigSpy = spyOn(unifiedConfigLoader, 'loadUnifiedConfig').mockReturnValue(
+        mockUnifiedConfig as any
+      );
+
+      try {
+        const result = detector.detectProfileType('cursor');
+        expect(result.type).toBe('cursor');
+        expect(result.name).toBe('cursor');
+        expect(result.cursorConfig?.auto_start).toBe(true);
+      } finally {
+        isUnifiedModeSpy.mockRestore();
+        loadUnifiedConfigSpy.mockRestore();
+      }
+    });
+
+    it('should throw a helpful error when cursor profile is disabled', () => {
+      const mockUnifiedConfig = {
+        version: 2,
+        cursor: {
+          enabled: false,
+          port: 20129,
+          auto_start: false,
+          ghost_mode: true,
+          model: 'gpt-5.3-codex',
+        },
+      };
+
+      const isUnifiedModeSpy = spyOn(unifiedConfigLoader, 'isUnifiedMode').mockReturnValue(true);
+      const loadUnifiedConfigSpy = spyOn(unifiedConfigLoader, 'loadUnifiedConfig').mockReturnValue(
+        mockUnifiedConfig as any
+      );
+
+      try {
+        expect(() => detector.detectProfileType('cursor')).toThrow(/Cursor profile is not enabled/);
+      } finally {
+        isUnifiedModeSpy.mockRestore();
+        loadUnifiedConfigSpy.mockRestore();
+      }
+    });
   });
 });

@@ -13,7 +13,7 @@ export function renderCursorHelp(): number {
   printLines([
     'Cursor IDE Integration',
     '',
-    'Usage: ccs cursor [subcommand] [options]',
+    'Usage: ccs cursor <subcommand>',
     '',
     'Subcommands:',
     '  auth      Import Cursor IDE authentication token',
@@ -25,6 +25,9 @@ export function renderCursorHelp(): number {
     '  disable   Disable cursor integration in unified config',
     '  help      Show this help message',
     '',
+    'Runtime entry:',
+    '  ccs cursor [claude args]                          # Run Claude via the local Cursor proxy',
+    '',
     'Auth options:',
     '  ccs cursor auth                                    # Auto-detect from Cursor SQLite',
     '  ccs cursor auth --manual --token <t> --machine-id <id>',
@@ -33,7 +36,8 @@ export function renderCursorHelp(): number {
     '  1. ccs cursor enable   # Enable integration',
     '  2. ccs cursor auth     # Import Cursor IDE token',
     '  3. ccs cursor start    # Start daemon',
-    '  4. ccs cursor          # Show status and runtime connection details',
+    '  4. ccs cursor "task"   # Run Claude through Cursor',
+    '  5. ccs cursor status   # Inspect auth/daemon wiring',
     '',
     'Or use the web UI: ccs config -> Cursor page',
     '',
@@ -93,7 +97,9 @@ export function renderCursorStatus(
   console.log('');
   console.log('Client setup:');
   console.log(`  Raw settings:    ${dirDisplay}/cursor.settings.json`);
-  console.log('  Subcommands:     ccs cursor help');
+  console.log('  Runtime entry:   ccs cursor [claude args]');
+  console.log('  Status command:  ccs cursor status');
+  console.log('  Help command:    ccs cursor help');
 
   if (isReady) {
     return;

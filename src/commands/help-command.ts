@@ -287,7 +287,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
       'Auto-detects token from Cursor installation',
     ],
     [
-      ['ccs cursor', 'Cursor status + local daemon connection details'],
+      ['ccs cursor', 'Run Claude via Cursor local proxy'],
       ['ccs cursor auth', 'Import Cursor token'],
       ['ccs cursor auth --manual --token <t> --machine-id <id>', 'Manual token import'],
       ['ccs cursor status', 'Show connection status'],

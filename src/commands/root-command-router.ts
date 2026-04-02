@@ -172,13 +172,6 @@ const ROOT_COMMAND_ROUTES: readonly NamedCommandRoute[] = [
       await handleSetupCommand(args);
     },
   },
-  {
-    name: 'cursor',
-    handle: async (args) => {
-      const { handleCursorCommand } = await import('./cursor-command');
-      process.exit(await handleCursorCommand(args));
-    },
-  },
 ];
 
 export async function tryHandleRootCommand(args: string[]): Promise<boolean> {
