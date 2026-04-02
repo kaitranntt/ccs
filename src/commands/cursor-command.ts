@@ -56,6 +56,7 @@ export async function handleCursorCommand(args: string[]): Promise<number> {
     case 'disable':
       return handleDisable();
     case undefined:
+      return handleStatus();
     case 'help':
     case '--help':
     case '-h':

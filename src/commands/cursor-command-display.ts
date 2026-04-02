@@ -12,7 +12,7 @@ export function renderCursorHelp(): number {
   printLines([
     'Cursor IDE Integration',
     '',
-    'Usage: ccs cursor <subcommand> [options]',
+    'Usage: ccs cursor [subcommand] [options]',
     '',
     'Subcommands:',
     '  auth      Import Cursor IDE authentication token',
@@ -32,6 +32,7 @@ export function renderCursorHelp(): number {
     '  1. ccs cursor enable   # Enable integration',
     '  2. ccs cursor auth     # Import Cursor IDE token',
     '  3. ccs cursor start    # Start daemon',
+    '  4. ccs cursor          # Show status and runtime connection details',
     '',
     'Or use the web UI: ccs config -> Cursor page',
     '',
@@ -45,6 +46,10 @@ export function renderCursorStatus(
   authStatus: CursorAuthStatus,
   daemonStatus: CursorDaemonStatus
 ): void {
+  const localBaseUrl = `http://127.0.0.1:${cursorConfig.port}`;
+  const isReady =
+    cursorConfig.enabled && authStatus.authenticated && !authStatus.expired && daemonStatus.running;
+
   console.log('Cursor IDE Status');
   console.log('─────────────────');
   console.log('');
@@ -77,14 +82,22 @@ export function renderCursorStatus(
   console.log(`  Ghost mode:   ${cursorConfig.ghost_mode ? 'On' : 'Off'}`);
   console.log('');
 
-  if (
-    cursorConfig.enabled &&
-    authStatus.authenticated &&
-    !authStatus.expired &&
-    daemonStatus.running
-  ) {
+  console.log('Runtime:');
+  console.log(`  OpenAI base:     ${localBaseUrl}/v1`);
+  console.log(`  Anthropic base:  ${localBaseUrl}`);
+  console.log(`  Chat route:      ${localBaseUrl}/v1/chat/completions`);
+  console.log(`  Messages route:  ${localBaseUrl}/v1/messages`);
+  console.log(`  Models route:    ${localBaseUrl}/v1/models`);
+  console.log('');
+  console.log('Client setup:');
+  console.log('  Raw settings:    ~/.ccs/cursor.settings.json');
+  console.log('  Subcommands:     ccs cursor help');
+
+  if (isReady) {
     return;
   }
+
+  console.log('');
 
   console.log('Next steps:');
   if (!cursorConfig.enabled) {
@@ -96,6 +109,7 @@ export function renderCursorStatus(
   if (!daemonStatus.running) {
     console.log('  - Start:       ccs cursor start');
   }
+  console.log('  - Help:        ccs cursor help');
 }
 
 export function renderCursorModels(models: CursorModel[], defaultModel: string): void {

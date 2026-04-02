@@ -184,7 +184,7 @@ The dashboard provides visual management for all account types:
 ccs           # Default Claude session
 ccs gemini    # Gemini (OAuth)
 ccs codex     # OpenAI Codex (OAuth)
-ccs cursor    # Cursor IDE integration (token import + local daemon)
+ccs cursor    # Cursor status + local daemon connection details
 ccs kiro      # Kiro/AWS CodeWhisperer (OAuth)
 ccs ghcp      # GitHub Copilot (OAuth device flow)
 ccs agy       # Antigravity (OAuth)

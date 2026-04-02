@@ -49,6 +49,13 @@ ccs cursor start
 ccs cursor status
 ```
 
+Or use the bare command to see the same status view plus the local endpoint details
+needed for OpenAI-compatible and Anthropic-compatible clients:
+
+```bash
+ccs cursor
+```
+
 ### 5) Stop daemon
 
 ```bash

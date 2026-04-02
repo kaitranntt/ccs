@@ -13,6 +13,7 @@ import {
 import {
   decodeVarint,
   decodeField,
+  decodeMessage,
   parseConnectRPCFrame,
 } from '../../../src/cursor/cursor-protobuf-decoder';
 import { buildCursorRequest } from '../../../src/cursor/cursor-translator';
@@ -251,11 +252,256 @@ describe('Message Translation', () => {
         {}
       );
 
+      expect(result.messages).toHaveLength(3);
+      expect(result.messages[1].role).toBe('user');
+      expect(result.messages[1].content).toContain('<tool_result>');
+      expect(result.messages[1].content).toContain('<tool_name>get_weather</tool_name>');
+      expect(result.messages[1].content).toContain('<tool_call_id>call_123</tool_call_id>');
+      expect(result.messages[2]).toEqual({ role: 'user', content: 'What is the weather?' });
+    });
+
+    it('should recover tool names for tool results without a name field', () => {
+      const result = buildCursorRequest(
+        'gpt-4',
+        {
+          messages: [
+            {
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                {
+                  id: 'call_456',
+                  type: 'function',
+                  function: { name: 'search_docs', arguments: '{"q":"cursor"}' },
+                },
+              ],
+            },
+            {
+              role: 'tool',
+              content: 'done',
+              tool_call_id: 'call_456',
+            },
+          ],
+        },
+        false,
+        {}
+      );
+
       expect(result.messages).toHaveLength(2);
-      // Tool result should be attached to next message
-      expect(result.messages[1].tool_results).toBeDefined();
-      expect(result.messages[1].tool_results).toHaveLength(1);
-      expect(result.messages[1].tool_results![0].tool_call_id).toBe('call_123');
+      expect(result.messages[1].content).toContain('<tool_name>search_docs</tool_name>');
+      expect(result.messages[1].tool_results).toBeUndefined();
+    });
+
+    it('should flatten user content arrays that include tool_result blocks', () => {
+      const result = buildCursorRequest(
+        'gpt-4',
+        {
+          messages: [
+            {
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                {
+                  id: 'call_789',
+                  type: 'function',
+                  function: { name: 'search_docs', arguments: '{"q":"cursor"}' },
+                },
+              ],
+            },
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'Tool finished.' },
+                {
+                  type: 'tool_result',
+                  tool_use_id: 'call_789',
+                  content: { answer: 'Cursor integration ready' },
+                },
+              ],
+            },
+          ],
+        },
+        false,
+        {}
+      );
+
+      expect(result.messages).toHaveLength(2);
+      expect(result.messages[1].role).toBe('user');
+      expect(result.messages[1].content).toContain('Tool finished.');
+      expect(result.messages[1].content).toContain('<tool_name>search_docs</tool_name>');
+      expect(result.messages[1].content).toContain('{"answer":"Cursor integration ready"}');
+    });
+
+    it('should convert assistant tool_use content blocks into tool_calls', () => {
+      const result = buildCursorRequest(
+        'gpt-4',
+        {
+          messages: [
+            {
+              role: 'assistant',
+              content: [
+                { type: 'text', text: 'Inspecting the workspace.' },
+                {
+                  type: 'tool_use',
+                  id: 'call_999',
+                  name: 'list_files',
+                  input: { path: '/tmp' },
+                },
+              ],
+            },
+          ],
+        },
+        false,
+        {}
+      );
+
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].role).toBe('assistant');
+      expect(result.messages[0].content).toBe('Inspecting the workspace.');
+      expect(result.messages[0].tool_calls).toEqual([
+        {
+          id: 'call_999',
+          type: 'function',
+          function: { name: 'list_files', arguments: '{"path":"/tmp"}' },
+        },
+      ]);
+    });
+
+    it('should synthesize fallback ids for tool_use blocks that omit them', () => {
+      const result = buildCursorRequest(
+        'gpt-4',
+        {
+          messages: [
+            {
+              role: 'assistant',
+              content: [
+                {
+                  type: 'tool_use',
+                  name: 'search_docs',
+                  input: { q: 'cursor' },
+                },
+              ],
+            },
+          ],
+        },
+        false,
+        {}
+      );
+
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].tool_calls).toHaveLength(1);
+      expect(result.messages[0].tool_calls![0].id).toBe('toolu_cursor_fallback_0_0');
+    });
+
+    it('should dedupe tool calls when assistant messages contain both tool_calls and tool_use blocks', () => {
+      const result = buildCursorRequest(
+        'gpt-4',
+        {
+          messages: [
+            {
+              role: 'assistant',
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'call_dupe',
+                  name: 'search_docs',
+                  input: { q: 'cursor' },
+                },
+              ],
+              tool_calls: [
+                {
+                  id: 'call_dupe',
+                  type: 'function',
+                  function: { name: 'search_docs', arguments: '{"q":"cursor"}' },
+                },
+              ],
+            },
+          ],
+        },
+        false,
+        {}
+      );
+
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].tool_calls).toEqual([
+        {
+          id: 'call_dupe',
+          type: 'function',
+          function: { name: 'search_docs', arguments: '{"q":"cursor"}' },
+        },
+      ]);
+    });
+
+    it('should truncate oversized tool result payloads', () => {
+      const oversizedResult = '&'.repeat(12_050);
+      const result = buildCursorRequest(
+        'gpt-4',
+        {
+          messages: [
+            {
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                {
+                  id: 'call_big',
+                  type: 'function',
+                  function: { name: 'read_file', arguments: '{"path":"big.txt"}' },
+                },
+              ],
+            },
+            {
+              role: 'tool',
+              content: oversizedResult,
+              tool_call_id: 'call_big',
+            },
+          ],
+        },
+        false,
+        {}
+      );
+
+      expect(result.messages).toHaveLength(2);
+      expect(result.messages[1].content).toContain('[truncated ');
+      expect(result.messages[1].content.length).toBeLessThan(12_250);
+    });
+
+    it('should mark unserializable structured tool results explicitly', () => {
+      const circular: Record<string, unknown> = {};
+      circular.self = circular;
+
+      const result = buildCursorRequest(
+        'gpt-4',
+        {
+          messages: [
+            {
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                {
+                  id: 'call_bad',
+                  type: 'function',
+                  function: { name: 'read_json', arguments: '{"path":"bad.json"}' },
+                },
+              ],
+            },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'tool_result',
+                  tool_use_id: 'call_bad',
+                  content: circular,
+                },
+              ],
+            },
+          ],
+        },
+        false,
+        {}
+      );
+
+      expect(result.messages).toHaveLength(2);
+      expect(result.messages[1].content).toContain('[unserializable content]');
     });
 
     it('should handle array content format', () => {
@@ -343,6 +589,57 @@ describe('Request Encoding', () => {
 
       expect(result).toBeInstanceOf(Uint8Array);
       expect(result.length).toBeGreaterThan(0);
+    });
+
+    it('should preserve flattened tool_result blocks through protobuf encoding', () => {
+      const translated = buildCursorRequest(
+        'gpt-4',
+        {
+          messages: [
+            {
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                {
+                  id: 'call_wire',
+                  type: 'function',
+                  function: { name: 'read_file', arguments: '{"path":"notes.txt"}' },
+                },
+              ],
+            },
+            {
+              role: 'tool',
+              content: 'workspace snapshot',
+              tool_call_id: 'call_wire',
+            },
+          ],
+        },
+        false,
+        {}
+      );
+
+      const body = generateCursorBody(translated.messages, 'gpt-4', [], null);
+      const frame = parseConnectRPCFrame(Buffer.from(body));
+      expect(frame).not.toBeNull();
+
+      const topLevel = decodeMessage(frame!.payload);
+      const requestPayload = topLevel.get(FIELD.Request.REQUEST)?.[0]?.value as Uint8Array;
+      const chatRequest = decodeMessage(requestPayload);
+      const encodedMessages = (chatRequest.get(FIELD.Chat.MESSAGES) || []).map((entry) =>
+        decodeMessage(entry.value as Uint8Array)
+      );
+      const decoder = new TextDecoder();
+      const contents = encodedMessages.map((message) =>
+        decoder.decode(message.get(FIELD.Message.CONTENT)?.[0]?.value as Uint8Array)
+      );
+
+      expect(contents.some((content) => content.includes('<tool_result>'))).toBe(true);
+      expect(contents.some((content) => content.includes('<tool_name>read_file</tool_name>'))).toBe(
+        true
+      );
+      expect(
+        contents.some((content) => content.includes('<tool_call_id>call_wire</tool_call_id>'))
+      ).toBe(true);
     });
   });
 

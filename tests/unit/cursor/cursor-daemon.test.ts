@@ -19,7 +19,12 @@ import {
 } from '../../../src/cursor/cursor-daemon';
 import { getCcsDir } from '../../../src/utils/config-manager';
 import { handleCursorCommand } from '../../../src/commands/cursor-command';
+import {
+  renderCursorHelp,
+  renderCursorStatus,
+} from '../../../src/commands/cursor-command-display';
 import { loadCredentials } from '../../../src/cursor/cursor-auth';
+import { DEFAULT_CURSOR_CONFIG } from '../../../src/config/unified-config-types';
 
 // Test isolation
 let originalCcsHome: string | undefined;
@@ -271,6 +276,34 @@ describe('stopDaemon', () => {
 });
 
 describe('handleCursorCommand', () => {
+  it('treats bare ccs cursor as a status entrypoint instead of help', async () => {
+    const originalLog = console.log;
+    const originalError = console.error;
+    const logs: string[] = [];
+    const errors: string[] = [];
+
+    console.log = (...args: unknown[]) => {
+      logs.push(args.map((arg) => String(arg)).join(' '));
+    };
+    console.error = (...args: unknown[]) => {
+      errors.push(args.map((arg) => String(arg)).join(' '));
+    };
+
+    try {
+      const exitCode = await handleCursorCommand([]);
+
+      expect(exitCode).toBe(0);
+      expect(errors).toHaveLength(0);
+      expect(logs.some((line) => line.includes('Cursor IDE Status'))).toBe(true);
+      expect(logs.some((line) => line.includes('Usage: ccs cursor <subcommand> [options]'))).toBe(
+        false
+      );
+    } finally {
+      console.log = originalLog;
+      console.error = originalError;
+    }
+  });
+
   it('returns exit code 1 for unknown subcommand', async () => {
     const exitCode = await handleCursorCommand(['nonexistent']);
     expect(exitCode).toBe(1);
@@ -295,5 +328,104 @@ describe('handleCursorCommand', () => {
     expect(credentials).not.toBeNull();
     expect(credentials?.authMethod).toBe('manual');
     expect(credentials?.machineId).toBe(machineId);
+  });
+});
+
+describe('renderCursorStatus', () => {
+  it('shows runtime endpoint guidance when Cursor is ready', () => {
+    const originalLog = console.log;
+    const logs: string[] = [];
+
+    console.log = (...args: unknown[]) => {
+      logs.push(args.map((arg) => String(arg)).join(' '));
+    };
+
+    try {
+      renderCursorStatus(
+        { ...DEFAULT_CURSOR_CONFIG, enabled: true, port: 20129 },
+        {
+          authenticated: true,
+          expired: false,
+          tokenAge: 0,
+          credentials: {
+            accessToken: 'a'.repeat(60),
+            machineId: '1234567890abcdef1234567890abcdef',
+            authMethod: 'manual',
+            importedAt: new Date().toISOString(),
+          },
+        },
+        { running: true, port: 20129, pid: 1234 }
+      );
+
+      expect(logs.some((line) => line.includes('OpenAI base:     http://127.0.0.1:20129/v1'))).toBe(
+        true
+      );
+      expect(
+        logs.some((line) => line.includes('Chat route:      http://127.0.0.1:20129/v1/chat/completions'))
+      ).toBe(true);
+      expect(
+        logs.some((line) => line.includes('Anthropic base:  http://127.0.0.1:20129'))
+      ).toBe(true);
+      expect(logs.some((line) => line.includes('Raw settings:    ~/.ccs/cursor.settings.json'))).toBe(
+        true
+      );
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  it('shows runtime guidance even when setup is incomplete', () => {
+    const originalLog = console.log;
+    const logs: string[] = [];
+
+    console.log = (...args: unknown[]) => {
+      logs.push(args.map((arg) => String(arg)).join(' '));
+    };
+
+    try {
+      renderCursorStatus(
+        { ...DEFAULT_CURSOR_CONFIG, enabled: false, port: 20129 },
+        {
+          authenticated: false,
+          expired: false,
+          tokenAge: undefined,
+          credentials: undefined,
+        },
+        { running: false, port: 20129, pid: undefined }
+      );
+
+      expect(logs.some((line) => line.includes('OpenAI base:     http://127.0.0.1:20129/v1'))).toBe(
+        true
+      );
+      expect(logs.some((line) => line.includes('Next steps:'))).toBe(true);
+      expect(logs.some((line) => line.includes('  - Help:        ccs cursor help'))).toBe(true);
+    } finally {
+      console.log = originalLog;
+    }
+  });
+});
+
+describe('renderCursorHelp', () => {
+  it('shows bare ccs cursor as an optional entrypoint', () => {
+    const originalLog = console.log;
+    const logs: string[] = [];
+
+    console.log = (...args: unknown[]) => {
+      logs.push(args.map((arg) => String(arg)).join(' '));
+    };
+
+    try {
+      const exitCode = renderCursorHelp();
+
+      expect(exitCode).toBe(0);
+      expect(logs.some((line) => line.includes('Usage: ccs cursor [subcommand] [options]'))).toBe(
+        true
+      );
+      expect(
+        logs.some((line) => line.includes('4. ccs cursor          # Show status and runtime connection details'))
+      ).toBe(true);
+    } finally {
+      console.log = originalLog;
+    }
   });
 });
