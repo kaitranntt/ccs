@@ -40,6 +40,7 @@ import {
   handleCatalogStatus,
   handleCatalogRefresh,
   handleCatalogReset,
+  handleCatalogJson,
 } from './catalog-subcommand';
 
 /**
@@ -146,6 +147,10 @@ export async function handleCliproxyCommand(args: string[]): Promise<void> {
 
   // Catalog commands
   if (command === 'catalog') {
+    if (hasAnyFlag(remainingArgs, ['--json'])) {
+      handleCatalogJson();
+      return;
+    }
     const subcommand = remainingArgs[1];
     if (subcommand === 'refresh') {
       await handleCatalogRefresh(verbose);

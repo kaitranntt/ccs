@@ -5,6 +5,7 @@ import {
   SYNCABLE_PROVIDERS,
   getResolvedCatalog,
   refreshCatalogFromProxy,
+  getAllResolvedCatalogs,
 } from '../../cliproxy/catalog-cache';
 import { getCatalogRoutingSnapshot } from '../../cliproxy/catalog-routing';
 import { ensureManagedModelPrefixes } from '../../cliproxy/managed-model-prefixes';
@@ -171,6 +172,20 @@ export async function handleCatalogRefresh(verbose: boolean): Promise<void> {
   console.log('');
   console.log(`  ${color('[OK]', 'success')} Catalog synced (${totalModels} total models)`);
   console.log('');
+}
+
+/**
+ * Output catalog as JSON for programmatic consumption.
+ * Used by OnSteroids and other tools to get available models per provider.
+ * Format: { provider: [{ id, name }], ... }
+ */
+export function handleCatalogJson(): void {
+  const catalogs = getAllResolvedCatalogs();
+  const result: Record<string, Array<{ id: string; name: string }>> = {};
+  for (const [provider, catalog] of Object.entries(catalogs)) {
+    result[provider] = catalog.models.map((m) => ({ id: m.id, name: m.name }));
+  }
+  console.log(JSON.stringify(result));
 }
 
 /** Reset catalog cache */
