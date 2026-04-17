@@ -53,12 +53,14 @@ function runCodexProbe(codexPath: string, args: string[]): string | undefined {
 
     if (needsShell) {
       const cmdString = [codexPath, ...args].map(escapeShellArg).join(' ');
-      return childProcess.execFileSync('cmd.exe', ['/d', '/s', '/c', cmdString], {
+      const result = childProcess.spawnSync(cmdString, {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
         timeout: 5000,
         windowsHide: true,
+        shell: 'cmd.exe',
       });
+      return result.status === 0 ? result.stdout : undefined;
     }
 
     return childProcess.execFileSync(codexPath, args, {
