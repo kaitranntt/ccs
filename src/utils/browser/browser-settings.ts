@@ -2,6 +2,7 @@ import * as path from 'path';
 import type { BrowserConfig, BrowserEvalMode } from '../../config/unified-config-types';
 import { getCcsDir } from '../config-manager';
 import { expandPath } from '../helpers';
+import { type BrowserRuntimeEnv, resolveBrowserRuntimeEnv } from './chrome-reuse';
 
 export type BrowserOverrideSource = 'CCS_BROWSER_USER_DATA_DIR' | 'CCS_BROWSER_PROFILE_DIR';
 
@@ -17,6 +18,11 @@ export interface EffectiveClaudeBrowserAttachConfig {
 
 export function getRecommendedBrowserUserDataDir(): string {
   return path.join(getCcsDir(), 'browser', 'chrome-user-data');
+}
+
+export interface BrowserAttachRuntimeResolution {
+  runtimeEnv?: BrowserRuntimeEnv;
+  warning?: string;
 }
 
 export function resolveBrowserUserDataDir(value?: string): string | undefined {
@@ -82,6 +88,37 @@ export function getEffectiveClaudeBrowserAttachConfig(
     // the default 9222.
     hasExplicitDevtoolsPort: true,
   };
+}
+
+export async function resolveOptionalBrowserAttachRuntime(
+  config: EffectiveClaudeBrowserAttachConfig
+): Promise<BrowserAttachRuntimeResolution> {
+  if (!config.enabled) {
+    return {};
+  }
+
+  try {
+    return {
+      runtimeEnv: await resolveBrowserRuntimeEnv({
+        profileDir: config.userDataDir,
+        devtoolsPort: config.hasExplicitDevtoolsPort ? String(config.devtoolsPort) : undefined,
+        evalMode: config.evalMode,
+      }),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const usesManagedDefaultDir =
+      config.source === 'config' &&
+      path.resolve(config.userDataDir) === path.resolve(getRecommendedBrowserUserDataDir());
+
+    if (usesManagedDefaultDir && message.includes('Chrome profile directory is invalid')) {
+      return {
+        warning: `Claude Browser Attach is enabled, but the managed browser profile does not exist yet (${config.userDataDir}). Launching without browser tools. Run \`ccs browser doctor\` to finish setup.`,
+      };
+    }
+
+    throw error;
+  }
 }
 
 function parseDevtoolsPort(value?: string): number | undefined {

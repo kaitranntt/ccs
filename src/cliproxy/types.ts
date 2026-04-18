@@ -249,7 +249,7 @@ export interface ExecutorConfig {
   /** Optional inherited continuity directory from mapped account profile */
   claudeConfigDir?: string;
   /** Optional browser runtime env for Claude browser MCP reuse. */
-  browserRuntimeEnv?: Record<string, string>;
+  browserRuntimeEnv?: NodeJS.ProcessEnv;
 }
 
 /**

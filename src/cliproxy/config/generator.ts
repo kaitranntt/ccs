@@ -42,6 +42,11 @@ export const CCS_CONTROL_PANEL_SECRET = 'ccs';
  */
 export const CLIPROXY_CONFIG_VERSION = 17;
 
+interface RegenerateConfigOptions {
+  configPath?: string;
+  authDir?: string;
+}
+
 interface OAuthModelAliasEntry {
   name: string;
   alias: string;
@@ -739,8 +744,12 @@ function extractYamlSection(content: string, sectionKey: string): string {
  * @param port - Default port to use if not found in existing config
  * @returns Path to new config file
  */
-export function regenerateConfig(port: number = CLIPROXY_DEFAULT_PORT): string {
-  const configPath = getConfigPathForPort(port);
+export function regenerateConfig(
+  port: number = CLIPROXY_DEFAULT_PORT,
+  options?: RegenerateConfigOptions
+): string {
+  const configPath = options?.configPath ?? getConfigPathForPort(port);
+  const authDir = options?.authDir ?? getAuthDir();
 
   // Preserve user settings from existing config
   let effectivePort = port;
@@ -787,7 +796,7 @@ export function regenerateConfig(port: number = CLIPROXY_DEFAULT_PORT): string {
 
   // Ensure directories exist
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  fs.mkdirSync(getAuthDir(), { recursive: true, mode: 0o700 });
+  fs.mkdirSync(authDir, { recursive: true, mode: 0o700 });
 
   // Generate fresh config with preserved user API keys and aliases
   let configContent = generateUnifiedConfigContent(effectivePort, userApiKeys, existingAliases);

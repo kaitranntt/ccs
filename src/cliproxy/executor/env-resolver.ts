@@ -75,7 +75,7 @@ export interface ProxyChainConfig {
   /** Execution-aware image analysis env prepared by the caller */
   imageAnalysisEnv?: Record<string, string>;
   /** Optional browser runtime env for Claude browser MCP reuse. */
-  browserRuntimeEnv?: Record<string, string>;
+  browserRuntimeEnv?: NodeJS.ProcessEnv;
 }
 
 interface CliproxyImageAnalysisDeps {

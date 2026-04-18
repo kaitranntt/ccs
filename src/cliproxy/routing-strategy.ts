@@ -1,5 +1,6 @@
 import { mutateUnifiedConfig, loadOrCreateUnifiedConfig } from '../config/unified-config-loader';
 import { regenerateConfig } from './config/generator';
+import { getAuthDir, getConfigPathForPort } from './config/path-resolver';
 import {
   fetchCliproxyRoutingResponse,
   getCliproxyRoutingTarget,
@@ -98,6 +99,8 @@ export async function applyCliproxyRoutingStrategy(
   strategy: CliproxyRoutingStrategy
 ): Promise<CliproxyRoutingApplyResult> {
   const target = getCliproxyRoutingTarget();
+  const configPath = getConfigPathForPort(target.port);
+  const authDir = getAuthDir();
 
   if (target.isRemote) {
     await updateLiveCliproxyRoutingStrategy(strategy);
@@ -116,7 +119,7 @@ export async function applyCliproxyRoutingStrategy(
       config.cliproxy.routing = { strategy };
     }
   });
-  regenerateConfig(target.port);
+  regenerateConfig(target.port, { configPath, authDir });
 
   try {
     await updateLiveCliproxyRoutingStrategy(strategy);

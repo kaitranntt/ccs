@@ -67,7 +67,7 @@ import {
   appendBrowserToolArgs,
   ensureBrowserMcpOrThrow,
   getEffectiveClaudeBrowserAttachConfig,
-  resolveBrowserRuntimeEnv,
+  resolveOptionalBrowserAttachRuntime,
   syncBrowserMcpToConfigDir,
 } from '../../utils/browser';
 import {
@@ -265,7 +265,14 @@ export async function execClaudeWithCLIProxy(
   ensureWebSearchMcpOrThrow();
   const imageAnalysisMcpReady = ensureImageAnalysisMcpOrThrow();
   const browserAttachConfig = getEffectiveClaudeBrowserAttachConfig(getBrowserConfig());
-  if (browserAttachConfig.enabled) {
+  const browserAttachRuntime = browserAttachConfig.enabled
+    ? await resolveOptionalBrowserAttachRuntime(browserAttachConfig)
+    : undefined;
+  const browserRuntimeEnv = browserAttachRuntime?.runtimeEnv;
+  if (browserAttachRuntime?.warning) {
+    console.error(warn(browserAttachRuntime.warning));
+  }
+  if (browserRuntimeEnv) {
     ensureBrowserMcpOrThrow();
   }
   displayWebSearchStatus();
@@ -1054,7 +1061,7 @@ export async function execClaudeWithCLIProxy(
 
   syncImageAnalysisMcpToConfigDir(inheritedClaudeConfigDir);
   if (
-    browserAttachConfig.enabled &&
+    browserRuntimeEnv &&
     inheritedClaudeConfigDir &&
     !syncBrowserMcpToConfigDir(inheritedClaudeConfigDir)
   ) {
@@ -1157,18 +1164,6 @@ export async function execClaudeWithCLIProxy(
   }
 
   // 11. Build final environment with all proxy chains
-  const browserRuntimeEnv = browserAttachConfig.enabled
-    ? {
-        ...(await resolveBrowserRuntimeEnv({
-          profileDir: browserAttachConfig.userDataDir,
-          devtoolsPort: browserAttachConfig.hasExplicitDevtoolsPort
-            ? String(browserAttachConfig.devtoolsPort)
-            : undefined,
-          evalMode: browserAttachConfig.evalMode,
-        })),
-      }
-    : undefined;
-
   const env = buildClaudeEnvironment({
     provider,
     useRemoteProxy,

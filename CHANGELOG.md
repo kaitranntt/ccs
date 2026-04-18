@@ -1,3 +1,17 @@
+## [7.72.1](https://github.com/kaitranntt/ccs/compare/v7.72.0...v7.72.1) (2026-04-17)
+
+### Bug Fixes
+
+* **cliproxy:** pin routing config regeneration path ([d3de83e](https://github.com/kaitranntt/ccs/commit/d3de83e157b4d286cc9b684339cccbe501b911a3))
+
+### Hotfixes
+
+* **browser:** avoid aborting launch on missing managed profile ([41bf507](https://github.com/kaitranntt/ccs/commit/41bf5075e0ece90401dfa22fe9ffbed797825387))
+
+### Tests
+
+* **cliproxy:** pin routing strategy test env scope ([bc1606d](https://github.com/kaitranntt/ccs/commit/bc1606da756fdf1552029d3a74add4464caa2377))
+
 ## [7.72.0](https://github.com/kaitranntt/ccs/compare/v7.71.0...v7.72.0) (2026-04-17)
 
 ### Features

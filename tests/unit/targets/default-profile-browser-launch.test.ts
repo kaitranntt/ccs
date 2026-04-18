@@ -256,6 +256,50 @@ server.listen(0, '127.0.0.1', () => {
     expect(launchedEnv).toContain('evalMode=readonly');
   });
 
+  it('skips managed browser attach when the default CCS browser profile directory is missing', () => {
+    if (process.platform === 'win32') return;
+
+    const originalCcsHome = process.env.CCS_HOME;
+    process.env.CCS_HOME = tmpHome;
+
+    try {
+      mutateUnifiedConfig((config) => {
+        config.browser = {
+          claude: {
+            enabled: true,
+            user_data_dir: '',
+            devtools_port: 9222,
+          },
+          codex: {
+            enabled: true,
+          },
+        };
+      });
+
+      const result = runCcs(['default', 'smoke'], {
+        ...baseEnv,
+      });
+
+      expect(result.status).toBe(0);
+      expect(result.stderr).toContain('Launching without browser tools');
+      expect(result.stderr).toContain('ccs browser doctor');
+
+      const launchedArgs = fs.readFileSync(claudeArgsLogPath, 'utf8');
+      expect(launchedArgs).not.toContain(BROWSER_PROMPT_SNIPPET);
+
+      const launchedEnv = fs.readFileSync(claudeEnvLogPath, 'utf8');
+      expect(launchedEnv).toContain('userDataDir=');
+      expect(launchedEnv).not.toContain('.ccs/browser/chrome-user-data');
+      expect(launchedEnv).not.toContain('ws://127.0.0.1/devtools/browser/');
+    } finally {
+      if (originalCcsHome !== undefined) {
+        process.env.CCS_HOME = originalCcsHome;
+      } else {
+        delete process.env.CCS_HOME;
+      }
+    }
+  });
+
   it('uses config-backed browser attach settings when env overrides are absent', async () => {
     if (process.platform === 'win32') return;
 

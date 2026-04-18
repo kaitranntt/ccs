@@ -6,6 +6,8 @@ import * as path from 'path';
 describe('cliproxy routing strategy service', () => {
   let tempHome = '';
   let scopedConfigDir = '';
+  let originalCcsDir: string | undefined;
+  let originalCcsHome: string | undefined;
   let runWithScopedConfigDir: <T>(ccsDir: string, fn: () => Promise<T> | T) => Promise<T>;
   let routingTarget = {
     host: '127.0.0.1',
@@ -18,12 +20,28 @@ describe('cliproxy routing strategy service', () => {
   beforeEach(async () => {
     tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-routing-strategy-'));
     scopedConfigDir = path.join(tempHome, '.ccs');
+    originalCcsDir = process.env.CCS_DIR;
+    originalCcsHome = process.env.CCS_HOME;
+    process.env.CCS_DIR = scopedConfigDir;
+    process.env.CCS_HOME = tempHome;
 
     ({ runWithScopedConfigDir } = await import('../../../src/utils/config-manager'));
   });
 
   afterEach(() => {
     mock.restore();
+
+    if (originalCcsDir !== undefined) {
+      process.env.CCS_DIR = originalCcsDir;
+    } else {
+      delete process.env.CCS_DIR;
+    }
+
+    if (originalCcsHome !== undefined) {
+      process.env.CCS_HOME = originalCcsHome;
+    } else {
+      delete process.env.CCS_HOME;
+    }
 
     if (tempHome && fs.existsSync(tempHome)) {
       fs.rmSync(tempHome, { recursive: true, force: true });

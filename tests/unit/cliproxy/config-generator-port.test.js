@@ -185,6 +185,24 @@ describe('Config Generator Port', function () {
       // Port should still be 8325
       assert.ok(content.includes(`port: ${variantPort}`));
     });
+
+    it('honors an explicit config path override', function () {
+      const variantPort = 8318;
+      const overrideDir = path.join(testHome, '.ccs-scope-override', 'cliproxy');
+      const overrideConfigPath = path.join(overrideDir, `config-${variantPort}.yaml`);
+      const overrideAuthDir = path.join(overrideDir, 'auth');
+
+      regenerateConfig(variantPort, {
+        configPath: overrideConfigPath,
+        authDir: overrideAuthDir,
+      });
+
+      assert.ok(fs.existsSync(overrideConfigPath), 'Should create config at the override path');
+      assert.ok(fs.existsSync(overrideAuthDir), 'Should create auth dir at the override path');
+
+      const defaultConfigPath = path.join(cliproxyDir, `config-${variantPort}.yaml`);
+      assert.strictEqual(fs.existsSync(defaultConfigPath), false);
+    });
   });
 
   describe('deleteConfigForPort', function () {

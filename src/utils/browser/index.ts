@@ -21,6 +21,11 @@ export {
   getRecommendedBrowserUserDataDir,
   getBrowserAttachOverride,
   getEffectiveClaudeBrowserAttachConfig,
+  resolveOptionalBrowserAttachRuntime,
+} from './browser-settings';
+export type {
+  BrowserAttachRuntimeResolution,
+  EffectiveClaudeBrowserAttachConfig,
 } from './browser-settings';
 
 export {

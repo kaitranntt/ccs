@@ -11,6 +11,7 @@ export interface BrowserReuseOptions {
 }
 
 export interface BrowserRuntimeEnv {
+  [key: string]: string | undefined;
   CCS_BROWSER_USER_DATA_DIR: string;
   CCS_BROWSER_DEVTOOLS_HOST: string;
   CCS_BROWSER_DEVTOOLS_PORT: string;

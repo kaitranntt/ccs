@@ -40,7 +40,7 @@ import {
   appendBrowserToolArgs,
   ensureBrowserMcpOrThrow,
   getEffectiveClaudeBrowserAttachConfig,
-  resolveBrowserRuntimeEnv,
+  resolveOptionalBrowserAttachRuntime,
   syncBrowserMcpToConfigDir,
 } from './utils/browser';
 import {
@@ -1056,14 +1056,21 @@ async function main(): Promise<void> {
       // Settings-based profiles (glm, glmt) are third-party providers
       const imageAnalysisMcpReady =
         resolvedTarget === 'claude' ? ensureImageAnalysisMcpOrThrow() : true;
-      let browserRuntimeEnv: TargetCredentials['browserRuntimeEnv'];
       const browserAttachConfig =
         resolvedTarget === 'claude'
           ? getEffectiveClaudeBrowserAttachConfig(getBrowserConfig())
           : undefined;
+      const browserAttachRuntime =
+        resolvedTarget === 'claude' && browserAttachConfig?.enabled
+          ? await resolveOptionalBrowserAttachRuntime(browserAttachConfig)
+          : undefined;
+      const browserRuntimeEnv = browserAttachRuntime?.runtimeEnv;
+      if (browserAttachRuntime?.warning) {
+        console.error(warn(browserAttachRuntime.warning));
+      }
       if (resolvedTarget === 'claude') {
         ensureWebSearchMcpOrThrow();
-        if (browserAttachConfig?.enabled) {
+        if (browserRuntimeEnv) {
           ensureBrowserMcpOrThrow();
         }
       }
@@ -1096,7 +1103,7 @@ async function main(): Promise<void> {
         );
       }
       if (
-        browserAttachConfig?.enabled &&
+        browserRuntimeEnv &&
         inheritedClaudeConfigDir &&
         !syncBrowserMcpToConfigDir(inheritedClaudeConfigDir)
       ) {
@@ -1318,18 +1325,6 @@ async function main(): Promise<void> {
 
       // Explicitly inject effective settings env vars so stale ANTHROPIC_*
       // values from prior sessions cannot leak into the active profile.
-      if (browserAttachConfig?.enabled) {
-        browserRuntimeEnv = {
-          ...(await resolveBrowserRuntimeEnv({
-            profileDir: browserAttachConfig.userDataDir,
-            devtoolsPort: browserAttachConfig.hasExplicitDevtoolsPort
-              ? String(browserAttachConfig.devtoolsPort)
-              : undefined,
-            evalMode: browserAttachConfig.evalMode,
-          })),
-        };
-      }
-
       const envVars: NodeJS.ProcessEnv = {
         ...globalEnv,
         ...settingsEnv,
@@ -1489,24 +1484,22 @@ async function main(): Promise<void> {
         CCS_WEBSEARCH_SKIP: '1',
         CCS_IMAGE_ANALYSIS_SKIP: '1',
       };
-      let browserRuntimeEnv: TargetCredentials['browserRuntimeEnv'];
       const browserAttachConfig =
         resolvedTarget === 'claude'
           ? getEffectiveClaudeBrowserAttachConfig(getBrowserConfig())
           : undefined;
+      const browserAttachRuntime =
+        resolvedTarget === 'claude' && browserAttachConfig?.enabled
+          ? await resolveOptionalBrowserAttachRuntime(browserAttachConfig)
+          : undefined;
+      const browserRuntimeEnv = browserAttachRuntime?.runtimeEnv;
+      if (browserAttachRuntime?.warning) {
+        console.error(warn(browserAttachRuntime.warning));
+      }
 
       if (resolvedTarget === 'claude') {
-        if (browserAttachConfig?.enabled) {
+        if (browserRuntimeEnv) {
           ensureBrowserMcpOrThrow();
-          browserRuntimeEnv = {
-            ...(await resolveBrowserRuntimeEnv({
-              profileDir: browserAttachConfig.userDataDir,
-              devtoolsPort: browserAttachConfig.hasExplicitDevtoolsPort
-                ? String(browserAttachConfig.devtoolsPort)
-                : undefined,
-            })),
-            CCS_BROWSER_EVAL_MODE: browserAttachConfig.evalMode,
-          };
           Object.assign(envVars, browserRuntimeEnv);
         }
         const defaultContinuityInheritance = await resolveProfileContinuityInheritance({
@@ -1524,7 +1517,7 @@ async function main(): Promise<void> {
         if (defaultContinuityInheritance.claudeConfigDir) {
           envVars.CLAUDE_CONFIG_DIR = defaultContinuityInheritance.claudeConfigDir;
           if (
-            browserAttachConfig?.enabled &&
+            browserRuntimeEnv &&
             !syncBrowserMcpToConfigDir(defaultContinuityInheritance.claudeConfigDir)
           ) {
             throw new Error(
