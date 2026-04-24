@@ -191,11 +191,11 @@ describe('settings-routes model canonicalization', () => {
     };
 
     expect(persisted.env.ANTHROPIC_MODEL).toBe('gpt-5.3-codex-xhigh');
-    expect(persisted.env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.4-high');
+    expect(persisted.env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.5-high');
     expect(persisted.env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-5.3-codex-high');
     expect(persisted.env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('gpt-5.4-mini-medium');
     expect(persisted.presets[0]?.default).toBe('gpt-5.3-codex-xhigh');
-    expect(persisted.presets[0]?.opus).toBe('gpt-5.4-high');
+    expect(persisted.presets[0]?.opus).toBe('gpt-5.5-high');
     expect(persisted.presets[0]?.sonnet).toBe('gpt-5.3-codex-high');
     expect(persisted.presets[0]?.haiku).toBe('gpt-5.4-mini-medium');
   });
@@ -217,7 +217,7 @@ describe('settings-routes model canonicalization', () => {
     expect(response.status).toBe(200);
 
     const body = (await response.json()) as { settings: { env: Record<string, string> } };
-    expect(body.settings.env.ANTHROPIC_MODEL).toBe('gpt-5.4-high');
+    expect(body.settings.env.ANTHROPIC_MODEL).toBe('gpt-5.5-high');
     expect(body.settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.3-codex-xhigh');
     expect(body.settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-5.3-codex-high');
     expect(body.settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('gpt-5.4-mini-medium');
@@ -225,7 +225,7 @@ describe('settings-routes model canonicalization', () => {
     const persisted = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as {
       env: Record<string, string>;
     };
-    expect(persisted.env.ANTHROPIC_MODEL).toBe('gpt-5.4-high');
+    expect(persisted.env.ANTHROPIC_MODEL).toBe('gpt-5.5-high');
     expect(persisted.env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.3-codex-xhigh');
     expect(persisted.env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-5.3-codex-high');
     expect(persisted.env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('gpt-5.4-mini-medium');

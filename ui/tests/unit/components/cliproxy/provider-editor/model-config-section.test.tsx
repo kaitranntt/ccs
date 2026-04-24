@@ -39,12 +39,12 @@ describe('ModelConfigSection presets', () => {
     expect(screen.getByText('Available on free or paid plans')).toBeInTheDocument();
     expect(screen.getByText('Requires paid access')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'GPT-5.4' }));
+    await userEvent.click(screen.getByRole('button', { name: 'GPT-5.5' }));
 
     expect(onApplyPreset).toHaveBeenCalledWith({
-      ANTHROPIC_MODEL: 'gpt-5.4',
-      ANTHROPIC_DEFAULT_OPUS_MODEL: 'gpt-5.4',
-      ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-5.4',
+      ANTHROPIC_MODEL: 'gpt-5.5',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'gpt-5.5',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-5.5',
       ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gpt-5-codex-mini',
     });
   });

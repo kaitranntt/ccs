@@ -28,13 +28,13 @@ describe('CodexTopLevelControlsCard', () => {
     const saveButton = screen.getByRole('button', { name: 'Save top-level settings' });
     expect(saveButton).toBeDisabled();
 
-    await userEvent.type(screen.getByPlaceholderText('gpt-5.4'), 'gpt-5.4-mini');
+    await userEvent.type(screen.getByPlaceholderText('gpt-5.5'), 'gpt-5.5');
     expect(saveButton).toBeEnabled();
 
     await userEvent.click(saveButton);
 
     expect(onSave).toHaveBeenCalledTimes(1);
-    expect(onSave).toHaveBeenCalledWith({ model: 'gpt-5.4-mini' });
+    expect(onSave).toHaveBeenCalledWith({ model: 'gpt-5.5' });
   });
 
   it('submits manual long-context overrides without auto-filling defaults', async () => {
@@ -43,7 +43,7 @@ describe('CodexTopLevelControlsCard', () => {
     render(
       <CodexTopLevelControlsCard
         values={{
-          model: 'gpt-5.4',
+          model: 'gpt-5.5',
           modelReasoningEffort: null,
           modelContextWindow: null,
           modelAutoCompactTokenLimit: null,
@@ -75,7 +75,7 @@ describe('CodexTopLevelControlsCard', () => {
     render(
       <CodexTopLevelControlsCard
         values={{
-          model: 'gpt-5.4',
+          model: 'gpt-5.5',
           modelReasoningEffort: null,
           modelContextWindow: null,
           modelAutoCompactTokenLimit: null,

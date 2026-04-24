@@ -1,6 +1,6 @@
 # CCS Project Roadmap
 
-Last Updated: 2026-04-21
+Last Updated: 2026-04-24
 
 Forward-looking roadmap documenting current priorities, GitHub issues, and future feature plans.
 
@@ -41,6 +41,7 @@ All major modularization work is complete. The codebase evolved from monolithic 
 
 ### Recent Fixes
 
+- **2026-04-24**: Codex model configuration now defaults to GPT-5.5 in the CLIProxy runtime catalog, bundled Codex settings, and dashboard model picker metadata. GPT-5.5 is available with xhigh reasoning effort support while the fast/haiku route stays on GPT-5.4 Mini.
 - **2026-04-24**: **#1065** Local CLIProxy Plus is available again as an explicit opt-in backend through the community-maintained `kaitranntt/CLIProxyAPIPlus` fork. CCS keeps `original` as the default backend, no longer downgrades saved `backend: plus` configs to `original`, updates Plus release lookups to the maintained fork, and documents Plus as a targeted path for plus-only providers.
 - **2026-04-21**: CLIProxy quota failover now quarantines exhausted Claude and Antigravity accounts out of live rotation when a healthy fallback exists. CCS persists those quota-triggered pauses across launches, automatically resumes them after the configured cooldown window, and deliberately avoids auto-pausing the last available account so single-account setups still degrade gracefully instead of hard-locking themselves.
 - **2026-04-20**: **#1051** Browser automation now defaults safe-off for new installs and upgrades that do not already carry explicit browser settings. CCS changes both Claude Browser Attach and Codex Browser Tools to start with `enabled: false` and `policy: manual`, normalizes missing browser policies on upgrade back to `manual`, preserves explicit existing enablement, and updates status/help/docs so browser tooling is never implied to auto-expose unless users opt in.

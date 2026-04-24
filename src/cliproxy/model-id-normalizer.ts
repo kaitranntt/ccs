@@ -28,12 +28,12 @@ const DENIED_ANTIGRAVITY_SONNET_45_REGEX =
 const CANONICAL_ANTIGRAVITY_OPUS_46_MODEL = 'claude-opus-4-6-thinking';
 const CODEX_EFFORT_SUFFIX_REGEX = /-(xhigh|high|medium)$/i;
 const CODEX_LEGACY_MODEL_ALIASES: Readonly<Record<string, string>> = Object.freeze({
-  'gpt-5-codex': 'gpt-5.4',
+  'gpt-5-codex': 'gpt-5.5',
   'gpt-5-codex-mini': 'gpt-5.4-mini',
   'gpt-5-mini': 'gpt-5.4-mini',
   'gpt-5.1-codex': 'gpt-5.2',
   'gpt-5.1-codex-mini': 'gpt-5.4-mini',
-  'gpt-5.1-codex-max': 'gpt-5.4',
+  'gpt-5.1-codex-max': 'gpt-5.5',
   'gpt-5.2-codex': 'gpt-5.2',
   'gpt-5.2-codex-mini': 'gpt-5.4-mini',
 });

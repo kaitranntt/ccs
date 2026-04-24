@@ -186,8 +186,19 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
   codex: {
     provider: 'codex',
     displayName: 'Copilot Codex',
-    defaultModel: 'gpt-5.4',
+    defaultModel: 'gpt-5.5',
     models: [
+      {
+        id: 'gpt-5.5',
+        name: 'GPT-5.5',
+        description: 'Latest frontier Codex model for complex coding and agentic tasks',
+        thinking: {
+          type: 'levels',
+          levels: ['low', 'medium', 'high', 'xhigh'],
+          maxLevel: 'xhigh',
+          dynamicAllowed: false,
+        },
+      },
       {
         id: 'gpt-5.4',
         name: 'GPT-5.4',

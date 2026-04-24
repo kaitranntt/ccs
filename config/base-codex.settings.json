@@ -2,9 +2,9 @@
   "env": {
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:8317/api/provider/codex",
     "ANTHROPIC_AUTH_TOKEN": "ccs-internal-managed",
-    "ANTHROPIC_MODEL": "gpt-5.4",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "gpt-5.4",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "gpt-5.4",
+    "ANTHROPIC_MODEL": "gpt-5.5",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "gpt-5.5",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "gpt-5.5",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "gpt-5.4-mini"
   }
 }

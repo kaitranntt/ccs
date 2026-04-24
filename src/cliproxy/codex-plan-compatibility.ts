@@ -8,7 +8,7 @@ import { info, warn } from '../utils/ui';
 
 export type CodexPlanType = CodexQuotaResult['planType'];
 
-const FREE_SAFE_DEFAULT_MODEL = 'gpt-5.4';
+const FREE_SAFE_DEFAULT_MODEL = 'gpt-5.5';
 const FREE_SAFE_FAST_MODEL = 'gpt-5.4-mini';
 const CODEX_EFFORT_SUFFIX_REGEX = /-(xhigh|high|medium)$/i;
 const CODEX_PAREN_SUFFIX_REGEX = /\((xhigh|high|medium)\)$/i;

@@ -120,13 +120,13 @@ describe('model-id-normalizer', () => {
     });
 
     it('normalizes legacy codex aliases to the current supported model IDs', () => {
-      expect(normalizeCodexLegacyModelAliases('gpt-5-codex')).toBe('gpt-5.4');
+      expect(normalizeCodexLegacyModelAliases('gpt-5-codex')).toBe('gpt-5.5');
       expect(normalizeCodexLegacyModelAliases('gpt-5-codex-mini[1m]')).toBe('gpt-5.4-mini[1m]');
-      expect(normalizeCodexLegacyModelAliases('gpt-5-codex-high')).toBe('gpt-5.4-high');
-      expect(normalizeCodexLegacyModelAliases('gpt-5-codex-high[1m]')).toBe('gpt-5.4-high[1m]');
+      expect(normalizeCodexLegacyModelAliases('gpt-5-codex-high')).toBe('gpt-5.5-high');
+      expect(normalizeCodexLegacyModelAliases('gpt-5-codex-high[1m]')).toBe('gpt-5.5-high[1m]');
       expect(normalizeModelIdForProvider('gpt-5.2-codex', 'codex')).toBe('gpt-5.2');
       expect(normalizeModelIdForProvider('gpt-5.1-codex-mini', 'codex')).toBe('gpt-5.4-mini');
-      expect(canonicalizeModelIdForProvider('gpt-5-codex-high', 'codex')).toBe('gpt-5.4-high');
+      expect(canonicalizeModelIdForProvider('gpt-5-codex-high', 'codex')).toBe('gpt-5.5-high');
     });
   });
 

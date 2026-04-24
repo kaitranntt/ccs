@@ -81,7 +81,7 @@ function ProfileEditor({
         <Input
           value={modelDraft ?? ''}
           onChange={(event) => setModelDraft(event.target.value || null)}
-          placeholder="gpt-5.4"
+          placeholder="gpt-5.5"
           disabled={disabled}
         />
         <Select

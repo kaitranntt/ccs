@@ -16,10 +16,10 @@ import type { CodexTopLevelSettingsView } from '@/lib/codex-config';
 import { CodexConfigCardShell } from './codex-config-card-shell';
 
 const UNSET = '__unset__';
-const GPT_54_MAX_CONTEXT_WINDOW = 1_050_000;
-const GPT_54_STANDARD_CONTEXT_WINDOW = 272_000;
-const CCS_GPT_54_STARTER_CONTEXT_WINDOW = 800_000;
-const CCS_GPT_54_STARTER_AUTO_COMPACT_TOKEN_LIMIT = 700_000;
+const GPT_5X_MAX_CONTEXT_WINDOW = 1_050_000;
+const GPT_5X_STANDARD_CONTEXT_WINDOW = 272_000;
+const CCS_GPT_5X_STARTER_CONTEXT_WINDOW = 800_000;
+const CCS_GPT_5X_STARTER_AUTO_COMPACT_TOKEN_LIMIT = 700_000;
 const INTEGER_FORMATTER = new Intl.NumberFormat('en-US');
 
 interface CodexTopLevelControlsCardProps {
@@ -43,8 +43,9 @@ function formatInteger(value: number) {
   return INTEGER_FORMATTER.format(value);
 }
 
-function isGpt54ModelId(value: string | null | undefined) {
-  return value?.trim().toLowerCase().startsWith('gpt-5.4') ?? false;
+function isGpt5LongContextModelId(value: string | null | undefined) {
+  const model = value?.trim().toLowerCase();
+  return model?.startsWith('gpt-5.4') === true || model?.startsWith('gpt-5.5') === true;
 }
 
 function buildTopLevelPatch(
@@ -114,7 +115,7 @@ function TopLevelControlsForm({
   const personalityOptions = withCurrentValue(['none', 'friendly', 'pragmatic'], draft.personality);
   const patch = buildTopLevelPatch(initialValues, draft);
   const hasChanges = Object.keys(patch).length > 0;
-  const isGpt54Selected = isGpt54ModelId(draft.model);
+  const isGpt5LongContextSelected = isGpt5LongContextModelId(draft.model);
   const parseOptionalInteger = (value: string) => {
     const trimmed = value.trim();
     return trimmed.length > 0 ? Number(trimmed) : null;
@@ -130,7 +131,7 @@ function TopLevelControlsForm({
             onChange={(event) =>
               setDraft((current) => ({ ...current, model: event.target.value || null }))
             }
-            placeholder="gpt-5.4"
+            placeholder="gpt-5.5"
             disabled={disabled}
           />
         </div>
@@ -311,8 +312,8 @@ function TopLevelControlsForm({
                 variant="secondary"
                 className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground"
               >
-                {/* TODO i18n: missing keys codex.gpt54Selected / codex.gpt54Reference */}
-                {isGpt54Selected ? 'GPT-5.4 selected' : 'GPT-5.4 reference'}
+                {/* TODO i18n: missing keys codex.gpt5Selected / codex.gpt5Reference */}
+                {isGpt5LongContextSelected ? 'GPT-5.x selected' : 'GPT-5.x reference'}
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -330,8 +331,8 @@ function TopLevelControlsForm({
               onClick={() =>
                 setDraft((current) => ({
                   ...current,
-                  modelContextWindow: CCS_GPT_54_STARTER_CONTEXT_WINDOW,
-                  modelAutoCompactTokenLimit: CCS_GPT_54_STARTER_AUTO_COMPACT_TOKEN_LIMIT,
+                  modelContextWindow: CCS_GPT_5X_STARTER_CONTEXT_WINDOW,
+                  modelAutoCompactTokenLimit: CCS_GPT_5X_STARTER_AUTO_COMPACT_TOKEN_LIMIT,
                 }))
               }
             >
@@ -346,7 +347,7 @@ function TopLevelControlsForm({
               onClick={() =>
                 setDraft((current) => ({
                   ...current,
-                  modelContextWindow: GPT_54_MAX_CONTEXT_WINDOW,
+                  modelContextWindow: GPT_5X_MAX_CONTEXT_WINDOW,
                 }))
               }
             >
@@ -387,7 +388,7 @@ function TopLevelControlsForm({
               Standard window
             </p>
             <p className="mt-1 font-mono text-base font-semibold text-foreground">
-              {formatInteger(GPT_54_STANDARD_CONTEXT_WINDOW)}
+              {formatInteger(GPT_5X_STANDARD_CONTEXT_WINDOW)}
             </p>
             <p className="mt-1 text-[11px] text-muted-foreground">{t('codex.normalUsageWindow')}</p>
           </div>
@@ -412,11 +413,11 @@ function TopLevelControlsForm({
               </p>
               <div className="rounded-full border bg-background px-2.5 py-1 font-mono text-[11px] font-medium">
                 {/* TODO i18n: missing key codex.context */}
-                Context {formatInteger(CCS_GPT_54_STARTER_CONTEXT_WINDOW)}
+                Context {formatInteger(CCS_GPT_5X_STARTER_CONTEXT_WINDOW)}
               </div>
               <div className="rounded-full border bg-background px-2.5 py-1 font-mono text-[11px] font-medium">
                 {/* TODO i18n: missing key codex.autoCompact */}
-                Auto-compact {formatInteger(CCS_GPT_54_STARTER_AUTO_COMPACT_TOKEN_LIMIT)}
+                Auto-compact {formatInteger(CCS_GPT_5X_STARTER_AUTO_COMPACT_TOKEN_LIMIT)}
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -438,7 +439,7 @@ function TopLevelControlsForm({
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
             <span>{t('codex.quickFillWarning')}</span>
-            {!isGpt54Selected && draft.model ? (
+            {!isGpt5LongContextSelected && draft.model ? (
               <span>
                 {/* TODO i18n: missing key codex.shouldBeCheckedSeparately */}
                 <code>{draft.model}</code> should be checked separately.
@@ -500,13 +501,13 @@ function TopLevelControlsForm({
           {/* TODO i18n: missing key codex.docs */}
           <span className="text-[10px] uppercase tracking-[0.14em]">Docs</span>
           <a
-            href="https://developers.openai.com/api/docs/models/gpt-5.4"
+            href="https://developers.openai.com/api/docs/models/gpt-5.5"
             target="_blank"
             rel="noreferrer"
             className="underline underline-offset-2 hover:text-foreground"
           >
-            {/* TODO i18n: missing key codex.gpt54ModelPage */}
-            GPT-5.4 model page
+            {/* TODO i18n: missing key codex.gpt55ModelPage */}
+            GPT-5.5 model page
           </a>
           <a
             href="https://openai.com/index/introducing-gpt-5-4/"
