@@ -38,79 +38,82 @@ export function CostByModelCard({
 }: CostByModelCardProps) {
   const { t } = useTranslation();
 
-  const content = (
-    <>
-      {!headless && (
-        <CardHeader className="px-3 py-2">
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <DollarSign className="w-4 h-4" />
-            {t('analyticsPages.costByModel')}
-          </CardTitle>
-        </CardHeader>
-      )}
-      <CardContent
-        className={cn(
-          'flex-1 min-h-0 overflow-y-auto',
-          headless ? 'px-0 pb-0 pt-0' : 'px-2 pb-2 pt-0'
-        )}
-      >
+  /** Scrollable model list — shared between headless and card modes. */
+  const listContent = (
+    <div className="space-y-0.5">
+      {[...(models ?? [])]
+        .sort((a, b) => b.cost - a.cost)
+        .map((model) => (
+          <button
+            key={model.model}
+            className="group flex items-center text-xs w-full hover:bg-muted/50 rounded px-2 py-1.5 transition-colors cursor-pointer gap-3"
+            onClick={(e) => onModelClick(model, e)}
+            title="Click for details"
+          >
+            {/* Model name */}
+            <div className="flex items-center gap-2 min-w-0 w-[180px] shrink-0">
+              <div
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: getModelColor(model.model) }}
+              />
+              <span className="font-medium truncate group-hover:underline underline-offset-2">
+                {model.model}
+              </span>
+            </div>
+            {/* Cost breakdown mini-bar */}
+            <CostBreakdownBar model={model} />
+            {/* Token count */}
+            <span
+              className={cn(
+                'text-[10px] text-muted-foreground w-14 text-right shrink-0',
+                privacyMode && PRIVACY_BLUR_CLASS
+              )}
+            >
+              {formatTokens(model.tokens)}
+            </span>
+            {/* Total cost */}
+            <span
+              className={cn(
+                'font-mono font-medium w-16 text-right shrink-0',
+                privacyMode && PRIVACY_BLUR_CLASS
+              )}
+            >
+              ${model.cost.toFixed(2)}
+            </span>
+            <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity shrink-0" />
+          </button>
+        ))}
+      {/* Legend */}
+      <CostLegend />
+    </div>
+  );
+
+  // Headless: plain div to avoid CardContent slot-padding bleeding through MonitorCard.
+  if (headless) {
+    return (
+      <div className="flex flex-col h-full min-h-0 overflow-hidden">
         {isLoading ? (
           <Skeleton className="h-full w-full min-h-[120px]" />
         ) : (
-          <div className="space-y-0.5">
-            {[...(models ?? [])]
-              .sort((a, b) => b.cost - a.cost)
-              .map((model) => (
-                <button
-                  key={model.model}
-                  className="group flex items-center text-xs w-full hover:bg-muted/50 rounded px-2 py-1.5 transition-colors cursor-pointer gap-3"
-                  onClick={(e) => onModelClick(model, e)}
-                  title="Click for details"
-                >
-                  {/* Model name */}
-                  <div className="flex items-center gap-2 min-w-0 w-[180px] shrink-0">
-                    <div
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: getModelColor(model.model) }}
-                    />
-                    <span className="font-medium truncate group-hover:underline underline-offset-2">
-                      {model.model}
-                    </span>
-                  </div>
-                  {/* Cost breakdown mini-bar */}
-                  <CostBreakdownBar model={model} />
-                  {/* Token count */}
-                  <span
-                    className={cn(
-                      'text-[10px] text-muted-foreground w-14 text-right shrink-0',
-                      privacyMode && PRIVACY_BLUR_CLASS
-                    )}
-                  >
-                    {formatTokens(model.tokens)}
-                  </span>
-                  {/* Total cost */}
-                  <span
-                    className={cn(
-                      'font-mono font-medium w-16 text-right shrink-0',
-                      privacyMode && PRIVACY_BLUR_CLASS
-                    )}
-                  >
-                    ${model.cost.toFixed(2)}
-                  </span>
-                  <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity shrink-0" />
-                </button>
-              ))}
-            {/* Legend */}
-            <CostLegend />
-          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto">{listContent}</div>
         )}
+      </div>
+    );
+  }
+
+  const content = (
+    <>
+      <CardHeader className="px-3 py-2">
+        <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <DollarSign className="w-4 h-4" />
+          {t('analyticsPages.costByModel')}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-2 pb-2 pt-0 flex-1 min-h-0 overflow-y-auto">
+        {isLoading ? <Skeleton className="h-full w-full min-h-[120px]" /> : listContent}
       </CardContent>
     </>
   );
-
-  if (headless) {
-    return <div className="flex flex-col h-full min-h-0 overflow-hidden">{content}</div>;
-  }
 
   return (
     <Card className="flex flex-col h-full min-h-0 overflow-hidden gap-0 py-0 shadow-sm lg:col-span-4">

@@ -145,10 +145,12 @@ export function AnalyticsSummaryRow({ data, isLoading }: AnalyticsSummaryRowProp
     },
   ];
 
+  // 5 tiles × span-2 = 10 cols in a 12-col grid → single row (consistent between
+  // loading and loaded states, prevents layout shift).
   return (
     <MonitorGrid>
       {tiles.map((tile, i) => (
-        <MonitorCard key={i} span={isLoading ? 2 : undefined}>
+        <MonitorCard key={i} span={2}>
           <StatTile {...tile} blurred={privacyMode} loading={isLoading} />
         </MonitorCard>
       ))}
