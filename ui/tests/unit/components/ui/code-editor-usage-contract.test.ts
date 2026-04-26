@@ -45,8 +45,9 @@ const boundedLayoutContracts = [
     ],
   },
   {
-    file: 'src/pages/api.tsx',
-    snippets: ['flex min-h-0 flex-1 flex-col min-w-0 overflow-hidden'],
+    // api.tsx was migrated to design system; bounded layout is now in the sub-component
+    file: 'src/components/profiles/api-profile-view-pane.tsx',
+    snippets: ['flex h-full min-h-0 flex-col overflow-hidden'],
   },
 ] as const;
 
