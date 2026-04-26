@@ -18,6 +18,14 @@ import {
   type NoticeProgressMap,
 } from '@/lib/updates-notice-state';
 import { useTranslation } from 'react-i18next';
+import { PageShell, PageHeader } from '@/components/page-shell';
+import {
+  KpiRow,
+  KpiCard,
+  MonitorLayout,
+  MonitorGrid,
+  MonitorCard,
+} from '@/components/monitor-layout';
 
 type NoticeViewMode = 'inbox' | 'done' | 'all';
 
@@ -100,87 +108,106 @@ export function UpdatesPage() {
     [notices, progressMap]
   );
 
+  const viewModes: { id: NoticeViewMode; label: string }[] = [
+    { id: 'inbox', label: t('updates.actionRequired') },
+    { id: 'done', label: t('updates.done') },
+    { id: 'all', label: t('updates.all') },
+  ];
+
   return (
-    <div className="flex h-full min-h-0 overflow-hidden">
-      <div className="w-80 border-r bg-muted/30 flex flex-col overflow-hidden">
-        <div className="p-4 border-b bg-background space-y-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Megaphone className="h-5 w-5 text-primary" />
-              <h1 className="font-semibold">{t('updates.inboxTitle')}</h1>
-            </div>
-            <p className="text-xs text-muted-foreground">{t('updates.inboxSubtitle')}</p>
-          </div>
+    <PageShell>
+      {/* 1c. PageHeader — title + description; pendingCount as status badge */}
+      <PageHeader
+        title={
+          <span className="flex items-center gap-2">
+            <Megaphone className="h-5 w-5 text-primary" />
+            {t('updates.inboxTitle')}
+          </span>
+        }
+        description={t('updates.inboxSubtitle')}
+      />
 
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded-md border bg-background px-2 py-1.5">
-              <p className="text-muted-foreground">{t('updates.needsAction')}</p>
-              <p className="text-base font-semibold">{pendingCount}</p>
-            </div>
-            <div className="rounded-md border bg-background px-2 py-1.5">
-              <p className="text-muted-foreground">{t('updates.doneCount')}</p>
-              <p className="text-base font-semibold">{doneCount}</p>
-            </div>
-          </div>
-
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('updates.searchPlaceholder')}
-              className="h-9 pl-8"
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { id: 'inbox' as const, label: t('updates.actionRequired') },
-              { id: 'done' as const, label: t('updates.done') },
-              { id: 'all' as const, label: t('updates.all') },
-            ].map((mode) => (
-              <Button
-                key={mode.id}
-                size="sm"
-                variant={viewMode === mode.id ? 'default' : 'outline'}
-                onClick={() => setViewMode(mode.id)}
-              >
-                {mode.label}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        <ScrollArea className="flex-1">
-          <div className="space-y-2 p-2">
-            {visibleNotices.length === 0 ? (
-              <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-                {t('updates.noNotices')}
-              </div>
-            ) : (
-              visibleNotices.map((notice) => (
-                <UpdatesInboxItem
-                  key={notice.id}
-                  notice={notice}
-                  progress={getNoticeProgress(notice, progressMap)}
-                  selected={selectedNotice?.id === notice.id}
-                  onSelect={() => handleSelectNotice(notice)}
-                />
-              ))
-            )}
-          </div>
-        </ScrollArea>
+      {/* KpiRow — exactly 2 hero numbers, well within the ≤4 limit */}
+      <div className="border-b bg-background/50 px-6 py-3">
+        <KpiRow>
+          <KpiCard
+            label={t('updates.needsAction')}
+            value={pendingCount}
+            tone={pendingCount > 0 ? 'warning' : 'positive'}
+          />
+          <KpiCard label={t('updates.doneCount')} value={doneCount} />
+        </KpiRow>
       </div>
 
-      <UpdatesDetailsPanel
-        notice={selectedNotice}
-        progress={selectedNotice ? getNoticeProgress(selectedNotice, progressMap) : null}
-        relatedEntries={selectedNotice ? getSupportEntriesForNotice(selectedNotice) : []}
-        onUpdateProgress={(nextState) => {
-          if (!selectedNotice) return;
-          setProgressMap((previous) => ({ ...previous, [selectedNotice.id]: nextState }));
-        }}
-      />
-    </div>
+      {/* Monitor body — inbox pane + detail pane as MonitorGrid cards */}
+      <MonitorLayout>
+        <MonitorGrid>
+          {/* Inbox pane — span 4 on desktop, full on mobile */}
+          <MonitorCard
+            span={4}
+            title={
+              <div className="flex flex-col gap-2">
+                {/* Filter buttons */}
+                <div className="flex flex-wrap gap-1.5">
+                  {viewModes.map((mode) => (
+                    <Button
+                      key={mode.id}
+                      size="sm"
+                      variant={viewMode === mode.id ? 'default' : 'outline'}
+                      onClick={() => setViewMode(mode.id)}
+                    >
+                      {mode.label}
+                    </Button>
+                  ))}
+                </div>
+                {/* Search input */}
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder={t('updates.searchPlaceholder')}
+                    className="h-9 pl-8"
+                  />
+                </div>
+              </div>
+            }
+          >
+            <ScrollArea className="h-full max-h-[calc(100vh-22rem)]">
+              <div className="space-y-2">
+                {visibleNotices.length === 0 ? (
+                  <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                    {t('updates.noNotices')}
+                  </div>
+                ) : (
+                  visibleNotices.map((notice) => (
+                    <UpdatesInboxItem
+                      key={notice.id}
+                      notice={notice}
+                      progress={getNoticeProgress(notice, progressMap)}
+                      selected={selectedNotice?.id === notice.id}
+                      onSelect={() => handleSelectNotice(notice)}
+                    />
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </MonitorCard>
+
+          {/* Detail pane — span 8 on desktop, full on mobile */}
+          <MonitorCard span={8} className="min-h-0 p-0">
+            <UpdatesDetailsPanel
+              notice={selectedNotice}
+              progress={selectedNotice ? getNoticeProgress(selectedNotice, progressMap) : null}
+              relatedEntries={selectedNotice ? getSupportEntriesForNotice(selectedNotice) : []}
+              onUpdateProgress={(nextState) => {
+                if (!selectedNotice) return;
+                setProgressMap((previous) => ({ ...previous, [selectedNotice.id]: nextState }));
+              }}
+            />
+          </MonitorCard>
+        </MonitorGrid>
+      </MonitorLayout>
+    </PageShell>
   );
 }
