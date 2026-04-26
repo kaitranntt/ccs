@@ -146,6 +146,65 @@ describe('LogsPage', () => {
     expect(screen.getByLabelText('Loading logs...')).toBeInTheDocument();
   });
 
+  // Design system: PageHeader
+  it('renders PageHeader with correct title', async () => {
+    installFetchMock();
+    render(<LogsPage />);
+    // PageHeader h1 contains the page title
+    expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Log Operations Center');
+  });
+
+  // Design system: KpiRow cards
+  it('renders KpiRow with all four KPI cards', async () => {
+    installFetchMock();
+    render(<LogsPage />);
+    // Wait for data to load
+    await screen.findByRole('heading', { level: 1 });
+    // Four KPI labels (use getAllByText since label text may appear in multiple elements)
+    expect(screen.getAllByText('Pipeline').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Retention').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Sources').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Entries').length).toBeGreaterThan(0);
+  });
+
+  it('KpiRow shows pipeline enabled state from config', async () => {
+    installFetchMock();
+    render(<LogsPage />);
+    await screen.findByRole('heading', { level: 1 });
+    expect(screen.getByText('Enabled')).toBeInTheDocument();
+  });
+
+  it('KpiRow shows retention days from config', async () => {
+    installFetchMock();
+    render(<LogsPage />);
+    await screen.findByRole('heading', { level: 1 });
+    // retain_days=7 → "7d"
+    expect(screen.getByText('7d')).toBeInTheDocument();
+  });
+
+  // Design system: log stream MonitorCard mounts (tab content)
+  it('renders Telemetry Stream tab content with log entry list', async () => {
+    installFetchMock();
+    render(<LogsPage />);
+    // Stream tab is active by default
+    expect(await screen.findByRole('tab', { name: /Telemetry Stream/i })).toBeInTheDocument();
+    // Entry list renders
+    expect(
+      (await screen.findAllByText('Boot sequence failed for dashboard logging')).length
+    ).toBeGreaterThan(0);
+  });
+
+  // Design system: Legacy Errors tab renders
+  it('renders Legacy Errors tab and switches to it', async () => {
+    installFetchMock();
+    render(<LogsPage />);
+    await screen.findByRole('heading', { level: 1 });
+    const legacyTab = screen.getByRole('tab', { name: /Legacy Errors/i });
+    await userEvent.click(legacyTab);
+    expect(screen.getByText(/CLIProxy Failure Analysis/i)).toBeInTheDocument();
+  });
+
   it('filters by source and search query', async () => {
     installFetchMock();
 
