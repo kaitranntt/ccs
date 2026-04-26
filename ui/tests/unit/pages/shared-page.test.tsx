@@ -40,7 +40,7 @@ class StubIntersectionObserver {
   observe = vi.fn();
   unobserve = vi.fn();
   disconnect = vi.fn();
-  constructor(private cb: IntersectionObserverCallback) {}
+  constructor(_cb: IntersectionObserverCallback) {}
 }
 Object.defineProperty(window, 'IntersectionObserver', {
   writable: true,
