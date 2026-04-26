@@ -67,13 +67,16 @@ export function AccountsActionRail({
 
           {/* Legacy migration follow-up */}
           {hasLegacyFollowUp ? (
-            <section className="space-y-2">
+            <section aria-label={t('accountsPage.migrationFollowup')} className="space-y-2">
               <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 {t('accountsPage.migrationFollowup')}
               </p>
               <div className="space-y-3 rounded-md border border-amber-500/50 bg-amber-500/10 p-3">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-700 dark:text-amber-400 shrink-0" />
+                  <AlertTriangle
+                    aria-hidden="true"
+                    className="h-4 w-4 mt-0.5 text-amber-700 dark:text-amber-400 shrink-0"
+                  />
                   <div className="space-y-1 text-xs">
                     {legacyContextCount > 0 && (
                       <p className="text-amber-800 dark:text-amber-300">
