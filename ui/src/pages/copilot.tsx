@@ -32,7 +32,6 @@ import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { PageShell } from '@/components/page-shell';
 import { ConfigLayout } from '@/components/config-layout';
-import { FormPane } from '@/components/config-layout';
 
 // ---------------------------------------------------------------------------
 // Status section component
@@ -324,11 +323,11 @@ export function CopilotPage() {
     <PageShell>
       <ConfigLayout
         left={<CopilotStatusRail />}
-        form={
-          <FormPane>
-            <CopilotConfigForm />
-          </FormPane>
-        }
+        // CopilotConfigForm manages its own internal scroll + header + split
+        // layout. Do NOT wrap it in FormPane (which adds its own ScrollArea +
+        // padding) — that would create double-scroll nesting and break the
+        // form's flex height calculations.
+        form={<CopilotConfigForm />}
       />
     </PageShell>
   );
