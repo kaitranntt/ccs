@@ -2,6 +2,34 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { render, screen, userEvent, waitFor } from '@tests/setup/test-utils';
 
+// ConfigLayout renders desktop 3-pane grid only when matchMedia reports >= 1024px.
+// jsdom does not implement matchMedia — stub it to always return desktop.
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: (query: string) => ({
+    matches: query.includes('min-width') ? true : false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }),
+});
+
+// SectionRail uses IntersectionObserver for scroll-spy — stub for jsdom.
+class IntersectionObserverStub {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+  constructor(_cb: IntersectionObserverCallback, _opts?: IntersectionObserverInit) {}
+}
+Object.defineProperty(window, 'IntersectionObserver', {
+  writable: true,
+  value: IntersectionObserverStub,
+});
+
 const mocks = vi.hoisted(() => ({
   useCodex: vi.fn(),
   refetchDiagnostics: vi.fn(),
@@ -14,6 +42,8 @@ vi.mock('@/hooks/use-codex', () => ({
   useCodex: mocks.useCodex,
 }));
 
+// react-resizable-panels was used in the pre-migration layout — stub retained for
+// compatibility in case any transitive import still references it.
 vi.mock('react-resizable-panels', () => ({
   PanelGroup: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Panel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
