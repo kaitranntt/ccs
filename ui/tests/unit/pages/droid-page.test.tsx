@@ -24,8 +24,7 @@ class IntersectionObserverMock {
   disconnect = vi.fn();
   constructor(_callback: IntersectionObserverCallback, _options?: IntersectionObserverInit) {}
 }
-global.IntersectionObserver =
-  IntersectionObserverMock as unknown as typeof IntersectionObserver;
+global.IntersectionObserver = IntersectionObserverMock as unknown as typeof IntersectionObserver;
 
 // ---- Force desktop layout: matchMedia returns true for min-width queries ----
 // ConfigLayout uses useIsDesktop() which calls window.matchMedia('(min-width: 1024px)').
@@ -60,13 +59,7 @@ vi.mock('@/hooks/use-droid', () => ({
 
 // Stub CodeEditor so we can interact with raw JSON textarea in tests
 vi.mock('@/components/shared/code-editor', () => ({
-  CodeEditor: ({
-    value,
-    onChange,
-  }: {
-    value: string;
-    onChange: (next: string) => void;
-  }) => (
+  CodeEditor: ({ value, onChange }: { value: string; onChange: (next: string) => void }) => (
     <textarea
       aria-label="droid raw settings editor"
       value={value}
@@ -240,18 +233,14 @@ describe('DroidPage (Phase 4 design-system rewrite)', () => {
     mocks.useDroid.mockReturnValue(buildUseDroidResult());
     render(<DroidPage />);
     expect(document.getElementById('docs')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Use BYOK to bring your own model credentials/)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Use BYOK to bring your own model credentials/)).toBeInTheDocument();
   });
 
   it('mounts the raw settings JSON pane with editor', () => {
     mocks.useDroid.mockReturnValue(buildUseDroidResult());
     render(<DroidPage />);
     expect(screen.getByLabelText('droid raw settings editor')).toBeInTheDocument();
-    expect(screen.getByLabelText('droid raw settings editor')).toHaveValue(
-      baseRawSettings.rawText
-    );
+    expect(screen.getByLabelText('droid raw settings editor')).toHaveValue(baseRawSettings.rawText);
   });
 
   it('shows Unsaved badge when editor content differs from saved base', () => {
