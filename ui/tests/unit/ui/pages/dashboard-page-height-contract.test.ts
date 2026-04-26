@@ -15,7 +15,7 @@ const layoutManagedRouteFiles = [
   'src/pages/cliproxy-ai-providers.tsx',
   'src/pages/cliproxy-control-panel.tsx',
   'src/pages/copilot.tsx',
-  'src/pages/cursor.tsx',
+  'src/pages/cursor/index.tsx',
   'src/pages/claude-extension.tsx',
   'src/pages/codex.tsx',
   'src/pages/droid.tsx',

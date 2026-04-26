@@ -1,3 +1,11 @@
+/**
+ * CursorPage — integration-level tests (pre-existing, updated for design-system rewrite).
+ *
+ * Phase 4 rewrite replaced Tabs (Model Config | Settings | Info) with FormSections
+ * in a scrollable FormPane. Port input and other fields are now always visible
+ * (no tab navigation needed). Tests updated accordingly.
+ */
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, userEvent, waitFor } from '@tests/setup/test-utils';
 
@@ -94,8 +102,10 @@ function buildUseCursorResult(overrides: Record<string, unknown> = {}) {
     isSavingRawSettings: false,
     autoDetectAuthAsync: mocks.autoDetectAuthAsync,
     isAutoDetectingAuth: false,
+    autoDetectAuthResult: undefined,
     importManualAuthAsync: mocks.importManualAuthAsync,
     isImportingManualAuth: false,
+    manualAuthResult: undefined,
     startDaemonAsync: mocks.startDaemonAsync,
     isStartingDaemon: false,
     stopDaemonAsync: mocks.stopDaemonAsync,
@@ -113,12 +123,15 @@ describe('CursorPage', () => {
     mocks.runProbeAsync.mockReset();
     mocks.resetProbe.mockReset();
     mocks.refetchConfig.mockReset();
+    mocks.refetchStatus.mockReset();
+    mocks.refetchRawSettings.mockReset();
     mocks.refetchConfig.mockResolvedValue({
       status: 'success',
       isError: false,
       error: null,
       data: buildUseCursorResult().config,
     });
+    mocks.refetchStatus.mockResolvedValue({ data: buildUseCursorResult().status });
     mocks.runProbeAsync.mockResolvedValue(probeFailure);
     mocks.useCursor.mockReturnValue(buildUseCursorResult());
     toastMocks.error.mockReset();
@@ -134,7 +147,8 @@ describe('CursorPage', () => {
 
     render(<CursorPage />);
 
-    expect(screen.getByText('Live Probe')).toBeInTheDocument();
+    // "Live Probe" appears in sidebar header and as section heading — allow multiple
+    expect(screen.getAllByText('Live Probe').length).toBeGreaterThan(0);
     await waitFor(() => expect(screen.getByText('Probe failed')).toBeInTheDocument());
     expect(screen.getByText('503')).toBeInTheDocument();
     expect(screen.getByText('321 ms')).toBeInTheDocument();
@@ -153,9 +167,12 @@ describe('CursorPage', () => {
   it('blocks live probe runs while local edits are unsaved', async () => {
     render(<CursorPage />);
 
-    await userEvent.click(screen.getByRole('tab', { name: 'Settings' }));
-    await userEvent.clear(screen.getByLabelText('Port'));
-    await userEvent.type(screen.getByLabelText('Port'), '20130');
+    // Phase 4 rewrite: Port input is always visible in RuntimeSettingsSection (no tab nav needed)
+    const portInput = document.getElementById('cursor-port') as HTMLInputElement;
+    expect(portInput).toBeInTheDocument();
+
+    await userEvent.clear(portInput);
+    await userEvent.type(portInput, '20130');
     await userEvent.click(screen.getByRole('button', { name: 'Run Live Probe' }));
 
     expect(mocks.runProbeAsync).not.toHaveBeenCalled();
@@ -172,13 +189,17 @@ describe('CursorPage', () => {
       screen.getByRole('button', { name: 'Refresh Cursor configuration' })
     ).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('tab', { name: 'Settings' }));
-    await userEvent.clear(screen.getByLabelText('Port'));
-    await userEvent.type(screen.getByLabelText('Port'), '20130');
+    // Phase 4 rewrite: Port input is always visible (no tab click needed)
+    const portInput = document.getElementById('cursor-port') as HTMLInputElement;
+    expect(portInput).toBeInTheDocument();
+
+    await userEvent.clear(portInput);
+    await userEvent.type(portInput, '20130');
 
     await userEvent.click(screen.getByRole('button', { name: 'Refresh Cursor configuration' }));
 
     await waitFor(() => expect(mocks.refetchConfig).toHaveBeenCalledTimes(1));
-    expect(screen.getByLabelText('Port')).toHaveValue(20129);
+    // After refresh, port resets to pristine config value 20129
+    expect(portInput).toHaveValue(20129);
   });
 });
