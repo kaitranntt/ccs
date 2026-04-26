@@ -18,7 +18,7 @@ const layoutManagedRouteFiles = [
   'src/pages/cursor.tsx',
   'src/pages/claude-extension.tsx',
   'src/pages/codex.tsx',
-  'src/pages/droid.tsx',
+  'src/pages/droid/index.tsx',
   'src/pages/accounts.tsx',
   'src/pages/settings/index.tsx',
   'src/pages/health.tsx',
