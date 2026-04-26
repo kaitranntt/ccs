@@ -2,6 +2,10 @@
  * Cost By Model Card Component
  *
  * Displays a list of models sorted by cost with breakdown bars.
+ *
+ * Supports two rendering modes:
+ * - default: renders its own Card shell (legacy, standalone use)
+ * - headless (prop): renders content only — for use inside a MonitorCard
  */
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +22,11 @@ interface CostByModelCardProps {
   isLoading: boolean;
   onModelClick: (model: ModelUsage, event: React.MouseEvent) => void;
   privacyMode: boolean;
+  /**
+   * When true, suppresses the outer Card shell.
+   * Use when this component is already nested inside a MonitorCard.
+   */
+  headless?: boolean;
 }
 
 export function CostByModelCard({
@@ -25,23 +34,31 @@ export function CostByModelCard({
   isLoading,
   onModelClick,
   privacyMode,
+  headless = false,
 }: CostByModelCardProps) {
   const { t } = useTranslation();
 
-  return (
-    <Card className="flex flex-col h-full min-h-0 overflow-hidden gap-0 py-0 shadow-sm lg:col-span-4">
-      <CardHeader className="px-3 py-2">
-        <CardTitle className="text-base font-semibold flex items-center gap-2">
-          <DollarSign className="w-4 h-4" />
-          {t('analyticsPages.costByModel')}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="px-2 pb-2 pt-0 flex-1 min-h-0 overflow-y-auto">
+  const content = (
+    <>
+      {!headless && (
+        <CardHeader className="px-3 py-2">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <DollarSign className="w-4 h-4" />
+            {t('analyticsPages.costByModel')}
+          </CardTitle>
+        </CardHeader>
+      )}
+      <CardContent
+        className={cn(
+          'flex-1 min-h-0 overflow-y-auto',
+          headless ? 'px-0 pb-0 pt-0' : 'px-2 pb-2 pt-0'
+        )}
+      >
         {isLoading ? (
-          <Skeleton className="h-full w-full" />
+          <Skeleton className="h-full w-full min-h-[120px]" />
         ) : (
           <div className="space-y-0.5">
-            {[...(models || [])]
+            {[...(models ?? [])]
               .sort((a, b) => b.cost - a.cost)
               .map((model) => (
                 <button
@@ -88,6 +105,16 @@ export function CostByModelCard({
           </div>
         )}
       </CardContent>
+    </>
+  );
+
+  if (headless) {
+    return <div className="flex flex-col h-full min-h-0 overflow-hidden">{content}</div>;
+  }
+
+  return (
+    <Card className="flex flex-col h-full min-h-0 overflow-hidden gap-0 py-0 shadow-sm lg:col-span-4">
+      {content}
     </Card>
   );
 }

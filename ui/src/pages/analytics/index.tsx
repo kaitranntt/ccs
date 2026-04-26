@@ -1,19 +1,26 @@
 /**
  * Analytics Page
  *
- * Displays Claude Code usage analytics with charts.
- * Features trend charts, model breakdown, cost analysis, and anomaly detection.
+ * Monitor archetype: PageShell + PageHeader + MonitorLayout + MonitorGrid.
+ * Displays Claude Code usage analytics — trends, model breakdown, cost, sessions.
  */
 
 import { useRef } from 'react';
+import { BarChart2, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverAnchor } from '@/components/ui/popover';
-import { UsageSummaryCards } from '@/components/analytics/usage-summary-cards';
 import { ModelDetailsContent } from '@/components/analytics/model-details-content';
+import { PageShell } from '@/components/page-shell/page-shell';
+import { PageHeader } from '@/components/page-shell/page-header';
+import { MonitorLayout } from '@/components/monitor-layout/monitor-layout';
 import { useAnalyticsPage } from './hooks';
-import { AnalyticsHeader } from './components/analytics-header';
+import { AnalyticsControls } from './components/analytics-header';
 import { ChartsGrid } from './components/charts-grid';
+import { AnalyticsSummaryRow } from './components/analytics-summary-row';
+import { useTranslation } from 'react-i18next';
 
 export function AnalyticsPage() {
+  const { t } = useTranslation();
   const popoverAnchorRef = useRef<HTMLDivElement>(null);
   const {
     dateRange,
@@ -40,38 +47,64 @@ export function AnalyticsPage() {
   } = useAnalyticsPage();
 
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-4 overflow-y-auto px-4 py-4">
-      {/* Header */}
-      <AnalyticsHeader
-        dateRange={dateRange}
-        onDateRangeChange={handleDateRangeChange}
-        onTodayClick={handleTodayClick}
-        onRefresh={handleRefresh}
-        isRefreshing={isRefreshing}
-        lastUpdatedText={lastUpdatedText}
-        viewMode={viewMode}
+    <PageShell>
+      <PageHeader
+        title={
+          <span className="flex items-center gap-2">
+            <BarChart2 className="h-5 w-5 text-muted-foreground" />
+            {t('analytics.title')}
+          </span>
+        }
+        description={t('analytics.subtitle')}
+        actions={
+          <AnalyticsControls
+            dateRange={dateRange}
+            onDateRangeChange={handleDateRangeChange}
+            onTodayClick={handleTodayClick}
+            viewMode={viewMode}
+            lastUpdatedText={lastUpdatedText}
+            refreshButton={
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 h-8"
+                onClick={() => void handleRefresh()}
+                disabled={isRefreshing}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </Button>
+            }
+          />
+        }
       />
 
-      {/* Summary Cards */}
-      <UsageSummaryCards data={summary} isLoading={isSummaryLoading} />
+      <MonitorLayout>
+        {/* Summary KPI row — 5 metrics, rendered inside MonitorLayout body */}
+        <AnalyticsSummaryRow data={summary} isLoading={isSummaryLoading} />
 
-      {/* Charts Grid */}
-      <ChartsGrid
-        viewMode={viewMode}
-        trends={trends}
-        hourlyData={hourlyData}
-        models={models}
-        sessions={sessions}
-        isTrendsLoading={isTrendsLoading}
-        isHourlyLoading={isHourlyLoading}
-        isModelsLoading={isModelsLoading}
-        isSessionsLoading={isSessionsLoading}
-        isSummaryLoading={isSummaryLoading}
-        onModelClick={handleModelClick}
-      />
+        {/* Charts grid */}
+        <ChartsGrid
+          viewMode={viewMode}
+          trends={trends}
+          hourlyData={hourlyData}
+          models={models}
+          sessions={sessions}
+          isTrendsLoading={isTrendsLoading}
+          isHourlyLoading={isHourlyLoading}
+          isModelsLoading={isModelsLoading}
+          isSessionsLoading={isSessionsLoading}
+          isSummaryLoading={isSummaryLoading}
+          onModelClick={handleModelClick}
+        />
+      </MonitorLayout>
 
       {/* Model Details Popover - positioned at cursor */}
-      <Popover open={!!selectedModel} onOpenChange={(open) => !open && handlePopoverClose()}>
+      <Popover
+        open={!!selectedModel}
+        onOpenChange={(open) => {
+          if (!open) handlePopoverClose();
+        }}
+      >
         <PopoverAnchor asChild>
           <div
             ref={popoverAnchorRef}
@@ -88,7 +121,7 @@ export function AnalyticsPage() {
           {selectedModel && <ModelDetailsContent model={selectedModel} />}
         </PopoverContent>
       </Popover>
-    </div>
+    </PageShell>
   );
 }
 
