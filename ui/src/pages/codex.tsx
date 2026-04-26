@@ -1,15 +1,14 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { GripVertical, Loader2 } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import { CodexControlCenterTab } from '@/components/compatible-cli/codex-control-center-tab';
 import { CodexDocsTab } from '@/components/compatible-cli/codex-docs-tab';
 import { useCodex } from '@/hooks/use-codex';
 import { isApiConflictError } from '@/lib/api-client';
 import { CodexOverviewTab } from '@/components/compatible-cli/codex-overview-tab';
 import { RawConfigEditorPanel } from '@/components/compatible-cli/raw-json-settings-editor-panel';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   getKnownCodexFeatures,
   readCodexFeatureState,
@@ -20,6 +19,30 @@ import {
   readCodexTopLevelSettings,
 } from '@/lib/codex-config';
 import { safeParseTomlObject } from '@shared/toml-object';
+import { PageShell, PageHeader } from '@/components/page-shell';
+import {
+  ConfigLayout,
+  SectionRail,
+  FormPane,
+  FormSection,
+  type SectionRailItem,
+} from '@/components/config-layout';
+
+// ---------------------------------------------------------------------------
+// Section rail definition — anchors for the FormPane scroll-spy
+// ---------------------------------------------------------------------------
+
+const CODEX_SECTIONS: SectionRailItem[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'controls', label: 'Control Center' },
+  { id: 'docs', label: 'Docs' },
+];
+
+// ---------------------------------------------------------------------------
+// CodexPage — single-entity Config archetype
+// Identity strip: PageHeader (1c)
+// Body: ConfigLayout + SectionRail + FormPane + RawConfigEditorPanel (json slot)
+// ---------------------------------------------------------------------------
 
 export function CodexPage() {
   const { t } = useTranslation();
@@ -151,9 +174,11 @@ export function CodexPage() {
     }
   };
 
-  const tabContentClassName = 'mt-0 h-full border-0 p-0 data-[state=inactive]:hidden';
+  // ---------------------------------------------------------------------------
+  // FormPane body — three FormSections matching the SectionRail anchors
+  // ---------------------------------------------------------------------------
 
-  const renderSidebar = () => {
+  const renderFormBody = () => {
     if (diagnosticsLoading) {
       return (
         <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -176,56 +201,64 @@ export function CodexPage() {
     }
 
     return (
-      <Tabs defaultValue="overview" className="flex h-full flex-col">
-        <div className="shrink-0 px-4 pt-4">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="overview">{t('codexPage.overview')}</TabsTrigger>
-            <TabsTrigger value="controls">{t('codexPage.controlCenter')}</TabsTrigger>
-            <TabsTrigger value="docs">{t('codexPage.docs')}</TabsTrigger>
-          </TabsList>
-        </div>
+      <>
+        <FormSection id="overview" title={t('codexPage.overview')}>
+          <CodexOverviewTab diagnostics={diagnostics} />
+        </FormSection>
 
-        <div className="flex-1 min-h-0 overflow-hidden px-4 pb-4 pt-3">
-          <TabsContent value="overview" className={tabContentClassName}>
-            <CodexOverviewTab diagnostics={diagnostics} />
-          </TabsContent>
+        <FormSection id="controls" title={t('codexPage.controlCenter')}>
+          <CodexControlCenterTab
+            workspacePath={diagnostics.workspacePath}
+            activeProfile={diagnostics.config.activeProfile}
+            topLevelSettings={topLevelSettings}
+            projectTrustEntries={projectTrustEntries}
+            profileEntries={profileEntries}
+            modelProviderEntries={modelProviderEntries}
+            mcpServerEntries={mcpServerEntries}
+            featureCatalog={featureCatalog}
+            featureState={featureState}
+            disabled={structuredControlsDisabled}
+            disabledReason={controlsDisabledReason}
+            saving={isPatchingConfig}
+            onPatch={runConfigPatch}
+          />
+        </FormSection>
 
-          <TabsContent value="controls" className={tabContentClassName}>
-            <CodexControlCenterTab
-              workspacePath={diagnostics.workspacePath}
-              activeProfile={diagnostics.config.activeProfile}
-              topLevelSettings={topLevelSettings}
-              projectTrustEntries={projectTrustEntries}
-              profileEntries={profileEntries}
-              modelProviderEntries={modelProviderEntries}
-              mcpServerEntries={mcpServerEntries}
-              featureCatalog={featureCatalog}
-              featureState={featureState}
-              disabled={structuredControlsDisabled}
-              disabledReason={controlsDisabledReason}
-              saving={isPatchingConfig}
-              onPatch={runConfigPatch}
-            />
-          </TabsContent>
-
-          <TabsContent value="docs" className={tabContentClassName}>
-            <CodexDocsTab diagnostics={diagnostics} />
-          </TabsContent>
-        </div>
-      </Tabs>
+        <FormSection id="docs" title={t('codexPage.docs')}>
+          <CodexDocsTab diagnostics={diagnostics} />
+        </FormSection>
+      </>
     );
   };
 
   return (
-    <div className="h-full min-h-0 overflow-hidden">
-      <PanelGroup direction="horizontal" className="h-full">
-        <Panel defaultSize={45} minSize={35}>
-          <div className="h-full border-r bg-muted/20">{renderSidebar()}</div>
-        </Panel>
-        <PanelResizeHandle className="group flex w-2 cursor-col-resize items-center justify-center bg-border transition-colors hover:bg-primary/20">
-          <GripVertical className="h-3 w-3 text-muted-foreground group-hover:text-primary" />
-        </PanelResizeHandle>
-        <Panel defaultSize={55} minSize={35}>
+    <PageShell>
+      <PageHeader
+        title={/* TODO i18n: missing key for "Codex" page title */ 'Codex'}
+        description={
+          /* TODO i18n: missing key for codex page description */ 'Configure and manage your Codex CLI integration'
+        }
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refreshAll}
+            disabled={diagnosticsLoading || rawConfigLoading}
+            aria-label={/* TODO i18n: missing key for "Refresh Codex" */ 'Refresh Codex'}
+          >
+            <RefreshCw
+              className={
+                diagnosticsLoading || rawConfigLoading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'
+              }
+            />
+            {/* TODO i18n: missing key for "Refresh" */ 'Refresh'}
+          </Button>
+        }
+      />
+      <ConfigLayout
+        left={<SectionRail sections={CODEX_SECTIONS} />}
+        form={<FormPane>{renderFormBody()}</FormPane>}
+        json={
           <RawConfigEditorPanel
             /* TODO i18n: missing key for "Codex config.toml" title */
             title="Codex config.toml"
@@ -271,8 +304,8 @@ export function CodexPage() {
               </div>
             }
           />
-        </Panel>
-      </PanelGroup>
-    </div>
+        }
+      />
+    </PageShell>
   );
 }
