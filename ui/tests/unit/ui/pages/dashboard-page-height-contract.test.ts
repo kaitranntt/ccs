@@ -12,7 +12,7 @@ const layoutManagedRouteFiles = [
   'src/pages/updates.tsx',
   'src/pages/api.tsx',
   'src/pages/cliproxy.tsx',
-  'src/pages/cliproxy-ai-providers.tsx',
+  'src/pages/cliproxy-ai-providers/index.tsx',
   'src/pages/cliproxy-control-panel.tsx',
   'src/pages/copilot.tsx',
   'src/pages/cursor.tsx',
