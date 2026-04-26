@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Phase 4 — AI Providers Page Design System Rewrite</title>
+<style>
+  :root { --bg: #0f0f0f; --card: #1a1a1a; --border: #2a2a2a; --text: #e0e0e0; --muted: #888; --accent: #f97316; --green: #22c55e; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 2rem; }
+  h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
+  .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 2rem; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+  .badge-green { background: #166534; color: #86efac; }
+  .badge-orange { background: #7c2d12; color: #fed7aa; }
+  .badge-blue { background: #1e3a5f; color: #93c5fd; }
+  .section { margin-bottom: 2rem; }
+  .section-title { font-size: 1rem; font-weight: 600; color: var(--accent); margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+  .grid { display: grid; gap: 1rem; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
+  .card h3 { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; }
+  .card p, .card li { font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
+  .card ul { padding-left: 1.2rem; }
+  .file-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  .file-table th { text-align: left; padding: 0.5rem; background: #111; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); }
+  .file-table td { padding: 0.5rem; border-bottom: 1px solid #222; color: var(--text); }
+  .file-table td:nth-child(2) { color: var(--muted); font-family: monospace; font-size: 0.75rem; }
+  .mono { font-family: monospace; font-size: 0.75rem; color: #93c5fd; }
+  .check { color: var(--green); }
+  .stat { text-align: center; }
+  .stat .num { font-size: 2rem; font-weight: 700; color: var(--accent); }
+  .stat .label { font-size: 0.75rem; color: var(--muted); }
+  .arch-diagram { background: #111; border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; font-family: monospace; font-size: 0.75rem; line-height: 1.8; color: #a3e635; }
+  img { width: 100%; border-radius: 8px; border: 1px solid var(--border); }
+  .img-cap { font-size: 0.75rem; color: var(--muted); text-align: center; margin-top: 0.5rem; margin-bottom: 1.5rem; }
+</style>
+</head>
+<body>
+
+<h1>Phase 4 — AI Providers Page <span class="badge badge-orange">FINAL</span></h1>
+<p class="subtitle">Design system migration: 1825-line monolith → focused folder structure. Architecture: §1b Rail-anchored identity (Multi-entity Config).</p>
+
+<div class="section">
+  <div class="section-title">Key Stats</div>
+  <div class="grid grid-3">
+    <div class="card stat">
+      <div class="num">1825</div>
+      <div class="label">Lines removed (monolith)</div>
+    </div>
+    <div class="card stat">
+      <div class="num">13</div>
+      <div class="label">New focused files</div>
+    </div>
+    <div class="card stat">
+      <div class="num">38</div>
+      <div class="label">Unit tests passing</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">File Ownership</div>
+  <table class="file-table">
+    <thead>
+      <tr><th>File</th><th>LOC</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="mono">pages/cliproxy-ai-providers/index.tsx</td><td>480</td><td>Page shell, left rail, family header, entry selector, dialogs</td></tr>
+      <tr><td class="mono">pages/cliproxy-ai-providers/cliproxy-ai-providers-form.tsx</td><td>228</td><td>Entry editor orchestrator (config/info tabs + raw JSON pane)</td></tr>
+      <tr><td class="mono">pages/cliproxy-ai-providers/hooks/use-ai-providers-page.ts</td><td>76</td><td>URL-synced family + entry selection, dialog state</td></tr>
+      <tr><td class="mono">pages/cliproxy-ai-providers/hooks/use-entry-editor.ts</td><td>196</td><td>Draft state, JSON↔form sync, presets, validation</td></tr>
+      <tr><td class="mono">pages/cliproxy-ai-providers/lib/ai-provider-utils.ts</td><td>543</td><td>Pure utilities: build/parse/format functions, getFamilyGuide</td></tr>
+      <tr><td class="mono">pages/cliproxy-ai-providers/sections/provider-overview-section.tsx</td><td>162</td><td>Entry header, workspace presets, summary cards, missing-fields banner</td></tr>
+      <tr><td class="mono">pages/cliproxy-ai-providers/sections/provider-auth-section.tsx</td><td>137</td><td>Connection: API key, connector name, multi-key, base URL, proxy URL, prefix</td></tr>
+      <tr><td class="mono">pages/cliproxy-ai-providers/sections/provider-models-section.tsx</td><td>66</td><td>Model rules: model aliases textarea, validation errors</td></tr>
+      <tr><td class="mono">pages/cliproxy-ai-providers/sections/provider-advanced-routing-section.tsx</td><td>76</td><td>Headers + excluded models textareas</td></tr>
+      <tr><td class="mono">pages/cliproxy-ai-providers/sections/provider-info-section.tsx</td><td>76</td><td>Info &amp; Usage tab: route behavior, profile boundary, editing rule of thumb</td></tr>
+      <tr><td class="mono">pages/cliproxy-ai-providers/sections/provider-empty-state.tsx</td><td>138</td><td>Empty state: setup flow, route summary, profile boundary card</td></tr>
+      <tr><td class="mono">pages/cliproxy-ai-providers/sections/provider-entry-primitives.tsx</td><td>137</td><td>SummaryCard, EntrySecretBadge, EntryEditorField, SetupStepSection</td></tr>
+      <tr><td class="mono">tests/unit/pages/cliproxy-ai-providers-page.test.tsx</td><td>567</td><td>38 unit tests</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="section">
+  <div class="section-title">Architecture</div>
+  <div class="arch-diagram">
+ui/src/pages/cliproxy-ai-providers/
+├── index.tsx                          ← CliproxyAiProvidersPage export
+│   ├── Left Rail (280px)
+│   │   ├── Brand strip (CLIProxy Plus logo + refresh)
+│   │   ├── Add entry CTA (context-sensitive label)
+│   │   ├── FamilyRail (URL-synced ?family= param)
+│   │   ├── ProxyStatusWidget
+│   │   └── Footer (N families · N ready)
+│   └── Main Content
+│       ├── Family header (name, route badge, status, auth mode)
+│       ├── Entry selector (card strip, multi-entry OR single display)
+│       ├── AiProviderForm [keyed by entry.id]
+│       │   └── cliproxy-ai-providers-form.tsx
+│       │       ├── Left sub-pane: Config tab / Info tab
+│       │       │   ├── ProviderOverviewSection
+│       │       │   ├── ProviderAuthSection
+│       │       │   ├── ProviderModelsSection
+│       │       │   └── ProviderAdvancedRoutingSection
+│       │       └── Right sub-pane: Raw Entry Config / settings.json Preview
+│       ├── ProviderEmptyState (when no entries)
+│       ├── ProviderEntryDialog (create/edit)
+│       └── ConfirmDialog (delete)
+├── hooks/
+│   ├── use-ai-providers-page.ts      ← family/entry selection, dialogs
+│   └── use-entry-editor.ts           ← draft, JSON sync, validation
+├── lib/
+│   └── ai-provider-utils.ts          ← pure functions (no side effects)
+└── sections/
+    ├── provider-entry-primitives.tsx
+    ├── provider-overview-section.tsx
+    ├── provider-auth-section.tsx
+    ├── provider-models-section.tsx
+    ├── provider-advanced-routing-section.tsx
+    ├── provider-info-section.tsx
+    └── provider-empty-state.tsx
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Design Pattern — §1b Rail-anchored Identity</div>
+  <div class="grid grid-2">
+    <div class="card">
+      <h3>What changed</h3>
+      <ul>
+        <li>No top PageHeader — identity lives in left rail per design-system.md §1b</li>
+        <li>Left rail holds brand identity, primary CTA, provider family navigation</li>
+        <li>FamilyRail drives family selection via URL ?family= param (navigable, shareable)</li>
+        <li>JsonPane is editable (raw entry config) with settings.json preview alongside</li>
+        <li>Entry key prop forces remount on selection change (preserves original pattern)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Correctness preserved</h3>
+      <ul>
+        <li>preserveSecrets: don't send placeholder back to API when not rotating</li>
+        <li>effectiveSelectedEntryId: falls back to first entry when none selected</li>
+        <li>Bidirectional JSON sync: form → JSON (immediate), JSON → form (on valid parse)</li>
+        <li>5-family dispatch: gemini, codex, claude, vertex, openai-compatibility</li>
+        <li>canSave: requires isRawJsonValid + no missing fields + no model errors + hasChanges</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Test Coverage</div>
+  <div class="grid grid-2">
+    <div class="card">
+      <h3>Page-level tests (vi.hoisted + mock reset)</h3>
+      <ul>
+        <li class="check">✓ Loading skeleton (2)</li>
+        <li class="check">✓ Error state + retry callback (2)</li>
+        <li class="check">✓ Left rail: brand, FamilyRail, ProxyStatusWidget, footer (4)</li>
+        <li class="check">✓ Family header: display name, route badge, status badge (3)</li>
+        <li class="check">✓ Entry selector: label, entries count (2)</li>
+        <li class="check">✓ Config tab: Connection, Model rules, Advanced routing, Save/Reset/Remove state (6)</li>
+        <li class="check">✓ Raw JSON pane: tabs, CodeEditor, settings preview, placeholder (4)</li>
+        <li class="check">✓ Empty state: setup guidance, Create Connector CTA (2)</li>
+        <li class="check">✓ Create dialog open/close (2)</li>
+        <li class="check">✓ Delete confirm: open, confirm callback, cancel (3)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Pure function tests (ai-provider-utils)</h3>
+      <ul>
+        <li class="check">✓ getFamilyStatusBadge: ready + empty (2)</li>
+        <li class="check">✓ getRoutingMode: proxy override + default runtime (2)</li>
+        <li class="check">✓ parseDelimitedLines (1)</li>
+        <li class="check">✓ parseKeyValueLines (1)</li>
+        <li class="check">✓ renderModelRuleSummary: empty + mixed (2)</li>
+        <li class="check">✓ buildEntryEditorDraft: apiKey starts empty (1)</li>
+        <li class="check">✓ STORED_SECRET_PLACEHOLDER value (1)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Quality Gates</div>
+  <div class="grid grid-3">
+    <div class="card">
+      <h3 class="check">✓ bun run typecheck</h3>
+      <p>tsc --noEmit passes clean. No any escapes added. All imports typed.</p>
+    </div>
+    <div class="card">
+      <h3 class="check">✓ bun run lint:fix</h3>
+      <p>ESLint clean. No unused vars, no non-null assertions, hooks rules satisfied.</p>
+    </div>
+    <div class="card">
+      <h3 class="check">✓ bun run test</h3>
+      <p>38/38 tests pass. Contract tests updated. 3 pre-existing failures (codex/account-visual-groups) confirmed pre-existing.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Screenshots (headless Chrome, 1440×900, no CLIProxy API running)</div>
+  <div class="grid grid-2">
+    <div>
+      <img src="screenshots-phase4/before-cliproxy-ai-providers.png" alt="Before (dev branch)" />
+      <p class="img-cap">Before — dev branch (port 5174). Error state shown: no CLIProxy API in headless context.</p>
+    </div>
+    <div>
+      <img src="screenshots-phase4/after-cliproxy-ai-providers.png" alt="After (worktree rewrite)" />
+      <p class="img-cap">After — rewrite branch (port 5175). Same error state: redesigned error card with Control Panel + API Profiles buttons.</p>
+    </div>
+  </div>
+  <div class="card" style="margin-top:1rem;">
+    <h3>Privacy verification</h3>
+    <p>No API keys, OAuth tokens, or user account data visible in either screenshot. Error state shows only generic messages. Both screenshots are safe for inclusion in the PR.</p>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">PR</div>
+  <div class="card">
+    <h3>Branch: <span class="mono">kai/refactor/rewrite-cliproxy-ai-providers-design-system</span></h3>
+    <p>PR #1102 → <span class="mono">kai/feat/design-system-phase-3-4</span></p>
+    <p>URL: <a href="https://github.com/kaitranntt/ccs/pull/1102" style="color:#93c5fd;">https://github.com/kaitranntt/ccs/pull/1102</a></p>
+  </div>
+</div>
+
+</body>
+</html>
