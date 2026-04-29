@@ -42,12 +42,14 @@ STABLE=${STABLE_TAG#v}
 CURRENT_VERSION=$(jq -r '.version' package.json)
 HEAD_SUBJECT=$(git log -1 --pretty=%s 2>/dev/null || echo "")
 DEV_VERSION_REGEX="^${STABLE//./\\.}-dev\\.[0-9]+$"
+CURRENT_RELEASE_SUBJECT="chore(release): ${CURRENT_VERSION}"
+LEGACY_CURRENT_RELEASE_SUBJECT="${CURRENT_RELEASE_SUBJECT} [skip ci]"
 PREVIOUS_DEV_TAG=""
 RECOVERY_MODE=false
 
 log_info "Current stable version: ${STABLE}"
 
-if [[ "$CURRENT_VERSION" =~ $DEV_VERSION_REGEX ]] && [[ "$HEAD_SUBJECT" == "chore(release): ${CURRENT_VERSION} [skip ci]" ]]; then
+if [[ "$CURRENT_VERSION" =~ $DEV_VERSION_REGEX ]] && { [[ "$HEAD_SUBJECT" == "$CURRENT_RELEASE_SUBJECT" ]] || [[ "$HEAD_SUBJECT" == "$LEGACY_CURRENT_RELEASE_SUBJECT" ]]; }; then
   VERSION="$CURRENT_VERSION"
   CURRENT_TAG="v${VERSION}"
   PREVIOUS_DEV_TAG=$(git tag -l "v${STABLE}-dev.*" --sort=-v:refname | grep -vx "$CURRENT_TAG" | head -1 || echo "")
@@ -101,7 +103,7 @@ else
 
   # Commit version change
   git add package.json
-  git commit -m "chore(release): ${VERSION} [skip ci]"
+  git commit -m "chore(release): ${VERSION}"
   log_info "Created release commit"
 
   # Create tag

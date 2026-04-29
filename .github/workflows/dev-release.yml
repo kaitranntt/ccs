@@ -11,7 +11,9 @@ concurrency:
 
 jobs:
   release:
-    if: ${{ github.ref == 'refs/heads/dev' && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')) }}
+    # Release commits must still report PR CI when dev is promoted to main.
+    # Skip recursive dev releases by subject instead of GitHub's global [skip ci].
+    if: ${{ github.ref == 'refs/heads/dev' && (github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(release): ')) }}
     runs-on: ubuntu-latest
 
     permissions:

@@ -31,4 +31,20 @@ describe('dev release workflow', () => {
     expect(releaseSection).not.toContain('GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}');
     expect(releaseSection).not.toContain('GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}');
   });
+
+  test('keeps release commits visible to promotion PR CI', () => {
+    const workflowPath = resolvePath('../../../../.github/workflows/dev-release.yml');
+    const scriptPath = resolvePath('../../../../scripts/dev-release.sh');
+
+    const workflow = fs.readFileSync(workflowPath, 'utf8');
+    const script = fs.readFileSync(scriptPath, 'utf8');
+
+    expect(workflow).toContain("!startsWith(github.event.head_commit.message, 'chore(release): ')");
+    expect(workflow).not.toContain("contains(github.event.head_commit.message, '[skip ci]')");
+    expect(script).toContain('LEGACY_CURRENT_RELEASE_SUBJECT="${CURRENT_RELEASE_SUBJECT} [skip ci]"');
+    expect(script).toContain('[[ "$HEAD_SUBJECT" == "$CURRENT_RELEASE_SUBJECT" ]]');
+    expect(script).toContain('[[ "$HEAD_SUBJECT" == "$LEGACY_CURRENT_RELEASE_SUBJECT" ]]');
+    expect(script).toContain('git commit -m "chore(release): ${VERSION}"');
+    expect(script).not.toContain('git commit -m "chore(release): ${VERSION} [skip ci]"');
+  });
 });
