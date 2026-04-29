@@ -10,10 +10,32 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  guard:
+    if: ${{ github.ref == 'refs/heads/dev' }}
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.release-guard.outputs.should_release }}
+
+    steps:
+      - name: Check release recursion guard
+        id: release-guard
+        shell: bash
+        run: |
+          SHOULD_RELEASE=true
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            HEAD_SUBJECT=$(jq -r '.head_commit.message // "" | split("\n")[0]' "$GITHUB_EVENT_PATH")
+            case "$HEAD_SUBJECT" in
+              "chore(release): "*)
+                SHOULD_RELEASE=false
+                echo "Skipping generated dev release commit: $HEAD_SUBJECT"
+                ;;
+            esac
+          fi
+          echo "should_release=$SHOULD_RELEASE" >> "$GITHUB_OUTPUT"
+
   release:
-    # Release commits must still report PR CI when dev is promoted to main.
-    # Skip recursive dev releases by subject instead of GitHub's global [skip ci].
-    if: ${{ github.ref == 'refs/heads/dev' && (github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(release): ')) }}
+    needs: guard
+    if: ${{ needs.guard.outputs.should_release == 'true' }}
     runs-on: ubuntu-latest
 
     permissions:
