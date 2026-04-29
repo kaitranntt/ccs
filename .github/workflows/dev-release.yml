@@ -12,7 +12,7 @@ concurrency:
 jobs:
   guard:
     if: ${{ github.ref == 'refs/heads/dev' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     outputs:
       should_release: ${{ steps.release-guard.outputs.should_release }}
 
@@ -36,7 +36,7 @@ jobs:
   release:
     needs: guard
     if: ${{ needs.guard.outputs.should_release == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
 
     permissions:
       contents: write
