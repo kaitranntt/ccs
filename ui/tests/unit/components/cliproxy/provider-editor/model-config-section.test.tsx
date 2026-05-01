@@ -45,7 +45,7 @@ describe('ModelConfigSection presets', () => {
       ANTHROPIC_MODEL: 'gpt-5.4',
       ANTHROPIC_DEFAULT_OPUS_MODEL: 'gpt-5.4',
       ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-5.4',
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gpt-5-codex-mini',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gpt-5.4-mini',
     });
   });
 

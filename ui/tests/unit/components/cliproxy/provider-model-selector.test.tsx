@@ -130,6 +130,27 @@ describe('FlexibleModelSelector', () => {
     expect(screen.getAllByText('gpt-5.3-codex-high').length).toBeGreaterThan(0);
   });
 
+  it('preserves saved legacy codex model IDs under the current-value fallback', async () => {
+    render(
+      <FlexibleModelSelector
+        label="Primary model"
+        value="gpt-5-codex"
+        onChange={vi.fn()}
+        catalog={MODEL_CATALOGS.codex}
+        allModels={[]}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /gpt-5-codex/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /gpt-5-codex/i }));
+
+    expect(screen.getByText('Current value')).toBeInTheDocument();
+    expect(screen.getAllByText('gpt-5-codex').length).toBeGreaterThan(0);
+    expect(screen.getByText('gpt-5.4')).toBeInTheDocument();
+    expect(screen.getByText('gpt-5.4-mini')).toBeInTheDocument();
+  });
+
   it('preserves explicit suffixes on supplemental codex models outside the static catalog', async () => {
     const onChange = vi.fn();
 
