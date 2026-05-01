@@ -82,17 +82,20 @@ export interface QuotaResult {
 }
 
 /** Google Cloud Code API endpoints */
+const ANTIGRAVITY_DAILY_API_BASE = 'https://daily-cloudcode-pa.googleapis.com';
 const ANTIGRAVITY_API_BASE = 'https://cloudcode-pa.googleapis.com';
 const ANTIGRAVITY_API_VERSION = 'v1internal';
+const ANTIGRAVITY_LOADCODEASSIST_BASE_URLS = [
+  ANTIGRAVITY_DAILY_API_BASE,
+  ANTIGRAVITY_API_BASE,
+] as const;
 const MANAGEMENT_API_TIMEOUT_MS = 5000;
 
-/** Headers for loadCodeAssist (matches CLIProxyAPI antigravity.go) */
+/** Headers for loadCodeAssist (matches current CLIProxyAPIPlus control-plane requests) */
 const LOADCODEASSIST_HEADERS = {
   'Content-Type': 'application/json',
-  'User-Agent': 'google-api-nodejs-client/9.15.1',
-  'X-Goog-Api-Client': 'google-cloud-sdk vscode_cloudshelleditor/0.1',
-  'Client-Metadata':
-    '{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}',
+  'User-Agent': 'antigravity/1.21.9 darwin/arm64 google-api-nodejs-client/10.3.0',
+  'X-Goog-Api-Client': 'gl-node/22.21.1',
 };
 
 /** Headers for fetchAvailableModels (matches CLIProxyAPI antigravity_executor.go) */
@@ -543,6 +546,40 @@ async function performAntigravityRequest(
   }
 }
 
+async function performAntigravityRequestWithBaseUrlFallback(
+  accountId: string,
+  accessToken: string,
+  baseUrls: readonly string[],
+  apiPath: string,
+  headers: Record<string, string>,
+  body: string
+): Promise<ManagedResponse> {
+  let lastResponse: ManagedResponse | null = null;
+
+  for (const baseUrl of baseUrls) {
+    const response = await performAntigravityRequest(
+      accountId,
+      accessToken,
+      `${baseUrl}/${apiPath}`,
+      headers,
+      body
+    );
+    if (response.status >= 200 && response.status < 300) {
+      return response;
+    }
+    lastResponse = response;
+  }
+
+  return (
+    lastResponse ?? {
+      status: 503,
+      bodyText: 'No Antigravity API endpoint available',
+      json: null,
+      viaManagement: false,
+    }
+  );
+}
+
 /**
  * Read auth data from auth file (access token, project_id, expiry status)
  */
@@ -616,18 +653,18 @@ function readAuthData(provider: CLIProxyProvider, accountId: string): AuthData |
  * Uses paidTier.id for accurate tier detection (g1-ultra-tier, g1-pro-tier)
  */
 async function getProjectId(accountId: string, accessToken: string): Promise<ProjectLookupResult> {
-  const url = `${ANTIGRAVITY_API_BASE}/${ANTIGRAVITY_API_VERSION}:loadCodeAssist`;
   const body = JSON.stringify({
     metadata: {
-      ideType: 'IDE_UNSPECIFIED',
-      platform: 'PLATFORM_UNSPECIFIED',
-      pluginType: 'GEMINI',
+      ide_name: 'antigravity',
+      ide_type: 'ANTIGRAVITY',
+      ide_version: '1.21.9',
     },
   });
-  const response = await performAntigravityRequest(
+  const response = await performAntigravityRequestWithBaseUrlFallback(
     accountId,
     accessToken,
-    url,
+    ANTIGRAVITY_LOADCODEASSIST_BASE_URLS,
+    `${ANTIGRAVITY_API_VERSION}:loadCodeAssist`,
     LOADCODEASSIST_HEADERS,
     body
   );
