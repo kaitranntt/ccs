@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
+import { getCcsDir } from '../../utils/config-manager';
 import type { RawUsageEntry } from '../jsonl-parser';
 import { resolveCodexConfigPaths } from '../services/codex-dashboard-service';
 
@@ -8,6 +9,24 @@ interface CodexNativeUsageCollectorOptions {
   env?: NodeJS.ProcessEnv;
   homeDir?: string;
   includeCliproxySessions?: boolean;
+  cacheDir?: string;
+  disableCache?: boolean;
+}
+
+const CODEX_NATIVE_USAGE_CACHE_VERSION = 1;
+
+interface CachedRolloutFile {
+  path: string;
+  size: number;
+  mtimeMs: number;
+  entries: RawUsageEntry[];
+}
+
+interface CodexNativeUsageCache {
+  version: typeof CODEX_NATIVE_USAGE_CACHE_VERSION;
+  includeCliproxySessions: boolean;
+  generatedAt: number;
+  files: Record<string, CachedRolloutFile>;
 }
 
 interface CodexTokenSnapshot {
@@ -80,6 +99,85 @@ async function collectRolloutFiles(dir: string): Promise<string[]> {
   }
 
   return files.sort();
+}
+
+function getDefaultCacheDir(): string {
+  return path.join(getCcsDir(), 'cache');
+}
+
+function getCacheFilePath(cacheDir: string, includeCliproxySessions: boolean): string {
+  return path.join(
+    cacheDir,
+    includeCliproxySessions
+      ? 'codex-native-usage-with-cliproxy-v1.json'
+      : 'codex-native-usage-v1.json'
+  );
+}
+
+function isCachedRolloutFile(value: unknown): value is CachedRolloutFile {
+  if (!isObject(value)) return false;
+  return (
+    typeof value.path === 'string' &&
+    typeof value.size === 'number' &&
+    typeof value.mtimeMs === 'number' &&
+    Array.isArray(value.entries)
+  );
+}
+
+function isCodexNativeUsageCache(value: unknown): value is CodexNativeUsageCache {
+  if (!isObject(value)) return false;
+  if (value.version !== CODEX_NATIVE_USAGE_CACHE_VERSION) return false;
+  if (typeof value.includeCliproxySessions !== 'boolean') return false;
+  if (typeof value.generatedAt !== 'number') return false;
+  if (!isObject(value.files)) return false;
+  return Object.values(value.files).every(isCachedRolloutFile);
+}
+
+function readUsageCache(
+  cacheDir: string,
+  includeCliproxySessions: boolean
+): CodexNativeUsageCache | null {
+  try {
+    const cachePath = getCacheFilePath(cacheDir, includeCliproxySessions);
+    if (!fs.existsSync(cachePath)) return null;
+
+    const parsed = JSON.parse(fs.readFileSync(cachePath, 'utf8')) as unknown;
+    if (!isCodexNativeUsageCache(parsed)) return null;
+    if (parsed.includeCliproxySessions !== includeCliproxySessions) return null;
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeUsageCache(cacheDir: string, cache: CodexNativeUsageCache): void {
+  try {
+    fs.mkdirSync(cacheDir, { recursive: true });
+    const cachePath = getCacheFilePath(cacheDir, cache.includeCliproxySessions);
+    const tempPath = `${cachePath}.${process.pid}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify(cache), 'utf8');
+    fs.renameSync(tempPath, cachePath);
+  } catch {
+    // Best-effort only.
+  }
+}
+
+function getMtimeMsFingerprint(stats: fs.Stats): number {
+  return stats.mtimeMs;
+}
+
+function hasMatchingFingerprint(
+  cached: CachedRolloutFile | undefined,
+  filePath: string,
+  stats: fs.Stats
+): cached is CachedRolloutFile {
+  return (
+    !!cached &&
+    cached.path === filePath &&
+    cached.size === stats.size &&
+    cached.mtimeMs === getMtimeMsFingerprint(stats)
+  );
 }
 
 async function parseRolloutFile(
@@ -183,6 +281,7 @@ async function parseRolloutFile(
 export async function scanCodexNativeUsageEntries(
   options: CodexNativeUsageCollectorOptions = {}
 ): Promise<RawUsageEntry[]> {
+  const includeCliproxySessions = options.includeCliproxySessions === true;
   const { baseDir } = resolveCodexConfigPaths({
     env: options.env,
     homeDir: options.homeDir,
@@ -190,9 +289,42 @@ export async function scanCodexNativeUsageEntries(
   const rolloutFiles = await collectRolloutFiles(path.join(baseDir, 'sessions'));
   const entries: RawUsageEntry[] = [];
 
-  for (const filePath of rolloutFiles) {
-    entries.push(...(await parseRolloutFile(filePath, options.includeCliproxySessions === true)));
+  if (options.disableCache === true) {
+    for (const filePath of rolloutFiles) {
+      entries.push(...(await parseRolloutFile(filePath, includeCliproxySessions)));
+    }
+    return entries;
   }
 
+  const cacheDir = options.cacheDir ?? getDefaultCacheDir();
+  const previousCache = readUsageCache(cacheDir, includeCliproxySessions);
+  const nextCache: CodexNativeUsageCache = {
+    version: CODEX_NATIVE_USAGE_CACHE_VERSION,
+    includeCliproxySessions,
+    generatedAt: Date.now(),
+    files: {},
+  };
+
+  for (const filePath of rolloutFiles) {
+    const stats = await fs.promises.stat(filePath);
+    const cached = previousCache?.files[filePath];
+
+    if (hasMatchingFingerprint(cached, filePath, stats)) {
+      entries.push(...cached.entries);
+      nextCache.files[filePath] = cached;
+      continue;
+    }
+
+    const fileEntries = await parseRolloutFile(filePath, includeCliproxySessions);
+    entries.push(...fileEntries);
+    nextCache.files[filePath] = {
+      path: filePath,
+      size: stats.size,
+      mtimeMs: getMtimeMsFingerprint(stats),
+      entries: fileEntries,
+    };
+  }
+
+  writeUsageCache(cacheDir, nextCache);
   return entries;
 }
