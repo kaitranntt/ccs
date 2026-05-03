@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { runWithScopedCcsHome } from '../../../src/utils/config-manager';
 import { scanCodexNativeUsageEntries } from '../../../src/web-server/usage/codex-native-usage-collector';
 
 type TestUsageCache = {
@@ -187,10 +188,12 @@ describe('codex native usage collector', () => {
   it('parses token_count events into raw usage entries and suppresses duplicates', async () => {
     writeCodexRollout(tempRoot);
 
-    const entries = await scanCodexNativeUsageEntries({
-      env: { CODEX_HOME: tempRoot },
-      homeDir: tempRoot,
-    });
+    const entries = await runWithScopedCcsHome(tempRoot, () =>
+      scanCodexNativeUsageEntries({
+        env: { CODEX_HOME: tempRoot },
+        homeDir: tempRoot,
+      })
+    );
 
     expect(entries).toHaveLength(2);
     expect(entries[0]).toMatchObject({
@@ -213,10 +216,12 @@ describe('codex native usage collector', () => {
   it('skips cliproxy-backed codex sessions by default to avoid double counting', async () => {
     writeCodexRollout(tempRoot, { modelProvider: 'cliproxy' });
 
-    const entries = await scanCodexNativeUsageEntries({
-      env: { CODEX_HOME: tempRoot },
-      homeDir: tempRoot,
-    });
+    const entries = await runWithScopedCcsHome(tempRoot, () =>
+      scanCodexNativeUsageEntries({
+        env: { CODEX_HOME: tempRoot },
+        homeDir: tempRoot,
+      })
+    );
 
     expect(entries).toHaveLength(0);
   });
@@ -224,10 +229,12 @@ describe('codex native usage collector', () => {
   it('also skips ccs_runtime-backed codex bridge sessions by default', async () => {
     writeCodexRollout(tempRoot, { modelProvider: 'ccs_runtime' });
 
-    const entries = await scanCodexNativeUsageEntries({
-      env: { CODEX_HOME: tempRoot },
-      homeDir: tempRoot,
-    });
+    const entries = await runWithScopedCcsHome(tempRoot, () =>
+      scanCodexNativeUsageEntries({
+        env: { CODEX_HOME: tempRoot },
+        homeDir: tempRoot,
+      })
+    );
 
     expect(entries).toHaveLength(0);
   });
@@ -235,6 +242,8 @@ describe('codex native usage collector', () => {
   it('reuses cached rollout entries when file size and mtime are unchanged', async () => {
     const rolloutPath = writeCodexRollout(tempRoot);
     const cacheDir = getCacheDir();
+    const stableMtime = new Date('2026-03-02T10:20:00.000Z');
+    fs.utimesSync(rolloutPath, stableMtime, stableMtime);
 
     const firstEntries = await scanCodexNativeUsageEntries({
       env: { CODEX_HOME: tempRoot },
@@ -250,7 +259,7 @@ describe('codex native usage collector', () => {
 
     const originalContent = fs.readFileSync(rolloutPath, 'utf8');
     fs.writeFileSync(rolloutPath, '#'.repeat(originalContent.length), 'utf8');
-    fs.utimesSync(rolloutPath, originalStats.atimeMs / 1000, originalStats.mtimeMs / 1000);
+    fs.utimesSync(rolloutPath, stableMtime, stableMtime);
 
     const secondEntries = await scanCodexNativeUsageEntries({
       env: { CODEX_HOME: tempRoot },
