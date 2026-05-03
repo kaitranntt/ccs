@@ -34,6 +34,11 @@ describe('droid-provider', () => {
       expect(inferDroidProviderFromBaseUrl('https://api.z.ai/api/anthropic')).toBe('anthropic');
     });
 
+    it('detects ollama.com as anthropic-native', () => {
+      expect(inferDroidProviderFromBaseUrl('https://ollama.com')).toBe('anthropic');
+      expect(inferDroidProviderFromBaseUrl('https://ollama.com/v1')).toBe('anthropic');
+    });
+
     it('detects openai official endpoints', () => {
       expect(inferDroidProviderFromBaseUrl('https://api.openai.com/v1')).toBe('openai');
     });
