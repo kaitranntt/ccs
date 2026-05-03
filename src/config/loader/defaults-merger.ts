@@ -38,6 +38,15 @@ import { normalizeSearxngBaseUrl } from '../../utils/websearch/types';
 // mergeWithDefaults
 // ---------------------------------------------------------------------------
 
+function normalizeOptionalString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 /**
  * Merge partial config with defaults.
  * Preserves existing data while filling in missing sections.
@@ -77,6 +86,9 @@ export function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfi
         partial.cliproxy?.backend === 'original' || partial.cliproxy?.backend === 'plus'
           ? partial.cliproxy.backend
           : undefined, // Invalid values become undefined (defaults to 'original' at runtime)
+      management_panel_repository: normalizeOptionalString(
+        partial.cliproxy?.management_panel_repository
+      ),
       // Auto-sync - default to true
       auto_sync: partial.cliproxy?.auto_sync ?? defaults.cliproxy.auto_sync ?? true,
       routing: {

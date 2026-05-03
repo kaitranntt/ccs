@@ -128,6 +128,8 @@ export interface CLIProxyRoutingConfig {
 export interface CLIProxyConfig {
   /** Backend selection: 'original' or 'plus' (default: 'original') */
   backend?: 'original' | 'plus';
+  /** Optional CPAMC dashboard GitHub repository override for generated CLIProxy config */
+  management_panel_repository?: string;
   /** Nickname to email mapping for OAuth accounts */
   oauth_accounts: OAuthAccounts;
   /** Built-in providers (read-only, for reference) */

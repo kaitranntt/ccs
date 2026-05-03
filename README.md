@@ -119,7 +119,8 @@ config. Deep dive:
 Manage OAuth-backed providers, quota visibility, and proxy-wide routing from one place. CCS now
 surfaces round-robin vs fill-first natively in both CLI and dashboard flows instead of hiding that
 choice inside raw upstream controls. The original CLIProxyAPI backend remains the default; the
-community-maintained CLIProxyAPIPlus fork is opt-in for plus-only providers.
+community-maintained CLIProxyAPIPlus fork is opt-in for plus-only providers. When Plus is selected,
+CCS points the embedded management panel at the maintained CPAMC dashboard fork by default.
 Deep dive:
 [CLIProxy API](https://docs.ccs.kaitran.ca/features/proxy/cliproxy-api).
 

@@ -16,6 +16,8 @@ CLIProxyAPI is a local OAuth proxy binary that enables seamless integration with
 
 CCS defaults to the original `router-for-me/CLIProxyAPI` backend because it is the stable MIT upstream. The `plus` backend is an explicit opt-in path that downloads the community-maintained `kaitranntt/CLIProxyAPIPlus` fork for providers that still require Plus-only support, such as Kiro, GitHub Copilot, Cursor, GitLab, CodeBuddy, and Kilo. CCS does not silently downgrade `backend: plus` to `original`; users choose that backend deliberately when they need those providers.
 
+Generated local CLIProxy configs also keep the management dashboard aligned with the selected backend. `backend: original` uses upstream CPAMC (`router-for-me/Cli-Proxy-API-Management-Center`), while `backend: plus` uses the CCS-maintained dashboard fork (`kaitranntt/Cli-Proxy-API-Management-Center`). Advanced users can override the generated `remote-management.panel-github-repository` value by setting `cliproxy.management_panel_repository` in `~/.ccs/config.yaml`; CCS will regenerate stale local CLIProxy configs when the expected dashboard repository changes.
+
 ```
 +===========================================================================+
 |                      CLIProxyAPI Integration                               |

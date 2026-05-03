@@ -66,6 +66,9 @@ export function generateYamlWithComments(config: UnifiedConfig): string {
   lines.push('# CLIProxy: OAuth-based providers (gemini, codex, agy, qwen, iflow)');
   lines.push('# Each variant can reference a *.settings.json file for custom env vars.');
   lines.push('# Edit the settings file directly to customize model or other settings.');
+  lines.push(
+    '# Optional: cliproxy.management_panel_repository overrides the generated CPAMC repo.'
+  );
   lines.push('# ----------------------------------------------------------------------------');
   lines.push(
     yaml.dump({ cliproxy: config.cliproxy }, { indent: 2, lineWidth: -1, quotingType: '"' }).trim()

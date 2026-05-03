@@ -178,7 +178,7 @@ export async function ensureCliproxyService(
 
   // Check if config needs update (even if running)
   let configRegenerated = false;
-  if (configNeedsRegenerationFn()) {
+  if (configNeedsRegenerationFn(port)) {
     log('Config outdated, regenerating...');
     regenerateConfig(port);
     configRegenerated = true;
@@ -251,7 +251,7 @@ export async function ensureCliproxyService(
 
     // 2. Ensure/regenerate config if needed
     let configPath: string;
-    if (configNeedsRegeneration()) {
+    if (configNeedsRegeneration(port)) {
       log('Config needs regeneration, updating...');
       configPath = regenerateConfig(port);
     } else {

@@ -1123,6 +1123,12 @@ export interface CliproxyUpdateCheckResult {
   stabilityMessage?: string; // Warning message if running unstable version
 }
 
+/** Backend and management panel repository selected for local CLIProxy */
+export interface CliproxyBackendConfig {
+  backend: 'original' | 'plus';
+  managementPanelRepository: string;
+}
+
 /** Available versions list from GitHub releases */
 export interface CliproxyVersionsResponse {
   versions: string[];
@@ -1495,10 +1501,10 @@ export const api = {
         body: JSON.stringify(config),
       }),
     /** Get backend setting */
-    getBackend: () => request<{ backend: 'original' | 'plus' }>('/cliproxy-server/backend'),
+    getBackend: () => request<CliproxyBackendConfig>('/cliproxy-server/backend'),
     /** Update backend setting */
     updateBackend: (backend: 'original' | 'plus', force = false) =>
-      request<{ backend: 'original' | 'plus' }>('/cliproxy-server/backend', {
+      request<CliproxyBackendConfig>('/cliproxy-server/backend', {
         method: 'PUT',
         body: JSON.stringify({ backend, force }),
       }),

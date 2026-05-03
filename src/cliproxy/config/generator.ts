@@ -5,7 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { CLIProxyProvider, ProviderConfig } from '../types';
+import type { CLIProxyBackend, CLIProxyProvider, ProviderConfig } from '../types';
 import { getProviderDisplayName } from '../provider-capabilities';
 import { getModelMappingFromConfig } from '../config/base-config-loader';
 import { AI_PROVIDER_FAMILY_IDS } from '../ai-providers/types';
@@ -42,8 +42,14 @@ export const CCS_CONTROL_PANEL_SECRET = 'ccs';
  * v16: Narrow stale Gemini alias cleanup to broad multi-version guessed ranges
  * v17: Persist routing.strategy from CCS unified config
  * v18: Persist routing.session-affinity and routing.session-affinity-ttl from CCS unified config
+ * v19: Persist backend-aware management panel repository from CCS unified config
  */
-export const CLIPROXY_CONFIG_VERSION = 18;
+export const CLIPROXY_CONFIG_VERSION = 19;
+
+export const ORIGINAL_MANAGEMENT_PANEL_REPOSITORY =
+  'https://github.com/router-for-me/Cli-Proxy-API-Management-Center';
+export const PLUS_MANAGEMENT_PANEL_REPOSITORY =
+  'https://github.com/kaitranntt/Cli-Proxy-API-Management-Center';
 
 interface RegenerateConfigOptions {
   configPath?: string;
@@ -145,6 +151,33 @@ function getSessionAffinityTtl(): string {
   return ttl && GO_DURATION_PATTERN.test(ttl) && hasPositiveDuration(ttl) ? ttl : '1h';
 }
 
+function normalizeManagementPanelRepository(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function getDefaultManagementPanelRepository(backend: CLIProxyBackend | undefined): string {
+  return backend === 'plus'
+    ? PLUS_MANAGEMENT_PANEL_REPOSITORY
+    : ORIGINAL_MANAGEMENT_PANEL_REPOSITORY;
+}
+
+export function getManagementPanelRepository(): string {
+  const config = loadOrCreateUnifiedConfig();
+  return (
+    normalizeManagementPanelRepository(config.cliproxy?.management_panel_repository) ??
+    getDefaultManagementPanelRepository(config.cliproxy?.backend)
+  );
+}
+
+function quoteYamlString(value: string): string {
+  return JSON.stringify(value);
+}
+
 function hasPositiveDuration(value: string): boolean {
   const segments = value.match(new RegExp(GO_DURATION_SEGMENT, 'g'));
   if (!segments) {
@@ -166,6 +199,11 @@ function sanitizeYamlScalar(rawValue: string): string {
     return trimmed.slice(1, -1).trim();
   }
   return trimmed;
+}
+
+function parseManagementPanelRepository(content: string): string | null {
+  const match = content.match(/^\s*panel-github-repository:\s*(.+?)\s*$/m);
+  return match ? sanitizeYamlScalar(match[1]) : null;
 }
 
 function normalizeAntigravityAlias(rawAlias: string): string {
@@ -579,6 +617,7 @@ function generateUnifiedConfigContent(
   const routingStrategy = getRoutingStrategy();
   const sessionAffinityEnabled = getSessionAffinityEnabled();
   const sessionAffinityTtl = getSessionAffinityTtl();
+  const managementPanelRepository = getManagementPanelRepository();
 
   // Get effective auth tokens (respects user customization)
   const effectiveApiKey = getEffectiveApiKey();
@@ -633,6 +672,7 @@ remote-management:
   allow-remote: true
   secret-key: "${effectiveSecret}"
   disable-control-panel: false
+  panel-github-repository: ${quoteYamlString(managementPanelRepository)}
 
 # =============================================================================
 # Reliability & Quota Management
@@ -858,8 +898,8 @@ export function regenerateConfig(
  * Check if config needs regeneration (version mismatch)
  * @returns true if config should be regenerated
  */
-export function configNeedsRegeneration(): boolean {
-  const configPath = getConfigPathForPort(CLIPROXY_DEFAULT_PORT);
+export function configNeedsRegeneration(port: number = CLIPROXY_DEFAULT_PORT): boolean {
+  const configPath = getConfigPathForPort(port);
   if (!fs.existsSync(configPath)) {
     return false; // Will be created on first use
   }
@@ -872,7 +912,11 @@ export function configNeedsRegeneration(): boolean {
     if (configVersion === null) {
       return true; // No version marker = old config
     }
-    return configVersion < CLIPROXY_CONFIG_VERSION;
+    if (configVersion < CLIPROXY_CONFIG_VERSION) {
+      return true;
+    }
+
+    return parseManagementPanelRepository(content) !== getManagementPanelRepository();
   } catch {
     return true; // Error reading = regenerate
   }
