@@ -275,7 +275,7 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
   // sessions can still inherit model intent and other profile-scoped runtime flags.
   const settingsRuntimeEnv = stripBrowserEnv({ ...globalEnv, ...settingsEnv });
   const claudeRuntimeEnvVars: NodeJS.ProcessEnv = {
-    ...stripAnthropicRoutingEnv(settingsRuntimeEnv),
+    ...stripAnthropicRoutingEnv(settingsRuntimeEnv, settingsEnv),
     ...(inheritedClaudeConfigDir ? { CLAUDE_CONFIG_DIR: inheritedClaudeConfigDir } : {}),
     ...webSearchEnv,
     ...imageAnalysisEnv,

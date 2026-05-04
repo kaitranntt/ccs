@@ -295,6 +295,59 @@ describe('CLAUDECODE environment stripping', () => {
     expect(result.PATH).toBe('/usr/bin');
   });
 
+  it('stripAnthropicRoutingEnv preserves routing/auth keys from preserveFrom on the non-proxy settings path', () => {
+    const settingsEnv: NodeJS.ProcessEnv = {
+      ANTHROPIC_BASE_URL: 'https://ollama.com',
+      ANTHROPIC_AUTH_TOKEN: 'profile-token',
+      ANTHROPIC_API_KEY: 'profile-api-key',
+      ANTHROPIC_MODEL: 'minimax-m2.7:cloud',
+      OTHER: 'keep',
+    };
+    const globalEnv: NodeJS.ProcessEnv = {
+      ANTHROPIC_BASE_URL: 'http://127.0.0.1:9999',
+      ANTHROPIC_AUTH_TOKEN: 'global-stale',
+    };
+
+    const merged = stripAnthropicRoutingEnv({ ...globalEnv, ...settingsEnv }, settingsEnv);
+
+    expect(merged.ANTHROPIC_BASE_URL).toBe('https://ollama.com');
+    expect(merged.ANTHROPIC_AUTH_TOKEN).toBe('profile-token');
+    expect(merged.ANTHROPIC_API_KEY).toBe('profile-api-key');
+    expect(merged.ANTHROPIC_MODEL).toBe('minimax-m2.7:cloud');
+    expect(merged.OTHER).toBe('keep');
+  });
+
+  it('stripAnthropicRoutingEnv with empty preserveFrom strips all routing keys', () => {
+    const result = stripAnthropicRoutingEnv(
+      {
+        ANTHROPIC_BASE_URL: 'http://inherited',
+        ANTHROPIC_AUTH_TOKEN: 'inherited-token',
+        ANTHROPIC_MODEL: 'claude-opus-4-7',
+      },
+      { ANTHROPIC_MODEL: 'claude-opus-4-7' }
+    );
+    expect(result.ANTHROPIC_BASE_URL).toBeUndefined();
+    expect(result.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
+    expect(result.ANTHROPIC_MODEL).toBe('claude-opus-4-7');
+  });
+
+  it('stripAnthropicRoutingEnv preserveFrom only emits keys present in preserveFrom', () => {
+    const env = {
+      ANTHROPIC_BASE_URL: 'http://inherited',
+      ANTHROPIC_AUTH_TOKEN: 'inherited-token',
+    };
+    expect(stripAnthropicRoutingEnv(env, { ANTHROPIC_BASE_URL: 'https://ollama.com' })).toEqual({
+      ANTHROPIC_BASE_URL: 'https://ollama.com',
+    });
+    expect(stripAnthropicRoutingEnv(env, { ANTHROPIC_AUTH_TOKEN: 'profile-token' })).toEqual({
+      ANTHROPIC_AUTH_TOKEN: 'profile-token',
+    });
+    expect(stripAnthropicRoutingEnv(env, { ANTHROPIC_API_KEY: 'profile-api-key' })).toEqual({
+      ANTHROPIC_API_KEY: 'profile-api-key',
+    });
+    expect(stripAnthropicRoutingEnv(env, { ANTHROPIC_BASE_URL: '' })).toEqual({});
+  });
+
   it('stripAnthropicRoutingEnv removes routing/auth env case-insensitively while preserving model vars', () => {
     const input: NodeJS.ProcessEnv = {
       anthropic_base_url: 'http://127.0.0.1:8317/api/provider/codex',
@@ -451,7 +504,10 @@ describe('CLAUDECODE environment stripping', () => {
     expect(env.ANTHROPIC_SMALL_FAST_MODEL).toBe('gpt-5-codex-mini');
   });
 
-  it('execClaude strips routing env reintroduced by explicit settings-profile overrides', () => {
+  it('execClaude preserves routing env supplied via explicit settings-profile envVars', () => {
+    process.env.ANTHROPIC_BASE_URL = 'http://parent-leaked';
+    process.env.ANTHROPIC_AUTH_TOKEN = 'parent-leaked-token';
+
     execClaude('claude', ['--help'], {
       CCS_PROFILE_TYPE: 'settings',
       CCS_STRIP_INHERITED_ANTHROPIC_ENV: '1',
@@ -464,9 +520,9 @@ describe('CLAUDECODE environment stripping', () => {
 
     expect(spawnCalls.length).toBeGreaterThan(0);
     const env = spawnCalls[0].options?.env as NodeJS.ProcessEnv;
-    expect(env.ANTHROPIC_BASE_URL).toBeUndefined();
-    expect(env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
-    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317/api/provider/codex');
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('reintroduced-routing-token');
+    expect(env.ANTHROPIC_API_KEY).toBe('reintroduced-api-key');
     expect(env.ANTHROPIC_MODEL).toBe('gpt-5.4');
     expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-5.4');
   });

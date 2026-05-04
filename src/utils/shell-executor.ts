@@ -55,12 +55,27 @@ const TMUX_SYNC_ENV_KEYS = [
  * Used for nested settings-profile Claude launches where `--settings` already
  * defines the provider transport and the parent process should only lend model
  * defaults or effort hints.
+ *
+ * `preserveFrom`: if provided, routing keys present in this source survive the
+ * strip (with their values from `preserveFrom`). Settings-type profiles use
+ * this to keep routing/auth supplied by their own `settings.env` while
+ * dropping any routing leaked from the parent shell or `global.env`.
  */
-export function stripAnthropicRoutingEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+export function stripAnthropicRoutingEnv(
+  env: NodeJS.ProcessEnv,
+  preserveFrom?: NodeJS.ProcessEnv
+): NodeJS.ProcessEnv {
   const result: NodeJS.ProcessEnv = {};
   for (const key of Object.keys(env)) {
     if (!ANTHROPIC_ROUTING_ENV_KEY_SET.has(key.toUpperCase())) {
       result[key] = env[key];
+    }
+  }
+  if (preserveFrom) {
+    for (const key of ANTHROPIC_ROUTING_ENV_KEYS) {
+      if (preserveFrom[key]) {
+        result[key] = preserveFrom[key];
+      }
     }
   }
   return result;
@@ -240,7 +255,7 @@ export function execClaude(
     ? { ...baseEnv, ...claudeLaunchEnv, ...envVars, ...webSearchEnv }
     : { ...baseEnv, ...claudeLaunchEnv, ...webSearchEnv };
   const effectiveMergedEnv = stripInheritedAnthropicRoutingEnv
-    ? stripAnthropicRoutingEnv(mergedEnv)
+    ? stripAnthropicRoutingEnv(mergedEnv, envVars ?? undefined)
     : mergedEnv;
 
   // Strip Claude Code nested session guard env var to allow CCS delegation

@@ -228,7 +228,7 @@ export class HeadlessExecutor {
     }
 
     let runtimeEnvVars: NodeJS.ProcessEnv = {
-      ...stripAnthropicRoutingEnv({ ...globalEnv, ...settingsEnv }),
+      ...stripAnthropicRoutingEnv({ ...globalEnv, ...settingsEnv }, settingsEnv),
       ...(inheritedClaudeConfigDir ? { CLAUDE_CONFIG_DIR: inheritedClaudeConfigDir } : {}),
       CCS_PROFILE_TYPE: 'settings',
       CCS_STRIP_INHERITED_ANTHROPIC_ENV: '1',
