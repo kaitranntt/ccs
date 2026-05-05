@@ -706,6 +706,48 @@ describe('CLAUDECODE environment stripping', () => {
     expect(env.CLAUDE_CODE_MAX_OUTPUT_TOKENS).toBe('12345');
   });
 
+  it('headless executor preserves profile routing env for non-proxy settings-profile delegation', async () => {
+    writeConfigWithAutoUpdatePreference(false);
+    const ccsDir = path.join(process.env.CCS_HOME as string, '.ccs');
+    fs.writeFileSync(
+      path.join(ccsDir, 'ollama-cloud.settings.json'),
+      JSON.stringify(
+        {
+          env: {
+            ANTHROPIC_BASE_URL: 'https://ollama.com',
+            ANTHROPIC_AUTH_TOKEN: 'settings-ollama-token',
+            ANTHROPIC_MODEL: 'gemma4:31b-cloud',
+            CLAUDE_CODE_MAX_OUTPUT_TOKENS: '12345',
+          },
+        },
+        null,
+        2
+      ) + '\n',
+      'utf8'
+    );
+    const projectDir = path.join(ccsDir, 'project-headless-ollama-cloud');
+    fs.mkdirSync(projectDir, { recursive: true });
+    process.env.CCS_CLAUDE_PATH = 'claude';
+    process.env.ANTHROPIC_BASE_URL = 'http://127.0.0.1:8317/api/provider/codex';
+    process.env.ANTHROPIC_AUTH_TOKEN = 'parent-routing-token';
+    process.env.ANTHROPIC_API_KEY = 'parent-api-key';
+
+    const result = await HeadlessExecutor.execute('ollama-cloud', 'latest AI chip news', {
+      cwd: projectDir,
+      permissionMode: 'default',
+      timeout: 1000,
+    });
+
+    expect(result.success).toBe(true);
+    expect(spawnCalls.length).toBeGreaterThan(0);
+    const env = spawnCalls[0].options?.env as NodeJS.ProcessEnv;
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://ollama.com');
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('settings-ollama-token');
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(env.ANTHROPIC_MODEL).toBe('gemma4:31b-cloud');
+    expect(env.CLAUDE_CODE_MAX_OUTPUT_TOKENS).toBe('12345');
+  });
+
   it('headless executor rebuilds OpenAI-compatible bridge env from settings instead of inheriting stale parent routing', async () => {
     writeConfigWithAutoUpdatePreference(false);
     const ccsDir = path.join(process.env.CCS_HOME as string, '.ccs');

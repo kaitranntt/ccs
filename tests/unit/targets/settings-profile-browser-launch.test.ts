@@ -269,9 +269,13 @@ exit 0
       expect(result.status).toBe(0);
       const launchedEnv = fs.readFileSync(claudeEnvLogPath, 'utf8');
       expect(launchedEnv).toContain('stripAnthropic=1');
-      expect(launchedEnv).toContain('anthropicBaseUrl=');
-      expect(launchedEnv).toContain('anthropicAuthToken=');
+      expect(launchedEnv).toContain('anthropicBaseUrl=https://api.z.ai/api/anthropic');
+      expect(launchedEnv).toContain('anthropicAuthToken=profile-token');
       expect(launchedEnv).toContain('anthropicApiKey=');
+      expect(launchedEnv).not.toContain('global-routing-token');
+      expect(launchedEnv).not.toContain('parent-routing-token');
+      expect(launchedEnv).not.toContain('global-api-key');
+      expect(launchedEnv).not.toContain('parent-api-key');
       expect(launchedEnv).toContain('anthropicModel=gpt-5.4');
       expect(launchedEnv).toContain('anthropicSonnet=gpt-5.4');
       expect(launchedEnv).toContain('maxOutputTokens=12345');
