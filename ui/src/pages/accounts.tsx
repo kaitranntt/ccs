@@ -152,10 +152,11 @@ export function AccountsPage() {
                 <CardContent className="space-y-2">
                   <div className="rounded-md border bg-background px-2 py-2 font-mono text-[11px] flex items-start gap-2">
                     <span className="flex-1 break-all">
-                      ccs auth create work --context-group sprint-a --deeper-continuity
+                      ccs auth create work --share-context --context-group sprint-a
+                      --deeper-continuity
                     </span>
                     <CopyButton
-                      value="ccs auth create work --context-group sprint-a --deeper-continuity"
+                      value="ccs auth create work --share-context --context-group sprint-a --deeper-continuity"
                       size="icon"
                     />
                   </div>

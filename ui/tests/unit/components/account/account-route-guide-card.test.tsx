@@ -40,7 +40,9 @@ describe('AccountRouteGuideCard', () => {
 
     expect(screen.getByText('deeper sync ready')).toBeInTheDocument();
     expect(
-      screen.getByText('ccs auth create work2 --context-group sprint-a --deeper-continuity')
+      screen.getByText(
+        'ccs auth create work2 --share-context --context-group sprint-a --deeper-continuity'
+      )
     ).toBeInTheDocument();
     expect(
       screen.getByText(

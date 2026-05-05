@@ -33,7 +33,7 @@ export function AccountRouteGuideCard({
             : totalAccounts === 0
               ? 'empty'
               : 'mixed';
-  const syncCommand = `ccs auth create work2 --context-group ${recommendedGroup} --deeper-continuity`;
+  const syncCommand = `ccs auth create work2 --share-context --context-group ${recommendedGroup} --deeper-continuity`;
 
   return (
     <Card className="overflow-hidden">

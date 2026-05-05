@@ -39,7 +39,7 @@ This is for ordinary Claude Code settings, hooks, commands, skills, agents, and 
 Only opt in to shared history when both accounts should see the same local continuity:
 
 ```bash
-ccs auth create work2 --context-group daily --deeper-continuity
+ccs auth create work2 --share-context --context-group daily --deeper-continuity
 ```
 
 For existing accounts, use Dashboard -> Accounts -> Sync on both accounts, set both to `shared`, and use the same `History Sync Group`. Use `deeper` only when users expect stronger local handoff beyond project context.
@@ -141,8 +141,8 @@ ccs auth default ck
 
 ```bash
 ccs auth create work2 --share-context
-ccs auth create backup --context-group sprint-a
-ccs auth create backup2 --context-group sprint-a --deeper-continuity
+ccs auth create backup --share-context --context-group sprint-a
+ccs auth create backup2 --share-context --context-group sprint-a --deeper-continuity
 ```
 
 ### Existing account

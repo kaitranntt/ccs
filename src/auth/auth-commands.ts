@@ -93,11 +93,13 @@ class AuthCommands {
     console.log(`  ${color('ccs auth create work2 --share-context', 'command')}`);
     console.log('');
     console.log(`  ${dim('# Share context only within a specific group')}`);
-    console.log(`  ${color('ccs auth create backup --context-group sprint-a', 'command')}`);
+    console.log(
+      `  ${color('ccs auth create backup --share-context --context-group sprint-a', 'command')}`
+    );
     console.log('');
     console.log(`  ${dim('# Advanced: deeper shared continuity for session history artifacts')}`);
     console.log(
-      `  ${color('ccs auth create backup --context-group sprint-a --deeper-continuity', 'command')}`
+      `  ${color('ccs auth create backup --share-context --context-group sprint-a --deeper-continuity', 'command')}`
     );
     console.log('');
     console.log(`  ${dim('# Create clean profile without shared commands/skills/agents')}`);
