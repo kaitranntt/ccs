@@ -50,11 +50,23 @@ describe('account profile diagnostics', () => {
 
   it('reports bare account settings as profile-local', () => {
     const instancePath = path.join(tempHome, '.ccs', 'instances', 'bare');
+    fs.mkdirSync(instancePath, { recursive: true });
+    fs.writeFileSync(path.join(instancePath, 'settings.json'), '{}\n');
 
     const summary = describeSettingsSync(instancePath, { bare: true });
 
     expect(summary.state).toBe('profile-local');
     expect(summary.description).toContain('bare profile');
+  });
+
+  it('reports bare account settings as missing when the local file is absent', () => {
+    const instancePath = path.join(tempHome, '.ccs', 'instances', 'bare');
+
+    const summary = describeSettingsSync(instancePath, { bare: true });
+
+    expect(summary.state).toBe('missing');
+    expect(summary.description).toContain('bare profile');
+    expect(summary.profile_settings_path).toBe(path.join(instancePath, 'settings.json'));
   });
 
   it('summarizes shared project and deeper continuity lane state', () => {

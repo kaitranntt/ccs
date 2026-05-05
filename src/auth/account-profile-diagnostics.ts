@@ -63,6 +63,16 @@ export function describeSettingsSync(
   const profileSettingsPath = path.join(instancePath, 'settings.json');
 
   if (options.bare) {
+    if (!fs.existsSync(profileSettingsPath)) {
+      return {
+        state: 'missing',
+        profile_settings_path: profileSettingsPath,
+        shared_settings_path: sharedSettingsPath,
+        root_settings_path: rootSettingsPath,
+        description: 'missing (bare profile; no local settings.json yet)',
+      };
+    }
+
     return {
       state: 'profile-local',
       profile_settings_path: profileSettingsPath,
