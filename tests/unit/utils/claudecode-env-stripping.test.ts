@@ -345,7 +345,9 @@ describe('CLAUDECODE environment stripping', () => {
     expect(stripAnthropicRoutingEnv(env, { ANTHROPIC_API_KEY: 'profile-api-key' })).toEqual({
       ANTHROPIC_API_KEY: 'profile-api-key',
     });
-    expect(stripAnthropicRoutingEnv(env, { ANTHROPIC_BASE_URL: '' })).toEqual({});
+    expect(stripAnthropicRoutingEnv(env, { ANTHROPIC_BASE_URL: '' })).toEqual({
+      ANTHROPIC_BASE_URL: '',
+    });
   });
 
   it('stripAnthropicRoutingEnv removes routing/auth env case-insensitively while preserving model vars', () => {
@@ -716,6 +718,7 @@ describe('CLAUDECODE environment stripping', () => {
           env: {
             ANTHROPIC_BASE_URL: 'https://ollama.com',
             ANTHROPIC_AUTH_TOKEN: 'settings-ollama-token',
+            ANTHROPIC_API_KEY: '',
             ANTHROPIC_MODEL: 'gemma4:31b-cloud',
             CLAUDE_CODE_MAX_OUTPUT_TOKENS: '12345',
           },
@@ -743,7 +746,7 @@ describe('CLAUDECODE environment stripping', () => {
     const env = spawnCalls[0].options?.env as NodeJS.ProcessEnv;
     expect(env.ANTHROPIC_BASE_URL).toBe('https://ollama.com');
     expect(env.ANTHROPIC_AUTH_TOKEN).toBe('settings-ollama-token');
-    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(env.ANTHROPIC_API_KEY).toBe('');
     expect(env.ANTHROPIC_MODEL).toBe('gemma4:31b-cloud');
     expect(env.CLAUDE_CODE_MAX_OUTPUT_TOKENS).toBe('12345');
   });

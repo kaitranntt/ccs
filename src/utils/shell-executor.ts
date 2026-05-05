@@ -73,7 +73,10 @@ export function stripAnthropicRoutingEnv(
   }
   if (preserveFrom) {
     for (const key of ANTHROPIC_ROUTING_ENV_KEYS) {
-      if (preserveFrom[key]) {
+      if (
+        Object.prototype.hasOwnProperty.call(preserveFrom, key) &&
+        preserveFrom[key] !== undefined
+      ) {
         result[key] = preserveFrom[key];
       }
     }

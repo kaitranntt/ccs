@@ -166,6 +166,7 @@ fi
   printf "anthropicBaseUrl=%s\n" "$ANTHROPIC_BASE_URL"
   printf "anthropicAuthToken=%s\n" "$ANTHROPIC_AUTH_TOKEN"
   printf "anthropicApiKey=%s\n" "$ANTHROPIC_API_KEY"
+  printf "anthropicApiKeySet=%s\n" "\${ANTHROPIC_API_KEY+x}"
   printf "anthropicModel=%s\n" "$ANTHROPIC_MODEL"
   printf "anthropicSonnet=%s\n" "$ANTHROPIC_DEFAULT_SONNET_MODEL"
   printf "maxOutputTokens=%s\n" "$CLAUDE_CODE_MAX_OUTPUT_TOKENS"
@@ -231,6 +232,7 @@ exit 0
           env: {
             ANTHROPIC_BASE_URL: 'https://api.z.ai/api/anthropic',
             ANTHROPIC_AUTH_TOKEN: 'profile-token',
+            ANTHROPIC_API_KEY: '',
             ANTHROPIC_MODEL: 'gpt-5.4',
             ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-5.4',
             CLAUDE_CODE_MAX_OUTPUT_TOKENS: '12345',
@@ -272,6 +274,7 @@ exit 0
       expect(launchedEnv).toContain('anthropicBaseUrl=https://api.z.ai/api/anthropic');
       expect(launchedEnv).toContain('anthropicAuthToken=profile-token');
       expect(launchedEnv).toContain('anthropicApiKey=');
+      expect(launchedEnv).toContain('anthropicApiKeySet=x');
       expect(launchedEnv).not.toContain('global-routing-token');
       expect(launchedEnv).not.toContain('parent-routing-token');
       expect(launchedEnv).not.toContain('global-api-key');
