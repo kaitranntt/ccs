@@ -253,6 +253,42 @@ const resources = {
         copied: 'Copied!',
         copyCommand: 'Copy Command',
       },
+      accountRouteGuide: {
+        title: 'Recommended two-account route',
+        description:
+          'Use separate account profiles for token isolation. Turn on history sync only when both accounts should see the same local continuity.',
+        status: {
+          empty: 'create accounts',
+          isolated: 'isolated ready',
+          shared: 'shared project context',
+          deeper: 'deeper sync ready',
+          mixed: 'mixed setup',
+        },
+        cards: {
+          isolated: {
+            title: 'Tokens stay separate',
+            desc: 'Each ccs auth account owns its own Claude config, login, and credentials. Sync settings never copy tokens.',
+          },
+          select: {
+            title: 'You choose the account',
+            desc: 'Run ccs work or ccs personal for explicit usage. Set Default only when plain ccs should follow one account.',
+          },
+          settings: {
+            title: 'Settings follow root',
+            desc: 'Non-bare accounts link settings.json through CCS shared state to ~/.claude/settings.json. ccs auth show confirms it.',
+          },
+          sync: {
+            title: 'History sync is opt-in',
+            desc: 'Both accounts need Shared mode and the same group. Deeper sync adds extra local continuity artifacts.',
+          },
+        },
+        commands: {
+          isolated: 'Isolated account usage',
+          sync: 'Optional shared history',
+          syncDesc:
+            'Use the same group, such as "{{group}}", on both accounts when you want them to share local history.',
+        },
+      },
       cliproxyModelCategory: {
         google: 'Google (Gemini)',
         openai: 'OpenAI (GPT)',
@@ -2819,6 +2855,41 @@ const resources = {
         copied: '已复制！',
         copyCommand: '复制命令',
       },
+      accountRouteGuide: {
+        title: '推荐的双账号路线',
+        description:
+          '使用独立 account profile 保持 token 隔离。只有当两个账号应该看到同一份本地连续性时，才开启历史同步。',
+        status: {
+          empty: '创建账号',
+          isolated: '隔离已就绪',
+          shared: '共享项目上下文',
+          deeper: '更深同步已就绪',
+          mixed: '混合设置',
+        },
+        cards: {
+          isolated: {
+            title: 'Token 仍然隔离',
+            desc: '每个 ccs auth 账号都有自己的 Claude 配置、登录和凭据。同步设置不会复制 token。',
+          },
+          select: {
+            title: '你选择使用哪个账号',
+            desc: '运行 ccs work 或 ccs personal 来明确选择账号。只有当普通 ccs 应跟随某个账号时才设置默认。',
+          },
+          settings: {
+            title: '设置跟随根目录',
+            desc: '非 bare 账号会通过 CCS shared state 将 settings.json 链接到 ~/.claude/settings.json。ccs auth show 会确认状态。',
+          },
+          sync: {
+            title: '历史同步需要主动开启',
+            desc: '两个账号都需要使用 Shared 模式和同一分组。更深同步会加入额外的本地连续性文件。',
+          },
+        },
+        commands: {
+          isolated: '隔离账号用法',
+          sync: '可选共享历史',
+          syncDesc: '当希望两个账号共享本地历史时，在两个账号上使用同一分组，例如 "{{group}}"。',
+        },
+      },
       cliproxyModelCategory: {
         google: 'Google（Gemini）',
         openai: 'OpenAI（GPT）',
@@ -5281,6 +5352,42 @@ const resources = {
         close: 'Đóng',
         copied: 'Đã sao chép!',
         copyCommand: 'Sao chép lệnh',
+      },
+      accountRouteGuide: {
+        title: 'Lộ trình hai tài khoản khuyến nghị',
+        description:
+          'Dùng account profile riêng để giữ token tách biệt. Chỉ bật history sync khi cả hai tài khoản cần thấy cùng continuity cục bộ.',
+        status: {
+          empty: 'tạo tài khoản',
+          isolated: 'đã sẵn sàng tách biệt',
+          shared: 'chia sẻ context project',
+          deeper: 'deeper sync sẵn sàng',
+          mixed: 'thiết lập hỗn hợp',
+        },
+        cards: {
+          isolated: {
+            title: 'Token vẫn tách biệt',
+            desc: 'Mỗi tài khoản ccs auth có Claude config, login và credential riêng. Cài đặt sync không bao giờ copy token.',
+          },
+          select: {
+            title: 'Bạn chọn tài khoản cần dùng',
+            desc: 'Chạy ccs work hoặc ccs personal để chọn rõ tài khoản. Chỉ đặt Default khi plain ccs nên đi theo một tài khoản.',
+          },
+          settings: {
+            title: 'Settings đi theo root',
+            desc: 'Tài khoản không bare link settings.json qua CCS shared state tới ~/.claude/settings.json. ccs auth show sẽ xác nhận.',
+          },
+          sync: {
+            title: 'History sync là tùy chọn',
+            desc: 'Cả hai tài khoản cần Shared mode và cùng group. Deeper sync thêm các artifact continuity cục bộ.',
+          },
+        },
+        commands: {
+          isolated: 'Dùng tài khoản tách biệt',
+          sync: 'Chia sẻ lịch sử tùy chọn',
+          syncDesc:
+            'Dùng cùng group, ví dụ "{{group}}", trên cả hai tài khoản khi muốn chia sẻ lịch sử cục bộ.',
+        },
       },
       cliproxyModelCategory: {
         google: 'Google (Gemini)',
@@ -7847,6 +7954,42 @@ const resources = {
         close: '閉じる',
         copied: 'コピーしました!',
         copyCommand: 'コマンドをコピー',
+      },
+      accountRouteGuide: {
+        title: '推奨される 2 アカウント構成',
+        description:
+          'トークンを分離するため、別々の account profile を使います。両方のアカウントで同じローカル継続性を見たい場合だけ履歴同期を有効にします。',
+        status: {
+          empty: 'アカウントを作成',
+          isolated: '分離準備済み',
+          shared: 'プロジェクト文脈を共有',
+          deeper: '拡張同期準備済み',
+          mixed: '混在設定',
+        },
+        cards: {
+          isolated: {
+            title: 'トークンは分離されたまま',
+            desc: '各 ccs auth アカウントは専用の Claude 設定、ログイン、認証情報を持ちます。同期設定でトークンはコピーされません。',
+          },
+          select: {
+            title: '使うアカウントを選ぶ',
+            desc: 'ccs work または ccs personal を実行して明示的に選びます。通常の ccs を特定アカウントに合わせたい場合だけ既定を設定します。',
+          },
+          settings: {
+            title: '設定はルートに追従',
+            desc: '非 bare アカウントは CCS shared state 経由で settings.json を ~/.claude/settings.json にリンクします。ccs auth show で確認できます。',
+          },
+          sync: {
+            title: '履歴同期は任意',
+            desc: '両方のアカウントで共有モードと同じグループが必要です。拡張同期では追加のローカル継続性ファイルも共有します。',
+          },
+        },
+        commands: {
+          isolated: '分離アカウントの使用',
+          sync: '任意の共有履歴',
+          syncDesc:
+            'ローカル履歴を共有したい場合は、両方のアカウントで "{{group}}" など同じグループを使ってください。',
+        },
       },
       cliproxyModelCategory: {
         google: 'Google (Gemini)',

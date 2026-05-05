@@ -280,7 +280,9 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
             `Profile:  ${profileName}\n` +
               `Instance: ${instancePath}\n` +
               `Type:     account\n` +
-              `Context:  ${formatAccountContextPolicy(contextPolicy)}` +
+              `Context:  ${formatAccountContextPolicy(contextPolicy)}\n` +
+              `Tokens:   isolated per account\n` +
+              `Settings: ${effectiveBare ? 'profile-local (bare)' : 'shared with ~/.claude/settings.json'}` +
               (effectiveBare ? '\nMode:     bare (no shared symlinks)' : ''),
             'Profile Created'
           )
@@ -288,6 +290,14 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
         console.log('');
         console.log(header('Usage'));
         console.log(`  ${color(`ccs ${profileName} "your prompt here"`, 'command')}`);
+        console.log('');
+        console.log(
+          'To keep two accounts separate, create another account and run either profile by name:'
+        );
+        console.log(`  ${color('ccs auth create personal', 'command')}`);
+        console.log(
+          `  ${color(`ccs ${profileName}`, 'command')} / ${color('ccs personal', 'command')}`
+        );
         console.log('');
         console.log(
           warnBox(

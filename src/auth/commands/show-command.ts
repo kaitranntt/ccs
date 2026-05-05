@@ -8,9 +8,17 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { initUI, header, color, fail, table } from '../../utils/ui';
 import { resolveAccountContextPolicy, formatAccountContextPolicy } from '../account-context';
+import { describeSettingsSync, summarizeAccountHistory } from '../account-profile-diagnostics';
+import { resolveConfiguredPlainCcsResumeLane } from '../resume-lane-diagnostics';
 import { exitWithError } from '../../errors';
 import { ExitCode } from '../../errors/exit-codes';
 import { CommandContext, ProfileOutput, parseArgs } from './types';
+
+function formatHistorySummary(history: ReturnType<typeof summarizeAccountHistory>): string {
+  const scope = history.projects_shared ? 'shared projects' : 'profile-local projects';
+  const deeper = history.deeper_artifacts_shared ? ', deeper artifacts shared' : '';
+  return `${scope}: ${history.project_count} project(s), ${history.session_count} session env file(s)${deeper}`;
+}
 
 /**
  * Handle the show command
@@ -37,6 +45,11 @@ export async function handleShow(ctx: CommandContext, args: string[]): Promise<v
     const isDefault = profileName === defaultProfile;
     const instancePath = ctx.instanceMgr.getInstancePath(profileName);
     const contextPolicy = resolveAccountContextPolicy(profile);
+    const settingsSync = describeSettingsSync(instancePath, { bare: profile.bare === true });
+    const historySummary = summarizeAccountHistory(instancePath, contextPolicy);
+    const plainCcsLane = await resolveConfiguredPlainCcsResumeLane().catch(() => null);
+    const plainCcsUsesThisAccount =
+      !!plainCcsLane && path.resolve(plainCcsLane.configDir) === path.resolve(instancePath);
 
     // Count sessions
     let sessionCount = 0;
@@ -63,6 +76,24 @@ export async function handleShow(ctx: CommandContext, args: string[]): Promise<v
         continuity_mode: contextPolicy.mode === 'shared' ? contextPolicy.continuityMode : null,
         instance_path: instancePath,
         session_count: sessionCount,
+        settings_sync: {
+          state: settingsSync.state,
+          profile_settings_path: settingsSync.profile_settings_path,
+          shared_settings_path: settingsSync.shared_settings_path,
+          root_settings_path: settingsSync.root_settings_path,
+        },
+        history: historySummary,
+        ...(plainCcsLane
+          ? {
+              plain_ccs_lane: {
+                kind: plainCcsLane.kind,
+                label: plainCcsLane.label,
+                config_dir: plainCcsLane.configDir,
+                project_count: plainCcsLane.projectCount,
+                uses_this_account: plainCcsUsesThisAccount,
+              },
+            }
+          : {}),
         ...(profile.bare ? { bare: true } : {}),
       };
       console.log(JSON.stringify(output, null, 2));
@@ -81,6 +112,19 @@ export async function handleShow(ctx: CommandContext, args: string[]): Promise<v
       ['Created', new Date(profile.created).toLocaleString()],
       ['Last Used', profile.last_used ? new Date(profile.last_used).toLocaleString() : 'Never'],
       ['Context', formatAccountContextPolicy(contextPolicy)],
+      ['Credentials', 'isolated per account'],
+      ['Settings', settingsSync.description],
+      ['History', formatHistorySummary(historySummary)],
+      ...(plainCcsLane
+        ? [
+            [
+              'Plain ccs',
+              plainCcsUsesThisAccount
+                ? `uses this account lane (${plainCcsLane.projectCount} project(s))`
+                : `${plainCcsLane.label} (${plainCcsLane.projectCount} project(s))`,
+            ],
+          ]
+        : []),
       ...(profile.bare ? [['Bare', 'yes (no shared symlinks)']] : []),
       ['Sessions', `${sessionCount}`],
     ];

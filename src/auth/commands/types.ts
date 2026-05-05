@@ -40,6 +40,26 @@ export interface ProfileOutput {
   continuity_mode?: 'standard' | 'deeper' | null;
   instance_path?: string;
   session_count?: number;
+  settings_sync?: {
+    state: 'shared' | 'profile-local' | 'missing' | 'unknown';
+    profile_settings_path: string;
+    shared_settings_path: string;
+    root_settings_path: string;
+  };
+  history?: {
+    project_count: number;
+    session_count: number;
+    projects_path: string;
+    projects_shared: boolean;
+    deeper_artifacts_shared: boolean;
+  };
+  plain_ccs_lane?: {
+    kind: string;
+    label: string;
+    config_dir: string;
+    project_count: number;
+    uses_this_account: boolean;
+  };
   bare?: boolean;
 }
 

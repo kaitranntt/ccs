@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, ArrowRight, Plus, Users, Zap } from 'lucide-react';
 import { AccountsTable } from '@/components/account/accounts-table';
+import { AccountRouteGuideCard } from '@/components/account/account-route-guide-card';
 import { ContinuityOverview } from '@/components/account/continuity-overview';
 import { CreateAuthProfileDialog } from '@/components/account/create-auth-profile-dialog';
 import { CopyButton } from '@/components/ui/copy-button';
@@ -205,6 +206,13 @@ export function AccountsPage() {
               plainCcsLane={plainCcsLane}
             />
 
+            <AccountRouteGuideCard
+              totalAccounts={authAccounts.length}
+              isolatedCount={isolatedCount}
+              sharedPeerGroups={sharedPeerGroups}
+              deeperReadyGroups={deeperReadyGroups}
+            />
+
             <Card className="flex flex-col">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg">{t('accountsPage.accountMatrix')}</CardTitle>
@@ -281,6 +289,13 @@ export function AccountsPage() {
           legacyTargetCount={legacyTargetCount}
           cliproxyCount={cliproxyCount}
           plainCcsLane={plainCcsLane}
+        />
+
+        <AccountRouteGuideCard
+          totalAccounts={authAccounts.length}
+          isolatedCount={isolatedCount}
+          sharedPeerGroups={sharedPeerGroups}
+          deeperReadyGroups={deeperReadyGroups}
         />
 
         <Card>

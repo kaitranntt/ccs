@@ -1,6 +1,6 @@
 # Dashboard Authentication CLI
 
-Last Updated: 2026-04-06
+Last Updated: 2026-05-05
 
 CLI commands for managing CCS dashboard authentication.
 
@@ -27,7 +27,16 @@ Dashboard auth and account context metadata are separate:
 - `dashboard_auth`: protects dashboard access with username/password
 - `accounts.<name>.context_mode/context_group`: controls isolated vs shared account context
 
-Account context is isolation-first:
+Account context is isolation-first. The recommended two-account route is:
+
+```bash
+ccs auth create work
+ccs auth create personal
+ccs work
+ccs personal
+```
+
+Only enable history sync when both accounts should share local continuity while tokens stay separate:
 
 | Mode | Default | Requirement |
 |------|---------|-------------|
@@ -38,6 +47,16 @@ Shared continuity depth:
 
 - `standard` (default): shares project workspace context only
 - `deeper` (advanced opt-in): also syncs `session-env`, `file-history`, `shell-snapshots`, `todos`
+
+`ccs auth show <profile>` reports credential isolation, settings sync state, history lane, and whether plain `ccs` currently uses the same resume lane.
+
+Non-bare account profiles share the basic Claude `settings.json` with native Claude:
+
+```text
+~/.ccs/instances/<profile>/settings.json -> ~/.ccs/shared/settings.json -> ~/.claude/settings.json
+```
+
+This keeps ordinary Claude settings in sync without copying account tokens. Local history is separate: if users want future plain `ccs` and `ccs ck` sessions to resume from the same account lane, run `ccs auth default ck` after backing up the current native lane with `ccs auth backup default`.
 
 `context_group` normalization and validation:
 

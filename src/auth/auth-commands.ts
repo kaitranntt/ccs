@@ -81,10 +81,15 @@ class AuthCommands {
     );
     console.log('');
     console.log(subheader('Examples'));
-    console.log(`  ${dim('# Create & login to work profile')}`);
+    console.log(`  ${dim('# Create two isolated accounts and choose one explicitly at runtime')}`);
     console.log(`  ${color('ccs auth create work', 'command')}`);
+    console.log(`  ${color('ccs auth create personal', 'command')}`);
+    console.log(`  ${color('ccs work "review code"', 'command')}`);
+    console.log(`  ${color('ccs personal "write tests"', 'command')}`);
     console.log('');
-    console.log(`  ${dim('# Create account with shared project context (default group)')}`);
+    console.log(
+      `  ${dim('# Optional: share local project history while credentials stay isolated')}`
+    );
     console.log(`  ${color('ccs auth create work2 --share-context', 'command')}`);
     console.log('');
     console.log(`  ${dim('# Share context only within a specific group')}`);
@@ -112,9 +117,6 @@ class AuthCommands {
     console.log('');
     console.log(`  ${dim('# List all profiles')}`);
     console.log(`  ${color('ccs auth list', 'command')}`);
-    console.log('');
-    console.log(`  ${dim('# Use work profile')}`);
-    console.log(`  ${color('ccs work "review code"', 'command')}`);
     console.log('');
     console.log(subheader('Options'));
     console.log(
@@ -147,13 +149,23 @@ class AuthCommands {
       `  By default, ${color('ccs', 'command')} uses Claude CLI defaults from ~/.claude/`
     );
     console.log(
-      `  Use ${color('ccs auth default <profile>', 'command')} to change the default profile.`
+      `  Recommended two-account route: create ${color('work', 'command')} and ${color('personal', 'command')}, then run the profile you want.`
     );
     console.log(
-      `  Account profiles stay isolated unless you opt in with ${color('--share-context', 'command')}.`
+      `  Use ${color('ccs auth default <profile>', 'command')} to change the default profile.`
+    );
+    console.log(`  Account logins, tokens, and .anthropic stay isolated for every profile.`);
+    console.log(
+      `  Non-bare account profiles share basic ${color('settings.json', 'path')} with ${color('~/.claude/settings.json', 'path')}; ${color('ccs auth show <profile>', 'command')} shows the link state.`
+    );
+    console.log(
+      `  History sync is opt-in: both accounts need shared mode and the same ${color('context_group', 'path')}.`
     );
     console.log(
       `  ${color('--deeper-continuity', 'command')} requires shared mode and syncs session-env/file-history/todos/shell-snapshots.`
+    );
+    console.log(
+      `  To make future plain ${color('ccs', 'command')} resume with an account, set ${color('ccs auth default <profile>', 'command')}; back up the current native lane first with ${color('ccs auth backup default', 'command')}.`
     );
     console.log(
       `  Existing profiles: open ${color('ccs config', 'command')} -> Accounts -> Edit Context.`
