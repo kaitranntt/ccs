@@ -130,6 +130,7 @@ export interface CliproxyManagementAuthFile {
 
 const cachedUsageQueueResponses = new Map<string, CliproxyUsageApiResponse>();
 const USAGE_QUEUE_BATCH_SIZE = 1000;
+const USAGE_QUEUE_MAX_BATCHES = 100;
 
 /**
  * Fetch usage statistics from CLIProxyAPI management API
@@ -224,10 +225,11 @@ async function fetchUsageQueueRecords(
   port?: number
 ): Promise<ManagementJsonResult<unknown[]> | null> {
   const records: unknown[] = [];
+  const seenFullBatchSignatures = new Set<string>();
   let cacheKey = '';
   let status = 0;
 
-  for (;;) {
+  for (let batchCount = 0; batchCount < USAGE_QUEUE_MAX_BATCHES; batchCount++) {
     const result = await fetchManagementJson<unknown[]>(
       `/v0/management/usage-queue?count=${USAGE_QUEUE_BATCH_SIZE}`,
       port
@@ -242,11 +244,25 @@ async function fetchUsageQueueRecords(
       return records.length > 0 ? { ok: true, status, data: records, cacheKey } : result;
     }
 
+    if (result.data.length === USAGE_QUEUE_BATCH_SIZE) {
+      const batchSignature = createUsageQueueBatchSignature(result.data);
+      if (seenFullBatchSignatures.has(batchSignature)) {
+        return { ok: true, status, data: records, cacheKey };
+      }
+      seenFullBatchSignatures.add(batchSignature);
+    }
+
     records.push(...result.data);
     if (result.data.length < USAGE_QUEUE_BATCH_SIZE) {
       return { ok: true, status, data: records, cacheKey };
     }
   }
+
+  return { ok: true, status, data: records, cacheKey };
+}
+
+function createUsageQueueBatchSignature(records: unknown[]): string {
+  return JSON.stringify(records);
 }
 
 async function fetchManagementJson<T>(

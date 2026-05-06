@@ -124,6 +124,35 @@ describe('fetchCliproxyUsageRaw', () => {
     expect(raw?.usage?.apis?.codex.models?.['gpt-5.5'].details).toHaveLength(1001);
   });
 
+  it('stops draining when CLIProxy returns the same full queue batch again', async () => {
+    let queueCalls = 0;
+    const fullBatch = Array.from({ length: 1000 }, (_, index) => ({
+      ...createCodexQueueRecord(),
+      timestamp: `2026-05-05T18:${String(index % 60).padStart(2, '0')}:00.000Z`,
+      source: `oauth|codex-user-${index}@example.com-pro.json`,
+      auth_index: `codex-auth-${index}`,
+    }));
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+
+      if (url.endsWith('/v0/management/usage')) {
+        return jsonResponse({ error: 'not found' }, 404);
+      }
+      if (url.includes('/v0/management/usage-queue?count=1000')) {
+        queueCalls++;
+        return jsonResponse(fullBatch);
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    }) as typeof fetch;
+
+    const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19213));
+
+    expect(queueCalls).toBe(2);
+    expect(raw?.usage?.total_requests).toBe(1000);
+    expect(raw?.usage?.total_tokens).toBe(23 * 1000);
+    expect(raw?.usage?.apis?.codex.models?.['gpt-5.5'].details).toHaveLength(1000);
+  });
+
   it('keeps queue stats available after the same CLIProxy usage queue has been drained', async () => {
     let queueCalls = 0;
     globalThis.fetch = (async (input: RequestInfo | URL) => {
