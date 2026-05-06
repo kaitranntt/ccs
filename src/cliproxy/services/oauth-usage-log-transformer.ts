@@ -9,7 +9,7 @@ import {
 } from './usage-compatibility-transformer';
 
 interface PendingOAuthRequest {
-  timestamp: string;
+  timestamp?: string;
   provider: string;
   model: string;
   authFile: string;
@@ -17,7 +17,7 @@ interface PendingOAuthRequest {
 }
 
 interface ProviderCompletion {
-  timestamp: string;
+  timestamp?: string;
   provider: string;
   requestId?: string;
   failed: boolean;
@@ -27,13 +27,35 @@ function unquote(value: string): string {
   return value.trim().replace(/^['"]|['"]$/g, '');
 }
 
-function extractTimestamp(line: string): string {
-  const timestamp = line.match(/\d{4}-\d{2}-\d{2}T[^\s\]]+/)?.[0];
-  return timestamp ? timestamp.replace(/[,\]]+$/, '') : new Date().toISOString();
+function extractTimestamp(line: string): string | undefined {
+  const isoTimestamp = line.match(/\d{4}-\d{2}-\d{2}T[^\s\]]+/)?.[0];
+  if (isoTimestamp) {
+    return isoTimestamp.replace(/[,\]]+$/, '');
+  }
+
+  const bracketedTimestamp = line
+    .match(/^\[(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})\]/)
+    ?.slice(1, 3);
+  if (!bracketedTimestamp) {
+    return undefined;
+  }
+
+  const [datePart, timePart] = bracketedTimestamp;
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, minute, second] = timePart.split(':').map(Number);
+  return new Date(year, month - 1, day, hour, minute, second).toISOString();
 }
 
 function extractRequestId(line: string): string | undefined {
-  return line.match(/\b(?:request[_-]?id|req[_-]?id|rid)[=:]\s*([A-Za-z0-9._:-]+)/i)?.[1];
+  const explicitRequestId = line.match(
+    /\b(?:request[_-]?id|req[_-]?id|rid)[=:]\s*([A-Za-z0-9._:-]+)/i
+  )?.[1];
+  if (explicitRequestId) {
+    return explicitRequestId;
+  }
+
+  const bracketedRequestId = line.match(/^\[[^\]]+\]\s+\[([^\]]+)\]/)?.[1]?.trim();
+  return bracketedRequestId && bracketedRequestId !== '--------' ? bracketedRequestId : undefined;
 }
 
 function parseOAuthSelection(line: string): PendingOAuthRequest | null {
@@ -76,6 +98,14 @@ function addPendingRequest(
   byProvider: Map<string, PendingOAuthRequest[]>
 ): void {
   if (pending.requestId) {
+    const previous = byRequestId.get(pending.requestId);
+    if (previous) {
+      const previousProviderQueue = byProvider.get(previous.provider) ?? [];
+      byProvider.set(
+        previous.provider,
+        previousProviderQueue.filter((entry) => entry !== previous)
+      );
+    }
     byRequestId.set(pending.requestId, pending);
   }
 
@@ -103,6 +133,9 @@ function takePendingRequest(
   const providerQueue = byProvider.get(completion.provider) ?? [];
   const next = providerQueue.shift();
   byProvider.set(completion.provider, providerQueue);
+  if (next?.requestId) {
+    byRequestId.delete(next.requestId);
+  }
   return next ?? null;
 }
 
@@ -129,11 +162,12 @@ export function buildUsageResponseFromCliproxyLogLines(lines: string[]): Cliprox
     }
 
     records.push({
-      timestamp: completion.timestamp || pending.timestamp,
+      timestamp: completion.timestamp ?? pending.timestamp ?? '1970-01-01T00:00:00.000Z',
       provider: pending.provider,
       model: pending.model,
       source: `provider=${pending.provider} auth_file=${pending.authFile}`,
       auth_index: pending.authFile,
+      request_id: completion.requestId ?? pending.requestId,
       failed: completion.failed,
       tokens: {},
     });

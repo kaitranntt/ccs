@@ -158,6 +158,24 @@ function resolveCountWithDetails(aggregateCount: number | undefined, detailCount
   return aggregateCount < detailCount ? detailCount : aggregateCount;
 }
 
+function shouldReplaceLastUsedAt(current: string | undefined, next: string | undefined): boolean {
+  if (!next) {
+    return false;
+  }
+
+  const nextTime = Date.parse(next);
+  if (!Number.isFinite(nextTime)) {
+    return false;
+  }
+
+  if (!current) {
+    return true;
+  }
+
+  const currentTime = Date.parse(current);
+  return !Number.isFinite(currentTime) || nextTime > currentTime;
+}
+
 export function buildCliproxyStatsFromUsageResponse(
   data: CliproxyUsageApiResponse,
   options: BuildCliproxyStatsOptions = {}
@@ -184,14 +202,16 @@ export function buildCliproxyStatsFromUsageResponse(
       }
 
       for (const [model, modelData] of Object.entries(providerData.models)) {
-        requestsByModel[model] = modelData.total_requests ?? 0;
+        let modelDetailCount = 0;
         if (!modelData.details) {
+          requestsByModel[model] = (requestsByModel[model] ?? 0) + (modelData.total_requests ?? 0);
           continue;
         }
 
         for (const detail of modelData.details) {
           sawAnyDetail = true;
           providerDetailCount++;
+          modelDetailCount++;
           const resolvedProvider = resolveProviderForDetail(provider, detail, authIndexLookup);
           const source = resolveSourceForDetail(resolvedProvider, detail, authIndexLookup);
           const accountKey = buildQualifiedAccountStatsKey(resolvedProvider, source);
@@ -218,10 +238,16 @@ export function buildCliproxyStatsFromUsageResponse(
 
           const tokens = detail.tokens?.total_tokens ?? 0;
           accountStats[accountKey].totalTokens += tokens;
-          accountStats[accountKey].lastUsedAt = detail.timestamp;
+          if (shouldReplaceLastUsedAt(accountStats[accountKey].lastUsedAt, detail.timestamp)) {
+            accountStats[accountKey].lastUsedAt = detail.timestamp;
+          }
           totalInputTokens += detail.tokens?.input_tokens ?? 0;
           totalOutputTokens += detail.tokens?.output_tokens ?? 0;
         }
+
+        requestsByModel[model] =
+          (requestsByModel[model] ?? 0) +
+          resolveCountWithDetails(modelData.total_requests, modelDetailCount);
       }
 
       const providerTotal = providerData.total_requests ?? 0;
@@ -244,9 +270,18 @@ export function buildCliproxyStatsFromUsageResponse(
   const failureCount = sawAnyDetail
     ? resolveCountWithDetails(aggregateFailureCount, totalFailureCount)
     : (aggregateFailureCount ?? 0);
+  const providerTotalRequests = Object.values(requestsByProvider).reduce(
+    (total, count) => total + count,
+    0
+  );
+  const totalRequests = Math.max(
+    usage?.total_requests ?? 0,
+    successCount + failureCount,
+    providerTotalRequests
+  );
 
   return {
-    totalRequests: usage?.total_requests ?? 0,
+    totalRequests,
     successCount,
     failureCount,
     tokens: {

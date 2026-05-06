@@ -7,6 +7,7 @@ interface CliproxyUsageQueueRecord {
   alias?: string;
   source?: string;
   auth_index?: string | number;
+  request_id?: string;
   tokens?: Partial<CliproxyRequestDetail['tokens']>;
   failed?: boolean;
 }
@@ -17,6 +18,10 @@ interface ApiKeyUsageEntry {
 }
 
 type ApiKeyUsageResponse = Record<string, Record<string, ApiKeyUsageEntry>>;
+
+interface MergeMissingDetailsOptions {
+  appendExtraDetails?: boolean;
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -84,6 +89,7 @@ function normalizeQueueRecord(record: unknown): CliproxyUsageQueueRecord | null 
     alias: asString(raw.alias, model),
     source,
     auth_index: authIndex,
+    request_id: asString(raw.request_id, ''),
     tokens: normalizeTokens(raw.tokens),
     failed: asBoolean(raw.failed),
   };
@@ -141,6 +147,7 @@ function createDetailSignature(
   return [
     provider,
     model,
+    detail.request_id?.trim() ?? '',
     detail.timestamp,
     detail.source,
     String(detail.auth_index),
@@ -189,6 +196,7 @@ export function buildUsageResponseFromQueueRecords(records: unknown[]): Cliproxy
       timestamp: record.timestamp ?? new Date().toISOString(),
       source: record.source ?? 'unknown',
       auth_index: record.auth_index ?? record.source ?? 'unknown',
+      request_id: record.request_id || undefined,
       tokens: normalizeTokens(record.tokens),
       failed: record.failed === true,
     });
@@ -265,6 +273,7 @@ function createMissingDetailMergeKey(
   return [
     provider,
     model,
+    detail.request_id?.trim() ?? '',
     detail.timestamp,
     detail.source?.trim() ?? '',
     String(detail.auth_index ?? '').trim(),
@@ -285,6 +294,10 @@ function extractDuplicateIdentityValue(value: string): string {
   return pipeCandidate.split(/[\\/]/).pop() ?? pipeCandidate.trim();
 }
 
+function stripKnownAuthPlanSuffix(value: string): string {
+  return value.replace(/-(?:free|plus|pro|team|business|enterprise)$/i, '');
+}
+
 function normalizeDuplicateIdentity(provider: string, value: string | number | undefined): string {
   const rawValue = String(value ?? '').trim();
   if (!rawValue) {
@@ -292,13 +305,19 @@ function normalizeDuplicateIdentity(provider: string, value: string | number | u
   }
 
   const normalizedProvider = provider.trim().toLowerCase();
-  let candidate = extractDuplicateIdentityValue(rawValue).replace(/\.json$/i, '');
+  const identityValue = extractDuplicateIdentityValue(rawValue);
+  const hadJsonExtension = /\.json$/i.test(identityValue);
+  let candidate = identityValue.replace(/\.json$/i, '');
   const providerPrefix = `${normalizedProvider}-`;
   if (candidate.toLowerCase().startsWith(providerPrefix)) {
     candidate = candidate.slice(providerPrefix.length);
   }
 
   candidate = candidate.replace(/^[a-f0-9]{8}[-_]/i, '').trim();
+  if (hadJsonExtension) {
+    candidate = stripKnownAuthPlanSuffix(candidate);
+  }
+
   return candidate ? candidate.toLowerCase() : rawValue.toLowerCase();
 }
 
@@ -326,10 +345,25 @@ function createLikelyLogDuplicateKey(
   ].join('|');
 }
 
+function createRequestIdDuplicateKey(
+  provider: string,
+  model: string,
+  detail: CliproxyRequestDetail
+): string {
+  const requestId = detail.request_id?.trim();
+  return requestId ? [provider, model, requestId, detail.failed ? '1' : '0'].join('|') : '';
+}
+
+function parseDetailTimestamp(detail: CliproxyRequestDetail): number | null {
+  const timestampMs = Date.parse(detail.timestamp);
+  return Number.isFinite(timestampMs) ? timestampMs : null;
+}
+
 const TOKENLESS_LOG_DUPLICATE_WINDOW_MS = 5_000;
 
-interface LikelyLogDuplicateCandidate {
-  timestampMs: number;
+interface LikelyLogDuplicateCandidates {
+  byRequestId: Map<string, number>;
+  byIdentity: Map<string, number[]>;
 }
 
 function detailHasTokenUsage(detail: CliproxyRequestDetail): boolean {
@@ -340,11 +374,6 @@ function detailHasTokenUsage(detail: CliproxyRequestDetail): boolean {
     (detail.tokens?.cached_tokens ?? 0) > 0 ||
     (detail.tokens?.total_tokens ?? 0) > 0
   );
-}
-
-function parseDetailTimestamp(detail: CliproxyRequestDetail): number | null {
-  const timestampMs = Date.parse(detail.timestamp);
-  return Number.isFinite(timestampMs) ? timestampMs : null;
 }
 
 function collectDetailMergeKeyCounts(response: CliproxyUsageApiResponse): Map<string, number> {
@@ -358,26 +387,37 @@ function collectDetailMergeKeyCounts(response: CliproxyUsageApiResponse): Map<st
 
 function collectLikelyLogDuplicateCandidates(
   response: CliproxyUsageApiResponse
-): Map<string, LikelyLogDuplicateCandidate[]> {
-  const candidates = new Map<string, LikelyLogDuplicateCandidate[]>();
+): LikelyLogDuplicateCandidates {
+  const candidates: LikelyLogDuplicateCandidates = {
+    byRequestId: new Map<string, number>(),
+    byIdentity: new Map<string, number[]>(),
+  };
   for (const [provider, providerData] of Object.entries(response.usage?.apis ?? {})) {
     for (const [model, modelData] of Object.entries(providerData.models ?? {})) {
       const details = modelData.details ?? [];
-      const hasMissingAggregateDetails = (modelData.total_requests ?? 0) > details.length;
-      if (hasMissingAggregateDetails) {
-        continue;
-      }
-
+      const canUseIdentityWindow = (modelData.total_requests ?? 0) <= details.length;
       for (const detail of details) {
+        const requestIdKey = createRequestIdDuplicateKey(provider, model, detail);
+        if (requestIdKey) {
+          candidates.byRequestId.set(
+            requestIdKey,
+            (candidates.byRequestId.get(requestIdKey) ?? 0) + 1
+          );
+        }
+
+        if (!canUseIdentityWindow) {
+          continue;
+        }
+
         const timestampMs = parseDetailTimestamp(detail);
         if (timestampMs === null) {
           continue;
         }
 
         const key = createLikelyLogDuplicateKey(provider, model, detail);
-        const providerCandidates = candidates.get(key) ?? [];
-        providerCandidates.push({ timestampMs });
-        candidates.set(key, providerCandidates);
+        const timestamps = candidates.byIdentity.get(key) ?? [];
+        timestamps.push(timestampMs);
+        candidates.byIdentity.set(key, timestamps);
       }
     }
   }
@@ -398,8 +438,22 @@ function consumeDetailKey(counts: Map<string, number>, key: string): boolean {
   return true;
 }
 
+function consumeCount(counts: Map<string, number>, key: string): boolean {
+  const count = counts.get(key) ?? 0;
+  if (count <= 0) {
+    return false;
+  }
+
+  if (count === 1) {
+    counts.delete(key);
+  } else {
+    counts.set(key, count - 1);
+  }
+  return true;
+}
+
 function consumeLikelyLogDuplicateCandidate(
-  candidates: Map<string, LikelyLogDuplicateCandidate[]>,
+  candidates: LikelyLogDuplicateCandidates,
   provider: string,
   model: string,
   detail: CliproxyRequestDetail
@@ -408,26 +462,31 @@ function consumeLikelyLogDuplicateCandidate(
     return false;
   }
 
+  const requestIdKey = createRequestIdDuplicateKey(provider, model, detail);
+  if (requestIdKey && consumeCount(candidates.byRequestId, requestIdKey)) {
+    return true;
+  }
+
   const timestampMs = parseDetailTimestamp(detail);
   if (timestampMs === null) {
     return false;
   }
 
   const key = createLikelyLogDuplicateKey(provider, model, detail);
-  const providerCandidates = candidates.get(key) ?? [];
-  const index = providerCandidates.findIndex(
-    (candidate) =>
-      Math.abs(candidate.timestampMs - timestampMs) <= TOKENLESS_LOG_DUPLICATE_WINDOW_MS
+  const timestamps = candidates.byIdentity.get(key) ?? [];
+  const index = timestamps.findIndex(
+    (candidateTimestampMs) =>
+      Math.abs(candidateTimestampMs - timestampMs) <= TOKENLESS_LOG_DUPLICATE_WINDOW_MS
   );
   if (index === -1) {
     return false;
   }
 
-  providerCandidates.splice(index, 1);
-  if (providerCandidates.length === 0) {
-    candidates.delete(key);
+  timestamps.splice(index, 1);
+  if (timestamps.length === 0) {
+    candidates.byIdentity.delete(key);
   } else {
-    candidates.set(key, providerCandidates);
+    candidates.byIdentity.set(key, timestamps);
   }
   return true;
 }
@@ -445,12 +504,16 @@ function appendDetailToExistingProvider(
   merged: CliproxyUsageApiResponse,
   provider: string,
   model: string,
-  detail: CliproxyRequestDetail
+  detail: CliproxyRequestDetail,
+  options: Required<MergeMissingDetailsOptions>
 ): void {
   const providerBucket = ensureProviderBucket(merged, provider);
   const shouldFillAggregateOnly =
     (providerBucket.total_requests ?? 0) > countProviderDetails(providerBucket);
   if (!shouldFillAggregateOnly) {
+    if (!options.appendExtraDetails) {
+      return;
+    }
     addDetail(merged, provider, model, cloneDetail(detail));
     return;
   }
@@ -467,12 +530,16 @@ function appendDetailToExistingProvider(
 
 export function mergeUsageResponseWithMissingDetails(
   base: CliproxyUsageApiResponse,
-  incoming: CliproxyUsageApiResponse | null | undefined
+  incoming: CliproxyUsageApiResponse | null | undefined,
+  options: MergeMissingDetailsOptions = {}
 ): CliproxyUsageApiResponse {
   if (!incoming || !hasUsageDetails(incoming)) {
     return base;
   }
 
+  const normalizedOptions: Required<MergeMissingDetailsOptions> = {
+    appendExtraDetails: options.appendExtraDetails ?? true,
+  };
   const merged = cloneUsageResponse(base);
   const existingDetailCounts = collectDetailMergeKeyCounts(base);
   const likelyLogDuplicateCandidates = collectLikelyLogDuplicateCandidates(base);
@@ -494,7 +561,13 @@ export function mergeUsageResponseWithMissingDetails(
     }
 
     if (base.usage?.apis?.[entry.provider]) {
-      appendDetailToExistingProvider(merged, entry.provider, entry.model, entry.detail);
+      appendDetailToExistingProvider(
+        merged,
+        entry.provider,
+        entry.model,
+        entry.detail,
+        normalizedOptions
+      );
       continue;
     }
 

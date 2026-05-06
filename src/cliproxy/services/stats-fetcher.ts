@@ -81,6 +81,7 @@ export interface CliproxyRequestDetail {
   timestamp: string;
   source: string;
   auth_index: string | number;
+  request_id?: string;
   tokens: {
     input_tokens: number;
     output_tokens: number;
@@ -131,6 +132,7 @@ export interface CliproxyManagementAuthFile {
 const cachedUsageQueueResponses = new Map<string, CliproxyUsageApiResponse>();
 const USAGE_QUEUE_BATCH_SIZE = 1000;
 const USAGE_QUEUE_MAX_BATCHES = 100;
+const USAGE_QUEUE_DRAIN_TIMEOUT_MS = 30_000;
 
 /**
  * Fetch usage statistics from CLIProxyAPI management API
@@ -174,39 +176,70 @@ export async function fetchCliproxyUsageRaw(
 
   const mergeLocalLogUsage = (response: CliproxyUsageApiResponse): CliproxyUsageApiResponse =>
     mergeUsageResponseWithMissingDetails(response, getLocalLogUsage());
+  const mergeAggregateWithDetails = (
+    aggregate: CliproxyUsageApiResponse,
+    details: CliproxyUsageApiResponse
+  ): CliproxyUsageApiResponse =>
+    mergeUsageResponseWithMissingDetails(aggregate, details, { appendExtraDetails: false });
 
+  let legacyAggregateUsage: CliproxyUsageApiResponse | null = null;
   const legacyUsage = await fetchManagementJson<CliproxyUsageApiResponse>(
     '/v0/management/usage',
     port
   );
   if (legacyUsage?.ok && legacyUsage.data) {
-    return mergeLocalLogUsage(legacyUsage.data);
+    if (hasUsageDetails(legacyUsage.data)) {
+      return mergeLocalLogUsage(legacyUsage.data);
+    }
+    legacyAggregateUsage = legacyUsage.data;
   }
 
+  let cachedUsageQueueResponse: CliproxyUsageApiResponse | undefined;
   const usageQueue = await fetchUsageQueueRecords(port);
-  if (usageQueue?.ok && Array.isArray(usageQueue.data)) {
+  if (usageQueue?.cacheKey) {
+    cachedUsageQueueResponse = cachedUsageQueueResponses.get(usageQueue.cacheKey);
+  }
+
+  if (usageQueue && Array.isArray(usageQueue.data)) {
     const queueResponse = buildUsageResponseFromQueueRecords(usageQueue.data);
     if (hasUsageDetails(queueResponse)) {
-      const cachedUsageQueueResponse = cachedUsageQueueResponses.get(usageQueue.cacheKey);
       const mergedUsageQueueResponse = cachedUsageQueueResponse
         ? mergeUsageResponses(cachedUsageQueueResponse, queueResponse)
         : queueResponse;
       cachedUsageQueueResponses.set(usageQueue.cacheKey, mergedUsageQueueResponse);
-      return mergeLocalLogUsage(mergedUsageQueueResponse);
+      cachedUsageQueueResponse = mergedUsageQueueResponse;
+      if (usageQueue.ok) {
+        const response = legacyAggregateUsage
+          ? mergeAggregateWithDetails(legacyAggregateUsage, mergedUsageQueueResponse)
+          : mergedUsageQueueResponse;
+        return mergeLocalLogUsage(response);
+      }
     }
+  }
 
-    const cachedUsageQueueResponse = cachedUsageQueueResponses.get(usageQueue.cacheKey);
-    if (cachedUsageQueueResponse) {
-      return mergeLocalLogUsage(cachedUsageQueueResponse);
-    }
+  if (legacyAggregateUsage) {
+    const response = cachedUsageQueueResponse
+      ? mergeAggregateWithDetails(legacyAggregateUsage, cachedUsageQueueResponse)
+      : legacyAggregateUsage;
+    return mergeLocalLogUsage(response);
   }
 
   const apiKeyUsage = await fetchManagementJson<unknown>('/v0/management/api-key-usage', port);
   if (apiKeyUsage?.ok && apiKeyUsage.data) {
-    const apiKeyResponse = mergeLocalLogUsage(buildUsageResponseFromApiKeyUsage(apiKeyUsage.data));
+    const apiKeyResponseWithCachedDetails = cachedUsageQueueResponse
+      ? mergeAggregateWithDetails(
+          buildUsageResponseFromApiKeyUsage(apiKeyUsage.data),
+          cachedUsageQueueResponse
+        )
+      : buildUsageResponseFromApiKeyUsage(apiKeyUsage.data);
+    const apiKeyResponse = mergeLocalLogUsage(apiKeyResponseWithCachedDetails);
     if (hasUsageTotals(apiKeyResponse)) {
       return apiKeyResponse;
     }
+  }
+
+  if (cachedUsageQueueResponse) {
+    return mergeLocalLogUsage(cachedUsageQueueResponse);
   }
 
   const logUsage = getLocalLogUsage();
@@ -228,6 +261,7 @@ async function fetchUsageQueueRecords(
   const seenFullBatchSignatures = new Set<string>();
   let cacheKey = '';
   let status = 0;
+  const drainStartedAt = Date.now();
 
   for (let batchCount = 0; batchCount < USAGE_QUEUE_MAX_BATCHES; batchCount++) {
     const result = await fetchManagementJson<unknown[]>(
@@ -235,19 +269,19 @@ async function fetchUsageQueueRecords(
       port
     );
     if (!result) {
-      return records.length > 0 ? { ok: true, status, data: records, cacheKey } : null;
+      return records.length > 0 ? { ok: false, status, data: records, cacheKey } : null;
     }
 
     cacheKey ||= result.cacheKey;
     status = result.status;
     if (!result.ok || !Array.isArray(result.data)) {
-      return records.length > 0 ? { ok: true, status, data: records, cacheKey } : result;
+      return records.length > 0 ? { ok: false, status, data: records, cacheKey } : result;
     }
 
     if (result.data.length === USAGE_QUEUE_BATCH_SIZE) {
       const batchSignature = createUsageQueueBatchSignature(result.data);
       if (seenFullBatchSignatures.has(batchSignature)) {
-        return { ok: true, status, data: records, cacheKey };
+        return { ok: false, status, data: records, cacheKey };
       }
       seenFullBatchSignatures.add(batchSignature);
     }
@@ -256,9 +290,13 @@ async function fetchUsageQueueRecords(
     if (result.data.length < USAGE_QUEUE_BATCH_SIZE) {
       return { ok: true, status, data: records, cacheKey };
     }
+
+    if (Date.now() - drainStartedAt >= USAGE_QUEUE_DRAIN_TIMEOUT_MS) {
+      return { ok: false, status, data: records, cacheKey };
+    }
   }
 
-  return { ok: true, status, data: records, cacheKey };
+  return { ok: false, status, data: records, cacheKey };
 }
 
 function createUsageQueueBatchSignature(records: unknown[]): string {

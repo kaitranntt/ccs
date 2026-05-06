@@ -450,6 +450,53 @@ describe('buildCliproxyStatsFromUsageResponse', () => {
     });
   });
 
+  it('uses detail-derived totals and latest timestamps when aggregate request counts are stale', () => {
+    const usage: CliproxyUsageApiResponse = {
+      failed_requests: 0,
+      usage: {
+        total_requests: 0,
+        success_count: 0,
+        failure_count: 0,
+        apis: {
+          codex: {
+            total_requests: 0,
+            models: {
+              'gpt-5.5': {
+                total_requests: 0,
+                details: [
+                  createDetail({
+                    timestamp: '2025-03-26T10:02:00.000Z',
+                    source: 'provider=codex auth_file=codex-user@example.com-pro.json',
+                    auth_index: 'codex-user@example.com-pro.json',
+                    failed: true,
+                  }),
+                  createDetail({
+                    timestamp: '2025-03-26T10:01:00.000Z',
+                    source: 'provider=codex auth_file=codex-user@example.com-pro.json',
+                    auth_index: 'codex-user@example.com-pro.json',
+                  }),
+                ],
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const stats = buildCliproxyStatsFromUsageResponse(usage);
+
+    expect(stats.totalRequests).toBe(2);
+    expect(stats.requestsByModel['gpt-5.5']).toBe(2);
+    expect(stats.requestsByProvider.codex).toBe(2);
+    expect(stats.successCount).toBe(1);
+    expect(stats.failureCount).toBe(1);
+    expect(stats.accountStats['codex:user@example.com']).toMatchObject({
+      successCount: 1,
+      failureCount: 1,
+      lastUsedAt: '2025-03-26T10:02:00.000Z',
+    });
+  });
+
   it('does not strip plan-like suffixes from raw account identifiers', () => {
     const usage: CliproxyUsageApiResponse = {
       usage: {
