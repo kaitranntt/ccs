@@ -216,6 +216,97 @@ export function mergeUsageResponses(
   return merged;
 }
 
+function cloneUsageResponse(response: CliproxyUsageApiResponse): CliproxyUsageApiResponse {
+  return {
+    failed_requests: response.failed_requests ?? 0,
+    usage: {
+      total_requests: response.usage?.total_requests ?? 0,
+      success_count: response.usage?.success_count ?? 0,
+      failure_count: response.usage?.failure_count ?? 0,
+      total_tokens: response.usage?.total_tokens ?? 0,
+      apis: Object.fromEntries(
+        Object.entries(response.usage?.apis ?? {}).map(([provider, providerData]) => [
+          provider,
+          {
+            total_requests: providerData.total_requests ?? 0,
+            total_tokens: providerData.total_tokens ?? 0,
+            models: Object.fromEntries(
+              Object.entries(providerData.models ?? {}).map(([model, modelData]) => [
+                model,
+                {
+                  total_requests: modelData.total_requests ?? 0,
+                  total_tokens: modelData.total_tokens ?? 0,
+                  details: (modelData.details ?? []).map((detail) => ({
+                    ...detail,
+                    tokens: { ...detail.tokens },
+                  })),
+                },
+              ])
+            ),
+          },
+        ])
+      ),
+    },
+  };
+}
+
+function cloneDetail(detail: CliproxyRequestDetail): CliproxyRequestDetail {
+  return {
+    ...detail,
+    tokens: { ...detail.tokens },
+  };
+}
+
+function providerHasDetails(response: CliproxyUsageApiResponse, provider: string): boolean {
+  const providerData = response.usage?.apis?.[provider];
+  if (!providerData?.models) {
+    return false;
+  }
+
+  return Object.values(providerData.models).some((modelData) => (modelData.details ?? []).length);
+}
+
+function appendDetailToExistingProvider(
+  merged: CliproxyUsageApiResponse,
+  provider: string,
+  model: string,
+  detail: CliproxyRequestDetail
+): void {
+  const providerBucket = ensureProviderBucket(merged, provider);
+  const modelBucket = ensureModelBucket(providerBucket, model);
+  const totalTokens = detail.tokens?.total_tokens ?? 0;
+
+  providerBucket.total_tokens = (providerBucket.total_tokens ?? 0) + totalTokens;
+  modelBucket.total_requests = (modelBucket.total_requests ?? 0) + 1;
+  modelBucket.total_tokens = (modelBucket.total_tokens ?? 0) + totalTokens;
+  (modelBucket.details ??= []).push(cloneDetail(detail));
+}
+
+export function mergeUsageResponseWithMissingDetails(
+  base: CliproxyUsageApiResponse,
+  incoming: CliproxyUsageApiResponse | null | undefined
+): CliproxyUsageApiResponse {
+  if (!incoming || !hasUsageDetails(incoming)) {
+    return base;
+  }
+
+  const merged = cloneUsageResponse(base);
+  for (const entry of collectResponseDetails(incoming)) {
+    if (providerHasDetails(base, entry.provider)) {
+      continue;
+    }
+
+    if (base.usage?.apis?.[entry.provider]) {
+      appendDetailToExistingProvider(merged, entry.provider, entry.model, entry.detail);
+      continue;
+    }
+
+    addDetail(merged, entry.provider, entry.model, cloneDetail(entry.detail));
+  }
+
+  return merged;
+}
+
 export function buildUsageResponseFromApiKeyUsage(rawResponse: unknown): CliproxyUsageApiResponse {
   const response = buildUsageResponseFromQueueRecords([]);
   const usage = response.usage ?? {

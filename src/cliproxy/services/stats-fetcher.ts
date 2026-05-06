@@ -13,11 +13,13 @@ import {
   buildManagementHeaders,
 } from '../proxy/proxy-target-resolver';
 import { buildCliproxyStatsFromUsageResponse } from './stats-transformer';
+import { buildUsageResponseFromCliproxyMainLog } from './oauth-usage-log-transformer';
 import {
   buildUsageResponseFromApiKeyUsage,
   buildUsageResponseFromQueueRecords,
   hasUsageDetails,
   hasUsageTotals,
+  mergeUsageResponseWithMissingDetails,
   mergeUsageResponses,
 } from './usage-compatibility-transformer';
 
@@ -158,12 +160,25 @@ export async function fetchCliproxyStats(port?: number): Promise<CliproxyStats |
 export async function fetchCliproxyUsageRaw(
   port?: number
 ): Promise<CliproxyUsageApiResponse | null> {
+  let localLogUsage: CliproxyUsageApiResponse | null | undefined;
+  const getLocalLogUsage = (): CliproxyUsageApiResponse | null => {
+    if (localLogUsage !== undefined) {
+      return localLogUsage;
+    }
+
+    localLogUsage = getProxyTarget().isRemote ? null : buildUsageResponseFromCliproxyMainLog();
+    return localLogUsage;
+  };
+
+  const mergeLocalLogUsage = (response: CliproxyUsageApiResponse): CliproxyUsageApiResponse =>
+    mergeUsageResponseWithMissingDetails(response, getLocalLogUsage());
+
   const legacyUsage = await fetchManagementJson<CliproxyUsageApiResponse>(
     '/v0/management/usage',
     port
   );
   if (legacyUsage?.ok && legacyUsage.data) {
-    return legacyUsage.data;
+    return mergeLocalLogUsage(legacyUsage.data);
   }
 
   const usageQueue = await fetchManagementJson<unknown[]>(
@@ -178,21 +193,26 @@ export async function fetchCliproxyUsageRaw(
         ? mergeUsageResponses(cachedUsageQueueResponse, queueResponse)
         : queueResponse;
       cachedUsageQueueResponses.set(usageQueue.cacheKey, mergedUsageQueueResponse);
-      return mergedUsageQueueResponse;
+      return mergeLocalLogUsage(mergedUsageQueueResponse);
     }
 
     const cachedUsageQueueResponse = cachedUsageQueueResponses.get(usageQueue.cacheKey);
     if (cachedUsageQueueResponse) {
-      return cachedUsageQueueResponse;
+      return mergeLocalLogUsage(cachedUsageQueueResponse);
     }
   }
 
   const apiKeyUsage = await fetchManagementJson<unknown>('/v0/management/api-key-usage', port);
   if (apiKeyUsage?.ok && apiKeyUsage.data) {
-    const apiKeyResponse = buildUsageResponseFromApiKeyUsage(apiKeyUsage.data);
+    const apiKeyResponse = mergeLocalLogUsage(buildUsageResponseFromApiKeyUsage(apiKeyUsage.data));
     if (hasUsageTotals(apiKeyResponse)) {
       return apiKeyResponse;
     }
+  }
+
+  const logUsage = getLocalLogUsage();
+  if (logUsage && hasUsageDetails(logUsage)) {
+    return logUsage;
   }
 
   if (usageQueue?.ok) {

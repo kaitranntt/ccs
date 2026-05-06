@@ -39,6 +39,12 @@ function createCodexQueueRecord() {
   };
 }
 
+function writeCliproxyMainLog(lines: string[]): void {
+  const logsDir = path.join(ccsDir, 'cliproxy', 'logs');
+  fs.mkdirSync(logsDir, { recursive: true });
+  fs.writeFileSync(path.join(logsDir, 'main.log'), `${lines.join('\n')}\n`, 'utf-8');
+}
+
 beforeEach(() => {
   ccsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-stats-fetcher-'));
   __testExports.clearCachedUsageQueueResponse();
@@ -157,6 +163,118 @@ describe('fetchCliproxyUsageRaw', () => {
     expect(raw?.usage?.failure_count).toBe(1);
     expect(raw?.usage?.apis?.openai.total_requests).toBe(3);
     expect(raw?.usage?.apis?.openai.models).toEqual({});
+  });
+
+  it('merges local OAuth log usage when management endpoints have only aggregate API-key totals', async () => {
+    writeCliproxyMainLog([
+      '2026-05-05T18:45:00.000Z INFO request_id=req-1 Use OAuth provider=codex auth_file=codex-user@example.com-pro.json for model gpt-5.5',
+      '2026-05-05T18:45:01.000Z INFO request_id=req-1 POST "/api/provider/codex/v1/messages?beta=true" status=200',
+    ]);
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+
+      if (url.endsWith('/v0/management/usage')) {
+        return jsonResponse({ error: 'not found' }, 404);
+      }
+      if (url.includes('/v0/management/usage-queue?count=1000')) {
+        return jsonResponse([]);
+      }
+      if (url.endsWith('/v0/management/api-key-usage')) {
+        return jsonResponse({
+          openai: {
+            'https://api.example.test|sk-redacted': {
+              success: 2,
+              failed: 0,
+            },
+          },
+        });
+      }
+      if (url.endsWith('/v0/management/auth-files')) {
+        return jsonResponse({ files: [] });
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    }) as typeof fetch;
+
+    const stats = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyStats(19207));
+
+    expect(stats?.totalRequests).toBe(3);
+    expect(stats?.successCount).toBe(3);
+    expect(stats?.requestsByProvider).toEqual({ openai: 2, codex: 1 });
+    expect(stats?.requestsByModel).toEqual({ 'gpt-5.5': 1 });
+    expect(stats?.accountStats['codex:user@example.com']).toMatchObject({
+      provider: 'codex',
+      source: 'user@example.com',
+      successCount: 1,
+      failureCount: 0,
+    });
+  });
+
+  it('adds missing OAuth details to matching API-key provider totals without double-counting', async () => {
+    writeCliproxyMainLog([
+      '2026-05-05T18:45:00.000Z INFO request_id=req-1 Use OAuth provider=codex auth_file=codex-user@example.com-pro.json for model gpt-5.5',
+      '2026-05-05T18:45:01.000Z INFO request_id=req-1 POST "/api/provider/codex/v1/messages?beta=true" status=200',
+    ]);
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+
+      if (url.endsWith('/v0/management/usage')) {
+        return jsonResponse({ error: 'not found' }, 404);
+      }
+      if (url.includes('/v0/management/usage-queue?count=1000')) {
+        return jsonResponse([]);
+      }
+      if (url.endsWith('/v0/management/api-key-usage')) {
+        return jsonResponse({
+          codex: {
+            'oauth|codex-user@example.com-pro.json': {
+              success: 1,
+              failed: 0,
+            },
+          },
+        });
+      }
+      if (url.endsWith('/v0/management/auth-files')) {
+        return jsonResponse({ files: [] });
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    }) as typeof fetch;
+
+    const stats = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyStats(19209));
+
+    expect(stats?.totalRequests).toBe(1);
+    expect(stats?.successCount).toBe(1);
+    expect(stats?.requestsByProvider).toEqual({ codex: 1 });
+    expect(stats?.requestsByModel).toEqual({ 'gpt-5.5': 1 });
+    expect(stats?.accountStats['codex:user@example.com']).toMatchObject({
+      provider: 'codex',
+      source: 'user@example.com',
+      successCount: 1,
+      failureCount: 0,
+    });
+  });
+
+  it('does not double-count local OAuth logs when usage queue already has provider details', async () => {
+    writeCliproxyMainLog([
+      '2026-05-05T18:45:00.000Z INFO request_id=req-1 Use OAuth provider=codex auth_file=codex-user@example.com-pro.json for model gpt-5.5',
+      '2026-05-05T18:45:01.000Z INFO request_id=req-1 POST "/api/provider/codex/v1/messages?beta=true" status=200',
+    ]);
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+
+      if (url.endsWith('/v0/management/usage')) {
+        return jsonResponse({ error: 'not found' }, 404);
+      }
+      if (url.includes('/v0/management/usage-queue?count=1000')) {
+        return jsonResponse([createCodexQueueRecord()]);
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    }) as typeof fetch;
+
+    const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19208));
+
+    expect(raw?.usage?.total_requests).toBe(1);
+    expect(raw?.usage?.apis?.codex.total_requests).toBe(1);
+    expect(raw?.usage?.apis?.codex.models?.['gpt-5.5'].details).toHaveLength(1);
   });
 });
 

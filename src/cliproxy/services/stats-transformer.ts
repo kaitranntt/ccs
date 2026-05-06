@@ -42,22 +42,25 @@ function extractAuthFilenameFromSource(source: string): string {
   );
 }
 
-function stripKnownAuthFilenameSuffix(value: string): string {
-  let normalized = value.replace(/\.json$/i, '');
-  normalized = normalized.replace(/-(?:free|plus|pro|team|business|enterprise)$/i, '');
-  return normalized;
+function stripKnownAuthPlanSuffix(value: string): string {
+  return value.replace(/-(?:free|plus|pro|team|business|enterprise)$/i, '');
 }
 
 function normalizeAuthFilenameSource(provider: string, source: string): string | null {
   const filename = extractAuthFilenameFromSource(source);
   const normalizedProvider = normalizeProvider(provider);
-  let candidate = stripKnownAuthFilenameSuffix(filename);
+  const hadJsonExtension = /\.json$/i.test(filename);
+  let candidate = filename.replace(/\.json$/i, '');
   const providerPrefix = `${normalizedProvider}-`;
   if (candidate.toLowerCase().startsWith(providerPrefix)) {
     candidate = candidate.slice(providerPrefix.length);
   }
 
   candidate = candidate.replace(/^[a-f0-9]{8}[-_]/i, '');
+  if (hadJsonExtension) {
+    candidate = stripKnownAuthPlanSuffix(candidate);
+  }
+
   const parts = candidate.split('@');
   if (parts.length < 2) {
     return null;
@@ -232,10 +235,9 @@ export function buildCliproxyStatsFromUsageResponse(
 
   return {
     totalRequests: usage?.total_requests ?? 0,
-    successCount: sawAnyDetail ? totalSuccessCount : (usage?.success_count ?? 0),
-    failureCount: sawAnyDetail
-      ? totalFailureCount
-      : (usage?.failure_count ?? data.failed_requests ?? 0),
+    successCount: usage?.success_count ?? (sawAnyDetail ? totalSuccessCount : 0),
+    failureCount:
+      usage?.failure_count ?? data.failed_requests ?? (sawAnyDetail ? totalFailureCount : 0),
     tokens: {
       input: totalInputTokens,
       output: totalOutputTokens,

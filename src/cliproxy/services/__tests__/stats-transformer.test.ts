@@ -367,4 +367,49 @@ describe('buildCliproxyStatsFromUsageResponse', () => {
       failureCount: 0,
     });
   });
+
+  it('does not strip plan-like suffixes from raw account identifiers', () => {
+    const usage: CliproxyUsageApiResponse = {
+      usage: {
+        total_requests: 2,
+        apis: {
+          codex: {
+            total_requests: 2,
+            models: {
+              'gpt-5.5': {
+                total_requests: 2,
+                details: [
+                  createDetail({
+                    source: 'provider=codex auth_file=codex-user-free@example.com.json',
+                    auth_index: 'codex-user-free@example.com.json',
+                  }),
+                  createDetail({
+                    source: 'codex-user@example.com-pro',
+                    auth_index: 'codex-user@example.com-pro',
+                    timestamp: '2025-03-26T10:01:00.000Z',
+                  }),
+                ],
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const stats = buildCliproxyStatsFromUsageResponse(usage);
+
+    expect(stats.accountStats['codex:user-free@example.com']).toMatchObject({
+      provider: 'codex',
+      source: 'user-free@example.com',
+      successCount: 1,
+      failureCount: 0,
+    });
+    expect(stats.accountStats['codex:user@example.com-pro']).toMatchObject({
+      provider: 'codex',
+      source: 'user@example.com-pro',
+      successCount: 1,
+      failureCount: 0,
+    });
+    expect(stats.accountStats['codex:user@example.com']).toBeUndefined();
+  });
 });
