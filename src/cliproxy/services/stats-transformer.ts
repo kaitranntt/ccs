@@ -30,6 +30,45 @@ function normalizeProvider(provider: string): string {
   return mapExternalProviderName(normalized) ?? normalized;
 }
 
+function extractAuthFilenameFromSource(source: string): string {
+  const authFileMatch = source.match(/(?:^|\s)auth_file=("[^"]+"|'[^']+'|[^\s]+)/i);
+  const value = authFileMatch?.[1] ?? source;
+  return (
+    value
+      .trim()
+      .replace(/^['"]|['"]$/g, '')
+      .split(/[\\/]/)
+      .pop() ?? value.trim()
+  );
+}
+
+function stripKnownAuthFilenameSuffix(value: string): string {
+  let normalized = value.replace(/\.json$/i, '');
+  normalized = normalized.replace(/-(?:free|plus|pro|team|business|enterprise)$/i, '');
+  return normalized;
+}
+
+function normalizeAuthFilenameSource(provider: string, source: string): string | null {
+  const filename = extractAuthFilenameFromSource(source);
+  const normalizedProvider = normalizeProvider(provider);
+  let candidate = stripKnownAuthFilenameSuffix(filename);
+  const providerPrefix = `${normalizedProvider}-`;
+  if (candidate.toLowerCase().startsWith(providerPrefix)) {
+    candidate = candidate.slice(providerPrefix.length);
+  }
+
+  candidate = candidate.replace(/^[a-f0-9]{8}[-_]/i, '');
+  const parts = candidate.split('@');
+  if (parts.length < 2) {
+    return null;
+  }
+
+  const localPart = parts[0]?.trim();
+  const domainPart = parts.slice(1).join('@').trim();
+  const email = `${localPart}@${domainPart}`;
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? email.toLowerCase() : null;
+}
+
 function buildAuthIndexLookup(
   authFiles: CliproxyManagementAuthFile[] | undefined
 ): ReadonlyMap<string, ResolvedAuthFile> {
@@ -106,7 +145,7 @@ function resolveSourceForDetail(
 
   const source = detail.source?.trim();
   if (source) {
-    return source;
+    return normalizeAuthFilenameSource(resolvedProvider, source) ?? source;
   }
 
   return resolvedAuthFile?.source ?? 'unknown';
@@ -129,7 +168,7 @@ export function buildCliproxyStatsFromUsageResponse(
 
   if (usage?.apis) {
     for (const [provider, providerData] of Object.entries(usage.apis)) {
-      let sawProviderDetail = false;
+      let providerDetailCount = 0;
       if (!providerData.models) {
         const normalizedProvider = normalizeProvider(provider);
         requestsByProvider[normalizedProvider] =
@@ -145,7 +184,7 @@ export function buildCliproxyStatsFromUsageResponse(
 
         for (const detail of modelData.details) {
           sawAnyDetail = true;
-          sawProviderDetail = true;
+          providerDetailCount++;
           const resolvedProvider = resolveProviderForDetail(provider, detail, authIndexLookup);
           const source = resolveSourceForDetail(resolvedProvider, detail, authIndexLookup);
           const accountKey = buildQualifiedAccountStatsKey(resolvedProvider, source);
@@ -178,10 +217,15 @@ export function buildCliproxyStatsFromUsageResponse(
         }
       }
 
-      if (!sawProviderDetail) {
+      const providerTotal = providerData.total_requests ?? 0;
+      if (providerDetailCount === 0) {
         const normalizedProvider = normalizeProvider(provider);
         requestsByProvider[normalizedProvider] =
-          (requestsByProvider[normalizedProvider] ?? 0) + (providerData.total_requests ?? 0);
+          (requestsByProvider[normalizedProvider] ?? 0) + providerTotal;
+      } else if (providerTotal > providerDetailCount) {
+        const normalizedProvider = normalizeProvider(provider);
+        requestsByProvider[normalizedProvider] =
+          (requestsByProvider[normalizedProvider] ?? 0) + (providerTotal - providerDetailCount);
       }
     }
   }

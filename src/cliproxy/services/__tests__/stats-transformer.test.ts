@@ -334,4 +334,37 @@ describe('buildCliproxyStatsFromUsageResponse', () => {
       failureCount: 1,
     });
   });
+
+  it('normalizes OAuth auth filenames before building account stats keys', () => {
+    const usage: CliproxyUsageApiResponse = {
+      usage: {
+        total_requests: 1,
+        apis: {
+          codex: {
+            total_requests: 1,
+            models: {
+              'gpt-5.5': {
+                total_requests: 1,
+                details: [
+                  createDetail({
+                    source: 'provider=codex auth_file=codex-user@example.com-pro.json',
+                    auth_index: 'codex-user@example.com-pro.json',
+                  }),
+                ],
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const stats = buildCliproxyStatsFromUsageResponse(usage);
+
+    expect(stats.accountStats['codex:user@example.com']).toMatchObject({
+      provider: 'codex',
+      source: 'user@example.com',
+      successCount: 1,
+      failureCount: 0,
+    });
+  });
 });
