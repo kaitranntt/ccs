@@ -317,11 +317,12 @@ function appendDetailToExistingProvider(
   }
 
   const modelBucket = ensureModelBucket(providerBucket, model);
-  const totalTokens = detail.tokens?.total_tokens ?? 0;
+  const shouldFillModelAggregateOnly =
+    (modelBucket.total_requests ?? 0) > (modelBucket.details ?? []).length;
 
-  providerBucket.total_tokens = (providerBucket.total_tokens ?? 0) + totalTokens;
-  modelBucket.total_requests = (modelBucket.total_requests ?? 0) + 1;
-  modelBucket.total_tokens = (modelBucket.total_tokens ?? 0) + totalTokens;
+  if (!shouldFillModelAggregateOnly) {
+    modelBucket.total_requests = (modelBucket.total_requests ?? 0) + 1;
+  }
   (modelBucket.details ??= []).push(cloneDetail(detail));
 }
 

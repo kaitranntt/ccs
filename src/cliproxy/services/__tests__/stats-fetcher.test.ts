@@ -4,6 +4,7 @@ import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { runWithScopedConfigDir } from '../../../utils/config-manager';
 import { __testExports, fetchCliproxyStats, fetchCliproxyUsageRaw } from '../stats-fetcher';
+import { mergeUsageResponseWithMissingDetails } from '../usage-compatibility-transformer';
 
 const originalFetch = globalThis.fetch;
 
@@ -341,6 +342,157 @@ describe('fetchCliproxyUsageRaw', () => {
     expect(raw?.usage?.total_requests).toBe(1);
     expect(raw?.usage?.apis?.codex.total_requests).toBe(1);
     expect(raw?.usage?.apis?.codex.models?.['gpt-5.5'].details).toHaveLength(1);
+  });
+
+  it('does not inflate token totals when enriching already-counted aggregate requests', () => {
+    const merged = mergeUsageResponseWithMissingDetails(
+      {
+        failed_requests: 0,
+        usage: {
+          total_requests: 1,
+          success_count: 1,
+          failure_count: 0,
+          total_tokens: 11,
+          apis: {
+            codex: {
+              total_requests: 1,
+              total_tokens: 11,
+              models: {},
+            },
+          },
+        },
+      },
+      {
+        failed_requests: 0,
+        usage: {
+          total_requests: 1,
+          success_count: 1,
+          failure_count: 0,
+          total_tokens: 11,
+          apis: {
+            codex: {
+              total_requests: 1,
+              total_tokens: 11,
+              models: {
+                'gpt-5.5': {
+                  total_requests: 1,
+                  total_tokens: 11,
+                  details: [
+                    {
+                      timestamp: '2026-05-05T18:45:01.000Z',
+                      source: 'provider=codex auth_file=codex-user@example.com-pro.json',
+                      auth_index: 'codex-user@example.com-pro.json',
+                      tokens: {
+                        input_tokens: 6,
+                        output_tokens: 5,
+                        reasoning_tokens: 0,
+                        cached_tokens: 0,
+                        total_tokens: 11,
+                      },
+                      failed: false,
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      }
+    );
+
+    expect(merged.usage?.total_requests).toBe(1);
+    expect(merged.usage?.total_tokens).toBe(11);
+    expect(merged.usage?.apis?.codex.total_requests).toBe(1);
+    expect(merged.usage?.apis?.codex.total_tokens).toBe(11);
+    expect(merged.usage?.apis?.codex.models?.['gpt-5.5'].total_requests).toBe(1);
+    expect(merged.usage?.apis?.codex.models?.['gpt-5.5'].total_tokens).toBe(0);
+    expect(merged.usage?.apis?.codex.models?.['gpt-5.5'].details).toHaveLength(1);
+  });
+
+  it('does not inflate model requests when enriching incomplete aggregate model details', () => {
+    const merged = mergeUsageResponseWithMissingDetails(
+      {
+        failed_requests: 0,
+        usage: {
+          total_requests: 2,
+          success_count: 2,
+          failure_count: 0,
+          total_tokens: 22,
+          apis: {
+            codex: {
+              total_requests: 2,
+              total_tokens: 22,
+              models: {
+                'gpt-5.5': {
+                  total_requests: 2,
+                  total_tokens: 22,
+                  details: [
+                    {
+                      timestamp: '2026-05-05T18:45:01.000Z',
+                      source: 'provider=codex auth_file=codex-user@example.com-pro.json',
+                      auth_index: 'codex-user@example.com-pro.json',
+                      tokens: {
+                        input_tokens: 6,
+                        output_tokens: 5,
+                        reasoning_tokens: 0,
+                        cached_tokens: 0,
+                        total_tokens: 11,
+                      },
+                      failed: false,
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+      {
+        failed_requests: 0,
+        usage: {
+          total_requests: 1,
+          success_count: 1,
+          failure_count: 0,
+          total_tokens: 11,
+          apis: {
+            codex: {
+              total_requests: 1,
+              total_tokens: 11,
+              models: {
+                'gpt-5.5': {
+                  total_requests: 1,
+                  total_tokens: 11,
+                  details: [
+                    {
+                      timestamp: '2026-05-05T18:46:01.000Z',
+                      source: 'provider=codex auth_file=codex-user@example.com-plus.json',
+                      auth_index: 'codex-user@example.com-plus.json',
+                      tokens: {
+                        input_tokens: 7,
+                        output_tokens: 4,
+                        reasoning_tokens: 0,
+                        cached_tokens: 0,
+                        total_tokens: 11,
+                      },
+                      failed: false,
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      }
+    );
+
+    const modelBucket = merged.usage?.apis?.codex.models?.['gpt-5.5'];
+    expect(merged.usage?.total_requests).toBe(2);
+    expect(merged.usage?.total_tokens).toBe(22);
+    expect(merged.usage?.apis?.codex.total_requests).toBe(2);
+    expect(merged.usage?.apis?.codex.total_tokens).toBe(22);
+    expect(modelBucket?.total_requests).toBe(2);
+    expect(modelBucket?.total_tokens).toBe(22);
+    expect(modelBucket?.details).toHaveLength(2);
   });
 });
 
