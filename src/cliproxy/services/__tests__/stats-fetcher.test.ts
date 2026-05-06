@@ -253,6 +253,72 @@ describe('fetchCliproxyUsageRaw', () => {
     });
   });
 
+  it('keeps log-derived OAuth details when the same provider already has other details', async () => {
+    writeCliproxyMainLog([
+      '2026-05-05T18:45:00.000Z INFO request_id=req-1 Use OAuth provider=codex auth_file=codex-user@example.com-pro.json for model gpt-5.5',
+      '2026-05-05T18:45:01.000Z INFO request_id=req-1 POST "/api/provider/codex/v1/messages?beta=true" status=200',
+    ]);
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+
+      if (url.endsWith('/v0/management/usage')) {
+        return jsonResponse({
+          failed_requests: 0,
+          usage: {
+            total_requests: 1,
+            success_count: 1,
+            failure_count: 0,
+            total_tokens: 7,
+            apis: {
+              codex: {
+                total_requests: 1,
+                total_tokens: 7,
+                models: {
+                  'gpt-4o': {
+                    total_requests: 1,
+                    total_tokens: 7,
+                    details: [
+                      {
+                        timestamp: '2026-05-05T18:44:00.000Z',
+                        source: 'api-key|sk-redacted',
+                        auth_index: 'api-key|sk-redacted',
+                        tokens: {
+                          input_tokens: 4,
+                          output_tokens: 3,
+                          reasoning_tokens: 0,
+                          cached_tokens: 0,
+                          total_tokens: 7,
+                        },
+                        failed: false,
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+      if (url.endsWith('/v0/management/auth-files')) {
+        return jsonResponse({ files: [] });
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    }) as typeof fetch;
+
+    const stats = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyStats(19210));
+
+    expect(stats?.totalRequests).toBe(2);
+    expect(stats?.successCount).toBe(2);
+    expect(stats?.requestsByProvider).toEqual({ codex: 2 });
+    expect(stats?.requestsByModel).toEqual({ 'gpt-4o': 1, 'gpt-5.5': 1 });
+    expect(stats?.accountStats['codex:user@example.com']).toMatchObject({
+      provider: 'codex',
+      source: 'user@example.com',
+      successCount: 1,
+      failureCount: 0,
+    });
+  });
+
   it('does not double-count local OAuth logs when usage queue already has provider details', async () => {
     writeCliproxyMainLog([
       '2026-05-05T18:45:00.000Z INFO request_id=req-1 Use OAuth provider=codex auth_file=codex-user@example.com-pro.json for model gpt-5.5',

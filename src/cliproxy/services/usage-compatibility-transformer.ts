@@ -257,13 +257,49 @@ function cloneDetail(detail: CliproxyRequestDetail): CliproxyRequestDetail {
   };
 }
 
-function providerHasDetails(response: CliproxyUsageApiResponse, provider: string): boolean {
-  const providerData = response.usage?.apis?.[provider];
-  if (!providerData?.models) {
+function createMissingDetailMergeKey(
+  provider: string,
+  model: string,
+  detail: CliproxyRequestDetail
+): string {
+  return [
+    provider,
+    model,
+    detail.source?.trim() || String(detail.auth_index ?? '').trim(),
+    detail.failed ? '1' : '0',
+  ].join('|');
+}
+
+function collectDetailMergeKeyCounts(response: CliproxyUsageApiResponse): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const entry of collectResponseDetails(response)) {
+    const key = createMissingDetailMergeKey(entry.provider, entry.model, entry.detail);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function consumeDetailMergeKey(counts: Map<string, number>, key: string): boolean {
+  const count = counts.get(key) ?? 0;
+  if (count <= 0) {
     return false;
   }
 
-  return Object.values(providerData.models).some((modelData) => (modelData.details ?? []).length);
+  if (count === 1) {
+    counts.delete(key);
+  } else {
+    counts.set(key, count - 1);
+  }
+  return true;
+}
+
+function countProviderDetails(
+  providerBucket: NonNullable<NonNullable<CliproxyUsageApiResponse['usage']>['apis']>[string]
+): number {
+  return Object.values(providerBucket.models ?? {}).reduce(
+    (total, modelData) => total + (modelData.details ?? []).length,
+    0
+  );
 }
 
 function appendDetailToExistingProvider(
@@ -273,6 +309,13 @@ function appendDetailToExistingProvider(
   detail: CliproxyRequestDetail
 ): void {
   const providerBucket = ensureProviderBucket(merged, provider);
+  const shouldFillAggregateOnly =
+    (providerBucket.total_requests ?? 0) > countProviderDetails(providerBucket);
+  if (!shouldFillAggregateOnly) {
+    addDetail(merged, provider, model, cloneDetail(detail));
+    return;
+  }
+
   const modelBucket = ensureModelBucket(providerBucket, model);
   const totalTokens = detail.tokens?.total_tokens ?? 0;
 
@@ -291,8 +334,10 @@ export function mergeUsageResponseWithMissingDetails(
   }
 
   const merged = cloneUsageResponse(base);
+  const existingDetailCounts = collectDetailMergeKeyCounts(base);
   for (const entry of collectResponseDetails(incoming)) {
-    if (providerHasDetails(base, entry.provider)) {
+    const mergeKey = createMissingDetailMergeKey(entry.provider, entry.model, entry.detail);
+    if (consumeDetailMergeKey(existingDetailCounts, mergeKey)) {
       continue;
     }
 
