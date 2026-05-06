@@ -344,6 +344,36 @@ describe('fetchCliproxyUsageRaw', () => {
     expect(raw?.usage?.apis?.codex.models?.['gpt-5.5'].details).toHaveLength(1);
   });
 
+  it('scans the full CLIProxy main log when OAuth selection and completion are far apart', async () => {
+    writeCliproxyMainLog([
+      '2026-05-05T18:45:00.000Z INFO request_id=req-1 Use OAuth provider=codex auth_file=codex-user@example.com-pro.json for model gpt-5.5',
+      'x'.repeat(1024 * 1024 + 64),
+      '2026-05-05T18:45:01.000Z INFO request_id=req-1 POST "/api/provider/codex/v1/messages?beta=true" status=200',
+    ]);
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+
+      if (url.endsWith('/v0/management/usage')) {
+        return jsonResponse({ error: 'not found' }, 404);
+      }
+      if (url.includes('/v0/management/usage-queue?count=1000')) {
+        return jsonResponse([]);
+      }
+      if (url.endsWith('/v0/management/api-key-usage')) {
+        return jsonResponse({ error: 'not found' }, 404);
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    }) as typeof fetch;
+
+    const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19211));
+
+    expect(raw?.usage?.total_requests).toBe(1);
+    expect(raw?.usage?.apis?.codex.models?.['gpt-5.5'].details?.[0]).toMatchObject({
+      auth_index: 'codex-user@example.com-pro.json',
+      failed: false,
+    });
+  });
+
   it('does not inflate token totals when enriching already-counted aggregate requests', () => {
     const merged = mergeUsageResponseWithMissingDetails(
       {

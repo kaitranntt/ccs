@@ -32,14 +32,10 @@ function normalizeProvider(provider: string): string {
 
 function extractAuthFilenameFromSource(source: string): string {
   const authFileMatch = source.match(/(?:^|\s)auth_file=("[^"]+"|'[^']+'|[^\s]+)/i);
-  const value = authFileMatch?.[1] ?? source;
-  return (
-    value
-      .trim()
-      .replace(/^['"]|['"]$/g, '')
-      .split(/[\\/]/)
-      .pop() ?? value.trim()
-  );
+  const rawValue = authFileMatch?.[1] ?? source;
+  const value = rawValue.trim().replace(/^['"]|['"]$/g, '');
+  const filenameCandidate = value.split('|').pop() ?? value;
+  return filenameCandidate.split(/[\\/]/).pop() ?? filenameCandidate.trim();
 }
 
 function stripKnownAuthPlanSuffix(value: string): string {

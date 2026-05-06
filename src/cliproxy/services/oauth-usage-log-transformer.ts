@@ -8,8 +8,6 @@ import {
   hasUsageDetails,
 } from './usage-compatibility-transformer';
 
-const MAX_LOG_BYTES = 1024 * 1024;
-
 interface PendingOAuthRequest {
   timestamp: string;
   provider: string;
@@ -144,27 +142,17 @@ export function buildUsageResponseFromCliproxyLogLines(lines: string[]): Cliprox
   return buildUsageResponseFromQueueRecords(records);
 }
 
-function readLogTail(filePath: string): string | null {
+function readLogFile(filePath: string): string | null {
   if (!fs.existsSync(filePath)) {
     return null;
   }
 
-  const stat = fs.statSync(filePath);
-  const bytesToRead = Math.min(stat.size, MAX_LOG_BYTES);
-  const buffer = Buffer.alloc(bytesToRead);
-  const fd = fs.openSync(filePath, 'r');
-  try {
-    fs.readSync(fd, buffer, 0, bytesToRead, Math.max(0, stat.size - bytesToRead));
-  } finally {
-    fs.closeSync(fd);
-  }
-
-  return buffer.toString('utf-8');
+  return fs.readFileSync(filePath, 'utf-8');
 }
 
 export function buildUsageResponseFromCliproxyMainLog(): CliproxyUsageApiResponse | null {
   const logPath = path.join(getCliproxyWritablePath(), 'logs', 'main.log');
-  const contents = readLogTail(logPath);
+  const contents = readLogFile(logPath);
   if (!contents) {
     return null;
   }

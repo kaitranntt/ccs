@@ -368,6 +368,45 @@ describe('buildCliproxyStatsFromUsageResponse', () => {
     });
   });
 
+  it('normalizes OAuth-prefixed auth filename sources before building account stats keys', () => {
+    const usage: CliproxyUsageApiResponse = {
+      usage: {
+        total_requests: 2,
+        apis: {
+          codex: {
+            total_requests: 2,
+            models: {
+              'gpt-5.5': {
+                total_requests: 2,
+                details: [
+                  createDetail({
+                    source: 'oauth|codex-user@example.com-pro.json',
+                    auth_index: 'oauth|codex-user@example.com-pro.json',
+                  }),
+                  createDetail({
+                    source: 'provider=codex auth_file=oauth|codex-user@example.com-pro.json',
+                    auth_index: 'oauth|codex-user@example.com-pro.json',
+                    timestamp: '2025-03-26T10:01:00.000Z',
+                  }),
+                ],
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const stats = buildCliproxyStatsFromUsageResponse(usage);
+
+    expect(stats.accountStats['codex:user@example.com']).toMatchObject({
+      provider: 'codex',
+      source: 'user@example.com',
+      successCount: 2,
+      failureCount: 0,
+    });
+    expect(stats.accountStats['codex:oauth|codex-user@example.com']).toBeUndefined();
+  });
+
   it('does not strip plan-like suffixes from raw account identifiers', () => {
     const usage: CliproxyUsageApiResponse = {
       usage: {
