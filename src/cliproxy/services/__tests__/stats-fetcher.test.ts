@@ -524,6 +524,93 @@ describe('fetchCliproxyUsageRaw', () => {
     expect(modelBucket?.total_tokens).toBe(22);
     expect(modelBucket?.details).toHaveLength(2);
   });
+
+  it('fills aggregate detail gaps for repeated requests from the same account', () => {
+    const merged = mergeUsageResponseWithMissingDetails(
+      {
+        failed_requests: 0,
+        usage: {
+          total_requests: 2,
+          success_count: 2,
+          failure_count: 0,
+          total_tokens: 24,
+          apis: {
+            codex: {
+              total_requests: 2,
+              total_tokens: 24,
+              models: {
+                'gpt-5.5': {
+                  total_requests: 2,
+                  total_tokens: 24,
+                  details: [
+                    {
+                      timestamp: '2026-05-05T18:45:01.000Z',
+                      source: 'provider=codex auth_file=codex-user@example.com-pro.json',
+                      auth_index: 'codex-user@example.com-pro.json',
+                      tokens: {
+                        input_tokens: 6,
+                        output_tokens: 5,
+                        reasoning_tokens: 0,
+                        cached_tokens: 0,
+                        total_tokens: 11,
+                      },
+                      failed: false,
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+      {
+        failed_requests: 0,
+        usage: {
+          total_requests: 1,
+          success_count: 1,
+          failure_count: 0,
+          total_tokens: 13,
+          apis: {
+            codex: {
+              total_requests: 1,
+              total_tokens: 13,
+              models: {
+                'gpt-5.5': {
+                  total_requests: 1,
+                  total_tokens: 13,
+                  details: [
+                    {
+                      timestamp: '2026-05-05T18:46:01.000Z',
+                      source: 'provider=codex auth_file=codex-user@example.com-pro.json',
+                      auth_index: 'codex-user@example.com-pro.json',
+                      tokens: {
+                        input_tokens: 8,
+                        output_tokens: 5,
+                        reasoning_tokens: 0,
+                        cached_tokens: 0,
+                        total_tokens: 13,
+                      },
+                      failed: false,
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      }
+    );
+
+    const modelBucket = merged.usage?.apis?.codex.models?.['gpt-5.5'];
+    expect(merged.usage?.total_requests).toBe(2);
+    expect(merged.usage?.total_tokens).toBe(24);
+    expect(modelBucket?.total_requests).toBe(2);
+    expect(modelBucket?.total_tokens).toBe(24);
+    expect(modelBucket?.details?.map((detail) => detail.timestamp)).toEqual([
+      '2026-05-05T18:45:01.000Z',
+      '2026-05-05T18:46:01.000Z',
+    ]);
+  });
 });
 
 describe('fetchCliproxyStats', () => {

@@ -265,6 +265,26 @@ function createMissingDetailMergeKey(
   return [
     provider,
     model,
+    detail.timestamp,
+    detail.source?.trim() ?? '',
+    String(detail.auth_index ?? '').trim(),
+    detail.tokens?.input_tokens ?? 0,
+    detail.tokens?.output_tokens ?? 0,
+    detail.tokens?.reasoning_tokens ?? 0,
+    detail.tokens?.cached_tokens ?? 0,
+    detail.tokens?.total_tokens ?? 0,
+    detail.failed ? '1' : '0',
+  ].join('|');
+}
+
+function createCompleteDetailDuplicateKey(
+  provider: string,
+  model: string,
+  detail: CliproxyRequestDetail
+): string {
+  return [
+    provider,
+    model,
     detail.source?.trim() || String(detail.auth_index ?? '').trim(),
     detail.failed ? '1' : '0',
   ].join('|');
@@ -279,7 +299,28 @@ function collectDetailMergeKeyCounts(response: CliproxyUsageApiResponse): Map<st
   return counts;
 }
 
-function consumeDetailMergeKey(counts: Map<string, number>, key: string): boolean {
+function collectCompleteDetailDuplicateCounts(
+  response: CliproxyUsageApiResponse
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const [provider, providerData] of Object.entries(response.usage?.apis ?? {})) {
+    for (const [model, modelData] of Object.entries(providerData.models ?? {})) {
+      const details = modelData.details ?? [];
+      const hasMissingAggregateDetails = (modelData.total_requests ?? 0) > details.length;
+      if (hasMissingAggregateDetails) {
+        continue;
+      }
+
+      for (const detail of details) {
+        const key = createCompleteDetailDuplicateKey(provider, model, detail);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    }
+  }
+  return counts;
+}
+
+function consumeDetailKey(counts: Map<string, number>, key: string): boolean {
   const count = counts.get(key) ?? 0;
   if (count <= 0) {
     return false;
@@ -336,9 +377,19 @@ export function mergeUsageResponseWithMissingDetails(
 
   const merged = cloneUsageResponse(base);
   const existingDetailCounts = collectDetailMergeKeyCounts(base);
+  const completeDuplicateCounts = collectCompleteDetailDuplicateCounts(base);
   for (const entry of collectResponseDetails(incoming)) {
     const mergeKey = createMissingDetailMergeKey(entry.provider, entry.model, entry.detail);
-    if (consumeDetailMergeKey(existingDetailCounts, mergeKey)) {
+    if (consumeDetailKey(existingDetailCounts, mergeKey)) {
+      continue;
+    }
+
+    const completeDuplicateKey = createCompleteDetailDuplicateKey(
+      entry.provider,
+      entry.model,
+      entry.detail
+    );
+    if (consumeDetailKey(completeDuplicateCounts, completeDuplicateKey)) {
       continue;
     }
 

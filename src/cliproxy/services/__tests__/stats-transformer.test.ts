@@ -407,6 +407,49 @@ describe('buildCliproxyStatsFromUsageResponse', () => {
     expect(stats.accountStats['codex:oauth|codex-user@example.com']).toBeUndefined();
   });
 
+  it('uses detail-derived success and failure counts when aggregate counters are stale', () => {
+    const usage: CliproxyUsageApiResponse = {
+      failed_requests: 0,
+      usage: {
+        total_requests: 2,
+        success_count: 0,
+        failure_count: 0,
+        apis: {
+          codex: {
+            total_requests: 2,
+            models: {
+              'gpt-5.5': {
+                total_requests: 2,
+                details: [
+                  createDetail({
+                    source: 'provider=codex auth_file=codex-user@example.com-pro.json',
+                    auth_index: 'codex-user@example.com-pro.json',
+                  }),
+                  createDetail({
+                    source: 'provider=codex auth_file=codex-user@example.com-pro.json',
+                    auth_index: 'codex-user@example.com-pro.json',
+                    timestamp: '2025-03-26T10:01:00.000Z',
+                    failed: true,
+                  }),
+                ],
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const stats = buildCliproxyStatsFromUsageResponse(usage);
+
+    expect(stats.successCount).toBe(1);
+    expect(stats.failureCount).toBe(1);
+    expect(stats.quotaExceededCount).toBe(1);
+    expect(stats.accountStats['codex:user@example.com']).toMatchObject({
+      successCount: 1,
+      failureCount: 1,
+    });
+  });
+
   it('does not strip plan-like suffixes from raw account identifiers', () => {
     const usage: CliproxyUsageApiResponse = {
       usage: {

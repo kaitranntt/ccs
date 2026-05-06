@@ -150,6 +150,14 @@ function resolveSourceForDetail(
   return resolvedAuthFile?.source ?? 'unknown';
 }
 
+function resolveCountWithDetails(aggregateCount: number | undefined, detailCount: number): number {
+  if (aggregateCount === undefined) {
+    return detailCount;
+  }
+
+  return aggregateCount < detailCount ? detailCount : aggregateCount;
+}
+
 export function buildCliproxyStatsFromUsageResponse(
   data: CliproxyUsageApiResponse,
   options: BuildCliproxyStatsOptions = {}
@@ -229,11 +237,18 @@ export function buildCliproxyStatsFromUsageResponse(
     }
   }
 
+  const aggregateFailureCount = usage?.failure_count ?? data.failed_requests;
+  const successCount = sawAnyDetail
+    ? resolveCountWithDetails(usage?.success_count, totalSuccessCount)
+    : (usage?.success_count ?? 0);
+  const failureCount = sawAnyDetail
+    ? resolveCountWithDetails(aggregateFailureCount, totalFailureCount)
+    : (aggregateFailureCount ?? 0);
+
   return {
     totalRequests: usage?.total_requests ?? 0,
-    successCount: usage?.success_count ?? (sawAnyDetail ? totalSuccessCount : 0),
-    failureCount:
-      usage?.failure_count ?? data.failed_requests ?? (sawAnyDetail ? totalFailureCount : 0),
+    successCount,
+    failureCount,
     tokens: {
       input: totalInputTokens,
       output: totalOutputTokens,
@@ -242,7 +257,7 @@ export function buildCliproxyStatsFromUsageResponse(
     requestsByModel,
     requestsByProvider,
     accountStats,
-    quotaExceededCount: usage?.failure_count ?? data.failed_requests ?? 0,
+    quotaExceededCount: failureCount,
     retryCount: 0,
     collectedAt: new Date().toISOString(),
   };
