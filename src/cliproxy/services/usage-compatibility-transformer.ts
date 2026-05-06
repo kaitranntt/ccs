@@ -313,7 +313,7 @@ function resolveCompleteDetailDuplicateIdentity(
   );
 }
 
-function createCompleteDetailDuplicateKey(
+function createLikelyLogDuplicateKey(
   provider: string,
   model: string,
   detail: CliproxyRequestDetail
@@ -326,6 +326,27 @@ function createCompleteDetailDuplicateKey(
   ].join('|');
 }
 
+const TOKENLESS_LOG_DUPLICATE_WINDOW_MS = 5_000;
+
+interface LikelyLogDuplicateCandidate {
+  timestampMs: number;
+}
+
+function detailHasTokenUsage(detail: CliproxyRequestDetail): boolean {
+  return (
+    (detail.tokens?.input_tokens ?? 0) > 0 ||
+    (detail.tokens?.output_tokens ?? 0) > 0 ||
+    (detail.tokens?.reasoning_tokens ?? 0) > 0 ||
+    (detail.tokens?.cached_tokens ?? 0) > 0 ||
+    (detail.tokens?.total_tokens ?? 0) > 0
+  );
+}
+
+function parseDetailTimestamp(detail: CliproxyRequestDetail): number | null {
+  const timestampMs = Date.parse(detail.timestamp);
+  return Number.isFinite(timestampMs) ? timestampMs : null;
+}
+
 function collectDetailMergeKeyCounts(response: CliproxyUsageApiResponse): Map<string, number> {
   const counts = new Map<string, number>();
   for (const entry of collectResponseDetails(response)) {
@@ -335,10 +356,10 @@ function collectDetailMergeKeyCounts(response: CliproxyUsageApiResponse): Map<st
   return counts;
 }
 
-function collectCompleteDetailDuplicateCounts(
+function collectLikelyLogDuplicateCandidates(
   response: CliproxyUsageApiResponse
-): Map<string, number> {
-  const counts = new Map<string, number>();
+): Map<string, LikelyLogDuplicateCandidate[]> {
+  const candidates = new Map<string, LikelyLogDuplicateCandidate[]>();
   for (const [provider, providerData] of Object.entries(response.usage?.apis ?? {})) {
     for (const [model, modelData] of Object.entries(providerData.models ?? {})) {
       const details = modelData.details ?? [];
@@ -348,12 +369,19 @@ function collectCompleteDetailDuplicateCounts(
       }
 
       for (const detail of details) {
-        const key = createCompleteDetailDuplicateKey(provider, model, detail);
-        counts.set(key, (counts.get(key) ?? 0) + 1);
+        const timestampMs = parseDetailTimestamp(detail);
+        if (timestampMs === null) {
+          continue;
+        }
+
+        const key = createLikelyLogDuplicateKey(provider, model, detail);
+        const providerCandidates = candidates.get(key) ?? [];
+        providerCandidates.push({ timestampMs });
+        candidates.set(key, providerCandidates);
       }
     }
   }
-  return counts;
+  return candidates;
 }
 
 function consumeDetailKey(counts: Map<string, number>, key: string): boolean {
@@ -366,6 +394,40 @@ function consumeDetailKey(counts: Map<string, number>, key: string): boolean {
     counts.delete(key);
   } else {
     counts.set(key, count - 1);
+  }
+  return true;
+}
+
+function consumeLikelyLogDuplicateCandidate(
+  candidates: Map<string, LikelyLogDuplicateCandidate[]>,
+  provider: string,
+  model: string,
+  detail: CliproxyRequestDetail
+): boolean {
+  if (detailHasTokenUsage(detail)) {
+    return false;
+  }
+
+  const timestampMs = parseDetailTimestamp(detail);
+  if (timestampMs === null) {
+    return false;
+  }
+
+  const key = createLikelyLogDuplicateKey(provider, model, detail);
+  const providerCandidates = candidates.get(key) ?? [];
+  const index = providerCandidates.findIndex(
+    (candidate) =>
+      Math.abs(candidate.timestampMs - timestampMs) <= TOKENLESS_LOG_DUPLICATE_WINDOW_MS
+  );
+  if (index === -1) {
+    return false;
+  }
+
+  providerCandidates.splice(index, 1);
+  if (providerCandidates.length === 0) {
+    candidates.delete(key);
+  } else {
+    candidates.set(key, providerCandidates);
   }
   return true;
 }
@@ -413,19 +475,21 @@ export function mergeUsageResponseWithMissingDetails(
 
   const merged = cloneUsageResponse(base);
   const existingDetailCounts = collectDetailMergeKeyCounts(base);
-  const completeDuplicateCounts = collectCompleteDetailDuplicateCounts(base);
+  const likelyLogDuplicateCandidates = collectLikelyLogDuplicateCandidates(base);
   for (const entry of collectResponseDetails(incoming)) {
     const mergeKey = createMissingDetailMergeKey(entry.provider, entry.model, entry.detail);
     if (consumeDetailKey(existingDetailCounts, mergeKey)) {
       continue;
     }
 
-    const completeDuplicateKey = createCompleteDetailDuplicateKey(
-      entry.provider,
-      entry.model,
-      entry.detail
-    );
-    if (consumeDetailKey(completeDuplicateCounts, completeDuplicateKey)) {
+    if (
+      consumeLikelyLogDuplicateCandidate(
+        likelyLogDuplicateCandidates,
+        entry.provider,
+        entry.model,
+        entry.detail
+      )
+    ) {
       continue;
     }
 

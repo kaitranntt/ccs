@@ -129,6 +129,7 @@ export interface CliproxyManagementAuthFile {
 }
 
 const cachedUsageQueueResponses = new Map<string, CliproxyUsageApiResponse>();
+const USAGE_QUEUE_BATCH_SIZE = 1000;
 
 /**
  * Fetch usage statistics from CLIProxyAPI management API
@@ -181,10 +182,7 @@ export async function fetchCliproxyUsageRaw(
     return mergeLocalLogUsage(legacyUsage.data);
   }
 
-  const usageQueue = await fetchManagementJson<unknown[]>(
-    '/v0/management/usage-queue?count=1000',
-    port
-  );
+  const usageQueue = await fetchUsageQueueRecords(port);
   if (usageQueue?.ok && Array.isArray(usageQueue.data)) {
     const queueResponse = buildUsageResponseFromQueueRecords(usageQueue.data);
     if (hasUsageDetails(queueResponse)) {
@@ -220,6 +218,35 @@ export async function fetchCliproxyUsageRaw(
   }
 
   return null;
+}
+
+async function fetchUsageQueueRecords(
+  port?: number
+): Promise<ManagementJsonResult<unknown[]> | null> {
+  const records: unknown[] = [];
+  let cacheKey = '';
+  let status = 0;
+
+  for (;;) {
+    const result = await fetchManagementJson<unknown[]>(
+      `/v0/management/usage-queue?count=${USAGE_QUEUE_BATCH_SIZE}`,
+      port
+    );
+    if (!result) {
+      return records.length > 0 ? { ok: true, status, data: records, cacheKey } : null;
+    }
+
+    cacheKey ||= result.cacheKey;
+    status = result.status;
+    if (!result.ok || !Array.isArray(result.data)) {
+      return records.length > 0 ? { ok: true, status, data: records, cacheKey } : result;
+    }
+
+    records.push(...result.data);
+    if (result.data.length < USAGE_QUEUE_BATCH_SIZE) {
+      return { ok: true, status, data: records, cacheKey };
+    }
+  }
 }
 
 async function fetchManagementJson<T>(
