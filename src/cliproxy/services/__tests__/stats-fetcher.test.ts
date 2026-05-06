@@ -332,7 +332,13 @@ describe('fetchCliproxyUsageRaw', () => {
         return jsonResponse({ error: 'not found' }, 404);
       }
       if (url.includes('/v0/management/usage-queue?count=1000')) {
-        return jsonResponse([createCodexQueueRecord()]);
+        return jsonResponse([
+          {
+            ...createCodexQueueRecord(),
+            source: 'oauth|codex-user@example.com-pro.json',
+            auth_index: 'codex-auth',
+          },
+        ]);
       }
       throw new Error(`unexpected URL: ${url}`);
     }) as typeof fetch;
@@ -340,8 +346,11 @@ describe('fetchCliproxyUsageRaw', () => {
     const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19208));
 
     expect(raw?.usage?.total_requests).toBe(1);
+    expect(raw?.usage?.total_tokens).toBe(23);
     expect(raw?.usage?.apis?.codex.total_requests).toBe(1);
-    expect(raw?.usage?.apis?.codex.models?.['gpt-5.5'].details).toHaveLength(1);
+    const details = raw?.usage?.apis?.codex.models?.['gpt-5.5'].details;
+    expect(details).toHaveLength(1);
+    expect(details?.[0]?.tokens.total_tokens).toBe(23);
   });
 
   it('scans the full CLIProxy main log when OAuth selection and completion are far apart', async () => {

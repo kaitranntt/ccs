@@ -277,6 +277,42 @@ function createMissingDetailMergeKey(
   ].join('|');
 }
 
+function extractDuplicateIdentityValue(value: string): string {
+  const authFileMatch = value.match(/(?:^|\s)auth_file=("[^"]+"|'[^']+'|[^\s]+)/i);
+  const rawValue = authFileMatch?.[1] ?? value;
+  const unquotedValue = rawValue.trim().replace(/^['"]|['"]$/g, '');
+  const pipeCandidate = unquotedValue.split('|').pop() ?? unquotedValue;
+  return pipeCandidate.split(/[\\/]/).pop() ?? pipeCandidate.trim();
+}
+
+function normalizeDuplicateIdentity(provider: string, value: string | number | undefined): string {
+  const rawValue = String(value ?? '').trim();
+  if (!rawValue) {
+    return '';
+  }
+
+  const normalizedProvider = provider.trim().toLowerCase();
+  let candidate = extractDuplicateIdentityValue(rawValue).replace(/\.json$/i, '');
+  const providerPrefix = `${normalizedProvider}-`;
+  if (candidate.toLowerCase().startsWith(providerPrefix)) {
+    candidate = candidate.slice(providerPrefix.length);
+  }
+
+  candidate = candidate.replace(/^[a-f0-9]{8}[-_]/i, '').trim();
+  return candidate ? candidate.toLowerCase() : rawValue.toLowerCase();
+}
+
+function resolveCompleteDetailDuplicateIdentity(
+  provider: string,
+  detail: CliproxyRequestDetail
+): string {
+  return (
+    normalizeDuplicateIdentity(provider, detail.source) ||
+    normalizeDuplicateIdentity(provider, detail.auth_index) ||
+    'unknown'
+  );
+}
+
 function createCompleteDetailDuplicateKey(
   provider: string,
   model: string,
@@ -285,7 +321,7 @@ function createCompleteDetailDuplicateKey(
   return [
     provider,
     model,
-    detail.source?.trim() || String(detail.auth_index ?? '').trim(),
+    resolveCompleteDetailDuplicateIdentity(provider, detail),
     detail.failed ? '1' : '0',
   ].join('|');
 }
