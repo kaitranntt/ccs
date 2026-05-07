@@ -80,6 +80,69 @@ describe('requestPasteCallbackStart', () => {
   });
 });
 
+describe('Gemini Plus OAuth credential diagnostics', () => {
+  it('fails fast when Gemini uses Plus without OAuth client env', async () => {
+    const { getGeminiPlusOAuthCredentialError } = await import(
+      `../oauth-handler?gemini-plus-missing-env=${Date.now()}`
+    );
+
+    const error = getGeminiPlusOAuthCredentialError('gemini', 'plus', {});
+
+    expect(error).toContain('Gemini OAuth from CLIProxy Plus is missing');
+    expect(error).toContain('CLIPROXY_GEMINI_OAUTH_CLIENT_ID');
+    expect(error).toContain('CLIPROXY_GEMINI_OAUTH_CLIENT_SECRET');
+    expect(error).toContain('cliproxy.backend');
+    expect(error).toContain('original');
+  });
+
+  it('allows Gemini Plus when both OAuth client env values exist', async () => {
+    const { getGeminiPlusOAuthCredentialError } = await import(
+      `../oauth-handler?gemini-plus-env-present=${Date.now()}`
+    );
+
+    expect(
+      getGeminiPlusOAuthCredentialError('gemini', 'plus', {
+        CLIPROXY_GEMINI_OAUTH_CLIENT_ID: 'client-id',
+        CLIPROXY_GEMINI_OAUTH_CLIENT_SECRET: 'client-secret',
+      })
+    ).toBeNull();
+  });
+
+  it('does not warn for Gemini on the original backend', async () => {
+    const { getGeminiPlusOAuthCredentialError } = await import(
+      `../oauth-handler?gemini-original-backend=${Date.now()}`
+    );
+
+    expect(getGeminiPlusOAuthCredentialError('gemini', 'original', {})).toBeNull();
+  });
+
+  it('detects Gemini auth URLs missing client_id before display', async () => {
+    const { getGeminiAuthUrlCredentialError } = await import(
+      `../oauth-handler?gemini-auth-url-missing-client=${Date.now()}`
+    );
+
+    const error = getGeminiAuthUrlCredentialError(
+      'gemini',
+      'https://accounts.google.com/o/oauth2/v2/auth?client_id=&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2Foauth2callback&state=test'
+    );
+
+    expect(error).toContain('Gemini OAuth from CLIProxy Plus is missing');
+  });
+
+  it('allows Gemini auth URLs with client_id present', async () => {
+    const { getGeminiAuthUrlCredentialError } = await import(
+      `../oauth-handler?gemini-auth-url-client-present=${Date.now()}`
+    );
+
+    expect(
+      getGeminiAuthUrlCredentialError(
+        'gemini',
+        'https://accounts.google.com/o/oauth2/v2/auth?client_id=test-client&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2Foauth2callback&state=test'
+      )
+    ).toBeNull();
+  });
+});
+
 describe('usesKiroLocalCallbackReplay', () => {
   it('limits local callback replay to CLI auth-code flows', async () => {
     const { usesKiroLocalCallbackReplay } = await import(

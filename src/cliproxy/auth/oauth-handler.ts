@@ -13,9 +13,9 @@
 import * as fs from 'fs';
 import { fail, info, warn, color, ok } from '../../utils/ui';
 import { createLogger } from '../../services/logging';
-import { ensureCLIProxyBinary } from '../binary-manager';
+import { ensureCLIProxyBinary, getStoredConfiguredBackend } from '../binary-manager';
 import { generateConfig } from '../config/config-generator';
-import { CLIProxyProvider } from '../types';
+import { CLIProxyBackend, CLIProxyProvider } from '../types';
 import {
   AccountInfo,
   getProviderAccounts,
@@ -82,8 +82,53 @@ interface PasteCallbackStartData {
 
 const PASTE_CALLBACK_AUTH_URL_POLL_INTERVAL_MS = 3000;
 const POLLED_AUTH_LOCAL_TOKEN_GRACE_MS = 15 * 1000;
+const GEMINI_PLUS_CLIENT_ID_ENV = 'CLIPROXY_GEMINI_OAUTH_CLIENT_ID';
+const GEMINI_PLUS_CLIENT_SECRET_ENV = 'CLIPROXY_GEMINI_OAUTH_CLIENT_SECRET';
 
 const logger = createLogger('cliproxy:auth:oauth');
+
+function buildGeminiPlusOAuthCredentialMessage(missing?: string[]): string {
+  const missingText = missing?.length ? ` Missing: ${missing.join(', ')}.` : '';
+  return (
+    'Gemini OAuth from CLIProxy Plus is missing Google OAuth client credentials.' +
+    missingText +
+    ` Set ${GEMINI_PLUS_CLIENT_ID_ENV} and ${GEMINI_PLUS_CLIENT_SECRET_ENV} before starting CLIProxy Plus,` +
+    ' or switch `cliproxy.backend` to `original` for Gemini.'
+  );
+}
+
+export function getGeminiPlusOAuthCredentialError(
+  provider: CLIProxyProvider,
+  backend: CLIProxyBackend,
+  env: NodeJS.ProcessEnv = process.env
+): string | null {
+  if (provider !== 'gemini' || backend !== 'plus') {
+    return null;
+  }
+
+  const missing = [GEMINI_PLUS_CLIENT_ID_ENV, GEMINI_PLUS_CLIENT_SECRET_ENV].filter(
+    (name) => !env[name]?.trim()
+  );
+
+  return missing.length > 0 ? buildGeminiPlusOAuthCredentialMessage(missing) : null;
+}
+
+export function getGeminiAuthUrlCredentialError(
+  provider: CLIProxyProvider,
+  authUrl: string
+): string | null {
+  if (provider !== 'gemini') {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(authUrl);
+    const clientId = parsed.searchParams.get('client_id')?.trim();
+    return clientId ? null : buildGeminiPlusOAuthCredentialMessage();
+  } catch {
+    return null;
+  }
+}
 
 export async function requestPasteCallbackStart(
   provider: CLIProxyProvider,
@@ -549,6 +594,12 @@ async function handlePasteCallbackMode(
       return null;
     }
 
+    const authUrlCredentialError = getGeminiAuthUrlCredentialError(provider, authUrl);
+    if (authUrlCredentialError) {
+      console.log(fail(authUrlCredentialError));
+      return null;
+    }
+
     const oauthState = startData.state || parseAuthUrlState(authUrl);
     const knownTokenFiles = listProviderTokenSnapshots(provider, tokenDir);
 
@@ -919,6 +970,17 @@ export async function triggerOAuth(
     usesKiroLocalCallbackReplay(resolvedKiroMethod, resolvedKiroIDCFlow);
   const useSelectedKiroDirectCliFlow =
     provider === 'kiro' && (isDeviceCodeFlow || useSelectedKiroLocalPasteCallback);
+
+  if (!(selectedPasteCallback && !useSelectedKiroDirectCliFlow)) {
+    const credentialError = getGeminiPlusOAuthCredentialError(
+      provider,
+      getStoredConfiguredBackend()
+    );
+    if (credentialError) {
+      console.log(fail(credentialError));
+      return null;
+    }
+  }
 
   if (existingAccounts.length > 0 && !add) {
     console.log('');
