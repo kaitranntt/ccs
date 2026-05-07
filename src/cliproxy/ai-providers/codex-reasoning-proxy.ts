@@ -10,6 +10,7 @@ import { getModelMaxLevel } from '../model-catalog';
 
 export type CodexReasoningEffort = 'medium' | 'high' | 'xhigh';
 export type CodexServiceTier = 'fast';
+type CodexServiceTierRequestValue = 'priority';
 
 export interface CodexReasoningModelMap {
   opusModel?: string;
@@ -48,6 +49,9 @@ interface ForwardJsonContext {
 
 const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
 const CODEX_TUNING_SUFFIX_TOKEN_REGEX = /-(xhigh|high|medium|fast)$/i;
+const CODEX_SERVICE_TIER_REQUEST_VALUE: Record<CodexServiceTier, CodexServiceTierRequestValue> = {
+  fast: 'priority',
+};
 
 function stripExtendedContextSuffix(model: string): string {
   return model.replace(EXTENDED_CONTEXT_SUFFIX_REGEX, '').trim();
@@ -202,7 +206,7 @@ export function injectCodexRequestTuningIntoBody(
   }
 
   if (tuning.serviceTier) {
-    tunedBody.service_tier = tuning.serviceTier;
+    tunedBody.service_tier = CODEX_SERVICE_TIER_REQUEST_VALUE[tuning.serviceTier];
   }
 
   return tunedBody;
@@ -479,9 +483,9 @@ export class CodexReasoningProxy {
         : null;
 
       // Support "model aliases" like `gpt-5.4-high-fast` by translating to:
-      // - upstream model: `gpt-5.2-codex`
-      // - reasoning.effort: `xhigh`
-      // - service_tier: `fast`
+      // - upstream model: `gpt-5.4`
+      // - reasoning.effort: `high`
+      // - service_tier: `priority` (Codex request value for fast mode)
       //
       // This allows tier/speed mapping without inventing upstream model IDs.
       const suffixParsed = this.parseTuningAlias(normalizedRequestModel);

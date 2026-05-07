@@ -195,10 +195,10 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
     expect(fastHighResponse.statusCode).toBe(200);
     expect(capturedBodies[0]?.model).toBe('gpt-5.4');
     expect((capturedBodies[0]?.reasoning as JsonRecord | undefined)?.effort).toBe('high');
-    expect(capturedBodies[0]?.service_tier).toBe('fast');
+    expect(capturedBodies[0]?.service_tier).toBe('priority');
     expect(capturedBodies[1]?.model).toBe('gpt-5.4');
     expect((capturedBodies[1]?.reasoning as JsonRecord | undefined)?.effort).toBe('high');
-    expect(capturedBodies[1]?.service_tier).toBe('fast');
+    expect(capturedBodies[1]?.service_tier).toBe('priority');
   });
 
   it('skips reasoning injection when disableEffort is enabled', async () => {
@@ -283,7 +283,7 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
     expect(response.statusCode).toBe(200);
     expect(capturedBody?.model).toBe('gpt-5.4');
     expect((capturedBody?.reasoning as JsonRecord | undefined)?.effort).toBeUndefined();
-    expect(capturedBody?.service_tier).toBe('fast');
+    expect(capturedBody?.service_tier).toBe('priority');
   });
 
   it('does not strip unknown model ids that merely end with "-high"', async () => {
