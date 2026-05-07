@@ -100,7 +100,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
   },
   ghcp: {
     displayName: 'GitHub Copilot (OAuth)',
-    description: 'GitHub Copilot via OAuth',
+    description: 'Deprecated GitHub Copilot compatibility via OAuth',
     oauthFlow: 'device_code',
     callbackPort: null,
     callbackProviderName: 'copilot',

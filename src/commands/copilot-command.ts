@@ -73,7 +73,13 @@ function printCopilotWarnings(messages: string[]): void {
  * Show help for copilot commands.
  */
 function handleHelp(): number {
-  console.log('GitHub Copilot Integration');
+  console.log('GitHub Copilot Integration (deprecated)');
+  console.log('');
+  console.log(
+    warn(
+      'Deprecated: GitHub usage-based Copilot billing begins June 1, 2026. Existing local setups remain available for compatibility; prefer Codex or another active provider for new work.'
+    )
+  );
   console.log('');
   console.log('Usage: ccs copilot <subcommand>');
   console.log('');

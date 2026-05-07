@@ -1,6 +1,6 @@
 # CCS Product Development Requirements (PDR)
 
-Last Updated: 2026-04-08
+Last Updated: 2026-05-07
 
 ## Product Overview
 
@@ -31,7 +31,7 @@ Developers using Claude Code face these challenges:
 CCS provides:
 
 1. **Multi-Account Claude**: Isolated instances via `CLAUDE_CONFIG_DIR`
-2. **OAuth Providers**: Zero-config Gemini, Codex, Antigravity, Copilot, Kiro (ghcp) integration
+2. **OAuth Providers**: Zero-config Gemini, Codex, Antigravity, Kiro, and other active OAuth integrations, with deprecated Copilot compatibility for existing setups
 3. **AI Providers**: Dedicated CLIProxy dashboard for Gemini, Codex, Claude, Vertex, and OpenAI-compatible API-key families
 4. **API Profiles**: GLM, Kimi, OpenRouter, any Anthropic-compatible API
 5. **Visual Dashboard**: React SPA for configuration management
@@ -68,8 +68,8 @@ CCS provides:
 - Share commands, skills, agents across accounts
 
 ### FR-003: OAuth Provider Integration
-- Support Gemini, Codex, Antigravity, Copilot, Kiro (ghcp) OAuth flows
-- Browser-based authentication (Authorization Code flow for most, Device Code for ghcp)
+- Support Gemini, Codex, Antigravity, Kiro, and deprecated Copilot compatibility OAuth flows
+- Browser-based authentication (Authorization Code flow for most, Device Code for ghcp compatibility)
 - Token caching and refresh
 
 ### FR-004: API Profile Management
@@ -273,7 +273,7 @@ CCS provides:
 
 ### v7.2 Release (Complete)
 - [x] Kiro (AWS) OAuth provider support via CLIProxyAPIPlus
-- [x] GitHub Copilot (ghcp) OAuth provider via Device Code flow
+- [x] GitHub Copilot (ghcp) OAuth provider via Device Code flow (deprecated compatibility)
 - [x] Authorization Code flow for Kiro (port 9876)
 - [x] Device Code flow for ghcp (no local port needed)
 
@@ -334,8 +334,8 @@ CCS provides:
 ### External Services
 - Anthropic Claude API
 - Google Gemini API
-- GitHub Codex/Copilot API
-- GitHub Copilot (ghcp - Device Code OAuth)
+- GitHub Codex API
+- GitHub Copilot (ghcp - deprecated Device Code OAuth compatibility)
 - AWS Kiro (Authorization Code OAuth)
 - Z.AI GLM API
 - OpenRouter API

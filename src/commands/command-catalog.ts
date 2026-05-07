@@ -129,7 +129,7 @@ export const ROOT_COMMAND_CATALOG: readonly RootCommandEntry[] = [
   },
   {
     name: 'copilot',
-    summary: 'Run or manage the GitHub Copilot bridge',
+    summary: 'Run or manage the deprecated GitHub Copilot bridge',
     group: 'runtime',
     visibility: 'public',
   },
@@ -198,7 +198,7 @@ export const BUILTIN_PROVIDER_SHORTCUTS: readonly ShortcutEntry[] = CLIPROXY_PRO
         qwen: 'Qwen Code via CLIProxy OAuth',
         iflow: 'iFlow via CLIProxy OAuth',
         kiro: 'Kiro via CLIProxy OAuth',
-        ghcp: 'GitHub Copilot via CLIProxy OAuth',
+        ghcp: 'Deprecated GitHub Copilot via CLIProxy OAuth',
         claude: 'Claude via CLIProxy OAuth',
         kimi: 'Kimi via CLIProxy OAuth',
         cursor: 'Cursor via CLIProxy OAuth',

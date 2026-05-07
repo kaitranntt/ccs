@@ -290,7 +290,7 @@ export async function handleHelpCommand(writeLine: HelpWriter = console.log): Pr
       { name: 'ccs proxy --help', summary: 'Deep help for the OpenAI-compatible local proxy' },
       { name: 'ccs docker --help', summary: 'Deep help for Docker deployment commands' },
       { name: 'ccs cursor --help', summary: 'Deep help for Cursor runtime/admin commands' },
-      { name: 'ccs copilot --help', summary: 'Deep help for GitHub Copilot commands' },
+      { name: 'ccs copilot --help', summary: 'Deep help for deprecated GitHub Copilot commands' },
     ],
     writeLine
   );

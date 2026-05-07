@@ -22,7 +22,7 @@ All major modularization work is complete. The codebase evolved from monolithic 
 | 8 | Auth Monitor | `monitoring/auth-monitor/` (465->8 files) |
 | 9 | Test Infrastructure | 1407 tests, 90% coverage |
 | 10 | Remote CLIProxy | `proxy-config-resolver.ts`, `remote-proxy-client.ts` |
-| 11 | Kiro + ghcp Providers | OAuth support via CLIProxyAPIPlus (v7.2) |
+| 11 | Kiro + legacy ghcp Providers | OAuth support via CLIProxyAPIPlus (v7.2) |
 | 12 | Hybrid Quota Management | `quota-manager.ts`, `quota-fetcher.ts` (v7.14) |
 | 13 | Docker Support | `docker/` directory with Dockerfile, Compose, entrypoint |
 | 14 | Image Analysis Hook | Vision proxying via CLIProxy transformers (v7.34) |
@@ -41,6 +41,7 @@ All major modularization work is complete. The codebase evolved from monolithic 
 
 ### Recent Fixes
 
+- **2026-05-07**: **#1103** GitHub Copilot is now treated as a deprecated compatibility bridge. The dashboard moves Copilot out of the active Identity & Access section and into Deprecated, quick setup no longer offers `ghcp` for new onboarding, CLI/help/config copy marks Copilot as deprecated, and existing `ccs copilot` / `ghcp` compatibility paths remain available for current setups.
 - **2026-05-07**: **#1189** Headless settings-profile delegation now preserves native Claude passthrough args without a Claude flag allowlist. Explicit `--channels` values reach Claude Code, future native flags can carry multiple adjacent values, malformed CCS-owned flags no longer swallow the next native flag, and `--prompt=<text>` routes through headless delegation consistently with `--prompt <text>`.
 - **2026-05-03**: **#1172** Local CLIProxy config generation now keeps the CPAMC management dashboard aligned with backend selection. `backend: original` points to the upstream dashboard, `backend: plus` points to the CCS-maintained CPAMC fork, `cliproxy.management_panel_repository` lets advanced users override the panel repository, and stale generated configs are regenerated when the expected panel source changes.
 - **2026-04-30**: **#1153** Native Claude launches now accept session-scoped `--effort low|medium|high|xhigh|max` overrides through CCS without mutating global Claude settings. CCS validates invalid or missing effort values before spawning Claude, normalizes accepted values, keeps default headless `-p/--prompt` launches on native Claude instead of delegation parsing, and preserves CLIProxy/Codex/Droid effort aliases.
@@ -214,7 +215,7 @@ worktrees:
 
 - **#158**: Fix AGY OAuth flow
 - **#157**: ~~Add Kiro auth support from CLIProxyAPIPlus~~ **COMPLETE** (v7.2)
-- GitHub Copilot (ghcp) Device Code flow **COMPLETE** (v7.2)
+- GitHub Copilot (ghcp) Device Code flow **COMPLETE** (v7.2, now deprecated compatibility)
 - Hybrid quota management **COMPLETE** (v7.14)
 
 ---
@@ -225,7 +226,7 @@ worktrees:
 |-----------|--------|--------|
 | Modularization (Phases 1-9) | COMPLETE | - |
 | Remote CLIProxy Support (#142) | COMPLETE | v7.1 |
-| Kiro + GitHub Copilot OAuth (#157) | COMPLETE | v7.2 |
+| Kiro + GitHub Copilot OAuth (#157) | COMPLETE, Copilot now deprecated compatibility | v7.2 |
 | Hybrid Quota Management | COMPLETE | v7.14 |
 | Docker Support (PR #345) | COMPLETE | v7.23 |
 | Image Analysis Hook | COMPLETE | v7.34 |

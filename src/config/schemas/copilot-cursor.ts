@@ -2,7 +2,7 @@
  * Copilot and Cursor IDE integration configuration types and defaults.
  *
  * Covers:
- * - CopilotConfig: GitHub Copilot proxy integration (strictly opt-in)
+ * - CopilotConfig: deprecated GitHub Copilot proxy compatibility (strictly opt-in)
  * - CursorConfig: Cursor IDE proxy daemon
  */
 
@@ -13,7 +13,7 @@ export type CopilotAccountType = 'individual' | 'business' | 'enterprise';
 
 /**
  * Copilot API configuration.
- * Enables GitHub Copilot subscription usage via copilot-api proxy.
+ * Enables deprecated GitHub Copilot compatibility via copilot-api proxy.
  * Strictly opt-in - disabled by default.
  *
  * !! DISCLAIMER - USE AT YOUR OWN RISK !!

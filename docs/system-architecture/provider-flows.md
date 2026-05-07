@@ -14,7 +14,7 @@ CLIProxyAPI is a local OAuth proxy binary that enables seamless integration with
 
 ### Local Backend Choice
 
-CCS defaults to the original `router-for-me/CLIProxyAPI` backend because it is the stable MIT upstream. The `plus` backend is an explicit opt-in path that downloads the community-maintained `kaitranntt/CLIProxyAPIPlus` fork for providers that still require Plus-only support, such as Kiro, GitHub Copilot, Cursor, GitLab, CodeBuddy, and Kilo. CCS does not silently downgrade `backend: plus` to `original`; users choose that backend deliberately when they need those providers.
+CCS defaults to the original `router-for-me/CLIProxyAPI` backend because it is the stable MIT upstream. The `plus` backend is an explicit opt-in path that downloads the community-maintained `kaitranntt/CLIProxyAPIPlus` fork for providers that still require Plus-only support, such as Kiro, Cursor, GitLab, CodeBuddy, Kilo, and deprecated GitHub Copilot compatibility. CCS does not silently downgrade `backend: plus` to `original`; users choose that backend deliberately when they need those providers.
 
 Generated local CLIProxy configs also keep the management dashboard aligned with the selected backend. `backend: original` uses upstream CPAMC (`router-for-me/Cli-Proxy-API-Management-Center`), while `backend: plus` uses the CCS-maintained dashboard fork (`kaitranntt/Cli-Proxy-API-Management-Center`). Advanced users can override the generated `remote-management.panel-github-repository` value by setting `cliproxy.management_panel_repository` in `~/.ccs/config.yaml`; CCS will regenerate stale local CLIProxy configs when the expected dashboard repository changes.
 
@@ -40,7 +40,7 @@ Generated local CLIProxy configs also keep the management dashboard aligned with
         |           |         - Callback to localhost:PORT
         |           |
         |           +---> Device Code Flow (no port needed)
-        |                     - GitHub Copilot (ghcp)
+        |                     - GitHub Copilot (ghcp, deprecated compatibility)
         |                     - User enters code at github.com/login/device
         |                     - Polls for token completion
         |           |
@@ -73,7 +73,7 @@ Generated local CLIProxy configs also keep the management dashboard aligned with
                     +---> GitHub (Codex)
                     +---> Antigravity (AGY)
                     +---> AWS Kiro (Claude-powered)
-                    +---> GitHub Copilot (ghcp)
+                    +---> GitHub Copilot (ghcp, deprecated compatibility)
                     +---> OpenAI-compatible endpoints
 ```
 
@@ -85,7 +85,7 @@ Generated local CLIProxy configs also keep the management dashboard aligned with
 | Codex | `codex` | Authorization Code | 9876 | CLIProxyAPI |
 | Antigravity | `agy` | Authorization Code | 9876 | CLIProxyAPI |
 | Kiro (AWS) | `kiro` | Method-aware (default: Device Code) | 9876 | CLIProxyAPIPlus fork |
-| GitHub Copilot | `ghcp` | Device Code | none | CLIProxyAPIPlus fork |
+| GitHub Copilot (deprecated) | `ghcp` | Device Code | none | CLIProxyAPIPlus fork |
 | Cursor | `cursor` | Browser URL polling | none | CLIProxyAPIPlus fork |
 
 ### Codex Duplicate-Email Account Identity
@@ -299,7 +299,7 @@ When CCS detects exhaustion and a healthy fallback exists, it temporarily pauses
         |           |       - Claude: policy limits endpoint
         |           |       - Codex: ChatGPT usage windows
         |           |       - Gemini CLI: Code Assist quota buckets
-        |           |       - GitHub Copilot: copilot_internal/user snapshots
+        |           |       - GitHub Copilot: copilot_internal/user snapshots (deprecated compatibility)
         |           |
         |           +---> Detect tier (free/paid/unknown)
         |           |
@@ -391,7 +391,7 @@ function selectBestAccount(accounts: AccountInfo[]): AccountInfo | null {
 
 ### OAuth Providers - Device Code Flow
 
-**Providers**: GitHub Copilot (ghcp)
+**Providers**: GitHub Copilot (ghcp, deprecated compatibility)
 
 Provider identity note:
 - Providers that do not expose a reliable email no longer require a manual nickname during first auth.
@@ -591,7 +591,7 @@ Image Analysis Hook enables vision model proxying through CLIProxy with automati
 | Codex | ✓ | Via CCS ImageAnalysis provider route |
 | Antigravity | ✓ | Via CCS ImageAnalysis provider route |
 | Kiro | ✓ | Via mapped CCS provider route when configured |
-| Copilot | ✓ | Via mapped ghcp provider route |
+| Copilot | ✓ | Deprecated compatibility route via mapped ghcp provider |
 | GLM/Kimi | ✓ | Via explicit or fallback backend mapping |
 
 ---

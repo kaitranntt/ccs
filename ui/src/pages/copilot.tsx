@@ -125,6 +125,9 @@ export function CopilotPage() {
             <div className="flex items-center gap-2">
               <Github className="w-5 h-5 text-primary" />
               <h1 className="font-semibold">{t('copilotPage.title')}</h1>
+              <span className="rounded border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+                {t('copilotPage.deprecatedBadge')}
+              </span>
             </div>
             <Button
               variant="ghost"
@@ -145,6 +148,21 @@ export function CopilotPage() {
             <LoadingSidebar />
           ) : (
             <div className="p-3 space-y-4">
+              {/* Deprecation Banner */}
+              <div className="rounded-md border border-amber-500/50 bg-amber-500/15 p-3 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span className="text-xs font-semibold text-amber-800 dark:text-amber-200">
+                    {t('copilotPage.deprecationTitle')}
+                  </span>
+                </div>
+                <ul className="text-[11px] text-amber-700 dark:text-amber-300 space-y-0.5 pl-6 list-disc">
+                  <li>{t('copilotPage.deprecationItem1')}</li>
+                  <li>{t('copilotPage.deprecationItem2')}</li>
+                  <li>{t('copilotPage.deprecationItem3')}</li>
+                </ul>
+              </div>
+
               {/* Warning Banner - Disclaimer */}
               <div className="rounded-md border border-yellow-500/50 bg-yellow-500/15 p-3 space-y-1.5">
                 <div className="flex items-center gap-2">

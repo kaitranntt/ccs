@@ -162,11 +162,14 @@ export function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push('');
   }
 
-  // Copilot section (GitHub Copilot proxy)
+  // Copilot section (deprecated GitHub Copilot compatibility bridge)
   if (config.copilot) {
     lines.push('# ----------------------------------------------------------------------------');
-    lines.push('# Copilot: GitHub Copilot API proxy (via copilot-api)');
-    lines.push('# Uses your existing GitHub Copilot subscription with Claude Code.');
+    lines.push('# Copilot: Deprecated GitHub Copilot compatibility bridge (via copilot-api)');
+    lines.push(
+      '# Existing local setups remain available, but prefer Codex or another active provider.'
+    );
+    lines.push('# GitHub usage-based Copilot billing begins June 1, 2026.');
     lines.push('#');
     lines.push('# !! DISCLAIMER - USE AT YOUR OWN RISK !!');
     lines.push('# This uses an UNOFFICIAL reverse-engineered API.');

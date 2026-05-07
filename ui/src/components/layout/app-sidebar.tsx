@@ -102,7 +102,6 @@ function buildNavGroups(t: (key: string) => string): SidebarGroupDef[] {
             { path: '/cliproxy/control-panel', icon: Gauge, label: t('nav.controlPanel') },
           ],
         },
-        { path: '/copilot', icon: Github, label: t('nav.githubCopilot') },
         {
           path: '/accounts',
           icon: Users,
@@ -126,6 +125,11 @@ function buildNavGroups(t: (key: string) => string): SidebarGroupDef[] {
     {
       title: t('nav.deprecated'),
       items: [
+        {
+          path: '/copilot',
+          icon: Github,
+          label: `${t('nav.githubCopilot')} (${t('nav.deprecated')})`,
+        },
         {
           path: '/legacy/cursor',
           iconSrc: '/assets/sidebar/cursor.svg',

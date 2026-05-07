@@ -68,7 +68,7 @@ export interface UnifiedConfig {
   global_env?: GlobalEnvConfig;
   /** Cross-profile continuity inheritance mapping */
   continuity?: ContinuityConfig;
-  /** Copilot API configuration (GitHub Copilot proxy) */
+  /** Copilot API configuration (deprecated GitHub Copilot compatibility bridge) */
   copilot?: CopilotConfig;
   /** Cursor IDE configuration (Cursor proxy daemon) */
   cursor?: CursorConfig;
