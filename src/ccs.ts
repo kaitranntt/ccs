@@ -73,7 +73,7 @@ async function main(): Promise<void> {
     // Special case: headless delegation (-p/--prompt)
     // Keep existing behavior for Claude targets only; non-claude targets must continue
     // through normal adapter dispatch logic.
-    if (args.includes('-p') || args.includes('--prompt')) {
+    if (args.some((arg) => arg === '-p' || arg === '--prompt' || arg.startsWith('--prompt='))) {
       const shouldUseDelegation = resolvedTarget === 'claude' && profileInfo.type === 'settings';
       if (shouldUseDelegation) {
         const { DelegationHandler } = await import('./delegation/delegation-handler');

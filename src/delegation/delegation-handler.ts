@@ -9,6 +9,59 @@ import { fail, warn } from '../utils/ui';
 import { getCcsDir } from '../config/config-loader-facade';
 
 const PROFILE_FLAGS_WITH_VALUE = new Set(['-p', '--prompt', '--effort']);
+const PROMPT_FLAGS_WITH_VALUE = new Set(['-p', '--prompt']);
+const NUMERIC_CCS_FLAGS_WITH_VALUE = new Set(['--timeout', '--max-turns']);
+const DASH_REJECTING_CCS_FLAGS_WITH_VALUE = new Set([
+  '--permission-mode',
+  '--fallback-model',
+  '--agents',
+  '--betas',
+]);
+const CCS_FLAGS_WITH_VALUE = new Set([
+  '-p',
+  '--prompt',
+  '--timeout',
+  '--permission-mode',
+  '--max-turns',
+  '--fallback-model',
+  '--agents',
+  '--betas',
+]);
+
+function isFlag(arg: string): boolean {
+  return arg.startsWith('-');
+}
+
+function isInlineCcsValueFlag(arg: string): boolean {
+  return Array.from(CCS_FLAGS_WITH_VALUE).some(
+    (flag) => flag.startsWith('--') && arg.startsWith(`${flag}=`)
+  );
+}
+
+function shouldSkipCcsFlagValue(args: string[], index: number): boolean {
+  const arg = args[index];
+  if (index >= args.length - 1) return false;
+  if (PROMPT_FLAGS_WITH_VALUE.has(arg)) return true;
+  const nextArg = args[index + 1];
+  if (NUMERIC_CCS_FLAGS_WITH_VALUE.has(arg) && /^-\d/.test(nextArg)) return true;
+  if (
+    DASH_REJECTING_CCS_FLAGS_WITH_VALUE.has(arg) &&
+    isFlag(nextArg) &&
+    !nextArg.startsWith('--') &&
+    !CCS_FLAGS_WITH_VALUE.has(nextArg)
+  ) {
+    return true;
+  }
+  return !isFlag(nextArg);
+}
+
+function findInlineFlagValue(args: string[], flagName: string): string | undefined {
+  const prefix = `${flagName}=`;
+  const inlineArg = args.find((arg) => arg.startsWith(prefix));
+  if (inlineArg === undefined) return undefined;
+  const value = inlineArg.slice(prefix.length);
+  return value.trim().length > 0 ? value : undefined;
+}
 
 /**
  * Parse and validate a string flag value
@@ -20,9 +73,15 @@ function parseStringFlag(
   options?: { allowDashPrefix?: boolean }
 ): string | undefined {
   const index = args.indexOf(flagName);
-  if (index === -1 || index >= args.length - 1) return undefined;
+  let value: string | undefined;
 
-  const value = args[index + 1];
+  if (index === -1) {
+    value = findInlineFlagValue(args, flagName);
+    if (value === undefined) return undefined;
+  } else {
+    if (index >= args.length - 1) return undefined;
+    value = args[index + 1];
+  }
 
   // Reject dash-prefixed values (likely another flag)
   if (!options?.allowDashPrefix && value.startsWith('-')) {
@@ -165,9 +224,10 @@ export class DelegationHandler {
         continue;
       }
 
+      if (args[i].startsWith('--prompt=')) continue;
       if (args[i].startsWith('--effort=')) continue;
 
-      if (!args[i].startsWith('-')) {
+      if (!isFlag(args[i])) {
         return args[i];
       }
     }
@@ -186,6 +246,14 @@ export class DelegationHandler {
     const promptIndex = args.indexOf('--prompt');
 
     const index = pIndex !== -1 ? pIndex : promptIndex;
+
+    if (index === -1) {
+      const inlinePrompt = args.find((arg) => arg.startsWith('--prompt='));
+      if (inlinePrompt) {
+        const prompt = inlinePrompt.slice('--prompt='.length);
+        if (prompt.length > 0) return prompt;
+      }
+    }
 
     if (index === -1 || index === args.length - 1) {
       console.error(fail('Missing prompt after -p flag'));
@@ -215,15 +283,20 @@ export class DelegationHandler {
     };
 
     // Parse permission-mode (CLI flag overrides settings file)
-    const permModeIndex = args.indexOf('--permission-mode');
-    if (permModeIndex !== -1 && permModeIndex < args.length - 1) {
-      options.permissionMode = args[permModeIndex + 1];
+    const permissionMode = parseStringFlag(args, '--permission-mode');
+    if (permissionMode) {
+      options.permissionMode = permissionMode;
     }
 
     // Parse timeout (validated: positive integer, max 10 minutes)
     const timeoutIndex = args.indexOf('--timeout');
-    if (timeoutIndex !== -1 && timeoutIndex < args.length - 1) {
-      const rawVal = args[timeoutIndex + 1];
+    const inlineTimeout = findInlineFlagValue(args, '--timeout');
+    const rawTimeout =
+      timeoutIndex !== -1 && timeoutIndex < args.length - 1
+        ? args[timeoutIndex + 1]
+        : inlineTimeout;
+    if (rawTimeout !== undefined) {
+      const rawVal = rawTimeout;
       const val = parseInt(rawVal, 10);
       if (!isNaN(val) && val > 0 && val <= 600000) {
         options.timeout = val;
@@ -238,8 +311,13 @@ export class DelegationHandler {
 
     // Parse --max-turns (limit agentic turns, max 100)
     const maxTurnsIndex = args.indexOf('--max-turns');
-    if (maxTurnsIndex !== -1 && maxTurnsIndex < args.length - 1) {
-      const rawVal = args[maxTurnsIndex + 1];
+    const inlineMaxTurns = findInlineFlagValue(args, '--max-turns');
+    const rawMaxTurns =
+      maxTurnsIndex !== -1 && maxTurnsIndex < args.length - 1
+        ? args[maxTurnsIndex + 1]
+        : inlineMaxTurns;
+    if (rawMaxTurns !== undefined) {
+      const rawVal = rawMaxTurns;
       const val = parseInt(rawVal, 10);
       if (!isNaN(val) && val > 0 && val <= 100) {
         options.maxTurns = val;
@@ -271,42 +349,42 @@ export class DelegationHandler {
     // Parse --betas (experimental features)
     options.betas = parseStringFlag(args, '--betas');
 
-    // Collect extra args to pass through to Claude CLI
-    // CCS-handled flags with values (skip these and their values):
-    const ccsFlagsWithValue = new Set([
-      '-p',
-      '--prompt',
-      '--timeout',
-      '--permission-mode',
-      '--max-turns',
-      '--fallback-model',
-      '--agents',
-      '--betas',
-    ]);
+    // Collect extra args to pass through to Claude CLI.
+    // Only CCS-owned flags are consumed here. Unknown/native Claude flags are preserved
+    // generically, including future variadic flags such as "--flag value1 value2".
     const extraArgs: string[] = [];
     const profile = this._extractProfile(args);
+    let profileSkipped = false;
 
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];
 
-      // Skip profile name (non-flag first arg)
-      if (arg === profile && !arg.startsWith('-')) continue;
-
-      // Skip CCS-handled flags and their values
-      if (ccsFlagsWithValue.has(arg)) {
-        i++; // Skip next arg (the value)
+      // Skip only the first profile token. Later matching values may belong to native flags.
+      if (!profileSkipped && arg === profile && !isFlag(arg)) {
+        profileSkipped = true;
         continue;
       }
 
-      // Collect flags and their values as passthrough
-      if (arg.startsWith('-')) {
-        extraArgs.push(arg);
-        // If next arg exists and doesn't start with '-', it's likely a value
-        if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
-          extraArgs.push(args[i + 1]);
-          i++; // Skip the value we just added
-        }
+      // Skip CCS-handled flags and their values.
+      if (CCS_FLAGS_WITH_VALUE.has(arg)) {
+        if (shouldSkipCcsFlagValue(args, i)) i++;
+        continue;
       }
+      if (isInlineCcsValueFlag(arg)) {
+        continue;
+      }
+
+      // Preserve native/future Claude flags and all adjacent values until the next flag.
+      if (isFlag(arg)) {
+        extraArgs.push(arg);
+        while (i + 1 < args.length && !isFlag(args[i + 1])) {
+          extraArgs.push(args[i + 1]);
+          i++;
+        }
+        continue;
+      }
+
+      extraArgs.push(arg);
     }
 
     if (extraArgs.length > 0) {

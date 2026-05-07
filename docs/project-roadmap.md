@@ -1,6 +1,6 @@
 # CCS Project Roadmap
 
-Last Updated: 2026-04-30
+Last Updated: 2026-05-07
 
 Forward-looking roadmap documenting current priorities, GitHub issues, and future feature plans.
 
@@ -41,6 +41,7 @@ All major modularization work is complete. The codebase evolved from monolithic 
 
 ### Recent Fixes
 
+- **2026-05-07**: **#1189** Headless settings-profile delegation now preserves native Claude passthrough args without a Claude flag allowlist. Explicit `--channels` values reach Claude Code, future native flags can carry multiple adjacent values, malformed CCS-owned flags no longer swallow the next native flag, and `--prompt=<text>` routes through headless delegation consistently with `--prompt <text>`.
 - **2026-05-03**: **#1172** Local CLIProxy config generation now keeps the CPAMC management dashboard aligned with backend selection. `backend: original` points to the upstream dashboard, `backend: plus` points to the CCS-maintained CPAMC fork, `cliproxy.management_panel_repository` lets advanced users override the panel repository, and stale generated configs are regenerated when the expected panel source changes.
 - **2026-04-30**: **#1153** Native Claude launches now accept session-scoped `--effort low|medium|high|xhigh|max` overrides through CCS without mutating global Claude settings. CCS validates invalid or missing effort values before spawning Claude, normalizes accepted values, keeps default headless `-p/--prompt` launches on native Claude instead of delegation parsing, and preserves CLIProxy/Codex/Droid effort aliases.
 - **2026-04-28**: **#1123** CLIProxy quota failover now uses the dashboard/manual pause mechanism for all quota-visible OAuth providers with CCS quota fetchers: Antigravity, Claude, Codex, Gemini CLI, and GitHub Copilot. When a healthy fallback exists, CCS moves the exhausted account token out of the live `auth/` folder into `auth-paused/`, marks the account paused for dashboard visibility, persists the cooldown for auto-resume, and still avoids self-pausing the last usable account.

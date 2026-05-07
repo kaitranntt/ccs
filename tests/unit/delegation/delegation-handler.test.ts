@@ -36,6 +36,7 @@ describe('DelegationHandler', () => {
     it('rejects negative timeout with warning', () => {
       const options = handler._extractOptions(['glm', '-p', 'test', '--timeout', '-5000']);
       expect(options.timeout).toBeUndefined();
+      expect(options.extraArgs).toBeUndefined();
       expect(consoleErrorSpy).toHaveBeenCalled();
     });
 
@@ -55,6 +56,22 @@ describe('DelegationHandler', () => {
       const options = handler._extractOptions(['glm', '-p', 'test', '--timeout']);
       expect(options.timeout).toBeUndefined();
     });
+
+    it('does not drop following native flags when timeout value is missing', () => {
+      const options = handler._extractOptions([
+        'glm',
+        '-p',
+        'test',
+        '--timeout',
+        '--channels',
+        'plugin:telegram@claude-plugins-official',
+      ]);
+      expect(options.timeout).toBeUndefined();
+      expect(options.extraArgs).toEqual([
+        '--channels',
+        'plugin:telegram@claude-plugins-official',
+      ]);
+    });
   });
 
   describe('_extractOptions - max-turns validation', () => {
@@ -72,6 +89,7 @@ describe('DelegationHandler', () => {
     it('rejects negative max-turns with warning', () => {
       const options = handler._extractOptions(['glm', '-p', 'test', '--max-turns', '-5']);
       expect(options.maxTurns).toBeUndefined();
+      expect(options.extraArgs).toBeUndefined();
       expect(consoleErrorSpy).toHaveBeenCalled();
     });
 
@@ -91,12 +109,36 @@ describe('DelegationHandler', () => {
       const options = handler._extractOptions(['glm', '-p', 'test', '--max-turns', '100']);
       expect(options.maxTurns).toBe(100);
     });
+
+    it('accepts inline max-turns syntax', () => {
+      const options = handler._extractOptions(['glm', '-p', 'test', '--max-turns=7']);
+      expect(options.maxTurns).toBe(7);
+      expect(options.extraArgs).toBeUndefined();
+    });
+
+    it('treats empty inline max-turns as missing', () => {
+      const options = handler._extractOptions(['glm', '-p', 'test', '--max-turns=']);
+      expect(options.maxTurns).toBeUndefined();
+      expect(options.extraArgs).toBeUndefined();
+    });
   });
 
   describe('_extractOptions - fallback-model validation', () => {
     it('accepts valid fallback-model', () => {
       const options = handler._extractOptions(['glm', '-p', 'test', '--fallback-model', 'sonnet']);
       expect(options.fallbackModel).toBe('sonnet');
+    });
+
+    it('accepts inline fallback-model syntax', () => {
+      const options = handler._extractOptions(['glm', '-p', 'test', '--fallback-model=sonnet']);
+      expect(options.fallbackModel).toBe('sonnet');
+      expect(options.extraArgs).toBeUndefined();
+    });
+
+    it('treats empty inline fallback-model as missing', () => {
+      const options = handler._extractOptions(['glm', '-p', 'test', '--fallback-model=']);
+      expect(options.fallbackModel).toBeUndefined();
+      expect(options.extraArgs).toBeUndefined();
     });
 
     it('rejects dash-prefixed value with warning', () => {
@@ -111,6 +153,24 @@ describe('DelegationHandler', () => {
       expect(consoleErrorSpy).toHaveBeenCalled();
     });
 
+    it('does not forward rejected dash-prefixed fallback-model values', () => {
+      const options = handler._extractOptions([
+        'glm',
+        '-p',
+        'test',
+        '--fallback-model',
+        '-sonnet',
+        '--channels',
+        'plugin:telegram@claude-plugins-official',
+      ]);
+      expect(options.fallbackModel).toBeUndefined();
+      expect(options.extraArgs).toEqual([
+        '--channels',
+        'plugin:telegram@claude-plugins-official',
+      ]);
+      expect(consoleErrorSpy).toHaveBeenCalled();
+    });
+
     it('rejects empty string value', () => {
       const options = handler._extractOptions(['glm', '-p', 'test', '--fallback-model', '']);
       expect(options.fallbackModel).toBeUndefined();
@@ -119,6 +179,54 @@ describe('DelegationHandler', () => {
     it('rejects whitespace-only value', () => {
       const options = handler._extractOptions(['glm', '-p', 'test', '--fallback-model', '   ']);
       expect(options.fallbackModel).toBeUndefined();
+    });
+  });
+
+  describe('_extractOptions - permission-mode parsing', () => {
+    it('accepts inline permission-mode syntax', () => {
+      const options = handler._extractOptions(['glm', '-p', 'test', '--permission-mode=plan']);
+      expect(options.permissionMode).toBe('plan');
+      expect(options.extraArgs).toBeUndefined();
+    });
+
+    it('treats empty inline permission-mode as missing', () => {
+      const options = handler._extractOptions(['glm', '-p', 'test', '--permission-mode=']);
+      expect(options.permissionMode).toBe('acceptEdits');
+      expect(options.extraArgs).toBeUndefined();
+    });
+
+    it('does not drop following native flags when permission-mode value is missing', () => {
+      const options = handler._extractOptions([
+        'glm',
+        '-p',
+        'test',
+        '--permission-mode',
+        '--channels',
+        'plugin:telegram@claude-plugins-official',
+      ]);
+      expect(options.permissionMode).not.toBe('--channels');
+      expect(options.extraArgs).toEqual([
+        '--channels',
+        'plugin:telegram@claude-plugins-official',
+      ]);
+    });
+
+    it('does not forward rejected dash-prefixed permission-mode values', () => {
+      const options = handler._extractOptions([
+        'glm',
+        '-p',
+        'test',
+        '--permission-mode',
+        '-invalid',
+        '--channels',
+        'plugin:telegram@claude-plugins-official',
+      ]);
+      expect(options.permissionMode).toBe('acceptEdits');
+      expect(options.extraArgs).toEqual([
+        '--channels',
+        'plugin:telegram@claude-plugins-official',
+      ]);
+      expect(consoleErrorSpy).toHaveBeenCalled();
     });
   });
 
@@ -189,6 +297,67 @@ describe('DelegationHandler', () => {
       const options = handler._extractOptions(['glm', '--effort', 'low', '-p', 'test']);
       expect(options.extraArgs).toEqual(['--effort', 'low']);
     });
+
+    it('passes Claude channels through to extraArgs', () => {
+      const options = handler._extractOptions([
+        'glm',
+        '-p',
+        'test',
+        '--channels',
+        'plugin:telegram@claude-plugins-official',
+      ]);
+      expect(options.extraArgs).toEqual([
+        '--channels',
+        'plugin:telegram@claude-plugins-official',
+      ]);
+    });
+
+    it('preserves variadic native flag values without a Claude flag allowlist', () => {
+      const options = handler._extractOptions([
+        'glm',
+        '-p',
+        'test',
+        '--future-native',
+        'alpha',
+        'beta',
+        '--another-native',
+        'gamma',
+      ]);
+      expect(options.extraArgs).toEqual([
+        '--future-native',
+        'alpha',
+        'beta',
+        '--another-native',
+        'gamma',
+      ]);
+    });
+
+    it('keeps native flag values that match the profile name', () => {
+      const options = handler._extractOptions(['glm', '-p', 'test', '--channels', 'glm']);
+      expect(options.extraArgs).toEqual(['--channels', 'glm']);
+    });
+
+    it('does not drop following native flags when a CCS flag value is missing', () => {
+      const options = handler._extractOptions([
+        'glm',
+        '-p',
+        'test',
+        '--fallback-model',
+        '--channels',
+        'plugin:telegram@claude-plugins-official',
+      ]);
+      expect(options.fallbackModel).toBeUndefined();
+      expect(options.extraArgs).toEqual([
+        '--channels',
+        'plugin:telegram@claude-plugins-official',
+      ]);
+    });
+
+    it('keeps later CCS prompt flags from leaking when a prior CCS value is invalid', () => {
+      const options = handler._extractOptions(['glm', '--fallback-model', '-p', 'test']);
+      expect(options.fallbackModel).toBeUndefined();
+      expect(options.extraArgs).toBeUndefined();
+    });
   });
 
   describe('_extractProfile', () => {
@@ -200,6 +369,11 @@ describe('DelegationHandler', () => {
     it('returns empty string when no profile found', () => {
       const profile = handler._extractProfile(['-p', 'test']);
       expect(profile).toBe('');
+    });
+
+    it('skips inline prompt before profile names', () => {
+      const profile = handler._extractProfile(['--prompt=test', 'glm']);
+      expect(profile).toBe('glm');
     });
 
     it('skips flag values correctly', () => {
@@ -215,6 +389,26 @@ describe('DelegationHandler', () => {
     it('keeps leading profile names before effort flags', () => {
       const profile = handler._extractProfile(['glm', '--effort', 'low', '-p', 'test']);
       expect(profile).toBe('glm');
+    });
+  });
+
+  describe('_extractPrompt', () => {
+    it('accepts inline prompt syntax', () => {
+      const prompt = handler._extractPrompt(['glm', '--prompt=test']);
+      expect(prompt).toBe('test');
+    });
+
+    it('rejects empty inline prompt syntax', () => {
+      const exitSpy = spyOn(process, 'exit').mockImplementation(((code?: number) => {
+        throw new Error(`process.exit(${code})`);
+      }) as typeof process.exit);
+
+      try {
+        expect(() => handler._extractPrompt(['glm', '--prompt='])).toThrow('process.exit(1)');
+        expect(exitSpy).toHaveBeenCalledWith(1);
+      } finally {
+        exitSpy.mockRestore();
+      }
     });
   });
 });
