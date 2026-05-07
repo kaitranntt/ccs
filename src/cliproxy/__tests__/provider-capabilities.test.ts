@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   buildProviderAliasMap,
   CLIPROXY_PROVIDER_IDS,
+  getDeviceCodeVerificationProviders,
   getOAuthCallbackPort,
   getOAuthFlowType,
   PROVIDER_CAPABILITIES,
@@ -73,6 +74,17 @@ describe('provider-capabilities', () => {
       'iflow',
       'claude',
       'gitlab',
+    ]);
+  });
+
+  it('separates browser URL auth providers from verification-code device flows', () => {
+    expect(getDeviceCodeVerificationProviders()).toEqual([
+      'qwen',
+      'kiro',
+      'ghcp',
+      'kimi',
+      'codebuddy',
+      'kilo',
     ]);
   });
 

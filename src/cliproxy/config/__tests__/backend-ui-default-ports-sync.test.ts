@@ -9,9 +9,9 @@ import { CLIPROXY_DEFAULT_PORT as BACKEND_CLIPROXY_DEFAULT_PORT } from '../port-
 import { DEFAULT_CURSOR_PORT as BACKEND_CURSOR_DEFAULT_PORT } from '../../../cursor/cursor-models';
 import {
   CLIPROXY_PROVIDER_IDS as BACKEND_CLIPROXY_PROVIDER_IDS,
+  getDeviceCodeVerificationProviders,
   getProviderDescription as getBackendProviderDescription,
   getProviderDisplayName as getBackendProviderDisplayName,
-  getProvidersByOAuthFlow,
 } from '../../provider-capabilities';
 import {
   CLIPROXY_DEFAULT_PORT as UI_CLIPROXY_DEFAULT_PORT,
@@ -20,9 +20,9 @@ import {
 import {
   CLIPROXY_PROVIDERS as UI_CLIPROXY_PROVIDERS,
   CORE_CLIPROXY_PROVIDERS as UI_CORE_CLIPROXY_PROVIDERS,
-  DEVICE_CODE_PROVIDERS as UI_DEVICE_CODE_PROVIDERS,
   PLUS_EXTRA_CLIPROXY_PROVIDERS as UI_PLUS_EXTRA_CLIPROXY_PROVIDERS,
   PROVIDER_METADATA as UI_PROVIDER_METADATA,
+  VERIFICATION_CODE_AUTH_PROVIDERS as UI_VERIFICATION_CODE_AUTH_PROVIDERS,
 } from '../../../../ui/src/lib/provider-config';
 import { PLUS_ONLY_PROVIDERS as BACKEND_PLUS_ONLY_PROVIDERS } from '../../types/index';
 
@@ -43,9 +43,9 @@ describe('Default Port Sync', () => {
     expect(sorted(UI_CLIPROXY_PROVIDERS)).toEqual(sorted(BACKEND_CLIPROXY_PROVIDER_IDS));
   });
 
-  test('Device code providers are synced between backend and UI', () => {
-    expect(sorted(UI_DEVICE_CODE_PROVIDERS)).toEqual(
-      sorted(getProvidersByOAuthFlow('device_code'))
+  test('verification-code auth providers are synced between backend and UI', () => {
+    expect(sorted(UI_VERIFICATION_CODE_AUTH_PROVIDERS)).toEqual(
+      sorted(getDeviceCodeVerificationProviders())
     );
   });
 

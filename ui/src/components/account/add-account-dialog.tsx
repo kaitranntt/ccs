@@ -293,8 +293,8 @@ export function AddAccountDialog({
 
   /**
    * Start auth flow using provider capabilities.
-   * - Device code providers use /start and rely on WebSocket events for code display.
-   * - Authorization code providers use /start-url and polling.
+   * - Verification-code providers use /start and WebSocket events for code display.
+   * - Browser URL providers use /start-url and polling.
    */
   const handleAuthenticate = () => {
     if (isPowerUserModePending) {

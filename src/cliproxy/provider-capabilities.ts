@@ -188,6 +188,12 @@ export const CLIPROXY_PROVIDER_IDS = Object.freeze(
   Object.keys(PROVIDER_CAPABILITIES) as CLIProxyProvider[]
 );
 
+export const BROWSER_URL_AUTH_PROVIDER_IDS = Object.freeze([
+  'cursor',
+] as const satisfies readonly CLIProxyProvider[]);
+
+const BROWSER_URL_AUTH_PROVIDER_SET = new Set<CLIProxyProvider>(BROWSER_URL_AUTH_PROVIDER_IDS);
+
 /** Providers currently supported by quota status fetchers. */
 export const QUOTA_SUPPORTED_PROVIDER_IDS = Object.freeze([
   'agy',
@@ -275,6 +281,16 @@ export function getProviderDescription(provider: CLIProxyProvider): string {
 export function getProvidersByOAuthFlow(flowType: OAuthFlowType): CLIProxyProvider[] {
   return CLIPROXY_PROVIDER_IDS.filter(
     (provider) => PROVIDER_CAPABILITIES[provider].oauthFlow === flowType
+  );
+}
+
+export function isBrowserUrlAuthProvider(provider: CLIProxyProvider): boolean {
+  return BROWSER_URL_AUTH_PROVIDER_SET.has(provider);
+}
+
+export function getDeviceCodeVerificationProviders(): CLIProxyProvider[] {
+  return getProvidersByOAuthFlow('device_code').filter(
+    (provider) => !isBrowserUrlAuthProvider(provider)
   );
 }
 

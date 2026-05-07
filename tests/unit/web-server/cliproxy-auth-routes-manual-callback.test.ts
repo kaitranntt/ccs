@@ -11,7 +11,7 @@ import {
   getCachedQuota,
   setCachedQuota,
 } from '../../../src/cliproxy/quota/quota-response-cache';
-import { restoreFetch, mockFetch } from '../../mocks';
+import { restoreFetch, mockFetch, getCapturedFetchRequests } from '../../mocks';
 
 describe('cliproxy-auth-routes manual callback nickname persistence', () => {
   let server: Server;
@@ -177,6 +177,34 @@ describe('cliproxy-auth-routes manual callback nickname persistence', () => {
     };
 
     expect(registry.providers.kiro.accounts['github-ABC123']?.nickname).toBe('work');
+  });
+
+  it('starts Cursor auth through the browser URL management endpoint', async () => {
+    mockFetch([
+      {
+        url: /\/v0\/management\/cursor-auth-url\?is_webui=true$/,
+        response: {
+          url: 'https://cursor.com/loginDeepControl?state=cursor-state',
+          state: 'cursor-state',
+        },
+      },
+    ]);
+
+    const startResponse = await postJson('/api/cliproxy/auth/cursor/start-url', {
+      nickname: 'work',
+    });
+
+    expect(startResponse.status).toBe(200);
+    expect(startResponse.body).toEqual({
+      success: true,
+      authUrl: 'https://cursor.com/loginDeepControl?state=cursor-state',
+      state: 'cursor-state',
+      method: null,
+    });
+
+    const requests = getCapturedFetchRequests();
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.url).toContain('/v0/management/cursor-auth-url?is_webui=true');
   });
 
   it('returns wait after callback submission when the local token is not yet available', async () => {

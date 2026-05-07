@@ -45,6 +45,47 @@ describe('useCliproxyAuthFlow', () => {
     vi.restoreAllMocks();
   });
 
+  it('routes Cursor through start-url browser polling by default', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/cursor/start-url')) {
+        return Promise.resolve(
+          createJsonResponse({
+            success: true,
+            authUrl: 'https://cursor.com/loginDeepControl?state=cursor-state',
+            state: 'cursor-state',
+          })
+        );
+      }
+
+      if (url.includes('/status?state=cursor-state')) {
+        return Promise.resolve(createJsonResponse({ status: 'wait' }));
+      }
+
+      return Promise.resolve(createJsonResponse({ success: true, account: { id: 'cursor-test' } }));
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useCliproxyAuthFlow(), { wrapper });
+
+    await act(async () => {
+      await result.current.startAuth('cursor');
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/cliproxy/auth/cursor/start-url',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(result.current.isDeviceCodeFlow).toBe(false);
+    expect(result.current.authUrl).toContain('cursor.com/loginDeepControl');
+    expect(window.open).toHaveBeenCalledWith(
+      'https://cursor.com/loginDeepControl?state=cursor-state',
+      '_blank'
+    );
+  });
+
   it('ignores stale poll completions from a superseded auth attempt', async () => {
     const firstPoll = createDeferred<Response>();
     let startCount = 0;

@@ -7,7 +7,7 @@
 import {
   CLIPROXY_PROVIDER_IDS,
   PROVIDER_CAPABILITIES,
-  getProvidersByOAuthFlow,
+  getDeviceCodeVerificationProviders,
 } from '../../../src/cliproxy/provider-capabilities';
 import type { AiProviderFamilyId, AiProviderModelAlias } from '../../../src/cliproxy/ai-providers';
 import { PLUS_ONLY_PROVIDERS } from '../../../src/cliproxy/types';
@@ -346,12 +346,13 @@ export function getProviderDescription(provider: unknown): string {
   return PROVIDER_METADATA[normalized].description;
 }
 
-/**
- * Providers that use Device Code OAuth flow instead of Authorization Code flow.
- */
-export const DEVICE_CODE_PROVIDERS: CLIProxyProvider[] = [
-  ...getProvidersByOAuthFlow('device_code'),
+/** Providers whose add-account UX shows a verification code and uses `/start`. */
+export const VERIFICATION_CODE_AUTH_PROVIDERS: CLIProxyProvider[] = [
+  ...getDeviceCodeVerificationProviders(),
 ];
+
+/** Backward-compatible alias for verification-code auth providers. */
+export const DEVICE_CODE_PROVIDERS = VERIFICATION_CODE_AUTH_PROVIDERS;
 
 const DEVICE_CODE_PROVIDER_DISPLAY_NAMES: Readonly<Partial<Record<CLIProxyProvider, string>>> =
   Object.freeze({
@@ -368,10 +369,10 @@ const DEVICE_CODE_PROVIDER_INSTRUCTIONS: Readonly<Partial<Record<CLIProxyProvide
     kimi: 'Sign in with your Kimi account and finish the device authorization.',
   });
 
-/** Check if provider uses Device Code flow */
+/** Check if the add-account UI should use the verification-code auth dialog. */
 export function isDeviceCodeProvider(provider: unknown): boolean {
   const normalized = normalizeProviderInput(provider);
-  return isValidProvider(normalized) && DEVICE_CODE_PROVIDERS.includes(normalized);
+  return isValidProvider(normalized) && VERIFICATION_CODE_AUTH_PROVIDERS.includes(normalized);
 }
 
 /** Provider display name tuned for device-code UX copy. */

@@ -12,6 +12,7 @@ import {
   getRequestedUpstreamModelRuleErrors,
   getRequestedModelId,
   groupProvidersBySection,
+  isDeviceCodeProvider,
   isPlusExtraProvider,
   parseRequestedUpstreamModelRules,
   PLUS_EXTRA_CLIPROXY_PROVIDERS,
@@ -88,6 +89,12 @@ describe('provider presentation metadata', () => {
     expect(grouped[0]?.items.map((entry) => entry.provider)).toEqual(['gemini']);
     expect(grouped[1]?.id).toBe('plus-extra');
     expect(grouped[1]?.items.map((entry) => entry.provider)).toEqual(['cursor']);
+  });
+
+  it('keeps Cursor out of verification-code device flow routing', () => {
+    expect(isDeviceCodeProvider('cursor')).toBe(false);
+    expect(isDeviceCodeProvider('ghcp')).toBe(true);
+    expect(isDeviceCodeProvider('qwen')).toBe(true);
   });
 
   it('detects plus-extra providers inside composite variants', () => {

@@ -56,7 +56,11 @@ import {
   normalizeKiroAuthMethod,
   toKiroManagementMethod,
 } from '../../cliproxy/auth/auth-types';
-import { getOAuthFlowType, mapExternalProviderName } from '../../cliproxy/provider-capabilities';
+import {
+  getOAuthFlowType,
+  isBrowserUrlAuthProvider,
+  mapExternalProviderName,
+} from '../../cliproxy/provider-capabilities';
 import type { CLIProxyProvider } from '../../cliproxy/types';
 import { CLIPROXY_PROFILES } from '../../auth/profile-detector';
 import {
@@ -283,6 +287,10 @@ export function getStartUrlUnsupportedReason(
     if (isKiroDeviceCodeMethod(kiroMethod)) {
       return "Kiro method 'aws' uses Device Code flow. Use /api/cliproxy/auth/kiro/start instead.";
     }
+    return null;
+  }
+
+  if (isBrowserUrlAuthProvider(provider)) {
     return null;
   }
 

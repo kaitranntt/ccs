@@ -1,6 +1,6 @@
 # Provider Integration Flows
 
-Last Updated: 2026-03-30
+Last Updated: 2026-05-07
 
 Detailed provider integration flows including CLIProxyAPI, legacy GLMT compatibility transforms, remote CLIProxy, quota management, and authentication.
 
@@ -44,6 +44,11 @@ Generated local CLIProxy configs also keep the management dashboard aligned with
         |                     - User enters code at github.com/login/device
         |                     - Polls for token completion
         |           |
+        |           +---> Browser URL Polling (no callback port)
+        |                     - Cursor
+        |                     - Opens provider login URL returned by CLIProxyAPIPlus
+        |                     - Polls auth state until token is saved
+        |           |
         |           v
         |     +------------------+
         |     |   OAuth Server   |  Browser-based auth
@@ -81,6 +86,7 @@ Generated local CLIProxy configs also keep the management dashboard aligned with
 | Antigravity | `agy` | Authorization Code | 9876 | CLIProxyAPI |
 | Kiro (AWS) | `kiro` | Method-aware (default: Device Code) | 9876 | CLIProxyAPIPlus fork |
 | GitHub Copilot | `ghcp` | Device Code | none | CLIProxyAPIPlus fork |
+| Cursor | `cursor` | Browser URL polling | none | CLIProxyAPIPlus fork |
 
 ### Codex Duplicate-Email Account Identity
 

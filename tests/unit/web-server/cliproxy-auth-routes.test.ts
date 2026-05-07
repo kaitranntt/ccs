@@ -13,15 +13,14 @@ describe('cliproxy-auth-routes start-url guard', () => {
     );
     expect(getStartUrlUnsupportedReason('ghcp')).toContain("Provider 'ghcp' uses Device Code flow");
     expect(getStartUrlUnsupportedReason('qwen')).toContain("Provider 'qwen' uses Device Code flow");
-    expect(getStartUrlUnsupportedReason('cursor')).toContain(
-      "Provider 'cursor' uses Device Code flow"
-    );
     expect(getStartUrlUnsupportedReason('codebuddy')).toContain(
       "Provider 'codebuddy' uses Device Code flow"
     );
-    expect(getStartUrlUnsupportedReason('kilo')).toContain(
-      "Provider 'kilo' uses Device Code flow"
-    );
+    expect(getStartUrlUnsupportedReason('kilo')).toContain("Provider 'kilo' uses Device Code flow");
+  });
+
+  it('allows Cursor browser URL auth on start-url', () => {
+    expect(getStartUrlUnsupportedReason('cursor')).toBeNull();
   });
 
   it('allows Kiro social methods on start-url', () => {
@@ -138,6 +137,8 @@ describe('cliproxy-auth-routes nickname validation', () => {
     ];
 
     expect(getStartAuthNicknameError('kiro', 'work', existingAccounts, 'github-ABC123')).toBeNull();
-    expect(getStartAuthNicknameError('kiro', 'github-ABC123', existingAccounts, 'github-ABC123')).toBeNull();
+    expect(
+      getStartAuthNicknameError('kiro', 'github-ABC123', existingAccounts, 'github-ABC123')
+    ).toBeNull();
   });
 });
