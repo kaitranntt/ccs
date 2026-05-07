@@ -130,6 +130,64 @@ function formatModelOption(model: ModelEntry): string {
   return `${model.name}${tierBadge}`;
 }
 
+const CODEX_EFFORTS_IN_ORDER = ['medium', 'high', 'xhigh'] as const;
+type CodexSelectableEffort = (typeof CODEX_EFFORTS_IN_ORDER)[number];
+
+function getCodexSelectableEfforts(model: ModelEntry): CodexSelectableEffort[] {
+  const maxLevel = model.thinking?.maxLevel;
+  const maxIndex = CODEX_EFFORTS_IN_ORDER.findIndex((effort) => effort === maxLevel);
+  if (maxIndex < 0) return [];
+  return CODEX_EFFORTS_IN_ORDER.slice(0, maxIndex + 1);
+}
+
+function getCodexModelOptionValues(model: ModelEntry, modelId: string): string[] {
+  const serviceTiers = model.codexServiceTiers ?? [];
+  const optionValues: string[] = [modelId];
+
+  for (const serviceTier of serviceTiers) {
+    optionValues.push(`${modelId}-${serviceTier}`);
+  }
+
+  for (const effort of getCodexSelectableEfforts(model)) {
+    const effortModelId = `${modelId}-${effort}`;
+    optionValues.push(effortModelId);
+    for (const serviceTier of serviceTiers) {
+      optionValues.push(`${effortModelId}-${serviceTier}`);
+    }
+  }
+
+  return optionValues;
+}
+
+function getModelOptionsForProvider(
+  provider: CLIProxyProvider,
+  catalog: NonNullable<ReturnType<typeof getProviderCatalog>>,
+  routing: CliproxyProviderRoutingHints | undefined
+): Array<{ id: string; label: string }> {
+  return catalog.models.flatMap((model) => {
+    const modelId = getSelectableModelId(model.id, routing);
+    const optionValues =
+      provider === 'codex' ? getCodexModelOptionValues(model, modelId) : [modelId];
+    return optionValues.map((optionValue) => ({
+      id: optionValue,
+      label:
+        provider === 'codex'
+          ? `${optionValue} (${formatModelOption(model)})`
+          : formatModelOption(model),
+    }));
+  });
+}
+
+function getDefaultModelOptionIndex(
+  modelOptions: Array<{ id: string }>,
+  catalog: NonNullable<ReturnType<typeof getProviderCatalog>>,
+  routing: CliproxyProviderRoutingHints | undefined
+): number {
+  const defaultModelId = getSelectableModelId(catalog.defaultModel, routing);
+  const defaultIdx = modelOptions.findIndex((option) => option.id === defaultModelId);
+  return defaultIdx >= 0 ? defaultIdx : 0;
+}
+
 function getSelectableModelId(
   modelId: string,
   routing: CliproxyProviderRoutingHints | undefined
@@ -207,13 +265,13 @@ async function selectTierConfig(
     const routing = (await getCatalogRoutingSnapshot()).routing[provider as CLIProxyProvider];
     const catalog = getProviderCatalog(provider as CLIProxyProvider);
     if (catalog) {
-      const modelOptions = catalog.models.map((m) => ({
-        id: getSelectableModelId(m.id, routing),
-        label: formatModelOption(m),
-      }));
-      const defaultIdx = catalog.models.findIndex((m) => m.id === catalog.defaultModel);
+      const modelOptions = getModelOptionsForProvider(
+        provider as CLIProxyProvider,
+        catalog,
+        routing
+      );
       model = await InteractivePrompt.selectFromList(`Model for ${tierName}:`, modelOptions, {
-        defaultIndex: defaultIdx >= 0 ? defaultIdx : 0,
+        defaultIndex: getDefaultModelOptionIndex(modelOptions, catalog, routing),
       });
     }
   }
@@ -468,13 +526,13 @@ export async function handleCreate(
       const routing = (await getCatalogRoutingSnapshot()).routing[provider as CLIProxyProvider];
       const catalog = getProviderCatalog(provider as CLIProxyProvider);
       if (catalog) {
-        const modelOptions = catalog.models.map((m) => ({
-          id: getSelectableModelId(m.id, routing),
-          label: formatModelOption(m),
-        }));
-        const defaultIdx = catalog.models.findIndex((m) => m.id === catalog.defaultModel);
+        const modelOptions = getModelOptionsForProvider(
+          provider as CLIProxyProvider,
+          catalog,
+          routing
+        );
         model = await InteractivePrompt.selectFromList('Select model:', modelOptions, {
-          defaultIndex: defaultIdx >= 0 ? defaultIdx : 0,
+          defaultIndex: getDefaultModelOptionIndex(modelOptions, catalog, routing),
         });
       }
     }

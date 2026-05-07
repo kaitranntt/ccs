@@ -66,6 +66,8 @@ export interface ModelEntry {
   extendedContext?: boolean;
   /** Whether model can read image inputs natively without the Image transformer */
   nativeImageInput?: boolean;
+  /** Additional Codex service-tier suffixes supported by this model. */
+  codexServiceTiers?: Array<'fast'>;
 }
 
 /**
@@ -200,6 +202,7 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
           maxLevel: 'xhigh',
           dynamicAllowed: false,
         },
+        codexServiceTiers: ['fast'],
       },
       {
         id: 'gpt-5.4',
@@ -211,6 +214,7 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
           maxLevel: 'xhigh',
           dynamicAllowed: false,
         },
+        codexServiceTiers: ['fast'],
       },
       {
         id: 'gpt-5.4-mini',

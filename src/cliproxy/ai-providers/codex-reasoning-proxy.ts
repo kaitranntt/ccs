@@ -9,6 +9,7 @@ import {
 import { getModelMaxLevel } from '../model-catalog';
 
 export type CodexReasoningEffort = 'medium' | 'high' | 'xhigh';
+export type CodexServiceTier = 'fast';
 
 export interface CodexReasoningModelMap {
   opusModel?: string;
@@ -41,10 +42,12 @@ interface ForwardJsonContext {
   requestedModel: string | null;
   attemptedUpstreamModel: string | null;
   effort: CodexReasoningEffort | null;
+  serviceTier: CodexServiceTier | null;
   retryCount: number;
 }
 
 const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
+const CODEX_TUNING_SUFFIX_TOKEN_REGEX = /-(xhigh|high|medium|fast)$/i;
 
 function stripExtendedContextSuffix(model: string): string {
   return model.replace(EXTENDED_CONTEXT_SUFFIX_REGEX, '').trim();
@@ -58,16 +61,35 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function parseModelEffortSuffix(
-  model: string
-): { upstreamModel: string; effort: CodexReasoningEffort } | null {
+function parseModelTuningSuffix(model: string): {
+  upstreamModel: string;
+  effort: CodexReasoningEffort | null;
+  serviceTier: CodexServiceTier | null;
+} | null {
   const normalizedModel = stripExtendedContextSuffix(model);
-  const match = normalizedModel.match(/^(.*)-(xhigh|high|medium)$/i);
-  if (!match) return null;
-  const upstreamModel = match[1]?.trim();
-  const effort = match[2]?.toLowerCase() as CodexReasoningEffort;
+  let upstreamModel = normalizedModel;
+  let effort: CodexReasoningEffort | null = null;
+  let serviceTier: CodexServiceTier | null = null;
+
+  for (let consumed = 0; consumed < 2; consumed += 1) {
+    const match = upstreamModel.match(CODEX_TUNING_SUFFIX_TOKEN_REGEX);
+    if (!match?.[1]) break;
+
+    const token = match[1].toLowerCase();
+    if (token === 'fast') {
+      if (serviceTier) break;
+      serviceTier = 'fast';
+    } else {
+      if (effort) break;
+      effort = token as CodexReasoningEffort;
+    }
+
+    upstreamModel = upstreamModel.slice(0, -match[0].length).trim();
+  }
+
+  if (!effort && !serviceTier) return null;
   if (!upstreamModel) return null;
-  return { upstreamModel, effort };
+  return { upstreamModel, effort, serviceTier };
 }
 
 function isKnownCodexModelId(
@@ -155,18 +177,35 @@ export function injectReasoningEffortIntoBody(
   body: unknown,
   effort: CodexReasoningEffort
 ): unknown {
+  return injectCodexRequestTuningIntoBody(body, { effort, serviceTier: null });
+}
+
+export function injectCodexRequestTuningIntoBody(
+  body: unknown,
+  tuning: {
+    effort: CodexReasoningEffort | null;
+    serviceTier: CodexServiceTier | null;
+  }
+): unknown {
   if (!isRecord(body)) return body;
 
   // OpenAI Responses API knob: reasoning: { effort: "..." }
   // Always override effort (user expectation).
   const existingReasoning = isRecord(body.reasoning) ? body.reasoning : {};
-  return {
-    ...body,
-    reasoning: {
+  const tunedBody = { ...body };
+
+  if (tuning.effort) {
+    tunedBody.reasoning = {
       ...existingReasoning,
-      effort,
-    },
-  };
+      effort: tuning.effort,
+    };
+  }
+
+  if (tuning.serviceTier) {
+    tunedBody.service_tier = tuning.serviceTier;
+  }
+
+  return tunedBody;
 }
 
 export class CodexReasoningProxy {
@@ -191,7 +230,8 @@ export class CodexReasoningProxy {
     at: string;
     model: string | null;
     upstreamModel: string | null;
-    effort: CodexReasoningEffort;
+    effort: CodexReasoningEffort | null;
+    serviceTier: CodexServiceTier | null;
     path: string;
   }> = [];
   private readonly counts: Record<CodexReasoningEffort, number> = { medium: 0, high: 0, xhigh: 0 };
@@ -226,14 +266,21 @@ export class CodexReasoningProxy {
   private buildForwardBody(
     body: unknown,
     upstreamModel: string | null,
-    effort: CodexReasoningEffort | null
+    tuning: {
+      effort: CodexReasoningEffort | null;
+      serviceTier: CodexServiceTier | null;
+    }
   ): unknown {
     const withUpstreamModel =
       upstreamModel && isRecord(body) ? { ...body, model: upstreamModel } : body;
-    if (this.config.disableEffort || !effort) {
+    const effort = this.config.disableEffort ? null : tuning.effort;
+    if (!effort && !tuning.serviceTier) {
       return withUpstreamModel;
     }
-    return injectReasoningEffortIntoBody(withUpstreamModel, effort);
+    return injectCodexRequestTuningIntoBody(withUpstreamModel, {
+      effort,
+      serviceTier: tuning.serviceTier,
+    });
   }
 
   private sendBufferedResponse(
@@ -247,14 +294,17 @@ export class CodexReasoningProxy {
   }
 
   /**
-   * Treat trailing "-high/-medium/-xhigh" as an effort alias only for known codex models.
+   * Treat trailing "-high/-medium/-xhigh" and "-fast" as Codex tuning aliases
+   * only for known codex models.
    * Prevents stripping legitimate upstream model IDs that happen to end with those tokens.
    */
-  private parseEffortAlias(
-    model: string | null
-  ): { upstreamModel: string; effort: CodexReasoningEffort } | null {
+  private parseTuningAlias(model: string | null): {
+    upstreamModel: string;
+    effort: CodexReasoningEffort | null;
+    serviceTier: CodexServiceTier | null;
+  } | null {
     if (!model) return null;
-    const parsed = parseModelEffortSuffix(model);
+    const parsed = parseModelTuningSuffix(model);
     if (!parsed) return null;
     if (!isKnownCodexModelId(parsed.upstreamModel, this.modelEffort)) {
       return null;
@@ -296,11 +346,21 @@ export class CodexReasoningProxy {
   private record(
     model: string | null,
     upstreamModel: string | null,
-    effort: CodexReasoningEffort,
+    effort: CodexReasoningEffort | null,
+    serviceTier: CodexServiceTier | null,
     path: string
   ): void {
-    this.counts[effort] += 1;
-    this.recent.push({ at: new Date().toISOString(), model, upstreamModel, effort, path });
+    if (effort) {
+      this.counts[effort] += 1;
+    }
+    this.recent.push({
+      at: new Date().toISOString(),
+      model,
+      upstreamModel,
+      effort,
+      serviceTier,
+      path,
+    });
     if (this.recent.length > 50) this.recent.shift();
   }
 
@@ -418,12 +478,13 @@ export class CodexReasoningProxy {
         ? stripExtendedContextSuffix(originalModel)
         : null;
 
-      // Support "model aliases" like `gpt-5.2-codex-xhigh` by translating to:
+      // Support "model aliases" like `gpt-5.4-high-fast` by translating to:
       // - upstream model: `gpt-5.2-codex`
       // - reasoning.effort: `xhigh`
+      // - service_tier: `fast`
       //
-      // This allows tier→effort mapping without inventing upstream model IDs.
-      const suffixParsed = this.parseEffortAlias(normalizedRequestModel);
+      // This allows tier/speed mapping without inventing upstream model IDs.
+      const suffixParsed = this.parseTuningAlias(normalizedRequestModel);
       const requestedUpstreamModel = suffixParsed?.upstreamModel ?? normalizedRequestModel;
       const rememberedFallback = this.getRememberedFallback(requestedUpstreamModel);
       const upstreamModel = rememberedFallback ?? requestedUpstreamModel;
@@ -436,14 +497,15 @@ export class CodexReasoningProxy {
           : !this.config.disableEffort
             ? requestedEffort
             : null;
-      const rewritten = this.buildForwardBody(parsed, upstreamModel, effort);
+      const serviceTier = suffixParsed?.serviceTier ?? null;
+      const rewritten = this.buildForwardBody(parsed, upstreamModel, { effort, serviceTier });
 
-      if (effort) {
-        this.record(originalModel, upstreamModel, effort, requestPath);
+      if (effort || serviceTier) {
+        this.record(originalModel, upstreamModel, effort, serviceTier, requestPath);
         this.trace(
           `[${new Date().toISOString()}] model=${originalModel ?? 'null'} upstreamModel=${
             upstreamModel ?? 'null'
-          } effort=${effort} path=${requestPath}`
+          } effort=${effort ?? 'null'} serviceTier=${serviceTier ?? 'null'} path=${requestPath}`
         );
       } else {
         this.log(`[disabled] model=${originalModel ?? 'null'} -> passthrough (no reasoning)`);
@@ -458,6 +520,7 @@ export class CodexReasoningProxy {
         requestedModel: requestedUpstreamModel,
         attemptedUpstreamModel: upstreamModel,
         effort,
+        serviceTier,
         retryCount: 0,
       });
     } catch (error) {
@@ -630,7 +693,10 @@ export class CodexReasoningProxy {
                   !this.config.disableEffort && context.effort
                     ? capEffortAtModelMax(fallbackModel, context.effort)
                     : null;
-                const retryBody = this.buildForwardBody(body, fallbackModel, retryEffort);
+                const retryBody = this.buildForwardBody(body, fallbackModel, {
+                  effort: retryEffort,
+                  serviceTier: context.serviceTier,
+                });
 
                 this.log(
                   `Upstream rejected model "${context.attemptedUpstreamModel}". Retrying ${context.requestPath} with "${fallbackModel}".`

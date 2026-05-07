@@ -147,6 +147,60 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
     expect((capturedBody?.reasoning as JsonRecord | undefined)?.effort).toBe('high');
   });
 
+  it('translates codex fast model suffixes into service_tier', async () => {
+    const capturedBodies: JsonRecord[] = [];
+
+    const upstream = http.createServer((req, res) => {
+      let rawBody = '';
+      req.setEncoding('utf8');
+      req.on('data', (chunk) => {
+        rawBody += chunk;
+      });
+      req.on('end', () => {
+        capturedBodies.push(rawBody ? (JSON.parse(rawBody) as JsonRecord) : {});
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+    });
+    cleanupServers.push(upstream);
+
+    const upstreamPort = await listenOnRandomPort(upstream);
+    const proxy = new CodexReasoningProxy({
+      upstreamBaseUrl: `http://127.0.0.1:${upstreamPort}`,
+      modelMap: {
+        defaultModel: 'gpt-5.4',
+      },
+      defaultEffort: 'medium',
+    });
+
+    const proxyPort = await proxy.start();
+    const highFastResponse = await postJson(
+      `http://127.0.0.1:${proxyPort}/api/provider/codex/v1/messages`,
+      {
+        model: 'gpt-5.4-high-fast',
+        messages: [],
+      }
+    );
+    const fastHighResponse = await postJson(
+      `http://127.0.0.1:${proxyPort}/api/provider/codex/v1/messages`,
+      {
+        model: 'gpt-5.4-fast-high',
+        messages: [],
+      }
+    );
+
+    proxy.stop();
+
+    expect(highFastResponse.statusCode).toBe(200);
+    expect(fastHighResponse.statusCode).toBe(200);
+    expect(capturedBodies[0]?.model).toBe('gpt-5.4');
+    expect((capturedBodies[0]?.reasoning as JsonRecord | undefined)?.effort).toBe('high');
+    expect(capturedBodies[0]?.service_tier).toBe('fast');
+    expect(capturedBodies[1]?.model).toBe('gpt-5.4');
+    expect((capturedBodies[1]?.reasoning as JsonRecord | undefined)?.effort).toBe('high');
+    expect(capturedBodies[1]?.service_tier).toBe('fast');
+  });
+
   it('skips reasoning injection when disableEffort is enabled', async () => {
     let capturedBody: JsonRecord | null = null;
 
@@ -187,6 +241,49 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
     expect(response.statusCode).toBe(200);
     expect(capturedBody?.model).toBe('gpt-5.3-codex');
     expect((capturedBody?.reasoning as JsonRecord | undefined)?.effort).toBeUndefined();
+  });
+
+  it('keeps fast service tier when disableEffort is enabled', async () => {
+    let capturedBody: JsonRecord | null = null;
+
+    const upstream = http.createServer((req, res) => {
+      let rawBody = '';
+      req.setEncoding('utf8');
+      req.on('data', (chunk) => {
+        rawBody += chunk;
+      });
+      req.on('end', () => {
+        capturedBody = rawBody ? (JSON.parse(rawBody) as JsonRecord) : {};
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+    });
+    cleanupServers.push(upstream);
+
+    const upstreamPort = await listenOnRandomPort(upstream);
+    const proxy = new CodexReasoningProxy({
+      upstreamBaseUrl: `http://127.0.0.1:${upstreamPort}`,
+      modelMap: {
+        defaultModel: 'gpt-5.4',
+      },
+      disableEffort: true,
+    });
+
+    const proxyPort = await proxy.start();
+    const response = await postJson(
+      `http://127.0.0.1:${proxyPort}/api/provider/codex/v1/messages`,
+      {
+        model: 'gpt-5.4-high-fast',
+        messages: [],
+      }
+    );
+
+    proxy.stop();
+
+    expect(response.statusCode).toBe(200);
+    expect(capturedBody?.model).toBe('gpt-5.4');
+    expect((capturedBody?.reasoning as JsonRecord | undefined)?.effort).toBeUndefined();
+    expect(capturedBody?.service_tier).toBe('fast');
   });
 
   it('does not strip unknown model ids that merely end with "-high"', async () => {

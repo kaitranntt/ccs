@@ -16,9 +16,15 @@ import { getThinkingConfig } from '../../config/config-loader-facade';
 /** Model tier types for thinking budget defaults */
 export type ModelTier = 'opus' | 'sonnet' | 'haiku';
 
+const CODEX_EFFORT_REGEX = /^(medium|high|xhigh)$/i;
+const CODEX_FAST_TUNING_VALUE_REGEX =
+  /^(?:(medium|high|xhigh)-fast|fast-(medium|high|xhigh)|fast)$/i;
+const CODEX_TUNING_SUFFIX_REGEX =
+  /(?:-(?:xhigh|high|medium)(?:-fast)?|-fast(?:-(?:xhigh|high|medium))?)$/i;
+
 /**
  * Normalize model ID for provider capability lookup.
- * Codex may carry effort suffixes in either legacy "(high)" or current "-high" forms.
+ * Codex may carry effort/service-tier suffixes in legacy "(high)" or current "-high-fast" forms.
  */
 function normalizeModelForThinkingLookup(model: string, provider: CLIProxyProvider): string {
   const withoutExtendedContext = model.replace(/\[1m\]$/i, '').trim();
@@ -26,8 +32,10 @@ function normalizeModelForThinkingLookup(model: string, provider: CLIProxyProvid
 
   if (provider !== 'codex') return providerNormalized;
 
-  // New codex suffix form: gpt-5.3-codex-high -> gpt-5.3-codex
-  const codexSuffixMatch = providerNormalized.match(/^(.*)-(xhigh|high|medium)$/i);
+  // New codex suffix forms: gpt-5.4-high-fast, gpt-5.4-fast-high -> gpt-5.4
+  const codexSuffixMatch = providerNormalized.match(
+    /^(.*?)(?:-(?:xhigh|high|medium)(?:-fast)?|-fast(?:-(?:xhigh|high|medium))?)$/i
+  );
   if (codexSuffixMatch?.[1]) {
     return codexSuffixMatch[1].trim();
   }
@@ -82,8 +90,6 @@ function applyThinkingSuffixForProvider(
   thinkingValue: string | number,
   provider?: CLIProxyProvider
 ): string {
-  const codexEffortRegex = /^(medium|high|xhigh)$/i;
-  const codexModelSuffixRegex = /-(medium|high|xhigh)$/i;
   const parenthesizedSuffixMatch = model.match(/\(([^)]+)\)$/);
 
   // Existing parenthesized suffix:
@@ -93,7 +99,7 @@ function applyThinkingSuffixForProvider(
   if (parenthesizedSuffixMatch) {
     if (provider === 'codex') {
       const normalizedParensValue = parenthesizedSuffixMatch[1]?.trim().toLowerCase() || '';
-      if (codexEffortRegex.test(normalizedParensValue)) {
+      if (CODEX_EFFORT_REGEX.test(normalizedParensValue)) {
         return model.replace(/\([^)]+\)$/, `-${normalizedParensValue}`);
       }
     }
@@ -110,11 +116,11 @@ function applyThinkingSuffixForProvider(
   }
 
   if (provider === 'codex') {
-    if (codexModelSuffixRegex.test(model)) {
+    if (CODEX_TUNING_SUFFIX_REGEX.test(model)) {
       return model;
     }
     const normalized = String(thinkingValue).trim().toLowerCase();
-    if (codexEffortRegex.test(normalized)) {
+    if (CODEX_EFFORT_REGEX.test(normalized) || CODEX_FAST_TUNING_VALUE_REGEX.test(normalized)) {
       return `${model}-${normalized}`;
     }
   }

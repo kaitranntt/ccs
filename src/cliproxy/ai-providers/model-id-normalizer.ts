@@ -26,7 +26,7 @@ const DENIED_ANTIGRAVITY_OPUS_45_REGEX =
 const DENIED_ANTIGRAVITY_SONNET_45_REGEX =
   /claude-sonnet-4(?:[.-])5(?:-thinking)?(?=(?:$|[^a-z0-9]))/gi;
 const CANONICAL_ANTIGRAVITY_OPUS_46_MODEL = 'claude-opus-4-6-thinking';
-const CODEX_EFFORT_SUFFIX_REGEX = /-(xhigh|high|medium)$/i;
+const CODEX_TUNING_SUFFIX_TOKEN_REGEX = /-(xhigh|high|medium|fast)$/i;
 const CODEX_LEGACY_MODEL_ALIASES: Readonly<Record<string, string>> = Object.freeze({
   'gpt-5-codex': 'gpt-5.4',
   'gpt-5-codex-mini': 'gpt-5.4-mini',
@@ -65,15 +65,31 @@ function splitBaseModelAndSuffix(model: string): { baseModel: string; suffix: st
   };
 }
 
-function splitCodexEffortSuffix(model: string): { baseModel: string; suffix: string } {
-  const match = model.match(CODEX_EFFORT_SUFFIX_REGEX);
-  if (!match?.[0]) {
-    return { baseModel: model, suffix: '' };
+function splitCodexTuningSuffix(model: string): { baseModel: string; suffix: string } {
+  let baseModel = model;
+  let effort: string | null = null;
+  let serviceTier: 'fast' | null = null;
+
+  for (let consumed = 0; consumed < 2; consumed += 1) {
+    const match = baseModel.match(CODEX_TUNING_SUFFIX_TOKEN_REGEX);
+    if (!match?.[1]) break;
+
+    const token = match[1].toLowerCase();
+    if (token === 'fast') {
+      if (serviceTier) break;
+      serviceTier = 'fast';
+    } else {
+      if (effort) break;
+      effort = token;
+    }
+
+    baseModel = baseModel.slice(0, -match[0].length);
   }
 
+  const suffix = [effort, serviceTier].filter(Boolean).join('-');
   return {
-    baseModel: model.slice(0, -match[0].length),
-    suffix: match[0],
+    baseModel,
+    suffix: suffix ? `-${suffix}` : '',
   };
 }
 
@@ -109,11 +125,11 @@ export function isIFlowProvider(provider: ProviderLike): boolean {
   return provider.trim().toLowerCase() === 'iflow';
 }
 
-/** Strip Codex effort suffixes while preserving trailing config suffixes. */
+/** Strip Codex effort/service-tier suffixes while preserving trailing config suffixes. */
 export function stripCodexEffortSuffix(model: string): string {
   const trimmed = trimModelId(model);
   const { baseModel, suffix } = splitBaseModelAndSuffix(trimmed);
-  const { baseModel: withoutEffort } = splitCodexEffortSuffix(baseModel);
+  const { baseModel: withoutEffort } = splitCodexTuningSuffix(baseModel);
   return `${withoutEffort}${suffix}`;
 }
 
@@ -121,12 +137,12 @@ export function stripCodexEffortSuffix(model: string): string {
 export function normalizeCodexLegacyModelAliases(model: string): string {
   const trimmed = trimModelId(model);
   const { baseModel, suffix } = splitBaseModelAndSuffix(trimmed);
-  const { baseModel: baseWithoutEffort, suffix: effortSuffix } = splitCodexEffortSuffix(baseModel);
+  const { baseModel: baseWithoutEffort, suffix: tuningSuffix } = splitCodexTuningSuffix(baseModel);
   const replacement = CODEX_LEGACY_MODEL_ALIASES[baseWithoutEffort.trim().toLowerCase()];
   if (!replacement) {
     return trimmed;
   }
-  return `${replacement}${effortSuffix}${suffix}`;
+  return `${replacement}${tuningSuffix}${suffix}`;
 }
 
 /**

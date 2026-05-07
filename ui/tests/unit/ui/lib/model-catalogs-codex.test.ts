@@ -14,8 +14,10 @@ describe('codex model catalog defaults', () => {
     expect(codex55?.tier).toBe('paid');
     expect(codex55?.presetMapping?.haiku).toBe('gpt-5.4-mini');
     expect(codex55?.codexMaxEffort).toBe('xhigh');
+    expect(codex55?.codexServiceTiers).toEqual(['fast']);
     expect(codex54?.tier).toBeUndefined();
     expect(codex54?.presetMapping?.haiku).toBe('gpt-5.4-mini');
+    expect(codex54?.codexServiceTiers).toEqual(['fast']);
     expect(codex53?.presetMapping?.haiku).toBe('gpt-5.4-mini');
     expect(codex52?.presetMapping?.haiku).toBe('gpt-5.4-mini');
     expect(codex53?.codexMaxEffort).toBe('xhigh');

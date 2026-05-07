@@ -12,8 +12,12 @@ import { Badge } from '@/components/ui/badge';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { CliproxyProviderRoutingHints } from '@/lib/api-client';
-import type { CodexEffort } from '@/lib/codex-effort';
-import { getCodexEffortDisplay, getCodexEffortVariants } from '@/lib/codex-effort';
+import type { CodexEffort, CodexServiceTier } from '@/lib/codex-effort';
+import {
+  getCodexEffortDisplay,
+  getCodexEffortVariants,
+  parseCodexServiceTier,
+} from '@/lib/codex-effort';
 import { getResolvedCatalogModels, getSupplementalCatalogModels } from '@/lib/model-catalogs';
 import { cn } from '@/lib/utils';
 
@@ -38,6 +42,8 @@ export interface ModelEntry {
   };
   /** Highest codex reasoning-effort suffix this model supports in the dashboard UI. */
   codexMaxEffort?: CodexEffort;
+  /** Additional Codex service-tier suffixes supported by this model in the dashboard UI. */
+  codexServiceTiers?: CodexServiceTier[];
 }
 
 /** Provider catalog */
@@ -108,6 +114,17 @@ function CodexEffortBadge({ modelId }: { modelId: string | undefined }) {
       className="text-[9px] h-4 px-1 uppercase"
     >
       {codexEffort.label}
+    </Badge>
+  );
+}
+
+function CodexServiceTierBadge({ modelId }: { modelId: string | undefined }) {
+  const serviceTier = parseCodexServiceTier(modelId);
+  if (!serviceTier) return null;
+
+  return (
+    <Badge variant="secondary" className="text-[9px] h-4 px-1 uppercase">
+      {serviceTier}
     </Badge>
   );
 }
@@ -318,10 +335,13 @@ function getPreferredOptionValue(
 
 function getModelOptionValues(
   codexMaxEffort: CodexEffort | undefined,
+  codexServiceTiers: readonly CodexServiceTier[] | undefined,
   optionValue: string,
   isCodexProvider: boolean
 ): string[] {
-  return isCodexProvider ? getCodexEffortVariants(optionValue, codexMaxEffort) : [optionValue];
+  return isCodexProvider
+    ? getCodexEffortVariants(optionValue, codexMaxEffort, codexServiceTiers)
+    : [optionValue];
 }
 
 export function FlexibleModelSelector({
@@ -356,6 +376,7 @@ export function FlexibleModelSelector({
         resolvedCatalogModels.flatMap((model) =>
           getModelOptionValues(
             model.codexMaxEffort,
+            model.codexServiceTiers,
             getPreferredOptionValue(model.id, routingHints.get(model.id.toLowerCase())),
             isCodexProvider
           )
@@ -372,6 +393,7 @@ export function FlexibleModelSelector({
     const routingHint = routingHints.get(model.id.toLowerCase());
     const optionValues = getModelOptionValues(
       model.codexMaxEffort,
+      model.codexServiceTiers,
       getPreferredOptionValue(model.id, routingHint),
       isCodexProvider
     );
@@ -390,6 +412,7 @@ export function FlexibleModelSelector({
             </Badge>
           ) : null}
           {isCodexProvider && <CodexEffortBadge modelId={optionValue} />}
+          {isCodexProvider && <CodexServiceTierBadge modelId={optionValue} />}
         </div>
       ),
       itemContent: (
@@ -407,6 +430,7 @@ export function FlexibleModelSelector({
             </Badge>
           ) : null}
           {isCodexProvider && <CodexEffortBadge modelId={optionValue} />}
+          {isCodexProvider && <CodexServiceTierBadge modelId={optionValue} />}
         </div>
       ),
     }));
@@ -423,6 +447,7 @@ export function FlexibleModelSelector({
     .flatMap((model) => {
       const routingHint = routingHints.get(model.id.toLowerCase());
       const optionValues = getModelOptionValues(
+        undefined,
         undefined,
         getPreferredOptionValue(model.id, routingHint),
         isCodexProvider
@@ -442,6 +467,7 @@ export function FlexibleModelSelector({
               </Badge>
             ) : null}
             {isCodexProvider && <CodexEffortBadge modelId={optionValue} />}
+            {isCodexProvider && <CodexServiceTierBadge modelId={optionValue} />}
           </div>
         ),
         itemContent: (
@@ -458,6 +484,7 @@ export function FlexibleModelSelector({
               </Badge>
             ) : null}
             {isCodexProvider && <CodexEffortBadge modelId={optionValue} />}
+            {isCodexProvider && <CodexServiceTierBadge modelId={optionValue} />}
           </div>
         ),
       }));

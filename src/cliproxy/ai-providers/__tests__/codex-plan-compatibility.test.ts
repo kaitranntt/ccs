@@ -16,6 +16,8 @@ describe('codex plan compatibility', () => {
   it('maps paid-only free-plan models to safe fallbacks', () => {
     expect(getFreePlanFallbackCodexModel('gpt-5.5')).toBe('gpt-5.4');
     expect(getFreePlanFallbackCodexModel('gpt-5.5-xhigh')).toBe('gpt-5.4');
+    expect(getFreePlanFallbackCodexModel('gpt-5.5-high-fast')).toBe('gpt-5.4');
+    expect(getFreePlanFallbackCodexModel('gpt-5.5-fast-high')).toBe('gpt-5.4');
     expect(getFreePlanFallbackCodexModel('gpt-5.3-codex')).toBe('gpt-5.4');
     expect(getFreePlanFallbackCodexModel('gpt-5.3-codex-xhigh')).toBe('gpt-5.4');
     expect(getFreePlanFallbackCodexModel('gpt-5.3-codex(high)')).toBe('gpt-5.4');

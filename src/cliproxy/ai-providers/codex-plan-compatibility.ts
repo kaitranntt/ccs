@@ -10,7 +10,8 @@ export type CodexPlanType = CodexQuotaResult['planType'];
 
 const FREE_SAFE_DEFAULT_MODEL = 'gpt-5.4';
 const FREE_SAFE_FAST_MODEL = 'gpt-5.4-mini';
-const CODEX_EFFORT_SUFFIX_REGEX = /-(xhigh|high|medium)$/i;
+const CODEX_TUNING_SUFFIX_REGEX =
+  /(?:-(?:xhigh|high|medium)(?:-fast)?|-fast(?:-(?:xhigh|high|medium))?)$/i;
 const CODEX_PAREN_SUFFIX_REGEX = /\((xhigh|high|medium)\)$/i;
 const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
 const KNOWN_CODEX_MODELS = new Set(
@@ -57,7 +58,7 @@ export function normalizeCodexModelId(model: string): string {
     .trim()
     .replace(EXTENDED_CONTEXT_SUFFIX_REGEX, '')
     .replace(CODEX_PAREN_SUFFIX_REGEX, '')
-    .replace(CODEX_EFFORT_SUFFIX_REGEX, '')
+    .replace(CODEX_TUNING_SUFFIX_REGEX, '')
     .trim();
   return normalizeModelIdForProvider(stripped, 'codex').trim().toLowerCase();
 }

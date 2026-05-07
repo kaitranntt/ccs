@@ -123,9 +123,32 @@ describe('FlexibleModelSelector', () => {
 
     expect(screen.getByText('gpt-5.3-codex-high')).toBeInTheDocument();
     expect(screen.getByText('gpt-5.3-codex-xhigh')).toBeInTheDocument();
+    expect(screen.getByText('gpt-5.4-high-fast')).toBeInTheDocument();
 
     await userEvent.click(screen.getByText('gpt-5.3-codex-high'));
     expect(onChange).toHaveBeenCalledWith('gpt-5.3-codex-high');
+  });
+
+  it('offers codex fast variants without relegating saved fast selections', async () => {
+    const onChange = vi.fn();
+
+    render(
+      <FlexibleModelSelector
+        label="Primary model"
+        value="gpt-5.4-high-fast"
+        onChange={onChange}
+        catalog={MODEL_CATALOGS.codex}
+        allModels={[]}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /gpt-5\.4-high-fast/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /gpt-5\.4-high-fast/i }));
+
+    expect(screen.queryByText('Current value')).not.toBeInTheDocument();
+    expect(screen.getByText('gpt-5.4-fast')).toBeInTheDocument();
+    expect(screen.getAllByText('gpt-5.4-high-fast').length).toBeGreaterThan(0);
   });
 
   it('does not relegate saved codex effort variants to the legacy current-value fallback', async () => {

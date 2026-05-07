@@ -1,37 +1,69 @@
 export type CodexEffort = 'medium' | 'high' | 'xhigh';
+export type CodexServiceTier = 'fast';
 
-const CODEX_EFFORT_SUFFIX_REGEX = /-(medium|high|xhigh)$/i;
+const CODEX_TUNING_SUFFIX_TOKEN_REGEX = /-(medium|high|xhigh|fast)$/i;
 const CODEX_EFFORTS_IN_ORDER: readonly CodexEffort[] = ['medium', 'high', 'xhigh'];
 
 function trimModelId(modelId: string | undefined): string {
   return modelId?.trim() ?? '';
 }
 
+function parseCodexTuningSuffix(modelId: string | undefined): {
+  baseModel: string;
+  effort: CodexEffort | undefined;
+  serviceTier: CodexServiceTier | undefined;
+} {
+  let baseModel = trimModelId(modelId);
+  let effort: CodexEffort | undefined;
+  let serviceTier: CodexServiceTier | undefined;
+
+  for (let consumed = 0; consumed < 2; consumed += 1) {
+    const match = baseModel.match(CODEX_TUNING_SUFFIX_TOKEN_REGEX);
+    if (!match?.[1]) break;
+
+    const token = match[1].toLowerCase();
+    if (token === 'fast') {
+      if (serviceTier) break;
+      serviceTier = 'fast';
+    } else {
+      if (effort) break;
+      effort = token as CodexEffort;
+    }
+
+    baseModel = baseModel.slice(0, -match[0].length);
+  }
+
+  return { baseModel, effort, serviceTier };
+}
+
 export function parseCodexEffort(modelId: string | undefined): CodexEffort | undefined {
-  if (!modelId) return undefined;
-  const match = trimModelId(modelId).match(CODEX_EFFORT_SUFFIX_REGEX);
-  if (!match?.[1]) return undefined;
-  return match[1].toLowerCase() as CodexEffort;
+  return parseCodexTuningSuffix(modelId).effort;
+}
+
+export function parseCodexServiceTier(modelId: string | undefined): CodexServiceTier | undefined {
+  return parseCodexTuningSuffix(modelId).serviceTier;
 }
 
 export function stripCodexEffortSuffix(modelId: string | undefined): string {
-  return trimModelId(modelId).replace(CODEX_EFFORT_SUFFIX_REGEX, '');
+  return parseCodexTuningSuffix(modelId).baseModel;
 }
 
 export function applyCodexEffortSuffix(
   modelId: string | undefined,
   effort: CodexEffort | undefined
 ): string {
-  const normalizedModelId = stripCodexEffortSuffix(modelId);
+  const parsed = parseCodexTuningSuffix(modelId);
+  const normalizedModelId = parsed.baseModel;
   if (!normalizedModelId || !effort) {
-    return normalizedModelId;
+    return parsed.serviceTier ? `${normalizedModelId}-${parsed.serviceTier}` : normalizedModelId;
   }
-  return `${normalizedModelId}-${effort}`;
+  return [normalizedModelId, effort, parsed.serviceTier].filter(Boolean).join('-');
 }
 
 export function getCodexEffortVariants(
   modelId: string,
-  maxEffort: CodexEffort | undefined
+  maxEffort: CodexEffort | undefined,
+  serviceTiers: readonly CodexServiceTier[] = []
 ): string[] {
   if (!maxEffort) {
     const explicitEffort = parseCodexEffort(modelId);
@@ -39,10 +71,22 @@ export function getCodexEffortVariants(
   }
 
   const normalizedModelId = stripCodexEffortSuffix(modelId);
-  const variantIds = [normalizedModelId];
+  const variantIds: string[] = [];
+
+  const appendVariantsForEffort = (effort: CodexEffort | undefined) => {
+    const effortModel = effort
+      ? applyCodexEffortSuffix(normalizedModelId, effort)
+      : normalizedModelId;
+    variantIds.push(effortModel);
+    for (const serviceTier of serviceTiers) {
+      variantIds.push(`${effortModel}-${serviceTier}`);
+    }
+  };
+
+  appendVariantsForEffort(undefined);
 
   for (const effort of CODEX_EFFORTS_IN_ORDER) {
-    variantIds.push(applyCodexEffortSuffix(normalizedModelId, effort));
+    appendVariantsForEffort(effort);
     if (effort === maxEffort) {
       break;
     }

@@ -266,6 +266,7 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
         description:
           'Newest Codex-released GPT-5 family model; falls back to GPT-5.4 on free plans',
         codexMaxEffort: 'xhigh',
+        codexServiceTiers: ['fast'],
         presetMapping: {
           default: 'gpt-5.5',
           opus: 'gpt-5.5',
@@ -278,6 +279,7 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
         name: 'GPT-5.4',
         description: 'Recommended Codex default for most coding and agentic tasks',
         codexMaxEffort: 'xhigh',
+        codexServiceTiers: ['fast'],
         presetMapping: {
           default: 'gpt-5.4',
           opus: 'gpt-5.4',
