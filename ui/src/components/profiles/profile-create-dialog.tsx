@@ -285,8 +285,11 @@ export function ProfileCreateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] p-0 gap-0 overflow-hidden max-h-[90vh] !flex !flex-col">
-        <DialogHeader className="p-6 pb-4 border-b">
+      <DialogContent
+        data-testid="profile-create-dialog"
+        className="h-[calc(100dvh-2rem)] max-h-[900px] gap-0 overflow-hidden p-0 sm:max-w-[700px] !flex !flex-col"
+      >
+        <DialogHeader className="shrink-0 border-b p-6 pb-4">
           <DialogTitle className="flex items-center gap-2">
             <Plus className="w-5 h-5 text-primary" />
             {t('profileCreateDialog.createProfile')}
@@ -298,7 +301,10 @@ export function ProfileCreateDialog({
           onSubmit={handleSubmit(onSubmit)}
           className="flex flex-col flex-1 min-h-0 overflow-hidden"
         >
-          <div className="border-b bg-muted/10 px-6 py-3 space-y-3">
+          <div
+            data-testid="profile-create-provider-chooser"
+            className="max-h-[34dvh] shrink-0 space-y-3 overflow-y-auto overscroll-contain border-b bg-muted/10 px-6 py-3"
+          >
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-1">
@@ -398,7 +404,7 @@ export function ProfileCreateDialog({
               </TabsList>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto">
+            <div data-testid="profile-create-tab-scroll" className="flex-1 min-h-0 overflow-y-auto">
               <TabsContent value="basic" className="p-6 space-y-4 mt-0">
                 {/* Profile Name */}
                 <div className="space-y-1.5">
@@ -672,7 +678,10 @@ export function ProfileCreateDialog({
               </TabsContent>
             </div>
 
-            <DialogFooter className="p-6 pt-4 border-t bg-muted/10">
+            <DialogFooter
+              data-testid="profile-create-footer"
+              className="shrink-0 border-t bg-muted/10 p-6 pt-4"
+            >
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 {t('profileDialog.cancel')}
               </Button>

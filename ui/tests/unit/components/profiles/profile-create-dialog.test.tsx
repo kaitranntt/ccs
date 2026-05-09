@@ -76,6 +76,31 @@ describe('ProfileCreateDialog', () => {
     expect(screen.getByText('Local runtimes')).toBeInTheDocument();
   });
 
+  it('keeps the provider chooser and form body scrollable while the footer stays visible', () => {
+    render(
+      <ProfileCreateDialog
+        open
+        onOpenChange={vi.fn()}
+        onSuccess={vi.fn()}
+        initialMode="openrouter"
+      />
+    );
+
+    expect(screen.getByTestId('profile-create-dialog')).toHaveClass(
+      'h-[calc(100dvh-2rem)]',
+      'overflow-hidden'
+    );
+    expect(screen.getByTestId('profile-create-provider-chooser')).toHaveClass(
+      'max-h-[34dvh]',
+      'overflow-y-auto'
+    );
+    expect(screen.getByTestId('profile-create-tab-scroll')).toHaveClass(
+      'flex-1',
+      'overflow-y-auto'
+    );
+    expect(screen.getByTestId('profile-create-footer')).toHaveClass('shrink-0');
+  });
+
   it('steers the Hugging Face preset to the droid target by default', async () => {
     render(
       <ProfileCreateDialog
