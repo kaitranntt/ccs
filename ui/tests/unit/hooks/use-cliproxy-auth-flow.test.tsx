@@ -86,6 +86,49 @@ describe('useCliproxyAuthFlow', () => {
     );
   });
 
+  it('surfaces manual OAuth start guidance from the dashboard API', async () => {
+    const guidance = [
+      'Start local CLIProxy first: ccs cliproxy start',
+      'For SSH/VPS auth, open a tunnel from your local machine: ssh -L 1455:localhost:1455 <USER>@<HOST>',
+      'Then run inside that SSH session: ccs codex --auth --port-forward',
+    ];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+
+        if (url.includes('/codex/start-url')) {
+          return Promise.resolve(
+            createJsonResponse(
+              {
+                error: 'cliproxy_oauth_start_failed',
+                message:
+                  'OpenAI Codex OAuth could not start because CCS could not reach the local CLIProxy management API.',
+                hints: guidance,
+              },
+              503
+            )
+          );
+        }
+
+        return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+      })
+    );
+
+    const { result } = renderHook(() => useCliproxyAuthFlow(), { wrapper });
+
+    await act(async () => {
+      await result.current.startAuth('codex', { startEndpoint: 'start-url' });
+    });
+
+    expect(result.current.isAuthenticating).toBe(false);
+    expect(result.current.error).toContain('OpenAI Codex OAuth could not start');
+    expect(result.current.error).toContain('ccs cliproxy start');
+    expect(result.current.error).toContain('ssh -L 1455:localhost:1455 <USER>@<HOST>');
+    expect(result.current.error).not.toContain('cliproxy_oauth_start_failed');
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('ccs cliproxy start'));
+  });
+
   it('ignores stale poll completions from a superseded auth attempt', async () => {
     const firstPoll = createDeferred<Response>();
     let startCount = 0;

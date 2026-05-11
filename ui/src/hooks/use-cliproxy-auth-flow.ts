@@ -69,6 +69,22 @@ async function parseResponseBody(response: Response): Promise<Record<string, unk
   }
 }
 
+function buildAuthErrorMessage(data: Record<string, unknown>, fallback: string): string {
+  const message =
+    typeof data.message === 'string'
+      ? data.message
+      : typeof data.error === 'string'
+        ? data.error
+        : fallback;
+  const hints = Array.isArray(data.hints)
+    ? data.hints.filter(
+        (hint): hint is string => typeof hint === 'string' && hint.trim().length > 0
+      )
+    : [];
+
+  return hints.length > 0 ? [message, ...hints].join('\n') : message;
+}
+
 /** Initial state for auth flow - extracted for DRY */
 const INITIAL_STATE: AuthFlowState = {
   provider: null,
@@ -371,17 +387,7 @@ export function useCliproxyAuthFlow() {
           const success = data.success === true;
 
           if (!response.ok || !success) {
-            // For Plus OAuth credential errors the server sends a human-readable
-            // explanation in `data.message`; prefer it over the machine error code.
-            const isPlusCredentialError =
-              data.error === 'plus_oauth_credentials_missing' ||
-              data.error === 'plus_oauth_url_missing_client_id';
-            const errorMsg =
-              isPlusCredentialError && typeof data.message === 'string'
-                ? data.message
-                : typeof data.error === 'string'
-                  ? data.error
-                  : t('toasts.providerStartOAuthFailed');
+            const errorMsg = buildAuthErrorMessage(data, t('toasts.providerStartOAuthFailed'));
             throw new Error(errorMsg);
           }
 

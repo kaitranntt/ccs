@@ -74,6 +74,7 @@ import {
   getPlusOAuthCredentialError,
   getPlusAuthUrlCredentialError,
 } from '../../cliproxy/auth/oauth-handler';
+import { buildOAuthStartFailureGuidance } from '../../cliproxy/auth/oauth-start-failure-guidance';
 import { getStoredConfiguredBackend } from '../../cliproxy/binary-manager';
 
 const router = Router();
@@ -1065,6 +1066,7 @@ router.post('/:provider/start-url', async (req: Request, res: Response): Promise
     return;
   }
 
+  let startPath: string | null = null;
   try {
     const authUrlProvider =
       CLIPROXY_AUTH_URL_PROVIDER_MAP[provider as CLIProxyProvider] || provider;
@@ -1077,20 +1079,22 @@ router.post('/:provider/start-url', async (req: Request, res: Response): Promise
       provider === 'gitlab' && gitlabBaseUrl
         ? `&base_url=${encodeURIComponent(gitlabBaseUrl)}`
         : '';
+    startPath = `/v0/management/${authUrlProvider}-auth-url?is_webui=true${kiroQuery}${gitlabQuery}`;
 
     // Call CLIProxyAPI to start OAuth and get auth URL
     // CLIProxyAPI management routes are under /v0/management prefix
-    const response = await fetch(
-      buildProxyUrl(
-        target,
-        `/v0/management/${authUrlProvider}-auth-url?is_webui=true${kiroQuery}${gitlabQuery}`
-      ),
-      { headers: buildManagementHeaders(target) }
-    );
+    const response = await fetch(buildProxyUrl(target, startPath), {
+      headers: buildManagementHeaders(target),
+    });
 
     if (!response.ok) {
       const error = await response.text();
-      res.status(response.status).json({ error: error || 'Failed to start OAuth' });
+      const guidance = buildOAuthStartFailureGuidance(provider as CLIProxyProvider, {
+        target,
+        startPath,
+        cause: error || `HTTP ${response.status}`,
+      });
+      res.status(response.status).json(guidance);
       return;
     }
 
@@ -1144,7 +1148,28 @@ router.post('/:provider/start-url', async (req: Request, res: Response): Promise
       method: data.method || null,
     });
   } catch (error) {
-    respondInternalError(res, error, 'CLIProxyAPI not reachable.', 503);
+    if (error instanceof SyntaxError) {
+      console.error(
+        `[cliproxy-auth-routes] Invalid OAuth start response for provider=${provider}: ${error.message}`
+      );
+      res.status(502).json({
+        error: 'cliproxy_oauth_start_invalid_response',
+        provider,
+        message: 'CLIProxyAPI returned an invalid OAuth start response.',
+        details: error.message,
+      });
+      return;
+    }
+
+    const authUrlProvider =
+      CLIPROXY_AUTH_URL_PROVIDER_MAP[provider as CLIProxyProvider] || provider;
+    const guidance = buildOAuthStartFailureGuidance(provider as CLIProxyProvider, {
+      target,
+      startPath: startPath ?? `/v0/management/${authUrlProvider}-auth-url?is_webui=true`,
+      cause: error,
+    });
+    console.error(`[cliproxy-auth-routes] ${guidance.message} ${guidance.details}`);
+    res.status(503).json(guidance);
   }
 });
 
