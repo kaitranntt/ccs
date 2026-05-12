@@ -14,7 +14,7 @@ const router = Router();
 const CODEX_CONFIG_ACCESS_ERROR =
   'Codex configuration endpoints require localhost access when dashboard auth is disabled.';
 
-router.use((req: Request, res: Response, next) => {
+router.use('/config', (req: Request, res: Response, next) => {
   if (requireLocalAccessWhenAuthDisabled(req, res, CODEX_CONFIG_ACCESS_ERROR)) {
     next();
   }

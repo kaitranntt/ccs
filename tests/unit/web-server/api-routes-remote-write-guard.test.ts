@@ -93,6 +93,12 @@ describe('api-routes remote write guard', () => {
     });
   });
 
+  it('allows remote Codex diagnostics when dashboard auth is disabled', async () => {
+    const response = await fetch(`${baseUrl}/api/codex/diagnostics`);
+
+    expect(response.status).toBe(200);
+  });
+
   it('blocks remote profile creation when dashboard auth is disabled', async () => {
     const response = await fetch(`${baseUrl}/api/profiles`, {
       method: 'POST',
