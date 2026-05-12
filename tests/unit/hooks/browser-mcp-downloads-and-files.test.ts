@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { mkdirSync, realpathSync } from 'node:fs';
+import { delimiter } from 'node:path';
 import {
   runMcpRequests,
   getResponseText,
@@ -111,6 +112,8 @@ describe('ccs-browser MCP server - downloads and file inputs', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'ccs-browser-download-root-'));
     const allowedPath = join(tempDir, 'reports');
     const outsidePath = join(tmpdir(), 'ccs-browser-outside-downloads');
+    const sensitiveRoot = join(tempDir, '.aws');
+    const sensitiveDownloadPath = join(sensitiveRoot, 'reports');
 
     const responses = await runMcpRequests(
       [{ id: 'page-1', title: 'Reports', currentUrl: 'https://example.com/reports', browser: {} }],
@@ -133,8 +136,17 @@ describe('ccs-browser MCP server - downloads and file inputs', () => {
             arguments: { behavior: 'accept', downloadPath: outsidePath },
           },
         },
+        {
+          jsonrpc: '2.0',
+          id: 619,
+          method: 'tools/call',
+          params: {
+            name: 'browser_set_download_behavior',
+            arguments: { behavior: 'accept', downloadPath: sensitiveDownloadPath },
+          },
+        },
       ],
-      { childEnv: { CCS_BROWSER_DOWNLOAD_ROOTS: tempDir } }
+      { childEnv: { CCS_BROWSER_DOWNLOAD_ROOTS: `${sensitiveRoot}${delimiter}${tempDir}` } }
     );
 
     expect(getResponseText(responses.find((message) => message.id === 615))).toContain(
@@ -144,6 +156,9 @@ describe('ccs-browser MCP server - downloads and file inputs', () => {
     expect((rejectedResponse?.result as { isError?: boolean }).isError).toBe(true);
     expect(getResponseText(rejectedResponse)).toContain(
       'downloadPath must be inside the browser session download directory or a CCS_BROWSER_DOWNLOAD_ROOTS entry'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 619))).toContain(
+      'downloadPath cannot include hidden or sensitive path segment: .aws'
     );
   });
 
@@ -426,9 +441,11 @@ describe('ccs-browser MCP server - downloads and file inputs', () => {
     const outsidePath = join(outsideDir, 'secret.txt');
     const sensitiveDir = join(tempDir, '.ssh');
     const sensitivePath = join(sensitiveDir, 'id_rsa');
+    const sensitiveRootPath = join(sensitiveDir, 'public.txt');
     writeFileSync(outsidePath, 'outside');
     mkdirSync(sensitiveDir, { recursive: true });
     writeFileSync(sensitivePath, 'private-key');
+    writeFileSync(sensitiveRootPath, 'not-a-key');
 
     const responses = await runMcpRequests(
       [
@@ -460,14 +477,26 @@ describe('ccs-browser MCP server - downloads and file inputs', () => {
             arguments: { selector: '#real-file-input', files: [sensitivePath] },
           },
         },
+        {
+          jsonrpc: '2.0',
+          id: 620,
+          method: 'tools/call',
+          params: {
+            name: 'browser_set_file_input',
+            arguments: { selector: '#real-file-input', files: [sensitiveRootPath] },
+          },
+        },
       ],
-      { childEnv: { CCS_BROWSER_UPLOAD_ROOTS: tempDir } }
+      { childEnv: { CCS_BROWSER_UPLOAD_ROOTS: `${sensitiveDir}${delimiter}${tempDir}` } }
     );
 
     expect(getResponseText(responses.find((message) => message.id === 617))).toContain(
       'file must be inside the browser session download directory or a CCS_BROWSER_UPLOAD_ROOTS entry'
     );
     expect(getResponseText(responses.find((message) => message.id === 618))).toContain(
+      'file cannot include hidden or sensitive path segment: .ssh'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 620))).toContain(
       'file cannot include hidden or sensitive path segment: .ssh'
     );
   });
