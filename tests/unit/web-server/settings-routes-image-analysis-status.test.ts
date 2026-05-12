@@ -47,6 +47,24 @@ function writeProfileSettings(
   return settingsPath;
 }
 
+function createSymlinkIfAvailable(
+  targetPath: string,
+  linkPath: string,
+  type?: fs.symlink.Type
+): boolean {
+  try {
+    fs.symlinkSync(targetPath, linkPath, type);
+    return true;
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (process.platform === 'win32' && (code === 'EPERM' || code === 'EACCES')) {
+      console.warn('Skipping symlink escape regression: symlink creation unavailable on Windows.');
+      return false;
+    }
+    throw error;
+  }
+}
+
 describe('settings-routes image-analysis status', () => {
   let server: Server;
   let baseUrl = '';
@@ -199,7 +217,7 @@ describe('settings-routes image-analysis status', () => {
   });
 
   it('uses the configured custom settings path for status and persistence diagnostics', async () => {
-    const customSettingsPath = path.join(tempHome, 'profiles', 'foo.bar.settings.json');
+    const customSettingsPath = path.join(tempHome, '.ccs', 'profiles', 'foo.bar.settings.json');
     writeJson(path.join(tempHome, '.ccs', 'config.json'), {
       profiles: {
         'foo.bar': customSettingsPath,
@@ -229,6 +247,196 @@ describe('settings-routes image-analysis status', () => {
     expect(body.path).toBe(customSettingsPath);
     expect(body.imageAnalysisStatus.persistencePath).toBe(customSettingsPath);
     expect(body.imageAnalysisStatus.hookInstalled).toBe(true);
+  });
+
+  it('resolves configured profile and variant relative settings paths under the CCS directory', async () => {
+    const profileSettingsPath = path.join(tempHome, '.ccs', 'profiles', 'relative.settings.json');
+    const variantSettingsPath = path.join(
+      tempHome,
+      '.ccs',
+      'variants',
+      'relative-var.settings.json'
+    );
+    writeJson(path.join(tempHome, '.ccs', 'config.json'), {
+      profiles: {
+        relative: 'profiles/relative.settings.json',
+      },
+      cliproxy: {
+        'relative-var': {
+          provider: 'gemini',
+          settings: 'variants/relative-var.settings.json',
+        },
+      },
+    });
+    writeProfileSettings(
+      tempHome,
+      'relative',
+      {
+        ANTHROPIC_BASE_URL: 'https://api.z.ai/v1',
+        ANTHROPIC_API_KEY: 'relative-profile-key',
+      },
+      profileSettingsPath
+    );
+    writeProfileSettings(
+      tempHome,
+      'relative-var',
+      {
+        ANTHROPIC_BASE_URL: 'https://api.z.ai/v1',
+        ANTHROPIC_API_KEY: 'relative-variant-key',
+      },
+      variantSettingsPath
+    );
+
+    const profileResponse = await fetch(`${baseUrl}/api/settings/relative/raw`);
+    expect(profileResponse.status).toBe(200);
+    const profileBody = (await profileResponse.json()) as { path: string };
+    expect(profileBody.path).toBe(profileSettingsPath);
+
+    const variantResponse = await fetch(`${baseUrl}/api/settings/relative-var/raw`);
+    expect(variantResponse.status).toBe(200);
+    const variantBody = (await variantResponse.json()) as { path: string };
+    expect(variantBody.path).toBe(variantSettingsPath);
+  });
+
+  it('rejects configured profile settings paths outside the CCS directory', async () => {
+    const outsideSettingsPath = path.join(tempHome, 'outside', 'escaped.settings.json');
+    writeJson(path.join(tempHome, '.ccs', 'config.json'), {
+      profiles: {
+        escaped: outsideSettingsPath,
+      },
+    });
+    writeJson(outsideSettingsPath, {
+      env: {
+        ANTHROPIC_AUTH_TOKEN: 'outside-secret',
+      },
+    });
+
+    const readResponse = await fetch(`${baseUrl}/api/settings/escaped/raw`);
+    expect(readResponse.status).toBe(500);
+
+    const writeResponse = await fetch(`${baseUrl}/api/settings/escaped`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        settings: {
+          env: {
+            ANTHROPIC_AUTH_TOKEN: 'overwritten-secret',
+          },
+        },
+      }),
+    });
+    expect(writeResponse.status).toBe(500);
+
+    const outsideSettings = JSON.parse(fs.readFileSync(outsideSettingsPath, 'utf8')) as {
+      env: { ANTHROPIC_AUTH_TOKEN: string };
+    };
+    expect(outsideSettings.env.ANTHROPIC_AUTH_TOKEN).toBe('outside-secret');
+  });
+
+  it('rejects raw reads through settings-file symlink escapes', async () => {
+    const outsideSettingsPath = path.join(tempHome, 'outside-raw.settings.json');
+    const linkedSettingsPath = path.join(tempHome, '.ccs', 'linked.settings.json');
+    writeJson(outsideSettingsPath, {
+      env: {
+        ANTHROPIC_AUTH_TOKEN: 'raw-outside-secret',
+      },
+    });
+    fs.mkdirSync(path.dirname(linkedSettingsPath), { recursive: true });
+    if (!createSymlinkIfAvailable(outsideSettingsPath, linkedSettingsPath)) {
+      return;
+    }
+
+    const response = await fetch(`${baseUrl}/api/settings/linked/raw`);
+    expect(response.status).toBe(500);
+
+    const outsideSettings = JSON.parse(fs.readFileSync(outsideSettingsPath, 'utf8')) as {
+      env: { ANTHROPIC_AUTH_TOKEN: string };
+    };
+    expect(outsideSettings.env.ANTHROPIC_AUTH_TOKEN).toBe('raw-outside-secret');
+  });
+
+  it('rejects variant settings paths outside the CCS directory', async () => {
+    const outsideSettingsPath = path.join(tempHome, 'outside-variant', 'escaped.settings.json');
+    writeJson(path.join(tempHome, '.ccs', 'config.json'), {
+      profiles: {},
+      cliproxy: {
+        evilvar: {
+          provider: 'gemini',
+          settings: outsideSettingsPath,
+        },
+      },
+    });
+    writeJson(outsideSettingsPath, {
+      env: {
+        ANTHROPIC_AUTH_TOKEN: 'variant-outside-secret',
+      },
+    });
+
+    const response = await fetch(`${baseUrl}/api/settings/evilvar/raw`);
+    expect(response.status).toBe(500);
+
+    const writeResponse = await fetch(`${baseUrl}/api/settings/evilvar`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        settings: {
+          env: {
+            ANTHROPIC_AUTH_TOKEN: 'variant-overwritten-secret',
+          },
+        },
+      }),
+    });
+    expect(writeResponse.status).toBe(500);
+
+    const outsideSettings = JSON.parse(fs.readFileSync(outsideSettingsPath, 'utf8')) as {
+      env: { ANTHROPIC_AUTH_TOKEN: string };
+    };
+    expect(outsideSettings.env.ANTHROPIC_AUTH_TOKEN).toBe('variant-outside-secret');
+  });
+
+  it('rejects variant PUT settings paths that escape through symlinked parents', async () => {
+    const outsideDir = path.join(tempHome, 'outside-variant-link');
+    const outsideSettingsPath = path.join(outsideDir, 'escaped.settings.json');
+    const linkDir = path.join(tempHome, '.ccs', 'variant-link');
+    const linkedSettingsPath = path.join(linkDir, 'escaped.settings.json');
+    fs.mkdirSync(outsideDir, { recursive: true });
+    writeJson(outsideSettingsPath, {
+      env: {
+        ANTHROPIC_AUTH_TOKEN: 'variant-link-original',
+      },
+    });
+    fs.mkdirSync(path.dirname(linkDir), { recursive: true });
+    if (!createSymlinkIfAvailable(outsideDir, linkDir, 'dir')) {
+      return;
+    }
+
+    writeJson(path.join(tempHome, '.ccs', 'config.json'), {
+      profiles: {},
+      cliproxy: {
+        'linked-var': {
+          provider: 'gemini',
+          settings: linkedSettingsPath,
+        },
+      },
+    });
+
+    const response = await fetch(`${baseUrl}/api/settings/linked-var`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        settings: {
+          env: {
+            ANTHROPIC_AUTH_TOKEN: 'variant-link-overwritten',
+          },
+        },
+      }),
+    });
+    expect(response.status).toBe(500);
+
+    const outsideSettings = JSON.parse(fs.readFileSync(outsideSettingsPath, 'utf8')) as {
+      env: { ANTHROPIC_AUTH_TOKEN: string };
+    };
+    expect(outsideSettings.env.ANTHROPIC_AUTH_TOKEN).toBe('variant-link-original');
   });
 
   it('previews image-analysis status from unsaved editor settings', async () => {
