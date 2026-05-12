@@ -3,6 +3,7 @@
  * Session-based auth with httpOnly cookies for CCS dashboard.
  */
 
+import type { IncomingMessage } from 'http';
 import type { NextFunction, Request, Response } from 'express';
 import session from 'express-session';
 import rateLimit from 'express-rate-limit';
@@ -149,6 +150,90 @@ export function isLoopbackRemoteAddress(value: string | undefined): boolean {
     normalized === '::ffff:127.0.0.1' ||
     normalized.startsWith('::ffff:127.')
   );
+}
+
+function isLoopbackHostname(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '');
+  return (
+    normalized === 'localhost' ||
+    normalized.endsWith('.localhost') ||
+    isLoopbackRemoteAddress(normalized)
+  );
+}
+
+function getSingleHeader(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function parseHostHeader(value: string | undefined): URL | null {
+  if (!value) return null;
+
+  try {
+    return new URL(`http://${value}`);
+  } catch {
+    return null;
+  }
+}
+
+function isHttpOrigin(origin: URL): boolean {
+  return origin.protocol === 'http:' || origin.protocol === 'https:';
+}
+
+export function isDashboardWebSocketOriginAllowed(req: IncomingMessage): boolean {
+  const originHeader = getSingleHeader(req.headers.origin);
+  if (!originHeader) return true;
+
+  let origin: URL;
+  try {
+    origin = new URL(originHeader);
+  } catch {
+    return false;
+  }
+
+  if (!isHttpOrigin(origin)) {
+    return false;
+  }
+
+  const host = parseHostHeader(getSingleHeader(req.headers.host));
+  if (!host) {
+    return false;
+  }
+
+  if (origin.host.toLowerCase() === host.host.toLowerCase()) {
+    return true;
+  }
+
+  return (
+    isLoopbackHostname(origin.hostname) &&
+    isLoopbackHostname(host.hostname) &&
+    origin.port === host.port
+  );
+}
+
+export function isDashboardWebSocketUpgradeAllowed(req: IncomingMessage): boolean {
+  if (!isDashboardWebSocketOriginAllowed(req)) {
+    return false;
+  }
+
+  if (!isDashboardAuthEnabled()) {
+    return isLoopbackRemoteAddress(req.socket.remoteAddress);
+  }
+
+  return Boolean((req as Request).session?.authenticated);
+}
+
+export function getDashboardWebSocketRejectionStatus(req?: IncomingMessage): 401 | 403 {
+  if (req && !isDashboardWebSocketOriginAllowed(req)) {
+    return 403;
+  }
+
+  if (!isDashboardAuthEnabled()) return 403;
+
+  return 401;
 }
 
 export function requireLocalAccessWhenAuthDisabled(

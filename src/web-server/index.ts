@@ -12,7 +12,12 @@ import type { AddressInfo } from 'net';
 import path from 'path';
 import { WebSocketServer } from 'ws';
 import { setupWebSocket } from './websocket';
-import { createSessionMiddleware, authMiddleware } from './middleware/auth-middleware';
+import {
+  authMiddleware,
+  createSessionMiddleware,
+  getDashboardWebSocketRejectionStatus,
+  isDashboardWebSocketUpgradeAllowed,
+} from './middleware/auth-middleware';
 import { requestLoggingMiddleware } from './middleware/request-logging-middleware';
 import { ensureManagedModelPrefixes } from '../cliproxy/ai-providers/managed-model-prefixes';
 import { getProxyTarget } from '../cliproxy/proxy/proxy-target-resolver';
@@ -47,8 +52,7 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
   const app = express();
   const server = http.createServer(app);
   const wss = new WebSocketServer({
-    server,
-    path: '/ws',
+    noServer: true,
     maxPayload: 1024 * 1024, // 1MB hard limit to prevent DoS
     perMessageDeflate: false, // Prevent zip bomb attacks
   });
@@ -72,7 +76,8 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
   app.use(requestLoggingMiddleware);
 
   // Session middleware (for dashboard auth)
-  app.use(createSessionMiddleware());
+  const sessionMiddleware = createSessionMiddleware();
+  app.use(sessionMiddleware);
 
   // Auth middleware (protects API routes when enabled)
   app.use(authMiddleware);
@@ -120,6 +125,46 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
       res.sendFile(path.join(staticDir, 'index.html'));
     });
   }
+
+  server.on('upgrade', (request, socket, head) => {
+    const pathname = getUpgradePathname(request.url);
+    if (!pathname) {
+      rejectWebSocketUpgrade(socket, 400, 'Invalid WebSocket upgrade request');
+      return;
+    }
+
+    if (pathname !== '/ws') {
+      if (!options.dev) {
+        rejectWebSocketUpgrade(socket, 404, 'WebSocket endpoint not found');
+      }
+      return;
+    }
+
+    const response = new http.ServerResponse(request);
+    sessionMiddleware(
+      request as express.Request,
+      response as express.Response,
+      (error?: unknown) => {
+        if (error) {
+          rejectWebSocketUpgrade(socket, 500, 'WebSocket session validation failed');
+          return;
+        }
+
+        if (!isDashboardWebSocketUpgradeAllowed(request)) {
+          rejectWebSocketUpgrade(
+            socket,
+            getDashboardWebSocketRejectionStatus(request),
+            'WebSocket access denied'
+          );
+          return;
+        }
+
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          wss.emit('connection', ws, request);
+        });
+      }
+    );
+  });
 
   // WebSocket connection handler + file watcher
   const { cleanup: wsCleanup } = setupWebSocket(wss);
@@ -188,6 +233,30 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
       reject(new Error(formatListenError(error as NodeJS.ErrnoException, options)));
     }
   });
+}
+
+function getUpgradePathname(requestUrl: string | undefined): string | null {
+  try {
+    return new URL(requestUrl ?? '/', 'http://localhost').pathname;
+  } catch {
+    return null;
+  }
+}
+
+function rejectWebSocketUpgrade(
+  socket: NodeJS.WritableStream & { destroy: () => void },
+  statusCode: 400 | 401 | 403 | 404 | 500,
+  message: string
+): void {
+  socket.write(
+    `HTTP/1.1 ${statusCode} ${message}\r\n` +
+      'Connection: close\r\n' +
+      'Content-Type: text/plain; charset=utf-8\r\n' +
+      `Content-Length: ${Buffer.byteLength(message)}\r\n` +
+      '\r\n' +
+      message
+  );
+  socket.destroy();
 }
 
 function assertSafeDashboardBind(
