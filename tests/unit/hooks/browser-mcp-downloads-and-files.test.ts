@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, realpathSync } from 'node:fs';
 import {
   runMcpRequests,
   getResponseText,
@@ -138,7 +138,7 @@ describe('ccs-browser MCP server - downloads and file inputs', () => {
     );
 
     expect(getResponseText(responses.find((message) => message.id === 615))).toContain(
-      `downloadPath: ${allowedPath}`
+      `downloadPath: ${realpathSync(allowedPath)}`
     );
     const rejectedResponse = responses.find((message) => message.id === 616);
     expect((rejectedResponse?.result as { isError?: boolean }).isError).toBe(true);
@@ -353,14 +353,14 @@ describe('ccs-browser MCP server - downloads and file inputs', () => {
 
     expect(
       (pages[1]?.fileInputs?.['#selected-upload'] as MockFileInputState).assignedFiles
-    ).toEqual([invoicePath, receiptPath]);
+    ).toEqual([realpathSync(invoicePath), realpathSync(receiptPath)]);
     expect(
       (pages[0]?.frames?.[0]?.fileInputs?.['#frame-upload'] as MockFileInputState).assignedFiles
-    ).toEqual([invoicePath]);
+    ).toEqual([realpathSync(invoicePath)]);
     expect(
       (pages[0]?.shadowRoots?.[0]?.fileInputs?.['#shadow-upload'] as MockFileInputState)
         .assignedFiles
-    ).toEqual([receiptPath]);
+    ).toEqual([realpathSync(receiptPath)]);
   });
 
   it('uses pageId for browser_set_file_input when provided', async () => {
@@ -413,7 +413,7 @@ describe('ccs-browser MCP server - downloads and file inputs', () => {
       'pageIndex: 1'
     );
     expect((pages[1]?.fileInputs?.['#pageid-upload'] as MockFileInputState).assignedFiles).toEqual([
-      assetPath,
+      realpathSync(assetPath),
     ]);
     expect(
       (pages[0]?.fileInputs?.['#selected-upload'] as MockFileInputState).assignedFiles
