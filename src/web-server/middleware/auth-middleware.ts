@@ -3,6 +3,7 @@
  * Session-based auth with httpOnly cookies for CCS dashboard.
  */
 
+import type { IncomingMessage } from 'http';
 import type { NextFunction, Request, Response } from 'express';
 import session from 'express-session';
 import rateLimit from 'express-rate-limit';
@@ -149,6 +150,18 @@ export function isLoopbackRemoteAddress(value: string | undefined): boolean {
     normalized === '::ffff:127.0.0.1' ||
     normalized.startsWith('::ffff:127.')
   );
+}
+
+export function isDashboardWebSocketUpgradeAllowed(req: IncomingMessage): boolean {
+  if (!isDashboardAuthEnabled()) {
+    return isLoopbackRemoteAddress(req.socket.remoteAddress);
+  }
+
+  return Boolean((req as Request).session?.authenticated);
+}
+
+export function getDashboardWebSocketRejectionStatus(): 401 | 403 {
+  return isDashboardAuthEnabled() ? 401 : 403;
 }
 
 export function requireLocalAccessWhenAuthDisabled(
