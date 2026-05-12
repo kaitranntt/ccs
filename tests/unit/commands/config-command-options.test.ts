@@ -8,7 +8,7 @@ describe('config command options parser', () => {
 
     expect(result.help).toBe(false);
     expect(result.error).toBeUndefined();
-    expect(result.options.host).toBe('127.0.0.1');
+    expect(result.options.host).toBe('localhost');
     expect(result.options.hostProvided).toBe(false);
   });
 

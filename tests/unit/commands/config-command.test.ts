@@ -10,7 +10,7 @@ let logLines: string[] = [];
 let errorLines: string[] = [];
 let dashboardAuthEnabled = false;
 let startServerError: Error | null = null;
-let mockServerBindHost = '127.0.0.1';
+let mockServerBindHost = '::1';
 let originalConsoleLog: typeof console.log;
 let originalConsoleError: typeof console.error;
 let originalProcessExit: typeof process.exit;
@@ -79,7 +79,7 @@ beforeEach(() => {
   errorLines = [];
   dashboardAuthEnabled = false;
   startServerError = null;
-  mockServerBindHost = '127.0.0.1';
+  mockServerBindHost = '::1';
 
   originalConsoleLog = console.log;
   originalConsoleError = console.error;
@@ -144,10 +144,10 @@ describe('config command dashboard startup', () => {
     await handleConfigCommand([], createTestDeps());
 
     expect(startServerCalls).toHaveLength(1);
-    expect(startServerCalls[0]).toEqual({ port: 3000, dev: false, host: '127.0.0.1' });
+    expect(startServerCalls[0]).toEqual({ port: 3000, dev: false, host: 'localhost' });
 
     const rendered = logLines.join('\n');
-    expect(rendered).toContain('Dashboard: http://127.0.0.1:3000');
+    expect(rendered).toContain('Dashboard: http://[::1]:3000');
     expect(rendered).not.toContain('Dashboard may be reachable from other devices');
     expect(rendered).not.toContain('Protect it before sharing: ccs config auth setup');
     expect(errorLines).toHaveLength(0);
@@ -202,7 +202,7 @@ describe('config command dashboard startup', () => {
       expect(startServerCalls).toHaveLength(1);
 
       const rendered = logLines.join('\n');
-      expect(rendered).toContain('Dashboard: http://127.0.0.1:3000');
+      expect(rendered).toContain('Dashboard: http://[::1]:3000');
       expect(rendered).not.toContain('Bind host:');
       expect(errorLines).toHaveLength(0);
     } finally {

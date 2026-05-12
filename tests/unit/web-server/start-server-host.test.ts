@@ -26,7 +26,7 @@ describe('startServer host binding', () => {
 
     const address = instance.server.address() as AddressInfo;
     expect(address.port).toBeGreaterThan(0);
-    expect(address.address).toBe('127.0.0.1');
+    expect(['127.0.0.1', '::1']).toContain(address.address);
   });
 
   it('binds to an explicit loopback host', async () => {
