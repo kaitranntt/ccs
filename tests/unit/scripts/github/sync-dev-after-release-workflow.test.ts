@@ -7,7 +7,7 @@ function resolvePath(relativePath: string) {
 }
 
 describe('sync dev after release workflow', () => {
-  test('uses protected-branch runner and token settings', () => {
+  test('isolates the protected-branch token from pull-request runners', () => {
     const workflowPath = resolvePath('../../../../.github/workflows/sync-dev-after-release.yml');
 
     expect(fs.existsSync(workflowPath)).toBe(true);
@@ -20,14 +20,18 @@ describe('sync dev after release workflow', () => {
     const syncSection = workflow.slice(workflow.indexOf('- name: Sync dev with main'));
 
     expect(workflow).toContain('name: Sync Dev After Main Release');
-    expect(workflow).toContain('runs-on: [self-hosted, linux, x64]');
-    expect(workflow).not.toContain('runs-on: ubuntu-latest');
-    expect(checkoutSection).toContain('token: ${{ secrets.PAT_TOKEN }}');
-    expect(checkoutSection).not.toContain('token: ${{ github.token }}');
+    expect(workflow).toContain('runs-on: ubuntu-latest');
+    expect(workflow).not.toContain('runs-on: [self-hosted, linux, x64]');
+    expect(checkoutSection).toContain('persist-credentials: false');
+    expect(checkoutSection).not.toContain('token: ${{ secrets.PAT_TOKEN }}');
     expect(syncSection).toContain(
       'git merge origin/main --no-edit -m "chore(sync): merge main into dev after release"'
     );
     expect(syncSection).not.toContain('[skip ci]');
-    expect(syncSection).toContain('git push origin dev');
+    expect(workflow).toContain('git config --local core.hooksPath /dev/null');
+    expect(syncSection).toContain('PAT_TOKEN: ${{ secrets.PAT_TOKEN }}');
+    expect(syncSection).toContain('http.https://github.com/kaitranntt/ccs/.extraheader');
+    expect(syncSection).toContain('git -c core.hooksPath=/dev/null');
+    expect(syncSection).toContain('push origin dev');
   });
 });
