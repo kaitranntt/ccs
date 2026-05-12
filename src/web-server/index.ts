@@ -8,6 +8,7 @@
 
 import express from 'express';
 import http from 'http';
+import type { AddressInfo } from 'net';
 import path from 'path';
 import { WebSocketServer } from 'ws';
 import { setupWebSocket } from './websocket';
@@ -18,7 +19,7 @@ import { getProxyTarget } from '../cliproxy/proxy/proxy-target-resolver';
 import { startAutoSyncWatcher, stopAutoSyncWatcher } from '../cliproxy/sync';
 import { shutdownUsageAggregator } from './usage/aggregator';
 import { createLogger } from '../services/logging';
-import { DEFAULT_DASHBOARD_HOST } from '../commands/config-dashboard-host';
+import { DEFAULT_DASHBOARD_HOST, isLoopbackHost } from '../commands/config-dashboard-host';
 
 export interface ServerOptions {
   port: number;
@@ -159,6 +160,16 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
 
     const onListening = () => {
       server.off('error', onError);
+      try {
+        assertSafeDashboardBind(options, server.address());
+      } catch (error) {
+        cleanup();
+        server.close(() => {
+          reject(error instanceof Error ? error : new Error(String(error)));
+        });
+        return;
+      }
+
       logger.info('server.listening', 'Dashboard server listening', {
         host: listenHost,
         port: options.port,
@@ -177,6 +188,25 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
       reject(new Error(formatListenError(error as NodeJS.ErrnoException, options)));
     }
   });
+}
+
+function assertSafeDashboardBind(
+  options: ServerOptions,
+  address: string | AddressInfo | null
+): void {
+  const listenHost = getListenHost(options);
+
+  if (!isLoopbackHost(listenHost) || typeof address === 'string' || !address) {
+    return;
+  }
+
+  if (isLoopbackHost(address.address)) {
+    return;
+  }
+
+  throw new Error(
+    `Dashboard host ${listenHost} resolved to non-loopback address ${address.address}; pass --host explicitly to allow network exposure.`
+  );
 }
 
 function formatListenError(error: NodeJS.ErrnoException, options: ServerOptions): string {
