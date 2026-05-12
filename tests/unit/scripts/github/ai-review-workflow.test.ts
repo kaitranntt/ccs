@@ -24,7 +24,13 @@ describe('PR-Agent review lane migration', () => {
     expect(appTokenUsages).toHaveLength(2);
     expect(workflow).toContain('OPENAI.API_BASE');
     expect(workflow).toContain("github.event_name == 'pull_request_target' &&");
-    expect(workflow).toContain('github.event.pull_request.author_association');
+    expect(workflow).toContain(
+      'contains(fromJSON(\'["COLLABORATOR","MEMBER","OWNER"]\'), github.event.pull_request.author_association)'
+    );
+    expect(workflow).toContain(
+      'contains(fromJSON(\'["COLLABORATOR","MEMBER","OWNER"]\'), github.event.issue.author_association)'
+    );
+    expect(workflow).toContain('github.event.issue.author_association');
     expect(workflow).toContain('OPENAI_KEY');
     expect(workflow).toContain('vars.AI_REVIEW_BASE_URL');
     expect(workflow).toContain('vars.AI_REVIEW_MODEL');

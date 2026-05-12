@@ -50,6 +50,13 @@ AI MUST NOT declare a task done, close a session, or move to the next task while
 - Verified on `2026-04-22` via `gh api repos/kaitranntt/ccs/branches/dev/protection`: `dev` currently requires `typecheck`, `lint`, `format`, `build`, and `test`, has no branch restrictions, and has no required PR-review gate.
 - `dev-release.yml` currently pushes with `PAT_TOKEN` because `dev` is protected by those required status checks. Do not switch it back to `github.token` unless branch protection changes with it.
 
+### Self-Hosted Runner Policy
+
+- Keep active CCS workflows on local self-hosted runners by default. Do **not** move jobs to `ubuntu-latest`, `macos-latest`, or other GitHub-hosted runners as the first security fix.
+- For this public repo, standard GitHub-hosted runners may not consume billable minutes, but the project policy is still local-runner-first to keep compute predictable and avoid future quota surprises across repos.
+- Make self-hosted use secure by gating untrusted PR triggers, avoiding checkout of untrusted code in privileged `pull_request_target` jobs, setting `persist-credentials: false`, and scoping PAT-backed credentials to the exact release/sync push step.
+- If a workflow truly needs GitHub-hosted runners, document the exception in this file and add a regression test for the exception.
+
 ## Core Function
 
 Multi-provider profile and runtime manager for Claude Code, Factory Droid,
