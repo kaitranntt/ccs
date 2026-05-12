@@ -24,6 +24,7 @@ interface CodeEditorProps {
   onChange: (value: string) => void;
   language?: 'json' | 'yaml' | 'toml';
   readonly?: boolean;
+  plainText?: boolean;
   className?: string;
   minHeight?: string;
   heightMode?: 'content' | 'fill-parent';
@@ -95,6 +96,7 @@ export function CodeEditor({
   onChange,
   language = 'json',
   readonly = false,
+  plainText = false,
   className,
   minHeight = '300px',
   heightMode = 'content',
@@ -211,40 +213,67 @@ export function CodeEditor({
           className={cn(isFillParent && 'scrollbar-editor min-h-0 flex-1 overflow-auto')}
           data-slot={isFillParent ? 'code-editor-viewport' : undefined}
         >
-          <Editor
-            value={value}
-            onValueChange={readonly ? () => {} : onChange}
-            highlight={highlightCode}
-            key={isDark ? 'dark-editor' : 'light-editor'}
-            padding={12}
-            disabled={readonly}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-            textareaClassName={cn(
-              'focus:outline-none font-mono text-sm',
-              readonly && 'cursor-not-allowed'
-            )}
-            preClassName="font-mono text-sm"
-            style={{
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-              fontSize: '0.875rem',
-              minHeight,
-            }}
-          />
+          {plainText ? (
+            <textarea
+              value={value}
+              onChange={(event) => {
+                if (!readonly) onChange(event.target.value);
+              }}
+              readOnly={readonly}
+              wrap="off"
+              spellCheck={false}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              className={cn(
+                'block w-full resize-none border-0 bg-transparent p-3 font-mono text-sm leading-relaxed',
+                'whitespace-pre overflow-auto focus:outline-none',
+                isFillParent ? 'h-full min-h-full' : 'min-h-[300px]',
+                readonly && 'cursor-not-allowed'
+              )}
+              style={{
+                minHeight,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                fontSize: '0.875rem',
+              }}
+              data-slot="code-editor-plain-textarea"
+            />
+          ) : (
+            <Editor
+              value={value}
+              onValueChange={readonly ? () => {} : onChange}
+              highlight={highlightCode}
+              key={isDark ? 'dark-editor' : 'light-editor'}
+              padding={12}
+              disabled={readonly}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              textareaClassName={cn(
+                'focus:outline-none font-mono text-sm',
+                readonly && 'cursor-not-allowed'
+              )}
+              preClassName="font-mono text-sm"
+              style={{
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                fontSize: '0.875rem',
+                minHeight,
+              }}
+            />
+          )}
         </div>
 
-        {/* Secrets Toggle Overlay */}
-        <div className="absolute top-2 right-2 z-10 opacity-50 hover:opacity-100 transition-opacity">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 bg-background/50 hover:bg-background border shadow-sm rounded-full"
-            onClick={() => setIsMasked(!isMasked)}
-            title={isMasked ? t('codeEditor.revealSensitive') : t('codeEditor.maskSensitive')}
-          >
-            {isMasked ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-          </Button>
-        </div>
+        {!plainText && (
+          <div className="absolute top-2 right-2 z-10 opacity-50 hover:opacity-100 transition-opacity">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 bg-background/50 hover:bg-background border shadow-sm rounded-full"
+              onClick={() => setIsMasked(!isMasked)}
+              title={isMasked ? t('codeEditor.revealSensitive') : t('codeEditor.maskSensitive')}
+            >
+              {isMasked ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Validation status */}

@@ -67,4 +67,32 @@ describe('CodeEditor', () => {
 
     expect(screen.getByText('Valid TOML')).toBeInTheDocument();
   });
+
+  it('can render raw TOML as plain text so visible lines match copied text', () => {
+    const rawToml =
+      'model = "gpt-5.4"\n' +
+      '[mcp_servers.playwright]\n' +
+      'command = "node"\n' +
+      'args = ["--experimental-loader", "./very/long/path/that/should/not/soft/wrap/into/fake/toml/lines.js"]\n';
+
+    const { container } = render(
+      <CodeEditor
+        value={rawToml}
+        onChange={vi.fn()}
+        language="toml"
+        minHeight="100%"
+        heightMode="fill-parent"
+        plainText
+      />
+    );
+
+    const textarea = container.querySelector('[data-slot="code-editor-plain-textarea"]');
+
+    expect(textarea).toBeInstanceOf(HTMLTextAreaElement);
+    expect(textarea).toHaveValue(rawToml);
+    expect(textarea).toHaveAttribute('wrap', 'off');
+    expect(container.querySelector('pre')).not.toBeInTheDocument();
+    expect(container.querySelector('button')).not.toBeInTheDocument();
+    expect(screen.getByText('Valid TOML')).toBeInTheDocument();
+  });
 });
