@@ -10,6 +10,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { getDashboardAuthConfig } from '../../../src/config/unified-config-loader';
 import {
+  isDashboardWebSocketOriginAllowed,
   getDashboardWebSocketRejectionStatus,
   isDashboardWebSocketUpgradeAllowed,
 } from '../../../src/web-server/middleware/auth-middleware';
@@ -162,8 +163,13 @@ describe('Dashboard Auth', () => {
   });
 
   describe('websocket upgrade access', () => {
-    function makeUpgradeRequest(remoteAddress: string, authenticated = false) {
+    function makeUpgradeRequest(
+      remoteAddress: string,
+      authenticated = false,
+      headers: Record<string, string> = {}
+    ) {
       return {
+        headers,
         socket: { remoteAddress },
         session: authenticated ? { authenticated: true } : { authenticated: false },
       } as never;
@@ -188,8 +194,49 @@ describe('Dashboard Auth', () => {
       process.env.CCS_DASHBOARD_AUTH_ENABLED = 'true';
 
       expect(isDashboardWebSocketUpgradeAllowed(makeUpgradeRequest('127.0.0.1'))).toBe(false);
-      expect(isDashboardWebSocketUpgradeAllowed(makeUpgradeRequest('10.10.0.24', true))).toBe(true);
+      expect(
+        isDashboardWebSocketUpgradeAllowed(
+          makeUpgradeRequest('10.10.0.24', true, {
+            host: 'dashboard.internal:3001',
+            origin: 'https://dashboard.internal:3001',
+          })
+        )
+      ).toBe(true);
       expect(getDashboardWebSocketRejectionStatus()).toBe(401);
+    });
+
+    it('allows same-origin websocket upgrades when auth is enabled', () => {
+      process.env.CCS_DASHBOARD_AUTH_ENABLED = 'true';
+      const request = makeUpgradeRequest('10.10.0.24', true, {
+        host: 'dashboard.example.test:3001',
+        origin: 'https://dashboard.example.test:3001',
+      });
+
+      expect(isDashboardWebSocketOriginAllowed(request)).toBe(true);
+      expect(isDashboardWebSocketUpgradeAllowed(request)).toBe(true);
+    });
+
+    it('allows loopback host aliases on the same dashboard port', () => {
+      process.env.CCS_DASHBOARD_AUTH_ENABLED = 'true';
+      const request = makeUpgradeRequest('127.0.0.1', true, {
+        host: '127.0.0.1:3001',
+        origin: 'http://localhost:3001',
+      });
+
+      expect(isDashboardWebSocketOriginAllowed(request)).toBe(true);
+      expect(isDashboardWebSocketUpgradeAllowed(request)).toBe(true);
+    });
+
+    it('blocks cross-site websocket origins even with an authenticated session', () => {
+      process.env.CCS_DASHBOARD_AUTH_ENABLED = 'true';
+      const request = makeUpgradeRequest('127.0.0.1', true, {
+        host: '127.0.0.1:3001',
+        origin: 'https://evil.example.test',
+      });
+
+      expect(isDashboardWebSocketOriginAllowed(request)).toBe(false);
+      expect(isDashboardWebSocketUpgradeAllowed(request)).toBe(false);
+      expect(getDashboardWebSocketRejectionStatus(request)).toBe(403);
     });
   });
 

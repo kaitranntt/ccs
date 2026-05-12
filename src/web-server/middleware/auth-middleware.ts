@@ -152,16 +152,82 @@ export function isLoopbackRemoteAddress(value: string | undefined): boolean {
   );
 }
 
+function isLoopbackHostname(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '');
+  return (
+    normalized === 'localhost' ||
+    normalized.endsWith('.localhost') ||
+    isLoopbackRemoteAddress(normalized)
+  );
+}
+
+function getSingleHeader(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function parseHostHeader(value: string | undefined): URL | null {
+  if (!value) return null;
+
+  try {
+    return new URL(`http://${value}`);
+  } catch {
+    return null;
+  }
+}
+
+function isHttpOrigin(origin: URL): boolean {
+  return origin.protocol === 'http:' || origin.protocol === 'https:';
+}
+
+export function isDashboardWebSocketOriginAllowed(req: IncomingMessage): boolean {
+  const originHeader = getSingleHeader(req.headers.origin);
+  if (!originHeader) return true;
+
+  let origin: URL;
+  try {
+    origin = new URL(originHeader);
+  } catch {
+    return false;
+  }
+
+  if (!isHttpOrigin(origin)) {
+    return false;
+  }
+
+  const host = parseHostHeader(getSingleHeader(req.headers.host));
+  if (!host) {
+    return false;
+  }
+
+  if (origin.host.toLowerCase() === host.host.toLowerCase()) {
+    return true;
+  }
+
+  return (
+    isLoopbackHostname(origin.hostname) &&
+    isLoopbackHostname(host.hostname) &&
+    origin.port === host.port
+  );
+}
+
 export function isDashboardWebSocketUpgradeAllowed(req: IncomingMessage): boolean {
   if (!isDashboardAuthEnabled()) {
     return isLoopbackRemoteAddress(req.socket.remoteAddress);
   }
 
-  return Boolean((req as Request).session?.authenticated);
+  return Boolean((req as Request).session?.authenticated) && isDashboardWebSocketOriginAllowed(req);
 }
 
-export function getDashboardWebSocketRejectionStatus(): 401 | 403 {
-  return isDashboardAuthEnabled() ? 401 : 403;
+export function getDashboardWebSocketRejectionStatus(req?: IncomingMessage): 401 | 403 {
+  if (!isDashboardAuthEnabled()) return 403;
+  if (req && (req as Request).session?.authenticated && !isDashboardWebSocketOriginAllowed(req)) {
+    return 403;
+  }
+  return 401;
 }
 
 export function requireLocalAccessWhenAuthDisabled(

@@ -139,7 +139,7 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
         if (!isDashboardWebSocketUpgradeAllowed(request)) {
           rejectWebSocketUpgrade(
             socket,
-            getDashboardWebSocketRejectionStatus(),
+            getDashboardWebSocketRejectionStatus(request),
             'WebSocket access denied'
           );
           return;
