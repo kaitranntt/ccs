@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@tests/setup/test-utils';
+import { fireEvent, render, screen } from '@tests/setup/test-utils';
 
 import { CodeEditor } from '@/components/shared/code-editor';
 
@@ -68,7 +68,7 @@ describe('CodeEditor', () => {
     expect(screen.getByText('Valid TOML')).toBeInTheDocument();
   });
 
-  it('can render raw TOML as plain text so visible lines match copied text', () => {
+  it('renders raw TOML with syntax color while visible lines match copied text', () => {
     const rawToml =
       'model = "gpt-5.4"\n' +
       '[mcp_servers.playwright]\n' +
@@ -82,17 +82,28 @@ describe('CodeEditor', () => {
         language="toml"
         minHeight="100%"
         heightMode="fill-parent"
-        plainText
+        exactText
       />
     );
 
     const textarea = container.querySelector('[data-slot="code-editor-plain-textarea"]');
+    const highlightLayer = container.querySelector('[data-slot="code-editor-highlight-layer"]');
+    const highlightedToken = highlightLayer?.querySelector('span');
 
     expect(textarea).toBeInstanceOf(HTMLTextAreaElement);
     expect(textarea).toHaveValue(rawToml);
     expect(textarea).toHaveAttribute('wrap', 'off');
+    expect(textarea).toHaveClass('text-transparent');
+    expect(highlightLayer).toBeInTheDocument();
+    expect(highlightLayer).toHaveClass('whitespace-pre');
+    expect(highlightedToken).toBeInTheDocument();
     expect(container.querySelector('pre')).not.toBeInTheDocument();
-    expect(container.querySelector('button')).not.toBeInTheDocument();
+    if (textarea instanceof HTMLTextAreaElement && highlightLayer instanceof HTMLElement) {
+      textarea.scrollLeft = 96;
+      textarea.scrollTop = 24;
+      fireEvent.scroll(textarea);
+      expect(highlightLayer.style.transform).toBe('translate(-96px, -24px)');
+    }
     expect(screen.getByText('Valid TOML')).toBeInTheDocument();
   });
 });

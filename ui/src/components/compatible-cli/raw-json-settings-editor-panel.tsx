@@ -23,7 +23,7 @@ interface RawConfigEditorPanelProps {
   onRefresh: () => Promise<void> | void;
   onDiscard?: () => void;
   language?: 'json' | 'yaml' | 'toml';
-  plainText?: boolean;
+  exactText?: boolean;
   loadingLabel?: string;
   parseWarningLabel?: string;
   ownershipNotice?: ReactNode;
@@ -45,7 +45,7 @@ export function RawConfigEditorPanel({
   onRefresh,
   onDiscard,
   language = 'json',
-  plainText = false,
+  exactText = false,
   loadingLabel = 'Loading settings.json...',
   parseWarningLabel = 'Parse warning',
   ownershipNotice,
@@ -130,7 +130,7 @@ export function RawConfigEditorPanel({
                   onChange={onChange}
                   language={language}
                   readonly={readOnly}
-                  plainText={plainText}
+                  exactText={exactText}
                   minHeight="100%"
                   heightMode="fill-parent"
                 />

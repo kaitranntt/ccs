@@ -4,7 +4,7 @@
  * Uses react-simple-code-editor + prism-react-renderer for minimal bundle size (~18KB)
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef, type UIEvent } from 'react';
 import Editor from 'react-simple-code-editor';
 import { Highlight, themes } from 'prism-react-renderer';
 import Prism from 'prismjs';
@@ -24,7 +24,7 @@ interface CodeEditorProps {
   onChange: (value: string) => void;
   language?: 'json' | 'yaml' | 'toml';
   readonly?: boolean;
-  plainText?: boolean;
+  exactText?: boolean;
   className?: string;
   minHeight?: string;
   heightMode?: 'content' | 'fill-parent';
@@ -96,7 +96,7 @@ export function CodeEditor({
   onChange,
   language = 'json',
   readonly = false,
-  plainText = false,
+  exactText = false,
   className,
   minHeight = '300px',
   heightMode = 'content',
@@ -191,6 +191,14 @@ export function CodeEditor({
     ),
     [isDark, language, validation.line, isMasked]
   );
+  const highlightLayerRef = useRef<HTMLDivElement>(null);
+  const syncHighlightScroll = useCallback((event: UIEvent<HTMLTextAreaElement>) => {
+    const layer = highlightLayerRef.current;
+    if (!layer) return;
+
+    const { scrollLeft, scrollTop } = event.currentTarget;
+    layer.style.transform = `translate(${-scrollLeft}px, ${-scrollTop}px)`;
+  }, []);
 
   return (
     <div
@@ -213,30 +221,65 @@ export function CodeEditor({
           className={cn(isFillParent && 'scrollbar-editor min-h-0 flex-1 overflow-auto')}
           data-slot={isFillParent ? 'code-editor-viewport' : undefined}
         >
-          {plainText ? (
-            <textarea
-              value={value}
-              onChange={(event) => {
-                if (!readonly) onChange(event.target.value);
-              }}
-              readOnly={readonly}
-              wrap="off"
-              spellCheck={false}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
+          {exactText ? (
+            // Exact mode keeps the native textarea as the editable/copyable source of truth while
+            // rendering Prism colors behind it with the same non-wrapping layout contract.
+            <div
               className={cn(
-                'block w-full resize-none border-0 bg-transparent p-3 font-mono text-sm leading-relaxed',
-                'whitespace-pre overflow-auto focus:outline-none',
-                isFillParent ? 'h-full min-h-full' : 'min-h-[300px]',
-                readonly && 'cursor-not-allowed'
+                'relative w-full overflow-hidden',
+                isFillParent ? 'h-full min-h-full' : 'min-h-[300px]'
               )}
               style={{
                 minHeight,
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                fontSize: '0.875rem',
               }}
-              data-slot="code-editor-plain-textarea"
-            />
+              data-slot="code-editor-exact-highlight-wrapper"
+            >
+              <div
+                ref={highlightLayerRef}
+                aria-hidden="true"
+                className={cn(
+                  'pointer-events-none absolute left-0 top-0 min-w-full p-3 font-mono text-sm leading-relaxed',
+                  'whitespace-pre overflow-visible'
+                )}
+                style={{
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                  fontSize: '0.875rem',
+                  minHeight,
+                  tabSize: 2,
+                  overflowWrap: 'normal',
+                  wordBreak: 'normal',
+                }}
+                data-slot="code-editor-highlight-layer"
+              >
+                {highlightCode(value)}
+              </div>
+              <textarea
+                value={value}
+                onChange={(event) => {
+                  if (!readonly) onChange(event.target.value);
+                }}
+                readOnly={readonly}
+                wrap="off"
+                spellCheck={false}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                onScroll={syncHighlightScroll}
+                className={cn(
+                  'absolute inset-0 z-10 block h-full w-full resize-none border-0 bg-transparent p-3 font-mono text-sm leading-relaxed',
+                  'whitespace-pre overflow-auto text-transparent caret-foreground selection:bg-primary/25 focus:outline-none',
+                  readonly && 'cursor-not-allowed'
+                )}
+                style={{
+                  minHeight,
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                  fontSize: '0.875rem',
+                  tabSize: 2,
+                  overflowWrap: 'normal',
+                  wordBreak: 'normal',
+                }}
+                data-slot="code-editor-plain-textarea"
+              />
+            </div>
           ) : (
             <Editor
               value={value}
@@ -261,19 +304,17 @@ export function CodeEditor({
           )}
         </div>
 
-        {!plainText && (
-          <div className="absolute top-2 right-2 z-10 opacity-50 hover:opacity-100 transition-opacity">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 bg-background/50 hover:bg-background border shadow-sm rounded-full"
-              onClick={() => setIsMasked(!isMasked)}
-              title={isMasked ? t('codeEditor.revealSensitive') : t('codeEditor.maskSensitive')}
-            >
-              {isMasked ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-            </Button>
-          </div>
-        )}
+        <div className="absolute top-2 right-2 z-20 opacity-50 hover:opacity-100 transition-opacity">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 bg-background/50 hover:bg-background border shadow-sm rounded-full"
+            onClick={() => setIsMasked(!isMasked)}
+            title={isMasked ? t('codeEditor.revealSensitive') : t('codeEditor.maskSensitive')}
+          >
+            {isMasked ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+          </Button>
+        </div>
       </div>
 
       {/* Validation status */}
