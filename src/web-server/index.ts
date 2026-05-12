@@ -18,6 +18,7 @@ import { getProxyTarget } from '../cliproxy/proxy/proxy-target-resolver';
 import { startAutoSyncWatcher, stopAutoSyncWatcher } from '../cliproxy/sync';
 import { shutdownUsageAggregator } from './usage/aggregator';
 import { createLogger } from '../services/logging';
+import { DEFAULT_DASHBOARD_HOST } from '../commands/config-dashboard-host';
 
 export interface ServerOptions {
   port: number;
@@ -30,6 +31,10 @@ export interface ServerInstance {
   server: http.Server;
   wss: WebSocketServer;
   cleanup: () => void;
+}
+
+function getListenHost(options: ServerOptions): string {
+  return options.host || DEFAULT_DASHBOARD_HOST;
 }
 
 const logger = createLogger('web-server');
@@ -138,11 +143,12 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
 
   // Start listening
   return new Promise<ServerInstance>((resolve, reject) => {
+    const listenHost = getListenHost(options);
     const onError = (error: NodeJS.ErrnoException) => {
       logger.error('server.listen_failed', 'Dashboard server failed to start', {
         code: error.code || 'unknown',
         message: error.message,
-        host: options.host || null,
+        host: listenHost,
         port: options.port,
       });
       cleanup();
@@ -154,7 +160,7 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
     const onListening = () => {
       server.off('error', onError);
       logger.info('server.listening', 'Dashboard server listening', {
-        host: options.host || '0.0.0.0',
+        host: listenHost,
         port: options.port,
         dev: Boolean(options.dev),
       });
@@ -164,12 +170,7 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
     };
 
     try {
-      if (options.host) {
-        server.listen(options.port, options.host, onListening);
-        return;
-      }
-
-      server.listen(options.port, onListening);
+      server.listen(options.port, listenHost, onListening);
     } catch (error) {
       server.off('error', onError);
       cleanup();
@@ -179,25 +180,19 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
 }
 
 function formatListenError(error: NodeJS.ErrnoException, options: ServerOptions): string {
-  if (error.code === 'EADDRINUSE' && options.host) {
-    return `Unable to bind ${options.host}:${options.port}; the address may be unavailable or the port may already be in use`;
-  }
+  const listenHost = getListenHost(options);
 
   if (error.code === 'EADDRINUSE') {
-    return `Port ${options.port} is already in use`;
+    return `Unable to bind ${listenHost}:${options.port}; the address may be unavailable or the port may already be in use`;
   }
 
-  if (error.code === 'EADDRNOTAVAIL' && options.host) {
-    return `Cannot bind to ${options.host}:${options.port} on this machine`;
+  if (error.code === 'EADDRNOTAVAIL') {
+    return `Cannot bind to ${listenHost}:${options.port} on this machine`;
   }
 
   if (error.code === 'EACCES') {
     return `Permission denied while binding to port ${options.port}`;
   }
 
-  if (options.host) {
-    return `Cannot bind to ${options.host}:${options.port}: ${error.message}`;
-  }
-
-  return error.message;
+  return `Cannot bind to ${listenHost}:${options.port}: ${error.message}`;
 }

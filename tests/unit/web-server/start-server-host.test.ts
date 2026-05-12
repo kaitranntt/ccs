@@ -20,12 +20,13 @@ afterEach(async () => {
 });
 
 describe('startServer host binding', () => {
-  it('binds with system-default host when no host is provided', async () => {
+  it('binds to localhost by default when no host is provided', async () => {
     const instance = await startServer({ port: 0 });
     instances.push(instance);
 
     const address = instance.server.address() as AddressInfo;
     expect(address.port).toBeGreaterThan(0);
+    expect(address.address).toBe('127.0.0.1');
   });
 
   it('binds to an explicit loopback host', async () => {
