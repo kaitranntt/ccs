@@ -63,9 +63,12 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           auth_header=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')
-          export GIT_CONFIG_COUNT=1
-          export GIT_CONFIG_KEY_0=http.https://github.com/kaitranntt/ccs/.extraheader
+          echo "::add-mask::${auth_header}"
+          export GIT_CONFIG_COUNT=2
+          export GIT_CONFIG_KEY_0=http.https://github.com/kaitranntt/ccs.extraheader
           export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic ${auth_header}"
+          export GIT_CONFIG_KEY_1=http.https://github.com/kaitranntt/ccs.git.extraheader
+          export GIT_CONFIG_VALUE_1="AUTHORIZATION: basic ${auth_header}"
 
           set +e
           OUTPUT=$(bun x semantic-release 2>&1)

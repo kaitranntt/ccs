@@ -55,8 +55,10 @@ jobs:
           # trigger follow-up Push CI / Dev Release workflows. Keep it scoped to
           # the final push rather than persisting it in the checkout config.
           auth_header=$(printf 'x-access-token:%s' "$PAT_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::${auth_header}"
           git -c core.hooksPath=/dev/null \
-            -c "http.https://github.com/kaitranntt/ccs/.extraheader=AUTHORIZATION: basic ${auth_header}" \
+            -c "http.https://github.com/kaitranntt/ccs.extraheader=AUTHORIZATION: basic ${auth_header}" \
+            -c "http.https://github.com/kaitranntt/ccs.git.extraheader=AUTHORIZATION: basic ${auth_header}" \
             push origin dev
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}

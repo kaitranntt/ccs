@@ -16,6 +16,8 @@ concurrency:
 
 jobs:
   validate:
+    if: >-
+      contains(fromJSON('["COLLABORATOR","MEMBER","OWNER"]'), github.event.pull_request.author_association)
     runs-on: [self-hosted, linux, x64]
     env:
       # Keep Bun cache isolated per job workspace so parallel self-hosted runs
@@ -58,6 +60,8 @@ jobs:
         run: ${{ matrix.check.cmd }}
 
   build:
+    if: >-
+      contains(fromJSON('["COLLABORATOR","MEMBER","OWNER"]'), github.event.pull_request.author_association)
     runs-on: [self-hosted, linux, x64]
     name: build
     env:
@@ -98,6 +102,8 @@ jobs:
           if-no-files-found: error
 
   test:
+    if: >-
+      contains(fromJSON('["COLLABORATOR","MEMBER","OWNER"]'), github.event.pull_request.author_association)
     runs-on: [self-hosted, linux, x64]
     name: test
     needs: [build]

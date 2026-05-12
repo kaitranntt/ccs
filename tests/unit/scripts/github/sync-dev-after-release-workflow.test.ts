@@ -30,7 +30,9 @@ describe('sync dev after release workflow', () => {
     expect(syncSection).not.toContain('[skip ci]');
     expect(workflow).toContain('git config --local core.hooksPath /dev/null');
     expect(syncSection).toContain('PAT_TOKEN: ${{ secrets.PAT_TOKEN }}');
-    expect(syncSection).toContain('http.https://github.com/kaitranntt/ccs/.extraheader');
+    expect(syncSection).toContain('echo "::add-mask::${auth_header}"');
+    expect(syncSection).toContain('http.https://github.com/kaitranntt/ccs.extraheader');
+    expect(syncSection).toContain('http.https://github.com/kaitranntt/ccs.git.extraheader');
     expect(syncSection).toContain('git -c core.hooksPath=/dev/null');
     expect(syncSection).toContain('push origin dev');
   });
