@@ -215,18 +215,24 @@ export function isDashboardWebSocketOriginAllowed(req: IncomingMessage): boolean
 }
 
 export function isDashboardWebSocketUpgradeAllowed(req: IncomingMessage): boolean {
+  if (!isDashboardWebSocketOriginAllowed(req)) {
+    return false;
+  }
+
   if (!isDashboardAuthEnabled()) {
     return isLoopbackRemoteAddress(req.socket.remoteAddress);
   }
 
-  return Boolean((req as Request).session?.authenticated) && isDashboardWebSocketOriginAllowed(req);
+  return Boolean((req as Request).session?.authenticated);
 }
 
 export function getDashboardWebSocketRejectionStatus(req?: IncomingMessage): 401 | 403 {
-  if (!isDashboardAuthEnabled()) return 403;
-  if (req && (req as Request).session?.authenticated && !isDashboardWebSocketOriginAllowed(req)) {
+  if (req && !isDashboardWebSocketOriginAllowed(req)) {
     return 403;
   }
+
+  if (!isDashboardAuthEnabled()) return 403;
+
   return 401;
 }
 

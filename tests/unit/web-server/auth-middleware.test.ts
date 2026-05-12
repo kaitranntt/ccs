@@ -190,6 +190,18 @@ describe('Dashboard Auth', () => {
       expect(getDashboardWebSocketRejectionStatus()).toBe(403);
     });
 
+    it('blocks cross-site websocket origins when dashboard auth is disabled', () => {
+      process.env.CCS_DASHBOARD_AUTH_ENABLED = 'false';
+      const request = makeUpgradeRequest('127.0.0.1', false, {
+        host: '127.0.0.1:3001',
+        origin: 'https://evil.example.test',
+      });
+
+      expect(isDashboardWebSocketOriginAllowed(request)).toBe(false);
+      expect(isDashboardWebSocketUpgradeAllowed(request)).toBe(false);
+      expect(getDashboardWebSocketRejectionStatus(request)).toBe(403);
+    });
+
     it('requires an authenticated session for websocket upgrades when auth is enabled', () => {
       process.env.CCS_DASHBOARD_AUTH_ENABLED = 'true';
 

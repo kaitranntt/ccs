@@ -121,8 +121,16 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
   }
 
   server.on('upgrade', (request, socket, head) => {
-    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+    const pathname = getUpgradePathname(request.url);
+    if (!pathname) {
+      rejectWebSocketUpgrade(socket, 400, 'Invalid WebSocket upgrade request');
+      return;
+    }
+
     if (pathname !== '/ws') {
+      if (!options.dev) {
+        rejectWebSocketUpgrade(socket, 404, 'WebSocket endpoint not found');
+      }
       return;
     }
 
@@ -215,9 +223,17 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
   });
 }
 
+function getUpgradePathname(requestUrl: string | undefined): string | null {
+  try {
+    return new URL(requestUrl ?? '/', 'http://localhost').pathname;
+  } catch {
+    return null;
+  }
+}
+
 function rejectWebSocketUpgrade(
   socket: NodeJS.WritableStream & { destroy: () => void },
-  statusCode: 401 | 403 | 500,
+  statusCode: 400 | 401 | 403 | 404 | 500,
   message: string
 ): void {
   socket.write(

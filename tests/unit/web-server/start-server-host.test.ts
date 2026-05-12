@@ -5,6 +5,33 @@ import { startServer } from '../../../src/web-server';
 
 const instances: Array<Awaited<ReturnType<typeof startServer>>> = [];
 
+class MockUpgradeSocket {
+  data = '';
+  destroyed = false;
+
+  write(chunk: string | Buffer): boolean {
+    this.data += chunk.toString();
+    return true;
+  }
+
+  destroy(): void {
+    this.destroyed = true;
+  }
+}
+
+function dispatchUpgrade(instance: Awaited<ReturnType<typeof startServer>>, url: string) {
+  const listener = instance.server.listeners('upgrade')[0] as (
+    request: unknown,
+    socket: MockUpgradeSocket,
+    head: Buffer
+  ) => void;
+  const socket = new MockUpgradeSocket();
+
+  listener({ url, headers: {}, socket: { remoteAddress: '127.0.0.1' } }, socket, Buffer.alloc(0));
+
+  return socket;
+}
+
 afterEach(async () => {
   while (instances.length > 0) {
     const instance = instances.pop();
@@ -65,5 +92,25 @@ describe('startServer host binding', () => {
       | undefined;
     expect(serverConfig?.middlewareMode).toBe(true);
     expect(serverConfig?.hmr?.server).toBe(instance.server);
+  });
+
+  it('rejects unsupported production websocket upgrade paths', async () => {
+    const instance = await startServer({ port: 0 });
+    instances.push(instance);
+
+    const socket = dispatchUpgrade(instance, '/vite-hmr');
+
+    expect(socket.data.startsWith('HTTP/1.1 404')).toBe(true);
+    expect(socket.destroyed).toBe(true);
+  });
+
+  it('rejects malformed websocket upgrade targets', async () => {
+    const instance = await startServer({ port: 0 });
+    instances.push(instance);
+
+    const socket = dispatchUpgrade(instance, 'http://[bad');
+
+    expect(socket.data.startsWith('HTTP/1.1 400')).toBe(true);
+    expect(socket.destroyed).toBe(true);
   });
 });
