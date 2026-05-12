@@ -71,6 +71,8 @@ describe('CodeEditor', () => {
   it('renders raw TOML with wrapping syntax color while copied text stays raw', () => {
     const rawToml =
       'model = "gpt-5.4"\n' +
+      '[agents.brainstormer]\n' +
+      'config_file = "agents/brainstormer.toml"\n' +
       '[mcp_servers.playwright]\n' +
       'command = "node"\n' +
       'args = ["--experimental-loader", "./very/long/path/that/should/not/soft/wrap/into/fake/toml/lines.js"]\n';
@@ -89,6 +91,9 @@ describe('CodeEditor', () => {
     const textarea = container.querySelector('[data-slot="code-editor-plain-textarea"]');
     const highlightLayer = container.querySelector('[data-slot="code-editor-highlight-layer"]');
     const highlightedToken = highlightLayer?.querySelector('span');
+    const tableToken = Array.from(highlightLayer?.querySelectorAll('span') ?? []).find(
+      (token) => token.textContent === 'agents.brainstormer'
+    );
 
     expect(textarea).toBeInstanceOf(HTMLTextAreaElement);
     expect(textarea).toHaveValue(rawToml);
@@ -103,6 +108,8 @@ describe('CodeEditor', () => {
       wordBreak: 'break-word',
     });
     expect(highlightedToken).toBeInTheDocument();
+    expect(tableToken).toHaveClass('table');
+    expect(tableToken).toHaveStyle({ display: 'inline' });
     expect(container.querySelector('pre')).not.toBeInTheDocument();
     if (textarea instanceof HTMLTextAreaElement && highlightLayer instanceof HTMLElement) {
       textarea.scrollLeft = 96;

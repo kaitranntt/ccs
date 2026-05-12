@@ -172,6 +172,11 @@ export function CodeEditor({
                     }
 
                     const tokenProps = getTokenProps({ token });
+                    // Prism TOML emits a `table` class, which collides with Tailwind's layout utility.
+                    tokenProps.style = {
+                      ...tokenProps.style,
+                      display: 'inline',
+                    };
 
                     if (isSensitive && isMasked) {
                       tokenProps.className = cn(
