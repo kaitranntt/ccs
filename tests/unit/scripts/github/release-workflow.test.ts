@@ -7,7 +7,7 @@ function resolvePath(relativePath: string) {
 }
 
 describe('stable release workflow', () => {
-  test('uses the protected-branch runner and release token path', () => {
+  test('uses an ephemeral hosted runner and release token path', () => {
     const workflowPath = resolvePath('../../../../.github/workflows/release.yml');
 
     expect(fs.existsSync(workflowPath)).toBe(true);
@@ -24,8 +24,8 @@ describe('stable release workflow', () => {
 
     expect(workflow).toContain('name: Release');
     expect(workflow).toContain('branches: [main]');
-    expect(workflow).toContain('runs-on: [self-hosted, linux, x64]');
-    expect(workflow).not.toContain('runs-on: ubuntu-latest');
+    expect(workflow).toContain('runs-on: ubuntu-latest');
+    expect(workflow).not.toContain('runs-on: [self-hosted, linux, x64]');
     expect(checkoutSection).toContain('token: ${{ secrets.PAT_TOKEN }}');
     expect(releaseSection).toContain('GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}');
     expect(releaseSection).toContain('GH_TOKEN: ${{ secrets.PAT_TOKEN }}');
