@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import { resolveOpenAICompatProfileConfig } from './profile-router';
 import { OPENAI_COMPAT_PROXY_DEFAULT_PORT } from './proxy-daemon-paths';
 import { startOpenAICompatProxyServer } from './server/proxy-server';
@@ -9,6 +10,7 @@ interface RuntimeOptions {
   profileName: string;
   settingsPath: string;
   authToken: string;
+  authTokenFile: string;
   insecure: boolean;
 }
 
@@ -18,6 +20,7 @@ function parseArgs(argv: string[]): RuntimeOptions {
   let profileName = '';
   let settingsPath = '';
   let authToken = '';
+  let authTokenFile = '';
   let insecure = false;
 
   for (let i = 0; i < argv.length; i++) {
@@ -42,16 +45,36 @@ function parseArgs(argv: string[]): RuntimeOptions {
       authToken = argv[++i] || '';
       continue;
     }
+    if (arg === '--auth-token-file' && argv[i + 1]) {
+      authTokenFile = argv[++i] || '';
+      continue;
+    }
     if (arg === '--insecure') {
       insecure = true;
     }
   }
 
-  return { port, host, profileName, settingsPath, authToken, insecure };
+  return { port, host, profileName, settingsPath, authToken, authTokenFile, insecure };
+}
+
+function readAuthToken(options: RuntimeOptions): string {
+  if (options.authTokenFile) {
+    try {
+      const token = fs.readFileSync(options.authTokenFile, 'utf8').trim();
+      fs.unlinkSync(options.authTokenFile);
+      return token;
+    } catch (error) {
+      throw new Error(`Failed to read local proxy auth token file: ${(error as Error).message}`);
+    }
+  }
+
+  return options.authToken;
 }
 
 function startRuntime(options: RuntimeOptions): void {
-  if (!options.authToken.trim()) {
+  const authToken = readAuthToken(options);
+
+  if (!authToken.trim()) {
     throw new Error('Missing local proxy auth token');
   }
 
@@ -71,7 +94,7 @@ function startRuntime(options: RuntimeOptions): void {
     profile,
     host: options.host,
     port: options.port,
-    authToken: options.authToken,
+    authToken,
     insecure: options.insecure,
   });
   server.once('error', (error) => {

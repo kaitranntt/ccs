@@ -19,10 +19,12 @@ import {
   readOpenAICompatProxySession,
   removeLegacyOpenAICompatProxyPid,
   removeLegacyOpenAICompatProxySession,
+  removeOpenAICompatProxyAuthTokenFile,
   removeOpenAICompatProxyPid,
   removeOpenAICompatProxySession,
   resolveOpenAICompatProxyEntrypointCandidates,
   type OpenAICompatProxySession,
+  writeOpenAICompatProxyAuthTokenFile,
   writeOpenAICompatProxyPid,
   writeOpenAICompatProxySession,
 } from './proxy-daemon-state';
@@ -82,7 +84,8 @@ function generateProxyAuthToken(): string {
 
 async function withOpenAICompatProxyLock<T>(operation: () => Promise<T>): Promise<T> {
   const proxyDir = getOpenAICompatProxyDir();
-  await fs.promises.mkdir(proxyDir, { recursive: true });
+  await fs.promises.mkdir(proxyDir, { recursive: true, mode: 0o700 });
+  await fs.promises.chmod(proxyDir, 0o700);
 
   let release: (() => Promise<void>) | undefined;
   try {
@@ -543,6 +546,7 @@ export async function startOpenAICompatProxy(
         let timeout: NodeJS.Timeout | null = null;
         let stderr = '';
         const authToken = generateProxyAuthToken();
+        const authTokenFile = writeOpenAICompatProxyAuthTokenFile(profile.profileName, authToken);
         const commitState = () => {
           if (proc.pid) {
             writeOpenAICompatProxyPid(profile.profileName, proc.pid);
@@ -563,9 +567,12 @@ export async function startOpenAICompatProxy(
           if (resolved) return;
           resolved = true;
           if (timeout) clearTimeout(timeout);
-          if (!result.success && persistState) {
-            removeOpenAICompatProxyPid(profile.profileName);
-            removeOpenAICompatProxySession(profile.profileName);
+          if (!result.success) {
+            removeOpenAICompatProxyAuthTokenFile(authTokenFile);
+            if (persistState) {
+              removeOpenAICompatProxyPid(profile.profileName);
+              removeOpenAICompatProxySession(profile.profileName);
+            }
           }
           resolve(result);
         };
@@ -582,8 +589,8 @@ export async function startOpenAICompatProxy(
             profile.profileName,
             '--settings-path',
             profile.settingsPath,
-            '--auth-token',
-            authToken,
+            '--auth-token-file',
+            authTokenFile,
             ...(options.insecure ? ['--insecure'] : []),
             '--ccs-openai-proxy-daemon',
           ],

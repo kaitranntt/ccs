@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -71,6 +72,27 @@ async function getPortOutsideOpenAICompatAdaptiveRange(): Promise<number> {
   throw new Error('No stale proxy fixture port found outside the adaptive range');
 }
 
+function readProcessCommandLine(pid: number): string | null {
+  if (process.platform === 'linux') {
+    try {
+      const commandLine = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8');
+      return commandLine.split('\u0000').filter(Boolean).join(' ') || null;
+    } catch {
+      // Fall back to ps below for platforms without readable procfs entries.
+    }
+  }
+
+  try {
+    return (
+      execFileSync('ps', ['-ww', '-p', String(pid), '-o', 'command='], {
+        encoding: 'utf8',
+      }).trim() || null
+    );
+  } catch {
+    return null;
+  }
+}
+
 describe('openai proxy daemon lifecycle', () => {
   it('starts, reports status, serves health/models, and stops', async () => {
     const port = await getPort();
@@ -101,18 +123,42 @@ describe('openai proxy daemon lifecycle', () => {
     const started = await startOpenAICompatProxy(profile, { port });
     expect(started.success).toBe(true);
     expect(started.authToken).toBeTruthy();
+    const authToken = started.authToken;
+    if (!authToken) {
+      throw new Error('Expected proxy auth token');
+    }
 
     const status = await getOpenAICompatProxyStatus();
     expect(status.running).toBe(true);
     expect(status.profileName).toBe('hf');
-    expect(status.authToken).toBe(started.authToken);
+    expect(status.authToken).toBe(authToken);
+
+    const sessionPath = getOpenAICompatProxySessionPath('hf');
+    const proxyDir = path.dirname(sessionPath);
+    if (process.platform !== 'win32') {
+      expect(fs.statSync(proxyDir).mode & 0o777).toBe(0o700);
+      expect(fs.statSync(sessionPath).mode & 0o777).toBe(0o600);
+    }
+    expect(fs.readdirSync(proxyDir).some((entry) => entry.endsWith('.token'))).toBe(false);
+    if (started.pid) {
+      const commandLine = readProcessCommandLine(started.pid);
+      if (!commandLine) {
+        console.warn(
+          `Skipping daemon argv assertion: could not read command line for PID ${started.pid}`
+        );
+      } else {
+        expect(commandLine).toContain('--auth-token-file');
+        expect(commandLine).not.toContain(authToken);
+        expect(commandLine).not.toMatch(/(^|\s)--auth-token(?:\s|=|$)/);
+      }
+    }
 
     const health = await fetch(`http://127.0.0.1:${port}/health`);
     expect(health.status).toBe(200);
 
     const models = (await (
       await fetch(`http://127.0.0.1:${port}/v1/models`, {
-        headers: { 'x-api-key': started.authToken! },
+        headers: { 'x-api-key': authToken },
       })
     ).json()) as { data?: Array<{ id: string }> };
     expect(models.data?.map((entry) => entry.id)).toEqual(['qwen3-coder']);
