@@ -68,7 +68,7 @@ describe('CodeEditor', () => {
     expect(screen.getByText('Valid TOML')).toBeInTheDocument();
   });
 
-  it('renders raw TOML with syntax color while visible lines match copied text', () => {
+  it('renders raw TOML with wrapping syntax color while copied text stays raw', () => {
     const rawToml =
       'model = "gpt-5.4"\n' +
       '[mcp_servers.playwright]\n' +
@@ -92,17 +92,23 @@ describe('CodeEditor', () => {
 
     expect(textarea).toBeInstanceOf(HTMLTextAreaElement);
     expect(textarea).toHaveValue(rawToml);
-    expect(textarea).toHaveAttribute('wrap', 'off');
+    expect(textarea).toHaveAttribute('wrap', 'soft');
     expect(textarea).toHaveClass('text-transparent');
+    expect(textarea).toHaveClass('whitespace-pre-wrap');
+    expect(textarea).toHaveClass('overflow-x-hidden');
     expect(highlightLayer).toBeInTheDocument();
-    expect(highlightLayer).toHaveClass('whitespace-pre');
+    expect(highlightLayer).toHaveClass('whitespace-pre-wrap');
+    expect(highlightLayer).toHaveStyle({
+      overflowWrap: 'anywhere',
+      wordBreak: 'break-word',
+    });
     expect(highlightedToken).toBeInTheDocument();
     expect(container.querySelector('pre')).not.toBeInTheDocument();
     if (textarea instanceof HTMLTextAreaElement && highlightLayer instanceof HTMLElement) {
       textarea.scrollLeft = 96;
       textarea.scrollTop = 24;
       fireEvent.scroll(textarea);
-      expect(highlightLayer.style.transform).toBe('translate(-96px, -24px)');
+      expect(highlightLayer.style.transform).toBe('translateY(-24px)');
     }
     expect(screen.getByText('Valid TOML')).toBeInTheDocument();
   });

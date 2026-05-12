@@ -196,8 +196,8 @@ export function CodeEditor({
     const layer = highlightLayerRef.current;
     if (!layer) return;
 
-    const { scrollLeft, scrollTop } = event.currentTarget;
-    layer.style.transform = `translate(${-scrollLeft}px, ${-scrollTop}px)`;
+    const { scrollTop } = event.currentTarget;
+    layer.style.transform = `translateY(${-scrollTop}px)`;
   }, []);
 
   return (
@@ -218,12 +218,15 @@ export function CodeEditor({
         data-slot="code-editor-surface"
       >
         <div
-          className={cn(isFillParent && 'scrollbar-editor min-h-0 flex-1 overflow-auto')}
+          className={cn(
+            isFillParent && 'scrollbar-editor min-h-0 flex-1',
+            isFillParent && (exactText ? 'overflow-hidden' : 'overflow-auto')
+          )}
           data-slot={isFillParent ? 'code-editor-viewport' : undefined}
         >
           {exactText ? (
             // Exact mode keeps the native textarea as the editable/copyable source of truth while
-            // rendering Prism colors behind it with the same non-wrapping layout contract.
+            // rendering Prism colors behind it with the same soft-wrap layout contract.
             <div
               className={cn(
                 'relative w-full overflow-hidden',
@@ -238,16 +241,16 @@ export function CodeEditor({
                 ref={highlightLayerRef}
                 aria-hidden="true"
                 className={cn(
-                  'pointer-events-none absolute left-0 top-0 min-w-full p-3 font-mono text-sm leading-relaxed',
-                  'whitespace-pre overflow-visible'
+                  'pointer-events-none absolute inset-x-0 top-0 w-full p-3 font-mono text-sm leading-relaxed',
+                  'whitespace-pre-wrap overflow-visible break-words'
                 )}
                 style={{
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
                   fontSize: '0.875rem',
                   minHeight,
                   tabSize: 2,
-                  overflowWrap: 'normal',
-                  wordBreak: 'normal',
+                  overflowWrap: 'anywhere',
+                  wordBreak: 'break-word',
                 }}
                 data-slot="code-editor-highlight-layer"
               >
@@ -259,14 +262,14 @@ export function CodeEditor({
                   if (!readonly) onChange(event.target.value);
                 }}
                 readOnly={readonly}
-                wrap="off"
+                wrap="soft"
                 spellCheck={false}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
                 onScroll={syncHighlightScroll}
                 className={cn(
                   'absolute inset-0 z-10 block h-full w-full resize-none border-0 bg-transparent p-3 font-mono text-sm leading-relaxed',
-                  'whitespace-pre overflow-auto text-transparent caret-foreground selection:bg-primary/25 focus:outline-none',
+                  'whitespace-pre-wrap overflow-y-auto overflow-x-hidden break-words text-transparent caret-foreground selection:bg-transparent focus:outline-none',
                   readonly && 'cursor-not-allowed'
                 )}
                 style={{
@@ -274,8 +277,9 @@ export function CodeEditor({
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
                   fontSize: '0.875rem',
                   tabSize: 2,
-                  overflowWrap: 'normal',
-                  wordBreak: 'normal',
+                  overflowWrap: 'anywhere',
+                  wordBreak: 'break-word',
+                  WebkitTextFillColor: 'transparent',
                 }}
                 data-slot="code-editor-plain-textarea"
               />
