@@ -59,6 +59,10 @@ import { executeOAuthProcess } from './oauth-process';
 import { importKiroToken } from './kiro-import';
 import { parseGitLabPatAuthResponse } from './gitlab-pat-response';
 import {
+  buildOAuthStartFailureGuidance,
+  formatOAuthStartFailureForCli,
+} from './oauth-start-failure-guidance';
+import {
   getProxyTarget,
   buildProxyUrl,
   buildManagementHeaders,
@@ -647,6 +651,7 @@ async function handlePasteCallbackMode(
   options?: {
     kiroMethod?: OAuthOptions['kiroMethod'];
     gitlabBaseUrl?: OAuthOptions['gitlabBaseUrl'];
+    add?: boolean;
   }
 ): Promise<AccountInfo | null> {
   // Resolve CLIProxyAPI target (local or remote based on config)
@@ -661,13 +666,33 @@ async function handlePasteCallbackMode(
     // Request auth URL from CLIProxyAPI management endpoints when the selected
     // provider/method supports the manual start-url contract.
     let startData: PasteCallbackStartData;
+    let startPath = getPasteCallbackStartPath(provider, {
+      kiroMethod: options?.kiroMethod,
+    });
+    const normalizedGitLabBaseUrl =
+      provider === 'gitlab' ? normalizeGitLabBaseUrl(options?.gitlabBaseUrl) : undefined;
+    if (startPath && normalizedGitLabBaseUrl) {
+      startPath += `&base_url=${encodeURIComponent(normalizedGitLabBaseUrl)}`;
+    }
     try {
       startData = await requestPasteCallbackStart(provider, target, {
         kiroMethod: options?.kiroMethod,
+        gitlabBaseUrl: options?.gitlabBaseUrl,
       });
     } catch (error) {
       const startError = (error as Error).message;
       console.log(fail('Failed to start OAuth flow'));
+      if (startPath) {
+        const guidance = buildOAuthStartFailureGuidance(provider, {
+          target,
+          startPath,
+          cause: error,
+          addAccount: options?.add,
+        });
+        for (const line of formatOAuthStartFailureForCli(guidance)) {
+          console.log(`    ${line}`);
+        }
+      }
       warnPossible403Ban(provider, startError);
       return null;
     }
@@ -1109,6 +1134,7 @@ export async function triggerOAuth(
       {
         kiroMethod: provider === 'kiro' ? resolvedKiroMethod : undefined,
         gitlabBaseUrl: provider === 'gitlab' ? resolvedGitLabBaseUrl : undefined,
+        add,
       }
     );
   }

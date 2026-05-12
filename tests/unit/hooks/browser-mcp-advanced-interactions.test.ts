@@ -48,55 +48,59 @@ describe('ccs-browser MCP server - advanced interactions', () => {
       },
     ];
 
-    const responses = await runMcpRequests(pages, [
-      {
-        jsonrpc: '2.0',
-        id: 901,
-        method: 'tools/call',
-        params: {
-          name: 'browser_drag_files',
-          arguments: { selector: '#dropzone', files: [invoicePath, receiptPath] },
-        },
-      },
-      {
-        jsonrpc: '2.0',
-        id: 902,
-        method: 'tools/call',
-        params: {
-          name: 'browser_drag_files',
-          arguments: {
-            selector: '#frame-dropzone',
-            files: [invoicePath],
-            frameSelector: '#upload-frame',
+    const responses = await runMcpRequests(
+      pages,
+      [
+        {
+          jsonrpc: '2.0',
+          id: 901,
+          method: 'tools/call',
+          params: {
+            name: 'browser_drag_files',
+            arguments: { selector: '#dropzone', files: [invoicePath, receiptPath] },
           },
         },
-      },
-      {
-        jsonrpc: '2.0',
-        id: 903,
-        method: 'tools/call',
-        params: {
-          name: 'browser_drag_files',
-          arguments: {
-            selector: '#shadow-dropzone',
-            files: [receiptPath],
-            pierceShadow: true,
+        {
+          jsonrpc: '2.0',
+          id: 902,
+          method: 'tools/call',
+          params: {
+            name: 'browser_drag_files',
+            arguments: {
+              selector: '#frame-dropzone',
+              files: [invoicePath],
+              frameSelector: '#upload-frame',
+            },
           },
         },
-      },
-      {
-        jsonrpc: '2.0',
-        id: 904,
-        method: 'tools/call',
-        params: {
-          name: 'browser_drag_files',
-          arguments: {
-            selector: '#cancel-dropzone',
-            files: [invoicePath],
+        {
+          jsonrpc: '2.0',
+          id: 903,
+          method: 'tools/call',
+          params: {
+            name: 'browser_drag_files',
+            arguments: {
+              selector: '#shadow-dropzone',
+              files: [receiptPath],
+              pierceShadow: true,
+            },
           },
         },
-      },
-    ]);
+        {
+          jsonrpc: '2.0',
+          id: 904,
+          method: 'tools/call',
+          params: {
+            name: 'browser_drag_files',
+            arguments: {
+              selector: '#cancel-dropzone',
+              files: [invoicePath],
+            },
+          },
+        },
+      ],
+      { childEnv: { CCS_BROWSER_UPLOAD_ROOTS: tempDir } }
+    );
 
     expect(getResponseText(responses.find((message) => message.id === 901))).toContain(
       'status: files-dropped'
@@ -184,7 +188,8 @@ describe('ccs-browser MCP server - advanced interactions', () => {
             arguments: { selector: '#reject-dropzone', files: [okPath] },
           },
         },
-      ]
+      ],
+      { childEnv: { CCS_BROWSER_UPLOAD_ROOTS: tempDir } }
     );
 
     expect(getResponseText(responses.find((message) => message.id === 904))).toContain(

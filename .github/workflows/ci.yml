@@ -16,10 +16,10 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     env:
-      # Keep Bun cache isolated per job workspace so parallel self-hosted runs
-      # do not race on ~/.bun/install/cache and corrupt restore/install state.
+      # Keep Bun cache isolated per job workspace so parallel CI runs
+      # do not race on shared cache paths and corrupt restore/install state.
       BUN_INSTALL_CACHE_DIR: ${{ github.workspace }}/.bun/install/cache
     strategy:
       fail-fast: false
@@ -58,7 +58,7 @@ jobs:
         run: ${{ matrix.check.cmd }}
 
   build:
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     name: build
     env:
       BUN_INSTALL_CACHE_DIR: ${{ github.workspace }}/.bun/install/cache
@@ -98,7 +98,7 @@ jobs:
           if-no-files-found: error
 
   test:
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     name: test
     needs: [build]
     env:

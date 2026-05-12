@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'bun:test';
-import { runMcpRequests, getResponseText, mkdtempSync, writeFileSync, tmpdir, join } from './browser-mcp-test-harness';
+import { mkdirSync, realpathSync } from 'node:fs';
+import { delimiter } from 'node:path';
+import {
+  runMcpRequests,
+  getResponseText,
+  mkdtempSync,
+  writeFileSync,
+  tmpdir,
+  join,
+} from './browser-mcp-test-harness';
 import type { MockPageState } from './browser-mcp-test-harness';
 
 describe('ccs-browser MCP server - downloads and file inputs', () => {
@@ -60,9 +69,15 @@ describe('ccs-browser MCP server - downloads and file inputs', () => {
       { responseTimeoutMs: 12000 }
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 57))).toContain('scope: browser');
-    expect(getResponseText(responses.find((message) => message.id === 58))).toContain('suggestedFilename: report.csv');
-    expect(getResponseText(responses.find((message) => message.id === 60))).toContain('status: canceled');
+    expect(getResponseText(responses.find((message) => message.id === 57))).toContain(
+      'scope: browser'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 58))).toContain(
+      'suggestedFilename: report.csv'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 60))).toContain(
+      'status: canceled'
+    );
     expect(pages[0]?.browser?.setDownloadBehaviorCalls?.[0]?.behavior).toBe('allow');
     expect(pages[0]?.browser?.canceledDownloadGuids).toContain('download-guid-1');
   });
@@ -90,6 +105,60 @@ describe('ccs-browser MCP server - downloads and file inputs', () => {
     expect((response?.result as { isError?: boolean }).isError).toBe(true);
     expect(getResponseText(response)).toContain(
       'Browser MCP failed: downloadPath is only allowed when behavior=accept'
+    );
+  });
+
+  it('restricts caller-provided download paths to configured safe roots', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'ccs-browser-download-root-'));
+    const allowedPath = join(tempDir, 'reports');
+    const outsidePath = join(tmpdir(), 'ccs-browser-outside-downloads');
+    const sensitiveRoot = join(tempDir, '.aws');
+    const sensitiveDownloadPath = join(sensitiveRoot, 'reports');
+
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Reports', currentUrl: 'https://example.com/reports', browser: {} }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 615,
+          method: 'tools/call',
+          params: {
+            name: 'browser_set_download_behavior',
+            arguments: { behavior: 'accept', downloadPath: allowedPath },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 616,
+          method: 'tools/call',
+          params: {
+            name: 'browser_set_download_behavior',
+            arguments: { behavior: 'accept', downloadPath: outsidePath },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 619,
+          method: 'tools/call',
+          params: {
+            name: 'browser_set_download_behavior',
+            arguments: { behavior: 'accept', downloadPath: sensitiveDownloadPath },
+          },
+        },
+      ],
+      { childEnv: { CCS_BROWSER_DOWNLOAD_ROOTS: `${sensitiveRoot}${delimiter}${tempDir}` } }
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 615))).toContain(
+      `downloadPath: ${realpathSync(allowedPath)}`
+    );
+    const rejectedResponse = responses.find((message) => message.id === 616);
+    expect((rejectedResponse?.result as { isError?: boolean }).isError).toBe(true);
+    expect(getResponseText(rejectedResponse)).toContain(
+      'downloadPath must be inside the browser session download directory or a CCS_BROWSER_DOWNLOAD_ROOTS entry'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 619))).toContain(
+      'downloadPath cannot include hidden or sensitive path segment: .aws'
     );
   });
 
@@ -144,7 +213,9 @@ describe('ccs-browser MCP server - downloads and file inputs', () => {
       { responseTimeoutMs: 12000 }
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 611))).toContain('status: completed');
+    expect(getResponseText(responses.find((message) => message.id === 611))).toContain(
+      'status: completed'
+    );
     const response = responses.find((message) => message.id === 612);
     expect((response?.result as { isError?: boolean }).isError).toBe(true);
     expect(getResponseText(response)).toContain(
@@ -188,7 +259,9 @@ describe('ccs-browser MCP server - downloads and file inputs', () => {
       { responseTimeoutMs: 12000 }
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 62))).toContain('status: observed');
+    expect(getResponseText(responses.find((message) => message.id === 62))).toContain(
+      'status: observed'
+    );
   });
 
   it('sets files on selected-page, frameSelector, and pierceShadow file inputs', async () => {
@@ -279,23 +352,30 @@ describe('ccs-browser MCP server - downloads and file inputs', () => {
             },
           },
         },
-      ]
+      ],
+      { childEnv: { CCS_BROWSER_UPLOAD_ROOTS: tempDir } }
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 64))).toContain('pageIndex: 1');
-    expect(getResponseText(responses.find((message) => message.id === 65))).toContain('frameSelector: #upload-frame');
-    expect(getResponseText(responses.find((message) => message.id === 66))).toContain('pierceShadow: true');
+    expect(getResponseText(responses.find((message) => message.id === 64))).toContain(
+      'pageIndex: 1'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 65))).toContain(
+      'frameSelector: #upload-frame'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 66))).toContain(
+      'pierceShadow: true'
+    );
 
-    expect((pages[1]?.fileInputs?.['#selected-upload'] as MockFileInputState).assignedFiles).toEqual([
-      invoicePath,
-      receiptPath,
-    ]);
+    expect(
+      (pages[1]?.fileInputs?.['#selected-upload'] as MockFileInputState).assignedFiles
+    ).toEqual([realpathSync(invoicePath), realpathSync(receiptPath)]);
     expect(
       (pages[0]?.frames?.[0]?.fileInputs?.['#frame-upload'] as MockFileInputState).assignedFiles
-    ).toEqual([invoicePath]);
+    ).toEqual([realpathSync(invoicePath)]);
     expect(
-      (pages[0]?.shadowRoots?.[0]?.fileInputs?.['#shadow-upload'] as MockFileInputState).assignedFiles
-    ).toEqual([receiptPath]);
+      (pages[0]?.shadowRoots?.[0]?.fileInputs?.['#shadow-upload'] as MockFileInputState)
+        .assignedFiles
+    ).toEqual([realpathSync(receiptPath)]);
   });
 
   it('uses pageId for browser_set_file_input when provided', async () => {
@@ -340,14 +420,85 @@ describe('ccs-browser MCP server - downloads and file inputs', () => {
             arguments: { pageId: 'page-2', selector: '#pageid-upload', files: [assetPath] },
           },
         },
-      ]
+      ],
+      { childEnv: { CCS_BROWSER_UPLOAD_ROOTS: tempDir } }
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 68))).toContain('pageIndex: 1');
+    expect(getResponseText(responses.find((message) => message.id === 68))).toContain(
+      'pageIndex: 1'
+    );
     expect((pages[1]?.fileInputs?.['#pageid-upload'] as MockFileInputState).assignedFiles).toEqual([
-      assetPath,
+      realpathSync(assetPath),
     ]);
-    expect((pages[0]?.fileInputs?.['#selected-upload'] as MockFileInputState).assignedFiles).toBeUndefined();
+    expect(
+      (pages[0]?.fileInputs?.['#selected-upload'] as MockFileInputState).assignedFiles
+    ).toBeUndefined();
+  });
+
+  it('rejects file uploads outside configured roots and sensitive files inside configured roots', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'ccs-browser-upload-root-'));
+    const outsideDir = mkdtempSync(join(tmpdir(), 'ccs-browser-upload-outside-'));
+    const outsidePath = join(outsideDir, 'secret.txt');
+    const sensitiveDir = join(tempDir, '.ssh');
+    const sensitivePath = join(sensitiveDir, 'id_rsa');
+    const sensitiveRootPath = join(sensitiveDir, 'public.txt');
+    writeFileSync(outsidePath, 'outside');
+    mkdirSync(sensitiveDir, { recursive: true });
+    writeFileSync(sensitivePath, 'private-key');
+    writeFileSync(sensitiveRootPath, 'not-a-key');
+
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Upload Guard',
+          currentUrl: 'https://example.com/',
+          fileInputs: {
+            '#real-file-input': { kind: 'file' },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 617,
+          method: 'tools/call',
+          params: {
+            name: 'browser_set_file_input',
+            arguments: { selector: '#real-file-input', files: [outsidePath] },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 618,
+          method: 'tools/call',
+          params: {
+            name: 'browser_set_file_input',
+            arguments: { selector: '#real-file-input', files: [sensitivePath] },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 620,
+          method: 'tools/call',
+          params: {
+            name: 'browser_set_file_input',
+            arguments: { selector: '#real-file-input', files: [sensitiveRootPath] },
+          },
+        },
+      ],
+      { childEnv: { CCS_BROWSER_UPLOAD_ROOTS: `${sensitiveDir}${delimiter}${tempDir}` } }
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 617))).toContain(
+      'file must be inside the browser session download directory or a CCS_BROWSER_UPLOAD_ROOTS entry'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 618))).toContain(
+      'file cannot include hidden or sensitive path segment: .ssh'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 620))).toContain(
+      'file cannot include hidden or sensitive path segment: .ssh'
+    );
   });
 
   it('rejects browser_set_file_input when target is not a file input, local file is missing, or page selectors conflict', async () => {
@@ -393,10 +544,16 @@ describe('ccs-browser MCP server - downloads and file inputs', () => {
           method: 'tools/call',
           params: {
             name: 'browser_set_file_input',
-            arguments: { pageIndex: 0, pageId: 'page-1', selector: '#real-file-input', files: [okPath] },
+            arguments: {
+              pageIndex: 0,
+              pageId: 'page-1',
+              selector: '#real-file-input',
+              files: [okPath],
+            },
           },
         },
-      ]
+      ],
+      { childEnv: { CCS_BROWSER_UPLOAD_ROOTS: tempDir } }
     );
 
     expect(getResponseText(responses.find((message) => message.id === 69))).toContain(
@@ -409,5 +566,4 @@ describe('ccs-browser MCP server - downloads and file inputs', () => {
       'pageIndex and pageId cannot be used together'
     );
   });
-
 });

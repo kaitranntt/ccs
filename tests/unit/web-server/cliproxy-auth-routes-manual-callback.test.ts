@@ -207,6 +207,52 @@ describe('cliproxy-auth-routes manual callback nickname persistence', () => {
     expect(requests[0]?.url).toContain('/v0/management/cursor-auth-url?is_webui=true');
   });
 
+  it('returns actionable Codex guidance when manual OAuth start cannot reach CLIProxy', async () => {
+    mockFetch([
+      {
+        url: /\/v0\/management\/codex-auth-url\?is_webui=true$/,
+        status: 503,
+        response: 'connect ECONNREFUSED 127.0.0.1:8317',
+      },
+    ]);
+
+    const startResponse = await postJson('/api/cliproxy/auth/codex/start-url', {});
+
+    expect(startResponse.status).toBe(503);
+    expect(startResponse.body).toMatchObject({
+      error: 'cliproxy_oauth_start_failed',
+      provider: 'codex',
+      message: expect.stringContaining('OpenAI Codex OAuth could not start'),
+      endpoint: 'http://127.0.0.1:8317/v0/management/codex-auth-url?is_webui=true',
+      retryCommand: 'ccs codex --auth --paste-callback',
+      portForwardCommand: 'ssh -L 1455:localhost:1455 <USER>@<HOST>',
+    });
+    expect(
+      (startResponse.body as { hints?: string[] }).hints?.some((hint) =>
+        hint.includes('ccs codex --auth --port-forward')
+      )
+    ).toBe(true);
+  });
+
+  it('does not label malformed OAuth start responses as proxy recovery guidance', async () => {
+    mockFetch([
+      {
+        url: /\/v0\/management\/codex-auth-url\?is_webui=true$/,
+        response: 'not-json',
+      },
+    ]);
+
+    const startResponse = await postJson('/api/cliproxy/auth/codex/start-url', {});
+
+    expect(startResponse.status).toBe(502);
+    expect(startResponse.body).toMatchObject({
+      error: 'cliproxy_oauth_start_invalid_response',
+      provider: 'codex',
+      message: 'CLIProxyAPI returned an invalid OAuth start response.',
+    });
+    expect((startResponse.body as { hints?: string[] }).hints).toBeUndefined();
+  });
+
   it('returns wait after callback submission when the local token is not yet available', async () => {
     mockFetch([
       {

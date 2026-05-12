@@ -84,6 +84,21 @@ describe('api-routes remote write guard', () => {
     expect(response.status).toBe(200);
   });
 
+  it('blocks remote Codex raw config reads when dashboard auth is disabled', async () => {
+    const response = await fetch(`${baseUrl}/api/codex/config/raw`);
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: 'Codex configuration endpoints require localhost access when dashboard auth is disabled.',
+    });
+  });
+
+  it('allows remote Codex diagnostics when dashboard auth is disabled', async () => {
+    const response = await fetch(`${baseUrl}/api/codex/diagnostics`);
+
+    expect(response.status).toBe(200);
+  });
+
   it('blocks remote profile creation when dashboard auth is disabled', async () => {
     const response = await fetch(`${baseUrl}/api/profiles`, {
       method: 'POST',

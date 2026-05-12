@@ -253,6 +253,7 @@ export function CodexPage() {
             onRefresh={refreshAll}
             onDiscard={() => setRawDraftText(null)}
             language="toml"
+            exactText
             /* TODO i18n: missing key for "Loading config.toml..." */
             loadingLabel="Loading config.toml..."
             /* TODO i18n: missing key for "TOML warning" */

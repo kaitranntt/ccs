@@ -1,6 +1,6 @@
 # Browser Automation
 
-Last Updated: 2026-04-19
+Last Updated: 2026-05-11
 
 CCS provides browser automation through two separate runtime paths:
 
@@ -127,6 +127,8 @@ CCS still supports environment-variable overrides for backward compatibility.
 | `CCS_BROWSER_USER_DATA_DIR` | Preferred override for Claude Browser Attach user-data dir |
 | `CCS_BROWSER_PROFILE_DIR` | Legacy alias for the same attach directory |
 | `CCS_BROWSER_DEVTOOLS_PORT` | Explicit DevTools port override |
+| `CCS_BROWSER_UPLOAD_ROOTS` | Optional `path.delimiter`-separated allowlist for local files that browser upload tools may read |
+| `CCS_BROWSER_DOWNLOAD_ROOTS` | Optional `path.delimiter`-separated allowlist for caller-provided browser download directories |
 
 If an override is active, Browser status surfaces should report that the current session is being
 managed externally by environment variables.
@@ -143,6 +145,22 @@ Override precedence is:
 Config-backed Browser Attach always passes an explicit DevTools port to the runtime, even when the
 effective value is the default `9222`. Metadata-based port discovery is preserved only for the
 legacy `CCS_BROWSER_PROFILE_DIR` flow when `CCS_BROWSER_DEVTOOLS_PORT` is not set.
+
+### Browser File Transfer Safety
+
+Claude Browser Attach file-transfer tools intentionally use a deny-by-default filesystem boundary:
+
+- Downloads without an explicit `downloadPath` go to a CCS-created temporary session directory.
+- A caller-provided `downloadPath` must be inside that temporary session directory or inside one of
+  the directories listed in `CCS_BROWSER_DOWNLOAD_ROOTS`.
+- Local upload and drag-and-drop files must be inside the temporary session download directory or
+  inside one of the directories listed in `CCS_BROWSER_UPLOAD_ROOTS`.
+- Hidden path segments and common secret locations/files, such as `.ssh`, `.aws`, `.ccs`,
+  `.claude`, `.env`, and private-key filenames, are rejected even inside an allowed root.
+- Each file-transfer call is limited to 10 files, and each local file must be at most 10 MiB.
+
+Set upload/download roots only to purpose-built scratch directories. Do not point these variables at
+your home directory, a source checkout with secrets, or a real cloud/tooling config directory.
 
 ## Managed Runtime Files
 

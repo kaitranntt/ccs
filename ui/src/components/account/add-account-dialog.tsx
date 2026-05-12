@@ -733,7 +733,11 @@ export function AddAccountDialog({
           )}
 
           {/* Persist error visibility outside auth-only UI states */}
-          {errorMessage && <p className="text-xs text-center text-destructive">{errorMessage}</p>}
+          {errorMessage && (
+            <p className="text-xs text-center text-destructive whitespace-pre-line">
+              {errorMessage}
+            </p>
+          )}
 
           {/* Kiro import loading */}
           {kiroImportMutation.isPending && (

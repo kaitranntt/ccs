@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@tests/setup/test-utils';
+import { fireEvent, render, screen } from '@tests/setup/test-utils';
 
 import { CodeEditor } from '@/components/shared/code-editor';
 
@@ -65,6 +65,58 @@ describe('CodeEditor', () => {
       />
     );
 
+    expect(screen.getByText('Valid TOML')).toBeInTheDocument();
+  });
+
+  it('renders raw TOML with wrapping syntax color while copied text stays raw', () => {
+    const rawToml =
+      'model = "gpt-5.4"\n' +
+      '[agents.brainstormer]\n' +
+      'config_file = "agents/brainstormer.toml"\n' +
+      '[mcp_servers.playwright]\n' +
+      'command = "node"\n' +
+      'args = ["--experimental-loader", "./very/long/path/that/should/not/soft/wrap/into/fake/toml/lines.js"]\n';
+
+    const { container } = render(
+      <CodeEditor
+        value={rawToml}
+        onChange={vi.fn()}
+        language="toml"
+        minHeight="100%"
+        heightMode="fill-parent"
+        exactText
+      />
+    );
+
+    const textarea = container.querySelector('[data-slot="code-editor-plain-textarea"]');
+    const highlightLayer = container.querySelector('[data-slot="code-editor-highlight-layer"]');
+    const highlightedToken = highlightLayer?.querySelector('span');
+    const tableToken = Array.from(highlightLayer?.querySelectorAll('span') ?? []).find(
+      (token) => token.textContent === 'agents.brainstormer'
+    );
+
+    expect(textarea).toBeInstanceOf(HTMLTextAreaElement);
+    expect(textarea).toHaveValue(rawToml);
+    expect(textarea).toHaveAttribute('wrap', 'soft');
+    expect(textarea).toHaveClass('text-transparent');
+    expect(textarea).toHaveClass('whitespace-pre-wrap');
+    expect(textarea).toHaveClass('overflow-x-hidden');
+    expect(highlightLayer).toBeInTheDocument();
+    expect(highlightLayer).toHaveClass('whitespace-pre-wrap');
+    expect(highlightLayer).toHaveStyle({
+      overflowWrap: 'anywhere',
+      wordBreak: 'break-word',
+    });
+    expect(highlightedToken).toBeInTheDocument();
+    expect(tableToken).toHaveClass('table');
+    expect(tableToken).toHaveStyle({ display: 'inline' });
+    expect(container.querySelector('pre')).not.toBeInTheDocument();
+    if (textarea instanceof HTMLTextAreaElement && highlightLayer instanceof HTMLElement) {
+      textarea.scrollLeft = 96;
+      textarea.scrollTop = 24;
+      fireEvent.scroll(textarea);
+      expect(highlightLayer.style.transform).toBe('translateY(-24px)');
+    }
     expect(screen.getByText('Valid TOML')).toBeInTheDocument();
   });
 });
