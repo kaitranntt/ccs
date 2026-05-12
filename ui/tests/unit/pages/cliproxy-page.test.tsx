@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, userEvent } from '@tests/setup/test-utils';
 
 const hookState = vi.hoisted(() => ({
+  variantsData: { variants: [] as Array<{ name: string; provider: string; target?: string }> },
   authData: {
     authStatus: [
       {
@@ -36,7 +37,7 @@ const hookState = vi.hoisted(() => ({
 
 vi.mock('@/hooks/use-cliproxy', () => ({
   useCliproxy: () => ({
-    data: { variants: [] },
+    data: hookState.variantsData,
     isFetching: false,
   }),
   useCliproxyAuth: () => ({
@@ -60,7 +61,8 @@ vi.mock('@/hooks/use-cliproxy', () => ({
 }));
 
 vi.mock('@/components/quick-setup-wizard', () => ({
-  QuickSetupWizard: () => null,
+  QuickSetupWizard: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="advanced-variant-wizard" /> : null,
 }));
 
 vi.mock('@/components/monitoring/proxy-status-widget', () => ({
@@ -82,9 +84,21 @@ vi.mock('@/components/cliproxy/provider-editor', () => ({
 }));
 
 vi.mock('@/components/account/add-account-dialog', () => ({
-  AddAccountDialog: ({ open, catalog }: { open: boolean; catalog?: { defaultModel?: string } }) =>
+  AddAccountDialog: ({
+    open,
+    provider,
+    catalog,
+  }: {
+    open: boolean;
+    provider?: string;
+    catalog?: { defaultModel?: string };
+  }) =>
     open ? (
-      <div data-testid="add-account-dialog" data-catalog={catalog?.defaultModel ?? 'missing'} />
+      <div
+        data-testid="add-account-dialog"
+        data-provider={provider}
+        data-catalog={catalog?.defaultModel ?? 'missing'}
+      />
     ) : null,
 }));
 
@@ -92,6 +106,7 @@ import { CliproxyPage } from '@/pages/cliproxy';
 
 describe('CliproxyPage add-account catalog gating', () => {
   beforeEach(() => {
+    hookState.variantsData = { variants: [] };
     hookState.authData = {
       authStatus: [
         {
@@ -153,5 +168,52 @@ describe('CliproxyPage add-account catalog gating', () => {
       'data-catalog',
       'gemini-3.9-pro-preview'
     );
+  });
+
+  it('uses the sidebar setup CTA for account connection instead of variant creation', async () => {
+    render(<CliproxyPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: /add account/i }));
+
+    expect(screen.getByTestId('add-account-dialog')).toHaveAttribute('data-provider', 'gemini');
+    expect(screen.queryByTestId('advanced-variant-wizard')).not.toBeInTheDocument();
+  });
+
+  it('adds accounts against the base provider when a runtime variant is selected', async () => {
+    hookState.variantsData = {
+      variants: [{ name: 'gemini-parallel', provider: 'gemini', target: 'claude' }],
+    };
+
+    render(<CliproxyPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: /gemini-parallel/i }));
+    await userEvent.click(screen.getByRole('button', { name: /add account/i }));
+
+    expect(screen.getByTestId('add-account-dialog')).toHaveAttribute('data-provider', 'gemini');
+    expect(screen.queryByTestId('advanced-variant-wizard')).not.toBeInTheDocument();
+  });
+
+  it('surfaces account setup from the empty state before provider data is available', async () => {
+    hookState.authData = {
+      authStatus: [],
+      source: 'local',
+    };
+
+    render(<CliproxyPage />);
+
+    const addAccountButtons = screen.getAllByRole('button', { name: /add account/i });
+    await userEvent.click(addAccountButtons[addAccountButtons.length - 1]);
+
+    expect(screen.getByTestId('add-account-dialog')).toHaveAttribute('data-provider', 'gemini');
+    expect(screen.queryByTestId('advanced-variant-wizard')).not.toBeInTheDocument();
+  });
+
+  it('keeps advanced variant creation available as a secondary action', async () => {
+    render(<CliproxyPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: /advanced variant/i }));
+
+    expect(screen.getByTestId('advanced-variant-wizard')).toBeInTheDocument();
+    expect(screen.queryByTestId('add-account-dialog')).not.toBeInTheDocument();
   });
 });

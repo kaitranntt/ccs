@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Check, X, RefreshCw, Sparkles, Zap, GitBranch, Trash2 } from 'lucide-react';
+import { Check, X, RefreshCw, Plus, Zap, GitBranch, Trash2 } from 'lucide-react';
 import { QuickSetupWizard } from '@/components/quick-setup-wizard';
 import { AddAccountDialog } from '@/components/account/add-account-dialog';
 import { AccountSafetyWarningCard } from '@/components/account/account-safety-warning-card';
@@ -183,7 +183,13 @@ function VariantSidebarItem({
 }
 
 // Empty state for right panel
-function EmptyProviderState({ onSetup }: { onSetup: () => void }) {
+function EmptyProviderState({
+  onAddAccount,
+  onCreateVariant,
+}: {
+  onAddAccount: () => void;
+  onCreateVariant: () => void;
+}) {
   const { t } = useTranslation();
   return (
     <div className="flex-1 flex items-center justify-center bg-muted/20">
@@ -200,10 +206,16 @@ function EmptyProviderState({ onSetup }: { onSetup: () => void }) {
           </a>
           .
         </p>
-        <Button onClick={onSetup} className="gap-2">
-          <Sparkles className="w-4 h-4" />
-          {t('cliproxyPage.quickSetup')}
-        </Button>
+        <div className="flex flex-col justify-center gap-2 sm:flex-row">
+          <Button onClick={onAddAccount} className="gap-2">
+            <Plus className="w-4 h-4" />
+            {t('cliproxyPage.addAccount')}
+          </Button>
+          <Button onClick={onCreateVariant} variant="outline" className="gap-2">
+            <GitBranch className="w-4 h-4" />
+            {t('cliproxyPage.advancedVariant')}
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -305,6 +317,38 @@ export function CliproxyPage() {
   const parentAuthForVariant = selectedVariantData
     ? providers.find((p) => p.provider === selectedVariantData.provider)
     : undefined;
+  const selectedAccountTarget =
+    selectedVariantData && parentAuthForVariant
+      ? {
+          provider: selectedVariantData.provider,
+          displayName: parentAuthForVariant.displayName,
+          accountCount: parentAuthForVariant.accounts?.length || 0,
+        }
+      : selectedStatus
+        ? {
+            provider: selectedStatus.provider,
+            displayName: selectedStatus.displayName,
+            accountCount: selectedStatus.accounts?.length || 0,
+          }
+        : null;
+  const fallbackAccountTarget = selectedVariantData
+    ? {
+        provider: selectedVariantData.provider,
+        displayName: getProviderDisplayName(selectedVariantData.provider),
+        accountCount: 0,
+      }
+    : selectedProvider && isValidProvider(selectedProvider)
+      ? {
+          provider: selectedProvider,
+          displayName: getProviderDisplayName(selectedProvider),
+          accountCount: 0,
+        }
+      : {
+          provider: 'gemini',
+          displayName: getProviderDisplayName('gemini'),
+          accountCount: 0,
+        };
+  const accountSetupTarget = selectedAccountTarget ?? fallbackAccountTarget;
   const warningProvider = (selectedVariantData?.provider || selectedStatus?.provider || '')
     .toLowerCase()
     .trim();
@@ -352,6 +396,14 @@ export function CliproxyPage() {
     setSelectedProvider(null);
   };
 
+  const handleAddAccountForSelectedProvider = () => {
+    setAddAccountProvider({
+      provider: accountSetupTarget.provider,
+      displayName: accountSetupTarget.displayName,
+      isFirstAccount: accountSetupTarget.accountCount === 0,
+    });
+  };
+
   return (
     <div className="flex h-full min-h-0 overflow-hidden">
       {/* Left Sidebar */}
@@ -377,15 +429,29 @@ export function CliproxyPage() {
             {t('cliproxyPage.accountManagement')}
           </p>
 
-          <Button
-            variant="default"
-            size="sm"
-            className="w-full gap-2"
-            onClick={() => setWizardOpen(true)}
-          >
-            <Sparkles className="w-4 h-4" />
-            {t('cliproxyPage.quickSetup')}
-          </Button>
+          <div className="space-y-2">
+            <Button
+              variant="default"
+              size="sm"
+              className="w-full gap-2"
+              onClick={handleAddAccountForSelectedProvider}
+            >
+              <Plus className="w-4 h-4" />
+              {t('cliproxyPage.addAccount')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full gap-2"
+              onClick={() => setWizardOpen(true)}
+            >
+              <GitBranch className="w-4 h-4" />
+              {t('cliproxyPage.advancedVariant')}
+            </Button>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              {t('cliproxyPage.setupActionsHint')}
+            </p>
+          </div>
         </div>
 
         {/* Providers List */}
@@ -577,7 +643,10 @@ export function CliproxyPage() {
             />
           </>
         ) : (
-          <EmptyProviderState onSetup={() => setWizardOpen(true)} />
+          <EmptyProviderState
+            onAddAccount={handleAddAccountForSelectedProvider}
+            onCreateVariant={() => setWizardOpen(true)}
+          />
         )}
       </div>
 

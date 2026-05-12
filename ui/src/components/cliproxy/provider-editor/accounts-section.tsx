@@ -142,8 +142,7 @@ export function AccountsSection({
             />
           )}
           <User className="w-4 h-4" />
-          {/* TODO i18n: missing key for "Accounts" */}
-          Accounts
+          {t('providerEditor.accounts')}
           {accounts.length > 0 && (
             <Badge variant="secondary" className="text-xs">
               {accounts.length}
@@ -152,7 +151,7 @@ export function AccountsSection({
         </h3>
         <Button variant="default" size="sm" className="h-7 text-xs gap-1" onClick={onAddAccount}>
           <Plus className="w-3 h-3" />
-          Add
+          {t('providerEditor.addAccount')}
         </Button>
       </div>
 
