@@ -81,7 +81,7 @@ describe('codex-detector', () => {
     expect(spawnSyncSpy).toHaveBeenCalled();
     expect(cmdWrapperProbeCall).toBeDefined();
     expect((cmdWrapperProbeCall?.[1] as Record<string, unknown> | undefined)?.shell).toBe(
-      'cmd.exe'
+      'C:\\Windows\\System32\\cmd.exe'
     );
     expect(info?.needsShell).toBe(true);
     expect(info?.features).toContain('config-overrides');
@@ -96,7 +96,9 @@ describe('codex-detector', () => {
     fs.writeFileSync(fakePsCodex, '');
     Object.defineProperty(process, 'platform', { value: 'win32' });
 
-    const execSyncSpy = spyOn(childProcess, 'execSync').mockImplementation(() => `${fakeCmdCodex}\n`);
+    const execSyncSpy = spyOn(childProcess, 'execSync').mockImplementation(
+      () => `${fakeCmdCodex}\n`
+    );
 
     expect(detectCodexCli()).toBe(fakeCmdCodex);
 
@@ -110,7 +112,9 @@ describe('codex-detector', () => {
     fs.writeFileSync(fakePsCodex, '');
     Object.defineProperty(process, 'platform', { value: 'win32' });
 
-    const execSyncSpy = spyOn(childProcess, 'execSync').mockImplementation(() => `${fakePsCodex}\n`);
+    const execSyncSpy = spyOn(childProcess, 'execSync').mockImplementation(
+      () => `${fakePsCodex}\n`
+    );
 
     expect(detectCodexCli()).toBe(fakeCmdCodex);
 
@@ -122,19 +126,21 @@ describe('codex-detector', () => {
     fs.writeFileSync(fakeCodex, '');
     process.env.CCS_CODEX_PATH = fakeCodex;
 
-    const execFileSyncSpy = spyOn(childProcess, 'execFileSync').mockImplementation((command, args) => {
-      const joinedArgs = Array.isArray(args) ? args.join(' ') : '';
+    const execFileSyncSpy = spyOn(childProcess, 'execFileSync').mockImplementation(
+      (command, args) => {
+        const joinedArgs = Array.isArray(args) ? args.join(' ') : '';
 
-      if (joinedArgs.includes('--help')) {
-        return 'Codex CLI\n';
-      }
+        if (joinedArgs.includes('--help')) {
+          return 'Codex CLI\n';
+        }
 
-      if (joinedArgs.includes('-c') && joinedArgs.includes('--version')) {
+        if (joinedArgs.includes('-c') && joinedArgs.includes('--version')) {
+          return 'codex-cli 0.119.0-alpha.1';
+        }
+
         return 'codex-cli 0.119.0-alpha.1';
       }
-
-      return 'codex-cli 0.119.0-alpha.1';
-    });
+    );
 
     const info = getCodexBinaryInfo();
 
@@ -148,19 +154,21 @@ describe('codex-detector', () => {
     fs.writeFileSync(fakeCodex, '');
     process.env.CCS_CODEX_PATH = fakeCodex;
 
-    const execFileSyncSpy = spyOn(childProcess, 'execFileSync').mockImplementation((command, args) => {
-      const joinedArgs = Array.isArray(args) ? args.join(' ') : '';
+    const execFileSyncSpy = spyOn(childProcess, 'execFileSync').mockImplementation(
+      (command, args) => {
+        const joinedArgs = Array.isArray(args) ? args.join(' ') : '';
 
-      if (joinedArgs.includes('--help')) {
-        return 'Codex CLI\n  -c, --config <CONFIG_OVERRIDE>\n';
+        if (joinedArgs.includes('--help')) {
+          return 'Codex CLI\n  -c, --config <CONFIG_OVERRIDE>\n';
+        }
+
+        if (joinedArgs.includes('-c') && joinedArgs.includes('--version')) {
+          throw new Error('unsupported');
+        }
+
+        return 'codex-cli 0.119.0-alpha.1';
       }
-
-      if (joinedArgs.includes('-c') && joinedArgs.includes('--version')) {
-        throw new Error('unsupported');
-      }
-
-      return 'codex-cli 0.119.0-alpha.1';
-    });
+    );
 
     const info = getCodexBinaryInfo();
 

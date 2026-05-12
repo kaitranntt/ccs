@@ -2,7 +2,12 @@ import * as fs from 'fs';
 import { execFileSync, execSync } from 'child_process';
 import { expandPath } from './helpers';
 import type { ClaudeCliInfo } from '../types';
-import { escapeShellArg, stripAnthropicEnv, stripClaudeCodeEnv } from './shell-executor';
+import {
+  escapeShellArg,
+  getWindowsEscapedCommandShell,
+  stripAnthropicEnv,
+  stripClaudeCodeEnv,
+} from './shell-executor';
 
 export interface ClaudeAuthStatus {
   loggedIn: boolean;
@@ -164,11 +169,12 @@ function runClaudeCliCommand(args: string[], envOverrides?: NodeJS.ProcessEnv): 
     }
 
     if (needsShell) {
+      const shell = getWindowsEscapedCommandShell();
       return execSync([claudePath, ...args].map(escapeShellArg).join(' '), {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
         timeout: 5000,
-        shell: process.env.ComSpec || 'cmd.exe',
+        shell: typeof shell === 'string' ? shell : undefined,
         env,
       }).trim();
     }

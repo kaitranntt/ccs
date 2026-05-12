@@ -5,6 +5,7 @@
  */
 
 import { spawn, spawnSync, ChildProcess, type SpawnOptions } from 'child_process';
+import * as path from 'path';
 import { ErrorManager } from './error-manager';
 import { getWebSearchHookEnv } from './websearch-manager';
 import { wireChildProcessSignals } from './signal-forwarder';
@@ -53,6 +54,7 @@ const TMUX_SYNC_ENV_KEYS = [
   ...ANTHROPIC_MODEL_ENV_KEYS,
   ...ANTHROPIC_ROUTING_ENV_KEYS,
 ];
+const DEFAULT_WINDOWS_CMD_SHELL = 'C:\\Windows\\System32\\cmd.exe';
 
 /**
  * Strip inherited Anthropic routing/auth env while preserving model intent.
@@ -214,15 +216,36 @@ export function escapeShellArg(arg: string): string {
 /**
  * Return the shell that matches escapeShellArg() quoting semantics.
  *
- * On Windows, prefer ComSpec over a bare `cmd.exe` so escaped wrapper launches
- * keep the same shell contract without depending on PATH lookup.
+ * On Windows, use an absolute, trusted system cmd.exe path instead of a bare
+ * executable name so wrapper launches cannot be hijacked through the current
+ * directory or PATH. ComSpec is accepted only when it resolves to that same
+ * system shell.
  */
 export function getWindowsEscapedCommandShell(): SpawnOptions['shell'] {
   if (process.platform !== 'win32') {
     return true;
   }
 
-  return process.env.ComSpec || process.env.COMSPEC || 'cmd.exe';
+  const systemRoot = [process.env.SystemRoot, process.env.SYSTEMROOT, process.env.windir].find(
+    (candidate): candidate is string => Boolean(candidate && path.win32.isAbsolute(candidate))
+  );
+  const trustedSystemCmd = systemRoot
+    ? path.win32.normalize(path.win32.join(systemRoot, 'System32', 'cmd.exe'))
+    : DEFAULT_WINDOWS_CMD_SHELL;
+  const trustedSystemCmdLower = trustedSystemCmd.toLowerCase();
+
+  for (const candidate of [process.env.ComSpec, process.env.COMSPEC]) {
+    if (!candidate || !path.win32.isAbsolute(candidate)) {
+      continue;
+    }
+
+    const normalizedCandidate = path.win32.normalize(candidate);
+    if (normalizedCandidate.toLowerCase() === trustedSystemCmdLower) {
+      return normalizedCandidate;
+    }
+  }
+
+  return trustedSystemCmd;
 }
 
 /**

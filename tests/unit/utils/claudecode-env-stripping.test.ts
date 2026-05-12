@@ -405,7 +405,7 @@ describe('CLAUDECODE environment stripping', () => {
     expect(spawnCalls.length).toBeGreaterThan(0);
     const env = spawnCalls[0].options?.env as NodeJS.ProcessEnv;
     expect(Object.keys(env).map((k) => k.toUpperCase())).not.toContain('CLAUDECODE');
-    expect(spawnCalls[0].options?.shell).toBe('cmd.exe');
+    expect(spawnCalls[0].options?.shell).toBe('C:\\Windows\\System32\\cmd.exe');
   });
 
   it('execClaude sets DISABLE_AUTOUPDATER=1 when preferences.auto_update is false', () => {
@@ -827,9 +827,9 @@ describe('CLAUDECODE environment stripping', () => {
     expect(persistedLaunchSettings.env?.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
     expect(persistedLaunchSettings.env?.ANTHROPIC_API_KEY).toBeUndefined();
     expect(persistedLaunchSettings.env?.ANTHROPIC_MODEL).toBe('gpt-5.4');
-    expect(
-      persistedLaunchSettings.hooks?.PreToolUse?.[0]?.hooks?.[0]?.command
-    ).toBe('echo headless-bridge-hook');
+    expect(persistedLaunchSettings.hooks?.PreToolUse?.[0]?.hooks?.[0]?.command).toBe(
+      'echo headless-bridge-hook'
+    );
     expect(fs.existsSync(launchSettingsPath)).toBe(false);
   });
 
