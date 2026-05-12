@@ -169,6 +169,7 @@ function invokeHook(
     input: JSON.stringify(input),
     encoding: 'utf8',
     env: buildHookEnv(env),
+    cwd: TEST_DIR,
     timeout: 10000, // 10 second timeout per test
   });
 
@@ -187,6 +188,7 @@ function invokeHookAsync(
     const child = spawn('node', [HOOK_PATH], {
       env: buildHookEnv(env),
       stdio: ['pipe', 'pipe', 'pipe'],
+      cwd: TEST_DIR,
     });
 
     let stdout = '';
@@ -531,6 +533,7 @@ describe('Image Analyzer Hook', () => {
         input: 'not valid json',
         encoding: 'utf8',
         timeout: 5000,
+        cwd: TEST_DIR,
         env: {
           ...process.env,
           CCS_CLIPROXY_API_KEY: CLIPROXY_API_KEY,
