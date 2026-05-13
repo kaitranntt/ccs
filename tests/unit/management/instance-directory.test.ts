@@ -75,6 +75,17 @@ describe('account instance directory enumeration', () => {
     );
   });
 
+  it('skips transient entries that cannot be statted', () => {
+    fs.mkdirSync(path.join(instancesDir(), 'work'), { recursive: true });
+    fs.symlinkSync(
+      path.join(instancesDir(), 'missing-instance'),
+      path.join(instancesDir(), 'transient'),
+      'dir'
+    );
+
+    expect(listAccountInstanceNames(instancesDir())).toEqual(['work']);
+  });
+
   it('keeps ccs doctor settings symlinks healthy when .locks exists', () => {
     createValidSettingsLayout();
 

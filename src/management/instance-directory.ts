@@ -15,7 +15,11 @@ export function listAccountInstanceNames(instancesDir: string): string[] {
       return false;
     }
 
-    return fs.statSync(path.join(instancesDir, name)).isDirectory();
+    try {
+      return fs.statSync(path.join(instancesDir, name)).isDirectory();
+    } catch {
+      return false;
+    }
   });
 }
 
