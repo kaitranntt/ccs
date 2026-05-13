@@ -19,6 +19,7 @@ import {
   normalizePluginMetadataValue,
 } from './plugin-path-normalizer';
 import { getCcsDir } from '../config/config-loader-facade';
+import { listAccountInstanceNames, listAccountInstancePaths } from './instance-directory';
 export {
   normalizePluginMetadataContent,
   normalizePluginMetadataPathString,
@@ -832,16 +833,8 @@ class SharedManager {
       path.join(this.claudeDir, 'plugins', 'known_marketplaces.json'),
     ]);
 
-    if (fs.existsSync(this.instancesDir)) {
-      for (const entry of fs.readdirSync(this.instancesDir, { withFileTypes: true })) {
-        if (!entry.isDirectory() || entry.name.startsWith('.')) {
-          continue;
-        }
-
-        sourcePaths.add(
-          path.join(this.instancesDir, entry.name, 'plugins', 'known_marketplaces.json')
-        );
-      }
+    for (const instancePath of listAccountInstancePaths(this.instancesDir)) {
+      sourcePaths.add(path.join(instancePath, 'plugins', 'known_marketplaces.json'));
     }
 
     if (configDir && path.resolve(configDir) !== path.resolve(this.claudeDir)) {
@@ -1037,14 +1030,10 @@ class SharedManager {
     // Update all instances to use new symlinks
     if (fs.existsSync(this.instancesDir)) {
       try {
-        const instances = fs.readdirSync(this.instancesDir);
-
-        for (const instance of instances) {
+        for (const instance of listAccountInstanceNames(this.instancesDir)) {
           const instancePath = path.join(this.instancesDir, instance);
           try {
-            if (fs.statSync(instancePath).isDirectory()) {
-              this.linkSharedDirectories(instancePath);
-            }
+            this.linkSharedDirectories(instancePath);
           } catch (_err) {
             console.log(warn(`Failed to update instance ${instance}: ${(_err as Error).message}`));
           }
@@ -1081,10 +1070,7 @@ class SharedManager {
       return;
     }
 
-    const instances = fs.readdirSync(this.instancesDir).filter((name) => {
-      const instancePath = path.join(this.instancesDir, name);
-      return fs.statSync(instancePath).isDirectory();
-    });
+    const instances = listAccountInstanceNames(this.instancesDir);
 
     let migrated = 0;
     let skipped = 0;

@@ -11,6 +11,7 @@ import {
   isOfficialChannelTokenRequired,
 } from './official-channels-runtime';
 import { getCcsDir } from '../config/config-loader-facade';
+import { listAccountInstancePaths } from '../management/instance-directory';
 
 export type OfficialChannelTokenSource = 'saved_env' | 'process_env' | 'missing';
 
@@ -151,10 +152,8 @@ function listManagedClaudeConfigDirs(): string[] {
     return [...dirs];
   }
 
-  for (const entry of fs.readdirSync(instancesDir, { withFileTypes: true })) {
-    if (entry.isDirectory()) {
-      dirs.add(path.join(instancesDir, entry.name));
-    }
+  for (const instancePath of listAccountInstancePaths(instancesDir)) {
+    dirs.add(instancePath);
   }
 
   return [...dirs];

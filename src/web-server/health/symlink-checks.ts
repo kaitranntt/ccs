@@ -7,6 +7,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { HealthCheck } from './types';
+import { listAccountInstanceNames } from '../../management/instance-directory';
 
 /**
  * Check CCS symlinks health
@@ -100,9 +101,7 @@ export function checkSettingsSymlinks(ccsDir: string, claudeDir: string): Health
       };
     }
 
-    const instances = fs.readdirSync(instancesDir).filter((name) => {
-      return fs.statSync(`${instancesDir}/${name}`).isDirectory();
-    });
+    const instances = listAccountInstanceNames(instancesDir);
 
     let broken = 0;
     for (const instance of instances) {

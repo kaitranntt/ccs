@@ -41,6 +41,7 @@ import {
   getProviderModelKey,
 } from './model-identity';
 import { getCcsDir } from '../../config/config-loader-facade';
+import { listAccountInstancePaths } from '../../management/instance-directory';
 
 // ============================================================================
 // Multi-Instance Support - Aggregate usage from CCS profiles
@@ -77,15 +78,11 @@ function getInstancePaths(): string[] {
   }
 
   try {
-    const entries = fs.readdirSync(instancesDir, { withFileTypes: true });
-    return entries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => path.join(instancesDir, entry.name))
-      .filter((instancePath) => {
-        // Only include instances that have a projects directory
-        const projectsPath = path.join(instancePath, 'projects');
-        return fs.existsSync(projectsPath);
-      });
+    return listAccountInstancePaths(instancesDir).filter((instancePath) => {
+      // Only include instances that have a projects directory
+      const projectsPath = path.join(instancePath, 'projects');
+      return fs.existsSync(projectsPath);
+    });
   } catch {
     console.error(fail('Failed to read CCS instances directory'));
     return [];
