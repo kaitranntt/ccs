@@ -80,7 +80,18 @@ const VALUE_TAKING_FLAGS = new Set<string>([
   '--setting-sources',
   '--settings',
   '--system-prompt',
+  '--teammate-mode',
   '--tools',
+]);
+
+const SUBCOMMAND_SESSION_ONLY_FLAGS = new Set<string>([
+  '--allow-dangerously-skip-permissions',
+  '--dangerously-skip-permissions',
+]);
+
+const SUBCOMMAND_SESSION_ONLY_VALUE_FLAGS = new Set<string>([
+  '--permission-mode',
+  '--teammate-mode',
 ]);
 
 /**
@@ -119,16 +130,56 @@ export function isClaudeSubcommandInvocation(args: readonly string[]): boolean {
   return false;
 }
 
+export function stripClaudeSubcommandSessionArgs(args: readonly string[]): string[] {
+  if (!isClaudeSubcommandInvocation(args)) {
+    return [...args];
+  }
+
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (SUBCOMMAND_SESSION_ONLY_FLAGS.has(arg)) {
+      continue;
+    }
+
+    if (arg.startsWith('--permission-mode=') || arg.startsWith('--teammate-mode=')) {
+      continue;
+    }
+
+    if (SUBCOMMAND_SESSION_ONLY_VALUE_FLAGS.has(arg)) {
+      const next = args[i + 1];
+      if (next !== undefined && !next.startsWith('-')) {
+        i += 1;
+      }
+      continue;
+    }
+
+    out.push(arg);
+  }
+
+  return out;
+}
+
 /**
- * Claude env vars that disable interactive subcommand TUIs (e.g. the new
- * `claude agents` agent view) when set. CCS injects these as defaults to
- * silence telemetry/bug-report prompts in normal sessions, but they trip
- * subcommands into non-interactive list mode. Issue #1218.
- *
- * Strip only for confirmed Claude subcommand invocations — keep the user's
- * telemetry preference intact for everything else.
+ * Claude Code treats DISABLE_TELEMETRY as a feature kill switch for agent-view
+ * and background-session surfaces, not only as telemetry preference.
  */
-const SUBCOMMAND_BLOCKING_ENV_KEYS = ['DISABLE_TELEMETRY'] as const;
+const CLAUDE_CODE_FEATURE_BLOCKING_ENV_KEYS = ['DISABLE_TELEMETRY'] as const;
+
+export function stripClaudeCodeFeatureBlockingEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (
+      CLAUDE_CODE_FEATURE_BLOCKING_ENV_KEYS.includes(
+        key as (typeof CLAUDE_CODE_FEATURE_BLOCKING_ENV_KEYS)[number]
+      )
+    ) {
+      continue;
+    }
+    out[key] = value;
+  }
+  return out;
+}
 
 /**
  * Return a shallow copy of `env` with subcommand-blocking telemetry vars
@@ -136,14 +187,5 @@ const SUBCOMMAND_BLOCKING_ENV_KEYS = ['DISABLE_TELEMETRY'] as const;
  * Claude subcommand invocation.
  */
 export function stripSubcommandBlockingEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const out: NodeJS.ProcessEnv = {};
-  for (const [key, value] of Object.entries(env)) {
-    if (
-      SUBCOMMAND_BLOCKING_ENV_KEYS.includes(key as (typeof SUBCOMMAND_BLOCKING_ENV_KEYS)[number])
-    ) {
-      continue;
-    }
-    out[key] = value;
-  }
-  return out;
+  return stripClaudeCodeFeatureBlockingEnv(env);
 }

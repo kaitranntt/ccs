@@ -44,7 +44,10 @@ import {
   normalizeDeprecatedGlmtEnv,
 } from '../../utils/glmt-deprecation';
 import { createOpenAICompatLaunchSettings } from '../../utils/openai-compat-launch-settings';
-import { isClaudeSubcommandInvocation } from '../../utils/claude-subcommand-detector';
+import {
+  isClaudeSubcommandInvocation,
+  stripClaudeSubcommandSessionArgs,
+} from '../../utils/claude-subcommand-detector';
 import {
   resolveDroidProvider,
   evaluateTargetRuntimeCompatibility,
@@ -371,8 +374,11 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
     // Claude subcommands reject `--settings` (it flips `agents` to list mode).
     // Routing env vars still flow via proxyEnv. Issue #1218.
     const isSubcommand = isClaudeSubcommandInvocation(browserArgs);
+    const subcommandArgs = isSubcommand
+      ? stripClaudeSubcommandSessionArgs(browserArgs)
+      : browserArgs;
     const launchArgs = isSubcommand
-      ? appendThirdPartyWebSearchToolArgs(browserArgs)
+      ? appendThirdPartyWebSearchToolArgs(subcommandArgs)
       : [
           '--settings',
           launchSettings.settingsPath,
@@ -393,8 +399,9 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
   // Skip `--settings` for Claude subcommands so the interactive agent view
   // works; env vars from the settings file still flow via envVars. Issue #1218.
   const isSubcommand = isClaudeSubcommandInvocation(browserArgs);
+  const subcommandArgs = isSubcommand ? stripClaudeSubcommandSessionArgs(browserArgs) : browserArgs;
   const launchArgs = isSubcommand
-    ? appendThirdPartyWebSearchToolArgs(browserArgs)
+    ? appendThirdPartyWebSearchToolArgs(subcommandArgs)
     : ['--settings', expandedSettingsPath, ...appendThirdPartyWebSearchToolArgs(browserArgs)];
   const traceEnv = createWebSearchTraceContext({
     launcher: 'ccs.settings-profile',

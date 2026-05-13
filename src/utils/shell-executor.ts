@@ -11,6 +11,8 @@ import { getWebSearchHookEnv } from './websearch-manager';
 import { wireChildProcessSignals } from './signal-forwarder';
 import {
   isClaudeSubcommandInvocation,
+  stripClaudeCodeFeatureBlockingEnv,
+  stripClaudeSubcommandSessionArgs,
   stripSubcommandBlockingEnv,
 } from './claude-subcommand-detector';
 
@@ -288,15 +290,19 @@ export function execClaude(
     ? stripAnthropicRoutingEnv(mergedEnv, envVars ?? undefined)
     : mergedEnv;
 
+  const effectiveArgs = isClaudeSubcommandInvocation(args)
+    ? stripClaudeSubcommandSessionArgs(args)
+    : args;
+
   // Strip Claude Code nested session guard env var to allow CCS delegation
   // (Claude Code v2.1.39+ sets CLAUDECODE to detect nested sessions)
-  let env = stripClaudeCodeEnv(effectiveMergedEnv);
+  let env = stripClaudeCodeFeatureBlockingEnv(stripClaudeCodeEnv(effectiveMergedEnv));
 
   // For Claude subcommand invocations (`agents`, `mcp`, `doctor`, ...) strip
   // telemetry-disable env vars that cause upstream Claude Code to fall back
   // to non-interactive list mode instead of opening the subcommand TUI.
   // Issue #1218.
-  if (isClaudeSubcommandInvocation(args)) {
+  if (isClaudeSubcommandInvocation(effectiveArgs)) {
     env = stripSubcommandBlockingEnv(env);
   }
 
@@ -316,7 +322,7 @@ export function execClaude(
   if (isPowerShellScript) {
     child = spawn(
       'powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', claudeCli, ...args],
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', claudeCli, ...effectiveArgs],
       {
         stdio: 'inherit',
         windowsHide: true,
@@ -325,7 +331,7 @@ export function execClaude(
     );
   } else if (needsShell) {
     // When shell needed: concatenate into string to avoid DEP0190 warning
-    const cmdString = [claudeCli, ...args].map(escapeShellArg).join(' ');
+    const cmdString = [claudeCli, ...effectiveArgs].map(escapeShellArg).join(' ');
     child = spawn(cmdString, {
       stdio: 'inherit',
       windowsHide: true,
@@ -334,7 +340,7 @@ export function execClaude(
     });
   } else {
     // When no shell needed: use array form (faster, no shell overhead)
-    child = spawn(claudeCli, args, {
+    child = spawn(claudeCli, effectiveArgs, {
       stdio: 'inherit',
       windowsHide: true,
       env,
