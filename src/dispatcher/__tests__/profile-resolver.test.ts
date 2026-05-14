@@ -252,6 +252,65 @@ describe('resolveProfileAndTarget', () => {
     expect(exitSpy).not.toHaveBeenCalled();
   });
 
+  it('keeps explicit codex cliproxy profile on the Codex target', async () => {
+    const mockCodexAdapter = {
+      displayName: 'Codex CLI',
+      detectBinary: mock(() => ({ path: '/usr/local/bin/codex', version: '1.0.0' })),
+      supportsProfileType: mock(() => true),
+    };
+    mockGetTarget.mockImplementation((_name: string) => mockCodexAdapter);
+    mockResolveTargetType.mockImplementation((_args: string[]) => 'codex' as const);
+    mockStripTargetFlag.mockImplementation((args: string[]) => {
+      const next: string[] = [];
+      for (let index = 0; index < args.length; index += 1) {
+        if (args[index] === '--target') {
+          index += 1;
+          continue;
+        }
+        next.push(args[index]);
+      }
+      return next;
+    });
+    mockDetectProfile.mockImplementation((args: string[]) => ({
+      profile: args[0] || 'default',
+      remainingArgs: args.slice(1),
+    }));
+    mockDetectProfileType.mockImplementation((profile: string) =>
+      profile === 'codex'
+        ? {
+            type: 'cliproxy' as const,
+            name: 'codex',
+            provider: 'codex',
+            target: undefined,
+          }
+        : {
+            type: 'account' as const,
+            name: 'work',
+            target: undefined,
+          }
+    );
+
+    const result = await resolveProfileAndTarget({
+      args: ['codex', '--target', 'codex', 'fix failing tests'],
+      browserLaunchOverride: undefined,
+      cliLogger: stubLogger,
+    });
+
+    expect(result.profile).toBe('codex');
+    expect(result.profileInfo.type).toBe('cliproxy');
+    expect(result.resolvedTarget).toBe('codex');
+    expect(result.targetAdapter).toBe(mockCodexAdapter);
+    expect(result.targetRemainingArgs).toEqual(['fix failing tests']);
+    expect(mockEvaluateTargetRuntimeCompatibility).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: 'codex',
+        profileType: 'cliproxy',
+        cliproxyProvider: 'codex',
+      })
+    );
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+
   it('resolves settings profile (glm) with --target droid and loads settings', async () => {
     // Settings loading only runs in the non-claude preflight block (resolvedTarget !== 'claude').
     const mockDroidAdapter = {

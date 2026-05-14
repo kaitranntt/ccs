@@ -24,6 +24,14 @@ import {
   readCodexVersion,
 } from './codex-detector';
 import { createLogger } from '../services/logging';
+import { getEffectiveApiKey } from '../cliproxy/auth/auth-token-manager';
+import { resolveLifecyclePort } from '../cliproxy/config/port-manager';
+import {
+  CCSXP_CLIPROXY_SHORTCUT_ENV,
+  CODEX_CLIPROXY_PROVIDER_ENV_KEY,
+  ensureCodexCliproxyProviderConfig,
+  isCcsxpCliproxyShortcut,
+} from './codex-cliproxy-provider-config';
 
 const adapterLogger = createLogger('targets:codex');
 
@@ -176,13 +184,25 @@ function prepareExplicitCodexHome(
 export class CodexAdapter implements TargetAdapter {
   readonly type: TargetType = 'codex';
   readonly displayName = 'Codex CLI';
+  private ccsxpCliproxyEnvKey = CODEX_CLIPROXY_PROVIDER_ENV_KEY;
 
   detectBinary(): TargetBinaryInfo | null {
     return getCodexBinaryInfo({ includeVersion: false, includeFeatures: false });
   }
 
   async prepareCredentials(_creds: TargetCredentials): Promise<void> {
-    // Codex uses transient -c overrides plus env_key injection.
+    if (!isCcsxpCliproxyShortcut()) {
+      return;
+    }
+
+    try {
+      const providerRepair = await ensureCodexCliproxyProviderConfig(resolveLifecyclePort());
+      this.ccsxpCliproxyEnvKey = providerRepair.envKey;
+    } catch (error) {
+      throw new Error(
+        `ccsxp could not repair the native Codex cliproxy provider: ${(error as Error).message}`
+      );
+    }
   }
 
   buildArgs(
@@ -258,7 +278,11 @@ export class CodexAdapter implements TargetAdapter {
     const env: NodeJS.ProcessEnv = {
       ...stripBrowserEnv(stripCodexSessionEnv(stripAnthropicEnv(process.env))),
     };
+    delete env[CCSXP_CLIPROXY_SHORTCUT_ENV];
     delete env[CODEX_RUNTIME_ENV_KEY];
+    if (profileType === 'default' && isCcsxpCliproxyShortcut()) {
+      env[this.ccsxpCliproxyEnvKey || CODEX_CLIPROXY_PROVIDER_ENV_KEY] = getEffectiveApiKey();
+    }
     if (profileType !== 'default') {
       if (!creds.apiKey?.trim()) {
         throw new Error('Codex target requires an API key for CCS-backed profile launches.');

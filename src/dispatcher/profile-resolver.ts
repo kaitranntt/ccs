@@ -79,6 +79,18 @@ export interface ResolvedProfile {
   detector: InstanceType<typeof ProfileDetector>;
 }
 
+function usesImplicitDefaultProfile(cleanArgs: string[]): boolean {
+  return cleanArgs.length === 0 || cleanArgs[0]?.startsWith('-') === true;
+}
+
+function buildNativeCodexDefaultProfile(): ProfileDetectionResult {
+  return {
+    type: 'default',
+    name: 'default',
+    message: 'Using native Codex auth; CCS default profile is not applied to Codex target.',
+  };
+}
+
 // ========== Profile and Target Resolver ==========
 
 /**
@@ -112,7 +124,7 @@ export async function resolveProfileAndTarget(
   // Detect profile (strip --target flags before profile detection)
   const cleanArgs = stripTargetFlag(args);
   const { profile, remainingArgs } = detectProfile(cleanArgs);
-  const profileInfo: ProfileDetectionResult = detector.detectProfileType(profile);
+  let profileInfo: ProfileDetectionResult = detector.detectProfileType(profile);
 
   let resolvedTarget: ReturnType<typeof resolveTargetType>;
   try {
@@ -125,6 +137,10 @@ export async function resolveProfileAndTarget(
     process.exit(1);
     // Unreachable; needed so TS knows resolvedTarget is always assigned below
     throw error;
+  }
+
+  if (resolvedTarget === 'codex' && usesImplicitDefaultProfile(cleanArgs)) {
+    profileInfo = buildNativeCodexDefaultProfile();
   }
 
   // Detect Claude CLI (needed for claude target and all CLIProxy-derived flows)

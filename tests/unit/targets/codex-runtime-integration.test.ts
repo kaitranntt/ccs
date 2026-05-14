@@ -116,18 +116,32 @@ if (out) {
 }
 const envOut = process.env.CCS_TEST_CODEX_ENV_OUT;
 if (envOut) {
+  const loggedEnv = {
+    CODEX_HOME: process.env.CODEX_HOME,
+    CODEX_CI: process.env.CODEX_CI,
+    CODEX_MANAGED_BY_BUN: process.env.CODEX_MANAGED_BY_BUN,
+    CODEX_THREAD_ID: process.env.CODEX_THREAD_ID,
+    ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
+    CCS_BROWSER_USER_DATA_DIR: process.env.CCS_BROWSER_USER_DATA_DIR,
+    CCS_BROWSER_PROFILE_DIR: process.env.CCS_BROWSER_PROFILE_DIR,
+    CCS_BROWSER_DEVTOOLS_WS_URL: process.env.CCS_BROWSER_DEVTOOLS_WS_URL,
+  };
+  if (
+    process.env.CCS_TEST_CODEX_LOG_CLIPROXY_API_KEY === '1' &&
+    process.env.CLIPROXY_API_KEY !== undefined
+  ) {
+    loggedEnv.CLIPROXY_API_KEY = process.env.CLIPROXY_API_KEY;
+  }
+  const extraEnvKeys = (process.env.CCS_TEST_CODEX_LOG_ENV_KEYS || '')
+    .split(',')
+    .map((key) => key.trim())
+    .filter(Boolean);
+  for (const key of extraEnvKeys) {
+    loggedEnv[key] = process.env[key];
+  }
   fs.appendFileSync(
     envOut,
-    JSON.stringify({
-      CODEX_HOME: process.env.CODEX_HOME,
-      CODEX_CI: process.env.CODEX_CI,
-      CODEX_MANAGED_BY_BUN: process.env.CODEX_MANAGED_BY_BUN,
-      CODEX_THREAD_ID: process.env.CODEX_THREAD_ID,
-      ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
-      CCS_BROWSER_USER_DATA_DIR: process.env.CCS_BROWSER_USER_DATA_DIR,
-      CCS_BROWSER_PROFILE_DIR: process.env.CCS_BROWSER_PROFILE_DIR,
-      CCS_BROWSER_DEVTOOLS_WS_URL: process.env.CCS_BROWSER_DEVTOOLS_WS_URL,
-    }) + '\\n'
+    JSON.stringify(loggedEnv) + '\\n'
   );
 }
 const configFlagIndex = cliArgs.findIndex((arg) => arg === '-c' || arg === '--config');
@@ -396,6 +410,7 @@ process.exit(0);
       ...process.env,
       CI: '1',
       NO_COLOR: '1',
+      HOME: tmpHome,
       CCS_HOME: tmpHome,
       CCS_CODEX_PATH: fakeCodexPath,
       CCS_TEST_CODEX_ARGS_OUT: codexArgsLogPath,
@@ -413,6 +428,7 @@ process.exit(0);
       ...process.env,
       CI: '1',
       NO_COLOR: '1',
+      HOME: tmpHome,
       CCS_HOME: tmpHome,
       CCS_CODEX_PATH: fakeCodexPath,
       CCS_TEST_CODEX_ARGS_OUT: codexArgsLogPath,
@@ -647,6 +663,7 @@ process.exit(0);
       ...process.env,
       CI: '1',
       NO_COLOR: '1',
+      HOME: tmpHome,
       CCS_HOME: tmpHome,
       CCS_CODEX_PATH: fakeCodexPath,
       CCS_TEST_CODEX_ARGS_OUT: codexArgsLogPath,
@@ -668,21 +685,24 @@ process.exit(0);
       ...process.env,
       CI: '1',
       NO_COLOR: '1',
+      HOME: tmpHome,
       CCS_HOME: tmpHome,
       CCS_CODEX_PATH: fakeCodexPath,
       CCS_TEST_CODEX_ENV_OUT: codexEnvLogPath,
       CCS_TEST_CODEX_VERSION: 'codex-cli 9.9.9-test',
+      CCS_TEST_CODEX_LOG_CLIPROXY_API_KEY: '1',
       CODEX_HOME: inheritedCodexHome,
     });
 
     expect(result.status).toBe(0);
     expect(readLoggedCodexEnv(codexEnvLogPath)).toEqual([
       {
-        CODEX_HOME: path.join(os.homedir(), '.codex'),
+        CODEX_HOME: path.join(tmpHome, '.codex'),
         CODEX_CI: undefined,
         CODEX_MANAGED_BY_BUN: undefined,
         CODEX_THREAD_ID: undefined,
         ANTHROPIC_BASE_URL: undefined,
+        CLIPROXY_API_KEY: 'ccs-internal-managed',
         CCS_BROWSER_USER_DATA_DIR: undefined,
         CCS_BROWSER_PROFILE_DIR: undefined,
         CCS_BROWSER_DEVTOOLS_WS_URL: undefined,
@@ -697,10 +717,112 @@ process.exit(0);
       ...process.env,
       CI: '1',
       NO_COLOR: '1',
+      HOME: tmpHome,
       CCS_HOME: tmpHome,
       CCS_CODEX_PATH: fakeCodexPath,
       CCS_TEST_CODEX_ARGS_OUT: codexArgsLogPath,
       CCS_TEST_CODEX_ENV_OUT: codexEnvLogPath,
+      CCS_TEST_CODEX_LOG_CLIPROXY_API_KEY: '1',
+    });
+
+    expect(result.status).toBe(0);
+    expect(readLoggedCodexCalls(codexArgsLogPath)).toEqual([
+      ['--config', 'model_provider="cliproxy"', 'fix failing tests'],
+    ]);
+    const codexConfig = fs.readFileSync(path.join(tmpHome, '.codex', 'config.toml'), 'utf8');
+    expect(codexConfig).toContain('[model_providers.cliproxy]');
+    expect(codexConfig).toContain('env_key = "CLIPROXY_API_KEY"');
+    expect(readLoggedCodexEnv(codexEnvLogPath)).toEqual([
+      {
+        CODEX_HOME: path.join(tmpHome, '.codex'),
+        CODEX_CI: undefined,
+        CODEX_MANAGED_BY_BUN: undefined,
+        CODEX_THREAD_ID: undefined,
+        ANTHROPIC_BASE_URL: undefined,
+        CLIPROXY_API_KEY: 'ccs-internal-managed',
+        CCS_BROWSER_USER_DATA_DIR: undefined,
+        CCS_BROWSER_PROFILE_DIR: undefined,
+        CCS_BROWSER_DEVTOOLS_WS_URL: undefined,
+      },
+    ]);
+  });
+
+  it('loads the configured cliproxy provider env_key for ccsxp launches', () => {
+    if (process.platform === 'win32') return;
+
+    const codexHome = path.join(tmpHome, '.codex');
+    fs.mkdirSync(codexHome, { recursive: true });
+    fs.writeFileSync(
+      path.join(codexHome, 'config.toml'),
+      `[model_providers.cliproxy]
+name = "CLIProxy Codex"
+base_url = "http://localhost:8317/api/provider/codex"
+env_key = "CCS_CUSTOM_CLIPROXY_TOKEN"
+wire_api = "responses"
+requires_openai_auth = false
+supports_websockets = false
+`,
+      'utf8'
+    );
+
+    const result = runCcsxpAlias(['fix failing tests'], {
+      ...process.env,
+      CI: '1',
+      NO_COLOR: '1',
+      HOME: tmpHome,
+      CCS_HOME: tmpHome,
+      CCS_CODEX_PATH: fakeCodexPath,
+      CCS_TEST_CODEX_ARGS_OUT: codexArgsLogPath,
+      CCS_TEST_CODEX_ENV_OUT: codexEnvLogPath,
+      CCS_TEST_CODEX_LOG_ENV_KEYS: 'CCS_CUSTOM_CLIPROXY_TOKEN',
+    });
+
+    expect(result.status).toBe(0);
+    expect(readLoggedCodexCalls(codexArgsLogPath)).toEqual([
+      ['--config', 'model_provider="cliproxy"', 'fix failing tests'],
+    ]);
+    const codexConfig = fs.readFileSync(path.join(codexHome, 'config.toml'), 'utf8');
+    expect(codexConfig).toContain('env_key = "CCS_CUSTOM_CLIPROXY_TOKEN"');
+    expect(readLoggedCodexEnv(codexEnvLogPath)).toEqual([
+      {
+        CODEX_HOME: codexHome,
+        CODEX_CI: undefined,
+        CODEX_MANAGED_BY_BUN: undefined,
+        CODEX_THREAD_ID: undefined,
+        ANTHROPIC_BASE_URL: undefined,
+        CCS_CUSTOM_CLIPROXY_TOKEN: 'ccs-internal-managed',
+        CCS_BROWSER_USER_DATA_DIR: undefined,
+        CCS_BROWSER_PROFILE_DIR: undefined,
+        CCS_BROWSER_DEVTOOLS_WS_URL: undefined,
+      },
+    ]);
+  });
+
+  it('keeps ccsxp native when the CCS default profile is a Claude account', () => {
+    if (process.platform === 'win32') return;
+
+    fs.writeFileSync(
+      path.join(ccsDir, 'config.yaml'),
+      [
+        'version: 2',
+        'default: work',
+        'accounts:',
+        '  work:',
+        '    created: "2026-01-01"',
+        '    last_used: "2026-01-01"',
+      ].join('\n')
+    );
+
+    const result = runCcsxpAlias(['fix failing tests'], {
+      ...process.env,
+      CI: '1',
+      NO_COLOR: '1',
+      HOME: tmpHome,
+      CCS_HOME: tmpHome,
+      CCS_CODEX_PATH: fakeCodexPath,
+      CCS_TEST_CODEX_ARGS_OUT: codexArgsLogPath,
+      CCS_TEST_CODEX_ENV_OUT: codexEnvLogPath,
+      CCS_TEST_CODEX_LOG_CLIPROXY_API_KEY: '1',
     });
 
     expect(result.status).toBe(0);
@@ -709,7 +831,51 @@ process.exit(0);
     ]);
     expect(readLoggedCodexEnv(codexEnvLogPath)).toEqual([
       {
-        CODEX_HOME: path.join(os.homedir(), '.codex'),
+        CODEX_HOME: path.join(tmpHome, '.codex'),
+        CODEX_CI: undefined,
+        CODEX_MANAGED_BY_BUN: undefined,
+        CODEX_THREAD_ID: undefined,
+        ANTHROPIC_BASE_URL: undefined,
+        CLIPROXY_API_KEY: 'ccs-internal-managed',
+        CCS_BROWSER_USER_DATA_DIR: undefined,
+        CCS_BROWSER_PROFILE_DIR: undefined,
+        CCS_BROWSER_DEVTOOLS_WS_URL: undefined,
+      },
+    ]);
+  });
+
+  it('keeps implicit ccs --target codex launches native when the CCS default is a Claude account', () => {
+    if (process.platform === 'win32') return;
+
+    fs.writeFileSync(
+      path.join(ccsDir, 'config.yaml'),
+      [
+        'version: 2',
+        'default: work',
+        'accounts:',
+        '  work:',
+        '    created: "2026-01-01"',
+        '    last_used: "2026-01-01"',
+      ].join('\n')
+    );
+
+    const result = runCcs(['--target', 'codex'], {
+      ...process.env,
+      CI: '1',
+      NO_COLOR: '1',
+      HOME: tmpHome,
+      CCS_HOME: tmpHome,
+      CCS_CODEX_PATH: fakeCodexPath,
+      CCS_TEST_CODEX_ARGS_OUT: codexArgsLogPath,
+      CCS_TEST_CODEX_ENV_OUT: codexEnvLogPath,
+      CCS_THINKING: '8192',
+    });
+
+    expect(result.status).toBe(0);
+    expect(readLoggedCodexCalls(codexArgsLogPath)).toEqual([[]]);
+    expect(readLoggedCodexEnv(codexEnvLogPath)).toEqual([
+      {
+        CODEX_HOME: undefined,
         CODEX_CI: undefined,
         CODEX_MANAGED_BY_BUN: undefined,
         CODEX_THREAD_ID: undefined,
@@ -721,6 +887,35 @@ process.exit(0);
     ]);
   });
 
+  it('still rejects an explicit Claude account profile on the Codex target', () => {
+    if (process.platform === 'win32') return;
+
+    fs.writeFileSync(
+      path.join(ccsDir, 'config.yaml'),
+      [
+        'version: 2',
+        'accounts:',
+        '  work:',
+        '    created: "2026-01-01"',
+        '    last_used: "2026-01-01"',
+      ].join('\n')
+    );
+
+    const result = runCcs(['work', '--target', 'codex', 'fix failing tests'], {
+      ...process.env,
+      CI: '1',
+      NO_COLOR: '1',
+      CCS_HOME: tmpHome,
+      CCS_CODEX_PATH: fakeCodexPath,
+      CCS_TEST_CODEX_ARGS_OUT: codexArgsLogPath,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Codex CLI does not support Claude account-based profiles.');
+    expect(result.stderr).toContain('CLIProxy Codex pool: ccs codex --target codex or ccsxp');
+    expect(readLoggedCodexCalls(codexArgsLogPath)).toEqual([]);
+  });
+
   it('rejects conflicting native provider config overrides for ccsxp', () => {
     if (process.platform === 'win32') return;
 
@@ -728,6 +923,7 @@ process.exit(0);
       ...process.env,
       CI: '1',
       NO_COLOR: '1',
+      HOME: tmpHome,
       CCS_HOME: tmpHome,
       CCS_CODEX_PATH: fakeCodexPath,
       CCS_TEST_CODEX_ARGS_OUT: codexArgsLogPath,
@@ -745,6 +941,7 @@ process.exit(0);
       ...process.env,
       CI: '1',
       NO_COLOR: '1',
+      HOME: tmpHome,
       CCS_HOME: tmpHome,
       CCS_CODEX_PATH: fakeCodexPath,
       CCS_TEST_CODEX_ARGS_OUT: codexArgsLogPath,
@@ -767,6 +964,7 @@ process.exit(0);
       CCS_CODEX_PATH: fakeCodexPath,
       CCS_TEST_CODEX_ENV_OUT: codexEnvLogPath,
       CCS_TEST_CODEX_VERSION: 'codex-cli 9.9.9-test',
+      CCS_TEST_CODEX_LOG_CLIPROXY_API_KEY: '1',
       CODEX_HOME: path.join(tmpHome, 'inherited-codex-home'),
       CCSXP_CODEX_HOME: explicitCodexHome,
     });
@@ -779,6 +977,7 @@ process.exit(0);
         CODEX_MANAGED_BY_BUN: undefined,
         CODEX_THREAD_ID: undefined,
         ANTHROPIC_BASE_URL: undefined,
+        CLIPROXY_API_KEY: 'ccs-internal-managed',
         CCS_BROWSER_USER_DATA_DIR: undefined,
         CCS_BROWSER_PROFILE_DIR: undefined,
         CCS_BROWSER_DEVTOOLS_WS_URL: undefined,

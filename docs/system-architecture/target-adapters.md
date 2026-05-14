@@ -521,6 +521,9 @@ ccsxp
 → CCS_INTERNAL_ENTRY_TARGET=codex
 → injects native `model_provider="cliproxy"` override
 → pins CODEX_HOME to native `~/.codex` unless `CCSXP_CODEX_HOME` is set
+→ repairs `[model_providers.cliproxy]` in the active Codex `config.toml`
+→ injects the effective CCS CLIProxy auth token into the provider's configured `env_key`
+→ ignores the configured CCS default account/profile and stays in native Codex default mode
 ```
 
 If a user launches CCS through a custom shim instead of the built-in package bins, target

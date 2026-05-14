@@ -1,10 +1,12 @@
 const os = require('os');
 const path = require('path');
+const { CCSXP_CLIPROXY_SHORTCUT_ENV } = require('../targets/codex-cliproxy-provider-config');
 const { stripTargetFlag } = require('../targets/target-resolver');
 const { expandPath } = require('../utils/helpers');
 const { fail } = require('../utils/ui');
 
 process.env.CCS_INTERNAL_ENTRY_TARGET = 'codex';
+process.env[CCSXP_CLIPROXY_SHORTCUT_ENV] = '1';
 const CCSXP_CLIPROXY_OVERRIDE = 'model_provider="cliproxy"';
 const DISALLOWED_CCSXP_CONFIG_KEY_REGEX =
   /^(model_provider|local_provider|profile)\s*=|^model_providers\./i;
