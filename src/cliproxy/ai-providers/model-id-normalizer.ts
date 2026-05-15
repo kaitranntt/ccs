@@ -45,6 +45,15 @@ const IFLOW_LEGACY_MODEL_ALIASES: Readonly<Record<string, string>> = Object.free
   'minimax-m2.5': 'qwen3-coder-plus',
 });
 
+export type CodexModelTuningEffort = 'medium' | 'high' | 'xhigh';
+export type CodexModelServiceTier = 'fast';
+
+export interface CodexModelTuningAlias {
+  baseModel: string;
+  effort: CodexModelTuningEffort | null;
+  serviceTier: CodexModelServiceTier | null;
+}
+
 function trimModelId(model: string): string {
   return model.trim();
 }
@@ -90,6 +99,23 @@ function splitCodexTuningSuffix(model: string): { baseModel: string; suffix: str
   return {
     baseModel,
     suffix: suffix ? `-${suffix}` : '',
+  };
+}
+
+export function parseCodexModelTuningAlias(model: string): CodexModelTuningAlias | null {
+  const trimmed = trimModelId(model);
+  const { baseModel, suffix } = splitBaseModelAndSuffix(trimmed);
+  if (suffix) return null;
+
+  const parsed = splitCodexTuningSuffix(baseModel);
+  if (!parsed.suffix) return null;
+
+  const tokens = parsed.suffix.slice(1).split('-');
+  const effort = tokens.find((token) => token !== 'fast') as CodexModelTuningEffort | undefined;
+  return {
+    baseModel: parsed.baseModel.trim(),
+    effort: effort ?? null,
+    serviceTier: tokens.includes('fast') ? 'fast' : null,
   };
 }
 

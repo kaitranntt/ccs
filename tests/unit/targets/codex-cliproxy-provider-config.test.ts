@@ -136,4 +136,65 @@ supports_websockets = false
     expect(result.envKey).toBe('CLIPROXY_API_KEY');
     expect(fs.readFileSync(configPath, 'utf8')).toBe(rawText);
   });
+
+  it('normalizes a ready native Codex tuning alias before requests reach cliproxy', async () => {
+    fs.mkdirSync(codexHome, { recursive: true });
+    fs.writeFileSync(
+      configPath,
+      `model = "gpt-5.5-high-fast"
+
+[model_providers.cliproxy]
+name = "CLIProxy Codex"
+base_url = "http://localhost:8317/api/provider/codex"
+env_key = "CLIPROXY_API_KEY"
+wire_api = "responses"
+requires_openai_auth = false
+supports_websockets = false
+`,
+      'utf8'
+    );
+
+    const result = await ensureCodexCliproxyProviderConfig(8317, env);
+
+    expect(result.changed).toBe(true);
+    const rawText = fs.readFileSync(configPath, 'utf8');
+    expect(rawText).toContain('model = "gpt-5.5"');
+    expect(rawText).toContain('model_reasoning_effort = "high"');
+    expect(rawText).toContain('service_tier = "priority"');
+    expect(rawText).toContain('[model_providers.cliproxy]');
+    expect(rawText).not.toContain('gpt-5.5-high-fast');
+  });
+
+  it('normalizes a native Codex effort alias when adding the missing provider', async () => {
+    fs.mkdirSync(codexHome, { recursive: true });
+    fs.writeFileSync(configPath, 'model = "gpt-5.5-xhigh"\n', 'utf8');
+
+    const result = await ensureCodexCliproxyProviderConfig(8317, env);
+
+    expect(result.changed).toBe(true);
+    const rawText = fs.readFileSync(configPath, 'utf8');
+    expect(rawText).toContain('model = "gpt-5.5"');
+    expect(rawText).toContain('model_reasoning_effort = "xhigh"');
+    expect(rawText).toContain('[model_providers.cliproxy]');
+  });
+
+  it('does not strip unknown top-level models that happen to end with effort tokens', async () => {
+    fs.mkdirSync(codexHome, { recursive: true });
+    const rawText = `model = "literal-high"
+
+[model_providers.cliproxy]
+name = "CLIProxy Codex"
+base_url = "http://localhost:8317/api/provider/codex"
+env_key = "CLIPROXY_API_KEY"
+wire_api = "responses"
+requires_openai_auth = false
+supports_websockets = false
+`;
+    fs.writeFileSync(configPath, rawText, 'utf8');
+
+    const result = await ensureCodexCliproxyProviderConfig(8317, env);
+
+    expect(result.changed).toBe(false);
+    expect(fs.readFileSync(configPath, 'utf8')).toBe(rawText);
+  });
 });

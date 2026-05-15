@@ -12,6 +12,7 @@ import {
   normalizeModelIdForProvider,
   normalizeModelIdForRouting,
   normalizeModelEnvVarsForProvider,
+  parseCodexModelTuningAlias,
 } from '../model-id-normalizer';
 
 describe('model-id-normalizer', () => {
@@ -134,6 +135,20 @@ describe('model-id-normalizer', () => {
       expect(canonicalizeModelIdForProvider('gpt-5-codex-fast-high', 'codex')).toBe(
         'gpt-5.4-high-fast'
       );
+    });
+
+    it('parses codex model tuning suffixes', () => {
+      expect(parseCodexModelTuningAlias('gpt-5.5-high')).toEqual({
+        baseModel: 'gpt-5.5',
+        effort: 'high',
+        serviceTier: null,
+      });
+      expect(parseCodexModelTuningAlias('gpt-5.5-fast-high')).toEqual({
+        baseModel: 'gpt-5.5',
+        effort: 'high',
+        serviceTier: 'fast',
+      });
+      expect(parseCodexModelTuningAlias('gpt-5.5[1m]')).toBeNull();
     });
   });
 
