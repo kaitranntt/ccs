@@ -13,6 +13,16 @@ Persistent config, restart on reboot.
 
 <br>
 
+## Choosing an image
+
+| Tag | Use | Approx. size | Status |
+|---|---|---|---|
+| `ghcr.io/kaitranntt/ccs:latest` | CCS + CLIProxy, no AI CLIs pre-installed | < 350 MB | **Recommended** |
+| `ghcr.io/kaitranntt/ccs:full` | CCS + CLIProxy + claude-code + gemini-cli + grok-cli + opencode | < 600 MB | Supported |
+| `ghcr.io/kaitranntt/ccs-dashboard:latest` | Legacy all-in-one image | > 600 MB | **Deprecated** — migrate to `ccs:latest`. Sunset after 2 releases. See [#1251](https://github.com/kaitranntt/ccs/issues/1251) |
+
+Both `ccs:latest` and `ccs:full` also publish pinned version tags (`ccs:<major>.<minor>.<patch>`, `ccs:<major>.<minor>`, `ccs:<major>`) for reproducible deployments. The `:full` variants carry the `full-` prefix: `ccs:full-<ver>`, `ccs:full-<minor>`, etc.
+
 ## Preferred: `ccs docker`
 
 The CLI now ships a first-class Docker command suite for the integrated CCS + CLIProxy stack:
@@ -147,24 +157,38 @@ Expected healthy output:
 
 ## Prebuilt Image Quick Start
 
-This existing image still runs the CCS dashboard and its locally managed CLIProxy inside one
-container. It does not provide the remote staging and in-container self-update flow exposed by
-`ccs docker`.
-
-Pull the latest stable release image from GitHub Container Registry:
+Pull the recommended minimal image (CCS + CLIProxy, no AI CLIs):
 
 ```bash
 docker run -d \
-  --name ccs-dashboard \
+  --name ccs \
   --restart unless-stopped \
   -p 3000:3000 \
   -p 8317:8317 \
   -e CCS_PORT=3000 \
-  -v ccs_home:/home/node/.ccs \
-  ghcr.io/kaitranntt/ccs-dashboard:latest
+  -v ccs_home:/root/.ccs \
+  ghcr.io/kaitranntt/ccs:latest
 ```
 
-Release-tag images are also published as `ghcr.io/kaitranntt/ccs-dashboard:<version>`.
+Or pull the full image with all 4 AI CLIs pre-installed:
+
+```bash
+docker run -d \
+  --name ccs \
+  --restart unless-stopped \
+  -p 3000:3000 \
+  -p 8317:8317 \
+  -e CCS_PORT=3000 \
+  -v ccs_home:/root/.ccs \
+  ghcr.io/kaitranntt/ccs:full
+```
+
+Release-tag images are published as `ghcr.io/kaitranntt/ccs:<version>` (minimal) and `ghcr.io/kaitranntt/ccs:full-<version>` (full).
+
+### Legacy image (deprecated)
+
+The `ghcr.io/kaitranntt/ccs-dashboard:latest` image continues building for 2 more releases but
+emits a deprecation warning on startup. Migrate to `ccs:latest` at your earliest convenience.
 
 ## Prebuilt Image Build Locally
 

@@ -20,6 +20,8 @@ Anthropic-compatible APIs without config thrash.
 
 </div>
 
+> **[Docker]** `ghcr.io/kaitranntt/ccs-dashboard:latest` is deprecated. Use `ghcr.io/kaitranntt/ccs:latest` instead. See [#1251](https://github.com/kaitranntt/ccs/issues/1251) and [docker/README.md](docker/README.md#choosing-an-image) for migration details.
+
 ## Why CCS
 
 CCS gives you one stable command surface while letting you switch between:
