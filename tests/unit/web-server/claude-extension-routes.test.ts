@@ -34,9 +34,8 @@ describe('web-server claude-extension-routes', () => {
     ({ default: SharedManager } = await import('../../../src/management/shared-manager'));
     ({ createEmptyUnifiedConfig } = await import('../../../src/config/unified-config-types'));
     ({ saveUnifiedConfig } = await import('../../../src/config/unified-config-loader'));
-    ({ default: claudeExtensionRoutes } = await import(
-      '../../../src/web-server/routes/claude-extension-routes'
-    ));
+    ({ default: claudeExtensionRoutes } =
+      await import('../../../src/web-server/routes/claude-extension-routes'));
 
     const app = express();
     app.use(express.json());
@@ -68,7 +67,8 @@ describe('web-server claude-extension-routes', () => {
     if (originalCcsHome !== undefined) process.env.CCS_HOME = originalCcsHome;
     else delete process.env.CCS_HOME;
 
-    if (originalClaudeConfigDir !== undefined) process.env.CLAUDE_CONFIG_DIR = originalClaudeConfigDir;
+    if (originalClaudeConfigDir !== undefined)
+      process.env.CLAUDE_CONFIG_DIR = originalClaudeConfigDir;
     else delete process.env.CLAUDE_CONFIG_DIR;
   });
 
@@ -176,6 +176,47 @@ describe('web-server claude-extension-routes', () => {
     expect(payload.ideSettings.json).toContain('"ANTHROPIC_API_KEY"');
     expect(payload.sharedSettings.command).toBe('ccs persist glm');
     expect(payload.sharedSettings.json).toContain('"env"');
+  });
+
+  it('blocks non-local setup requests when dashboard auth is disabled', async () => {
+    const app = express();
+    app.use((_req, _res, next) => {
+      Object.defineProperty(_req.socket, 'remoteAddress', {
+        configurable: true,
+        value: '10.0.0.25',
+      });
+      next();
+    });
+    app.use('/api/claude-extension', claudeExtensionRoutes);
+
+    const remoteServer = await new Promise<Server>((resolve, reject) => {
+      const instance = app.listen(0, '127.0.0.1');
+      const handleError = (error: Error) => reject(error);
+      instance.once('error', handleError);
+      instance.once('listening', () => {
+        instance.off('error', handleError);
+        resolve(instance);
+      });
+    });
+
+    try {
+      const address = remoteServer.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('Unable to resolve remote test server port');
+      }
+
+      const response = await fetch(
+        `http://127.0.0.1:${address.port}/api/claude-extension/setup?profile=glm&host=vscode`
+      );
+      expect(response.status).toBe(403);
+
+      const payload = (await response.json()) as { error: string };
+      expect(payload.error).toBe(
+        'Claude extension setup requires localhost access when dashboard auth is disabled.'
+      );
+    } finally {
+      await new Promise<void>((resolve) => remoteServer.close(() => resolve()));
+    }
   });
 
   it('normalizes the effective profile CLAUDE_CONFIG_DIR for extension setup', async () => {
