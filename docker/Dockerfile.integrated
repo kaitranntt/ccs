@@ -1,31 +1,32 @@
 FROM eceasy/cli-proxy-api:latest
 
 ARG CCS_NPM_VERSION=latest
-# FLAVOR=minimal installs CCS only; FLAVOR=full adds claude-code, gemini-cli, grok-cli, opencode
-ARG FLAVOR=minimal
+
+# CCS integrated image: CCS CLI + CLIProxy + supervisord.
+# No AI CLIs (claude-code, gemini-cli, etc.) are bundled.
+# To use AI CLIs alongside CLIProxy, run them in sibling containers
+# attached to ccs-net — see docker/README.md#connect-your-app-to-cliproxy.
 
 RUN apk add --no-cache \
-    bash \
     curl \
     jq \
     nodejs \
     npm \
     supervisor
 
-# Install CCS CLI (always present in both flavors)
+# Install CCS CLI.
+# Tradeoff: `npm install -g` does not use a lockfile — the package is already
+# version-pinned via CCS_NPM_VERSION (e.g. "7.80.0"), so transitive drift is
+# bounded to patch-level updates of CCS's own production dependencies between
+# publish time and image build time. This is intentional: pinning an exact
+# lockfile in a Docker global-install layer is fragile (lockfile format ties to
+# npm/Node version in the base image). The --mount=type=cache layer ensures the
+# resolved dependency tree is stable within a single build host's cache.
+# Regression test: tests/docker/image-size.sh asserts the image stays within
+# the size budget, which catches unexpected dep bloat.
 RUN --mount=type=cache,target=/root/.npm \
     npm install -g @kaitranntt/ccs@${CCS_NPM_VERSION} \
   && ln -sf /usr/local/lib/node_modules/@kaitranntt/ccs/dist/docker/docker-bootstrap.js /usr/local/bin/ccs-docker-bootstrap
-
-# Install AI CLIs only in the full flavor (all 4 bundled as one layer)
-RUN --mount=type=cache,target=/root/.npm \
-    if [ "$FLAVOR" = "full" ]; then \
-      npm install -g --ignore-scripts \
-        @anthropic-ai/claude-code \
-        @google/gemini-cli \
-        @vibe-kit/grok-cli \
-      && curl -fsSL https://opencode.ai/install | sh -s -- --no-modify-path 2>/dev/null || true; \
-    fi
 
 COPY supervisord.conf /etc/supervisord.conf
 COPY entrypoint-integrated.sh /entrypoint-integrated.sh

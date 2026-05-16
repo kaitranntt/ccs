@@ -35,7 +35,7 @@ docker compose up -d
 Dashboard at http://localhost:3000 · CLIProxy at http://localhost:8317.
 
 Need a corporate-proxy alternative? Download directly:
-`https://github.com/kaitranntt/ccs/blob/main/docker/compose.yaml`
+`https://raw.githubusercontent.com/kaitranntt/ccs/main/docker/compose.yaml`
 <!-- quickstart-snippet-end -->
 
 ## Install on Host (npm)

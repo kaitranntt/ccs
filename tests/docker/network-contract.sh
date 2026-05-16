@@ -8,12 +8,17 @@
 #   - Dashboard:    http://ccs:3000
 #
 # Requires: Docker with compose plugin, internet access to pull curlimages/curl
-# Usage: bash tests/docker/network-contract.sh
-#   (called from repo root so docker/compose.yaml path resolves)
+# Usage: bash tests/docker/network-contract.sh [compose-file] [image-ref]
+#   compose-file  Path to compose file (default: docker/compose.yaml)
+#   image-ref     Override the image used in the compose file (optional).
+#                 When set, the compose stack is run with that image instead
+#                 of whatever is pinned in the compose file.
+#   Called from repo root so the default path resolves.
 #
 set -euo pipefail
 
-COMPOSE_FILE="docker/compose.yaml"
+COMPOSE_FILE="${1:-docker/compose.yaml}"
+IMAGE_OVERRIDE="${2:-}"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -26,7 +31,12 @@ err() { printf '[X] %s\n' "$*" >&2; }
 # Bring stack up; register teardown on any exit
 # ---------------------------------------------------------------------------
 log "Bringing CCS stack up: $COMPOSE_FILE"
-docker compose -f "$COMPOSE_FILE" up -d
+if [[ -n "$IMAGE_OVERRIDE" ]]; then
+  log "Overriding image with: $IMAGE_OVERRIDE"
+  CCS_IMAGE="$IMAGE_OVERRIDE" docker compose -f "$COMPOSE_FILE" up -d
+else
+  docker compose -f "$COMPOSE_FILE" up -d
+fi
 
 cleanup() {
   log "Tearing down stack..."
@@ -35,7 +45,7 @@ cleanup() {
 trap cleanup EXIT
 
 # ---------------------------------------------------------------------------
-# Wait for healthcheck (max 90s)
+# Wait for healthcheck (max 90s) — use jq instead of python3 for CI portability
 # ---------------------------------------------------------------------------
 log "Waiting for healthcheck to pass (max 90s)..."
 WAIT_MAX=45   # 45 x 2s = 90s
@@ -43,20 +53,10 @@ HEALTHY=0
 for _i in $(seq 1 "$WAIT_MAX"); do
   STATUS=$(
     docker compose -f "$COMPOSE_FILE" ps --format json 2>/dev/null \
-      | python3 -c "
-import sys, json
-data = sys.stdin.read().strip()
-if not data:
-    print('unknown')
-    raise SystemExit(0)
-rows = json.loads('[' + ','.join(data.splitlines()) + ']')
-for r in rows:
-    if 'ccs' in r.get('Service', ''):
-        print(r.get('Health', 'unknown'))
-        raise SystemExit(0)
-print('unknown')
-" 2>/dev/null || echo "unknown"
+      | jq -r 'if type == "array" then .[] else . end | select(.Service != null and (.Service | contains("ccs"))) | .Health // "unknown"' \
+      2>/dev/null | head -1 || echo "unknown"
   )
+  STATUS="${STATUS:-unknown}"
   if [ "$STATUS" = "healthy" ]; then
     HEALTHY=1
     break

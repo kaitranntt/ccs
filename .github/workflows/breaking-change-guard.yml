@@ -1,0 +1,115 @@
+name: Breaking Change Guard – Docker Compose Contract
+
+# Guards against accidental breaking changes to the stable ccs-net contract
+# defined in docker/compose.yaml. The following fields are considered stable
+# API — changing them breaks existing sibling-container setups:
+#
+#   services.ccs.image (the image *name*, not the tag)
+#   networks.ccs-net.name
+#   services.ccs.container_name (if set)
+#
+# If any of these fields change in a PR, the workflow fails unless at least
+# one commit in the PR includes a breaking-change marker (feat!: or fix!:).
+# This enforces a deliberate, visible decision to change the contract.
+
+on:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - "docker/compose.yaml"
+
+jobs:
+  guard:
+    name: Verify breaking changes are intentional
+    if: >-
+      contains(fromJSON('["COLLABORATOR","MEMBER","OWNER"]'), github.event.pull_request.author_association)
+    runs-on: [self-hosted, linux, x64, cliproxy]
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.base_ref }} --depth=50
+
+      - name: Check for contract-breaking changes
+        id: contract
+        run: |
+          set -euo pipefail
+
+          BASE="origin/${{ github.base_ref }}"
+          DIFF=$(git diff "${BASE}"...HEAD -- docker/compose.yaml)
+
+          BREAKING=0
+
+          # 1. Image name change (repo path, not tag — tags change every release)
+          OLD_IMAGE=$(git show "${BASE}:docker/compose.yaml" \
+            | grep -m1 '^\s*image:' | sed 's/.*image:\s*//' | sed 's/:.*//' | tr -d ' ')
+          NEW_IMAGE=$(grep -m1 '^\s*image:' docker/compose.yaml \
+            | sed 's/.*image:\s*//' | sed 's/:.*//' | tr -d ' ')
+          if [[ "${OLD_IMAGE}" != "${NEW_IMAGE}" ]]; then
+            echo "[!] BREAKING: image name changed: '${OLD_IMAGE}' -> '${NEW_IMAGE}'"
+            BREAKING=1
+          fi
+
+          # 2. ccs-net network name change
+          OLD_NET=$(git show "${BASE}:docker/compose.yaml" \
+            | grep 'name: ccs-net' | tr -d ' ' || echo "")
+          NEW_NET=$(grep 'name: ccs-net' docker/compose.yaml | tr -d ' ' || echo "")
+          if [[ "${OLD_NET}" != "${NEW_NET}" ]]; then
+            echo "[!] BREAKING: ccs-net network name changed"
+            BREAKING=1
+          fi
+
+          # 3. container_name change (if present in either version)
+          OLD_CN=$(git show "${BASE}:docker/compose.yaml" \
+            | grep 'container_name:' | tr -d ' ' || echo "")
+          NEW_CN=$(grep 'container_name:' docker/compose.yaml | tr -d ' ' || echo "")
+          if [[ "${OLD_CN}" != "${NEW_CN}" ]]; then
+            echo "[!] BREAKING: container_name changed: '${OLD_CN}' -> '${NEW_CN}'"
+            BREAKING=1
+          fi
+
+          echo "breaking=${BREAKING}" >> "$GITHUB_OUTPUT"
+
+      - name: Require breaking-change commit marker if contract changed
+        if: steps.contract.outputs.breaking == '1'
+        run: |
+          set -euo pipefail
+
+          BASE="origin/${{ github.base_ref }}"
+
+          # Check all commit messages in the PR for feat! or fix! marker
+          HAS_BREAKING_MARKER=$(
+            git log "${BASE}"...HEAD --format="%s" \
+            | grep -cE "^(feat|fix)(\([^)]+\))?!:" || true
+          )
+
+          if [[ "${HAS_BREAKING_MARKER}" -eq 0 ]]; then
+            echo ""
+            echo "[X] Breaking change guard FAILED"
+            echo ""
+            echo "    docker/compose.yaml was modified in a way that changes the stable"
+            echo "    ccs-net contract (image name, network name, or container_name)."
+            echo ""
+            echo "    These fields are relied upon by sibling containers. Changing them"
+            echo "    without a breaking-change marker is a silent breaking change."
+            echo ""
+            echo "    To proceed, rename at least one commit to use the feat! or fix!"
+            echo "    breaking-change format:"
+            echo ""
+            echo "      feat!: rename ccs service image to ghcr.io/owner/newname"
+            echo "      fix!: align container_name with new naming convention"
+            echo ""
+            echo "    See: https://www.conventionalcommits.org/en/v1.0.0/#specification"
+            exit 1
+          fi
+
+          echo "[OK] Breaking-change commit marker found — contract change is intentional"
+
+      - name: No contract-breaking changes detected
+        if: steps.contract.outputs.breaking == '0'
+        run: echo "[OK] No contract-breaking changes in docker/compose.yaml"

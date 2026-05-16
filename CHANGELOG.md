@@ -3,10 +3,16 @@
 ### Added
 
 * **docker:** Stable Docker network contract — external network `ccs-net` with service DNS `ccs` resolving to the CCS container. CLIProxy reachable at `http://ccs:8317`; dashboard at `http://ccs:3000`. Sibling containers can attach via `--network ccs-net` or by declaring `ccs-net` as an external network in their own compose file. Changing the network name or service name is a **SemVer-major breaking change**. See [docker/README.md](docker/README.md#connect-your-app-to-cliproxy) for usage patterns and troubleshooting. Verified by `tests/docker/network-contract.sh`.
+* **docker/ci:** Published images are signed with cosign (keyless OIDC) and include a provenance attestation and SBOM. Verification command documented in [docker/README.md](docker/README.md#image-signatures-and-sbom).
+* **release:** Every merge to `main` now auto-cuts a `vX.Y.Z-rc.N` pre-release. A manual `promote-release` workflow promotes the rc to stable after the soak period. See [docs/release-process.md](docs/release-process.md).
+
+### Removed
+
+* **docker:** Dropped Docker image variant `ccs:full`. AI CLIs (claude-code, gemini-cli, grok-cli, opencode) are no longer bundled. Use sibling containers attached to `ccs-net` instead — see [docker/README.md#connect-your-app-to-cliproxy](docker/README.md#connect-your-app-to-cliproxy). Rationale: smaller surface area, fewer supply-chain dependencies, simpler tag taxonomy. The `:latest` image now covers the only published integrated variant.
 
 ### Deprecated
 
-* **docker:** `ghcr.io/kaitranntt/ccs-dashboard:latest` Docker image is deprecated — migrate to `ghcr.io/kaitranntt/ccs:latest` (minimal, CCS + CLIProxy) or `ghcr.io/kaitranntt/ccs:full` (with claude-code, gemini-cli, grok-cli, opencode). The legacy image continues publishing for 2 more releases and emits a startup warning. See [#1251](https://github.com/kaitranntt/ccs/issues/1251).
+* **docker:** `ghcr.io/kaitranntt/ccs-dashboard:latest` Docker image is deprecated — migrate to `ghcr.io/kaitranntt/ccs:latest` (CCS + CLIProxy). The legacy image continues publishing for 2 more releases and emits a startup warning. See [#1251](https://github.com/kaitranntt/ccs/issues/1251).
 
 ## [7.79.1](https://github.com/kaitranntt/ccs/compare/v7.79.0...v7.79.1) (2026-05-14)
 

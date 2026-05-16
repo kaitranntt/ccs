@@ -29,7 +29,7 @@ docker compose up -d
 Dashboard at http://localhost:3000 · CLIProxy at http://localhost:8317.
 
 Need a corporate-proxy alternative? Download directly:
-`https://github.com/kaitranntt/ccs/blob/main/docker/compose.yaml`
+`https://raw.githubusercontent.com/kaitranntt/ccs/main/docker/compose.yaml`
 <!-- quickstart-snippet-end -->
 
 ---
@@ -38,11 +38,12 @@ Need a corporate-proxy alternative? Download directly:
 
 | Tag | Use | Approx. size | Status |
 |---|---|---|---|
-| `ghcr.io/kaitranntt/ccs:latest` | CCS + CLIProxy, no AI CLIs pre-installed | < 350 MB | **Recommended** |
-| `ghcr.io/kaitranntt/ccs:full` | CCS + CLIProxy + claude-code + gemini-cli + grok-cli + opencode | < 600 MB | Supported |
+| `ghcr.io/kaitranntt/ccs:latest` | CCS + CLIProxy, no AI CLIs bundled | < 350 MB | **Recommended** |
 | `ghcr.io/kaitranntt/ccs-dashboard:latest` | Legacy all-in-one image | > 600 MB | **Deprecated** — migrate to `ccs:latest`. Sunset after 2 releases. See [#1251](https://github.com/kaitranntt/ccs/issues/1251) |
 
-Both `ccs:latest` and `ccs:full` also publish pinned version tags (`ccs:<major>.<minor>.<patch>`, `ccs:<major>.<minor>`, `ccs:<major>`) for reproducible deployments. The `:full` variants carry the `full-` prefix: `ccs:full-<ver>`, `ccs:full-<minor>`, etc.
+`ccs:latest` also publishes pinned version tags (`ccs:<major>.<minor>.<patch>`, `ccs:<major>.<minor>`, `ccs:<major>`) for reproducible deployments.
+
+**Need claude-code, gemini-cli, grok-cli, or opencode?** Run those tools in a sibling container attached to `ccs-net` — see [Connect your app to CLIProxy](#connect-your-app-to-cliproxy). This keeps each tool independently versioned and prevents supply-chain bloat in the CLIProxy image.
 
 ---
 
@@ -195,20 +196,7 @@ docker run -d \
   ghcr.io/kaitranntt/ccs:latest
 ```
 
-Or pull the full image with all 4 AI CLIs pre-installed:
-
-```bash
-docker run -d \
-  --name ccs \
-  --restart unless-stopped \
-  -p 3000:3000 \
-  -p 8317:8317 \
-  -e CCS_PORT=3000 \
-  -v ccs_home:/root/.ccs \
-  ghcr.io/kaitranntt/ccs:full
-```
-
-Release-tag images are published as `ghcr.io/kaitranntt/ccs:<version>` (minimal) and `ghcr.io/kaitranntt/ccs:full-<version>` (full).
+Release-tag images are published as `ghcr.io/kaitranntt/ccs:<version>` for reproducible deployments.
 
 ### Build Locally
 
@@ -362,7 +350,7 @@ releases. Migrate to `ghcr.io/kaitranntt/ccs:latest` now.
    ```
 
    Or download manually from:
-   `https://github.com/kaitranntt/ccs/blob/main/docker/compose.yaml`
+   `https://raw.githubusercontent.com/kaitranntt/ccs/main/docker/compose.yaml`
 
 4. **If you were bind-mounting `~/.ccs`** (instead of using a named volume), edit the downloaded
    `docker-compose.yaml` and replace the `ccs_home` named volume with your bind mount:
@@ -387,6 +375,11 @@ releases. Migrate to `ghcr.io/kaitranntt/ccs:latest` now.
 
    Dashboard at http://localhost:3000 · CLIProxy at http://localhost:8317.
 
+   > **Warning:** Use `docker compose down` (without `-v`) to stop the stack.
+   > `docker compose down -v` deletes named volumes including `ccs_home`, which
+   > permanently removes your CCS configuration and auth tokens. Always omit
+   > `-v` unless you intentionally want a clean wipe.
+
 6. **Verify.**
 
    ```bash
@@ -399,7 +392,7 @@ releases. Migrate to `ghcr.io/kaitranntt/ccs:latest` now.
 |---|---|
 | `ghcr.io/kaitranntt/ccs-dashboard:latest` | `ghcr.io/kaitranntt/ccs:latest` |
 | > 600 MB image | < 350 MB image |
-| Monolithic all-in-one | CCS + CLIProxy (AI CLIs optional via `:full`) |
+| Monolithic all-in-one | CCS + CLIProxy (AI CLIs via sibling containers on `ccs-net`) |
 | No stable network contract | `ccs-net` network, `ccs` service DNS |
 
 ---
@@ -592,3 +585,22 @@ docker exec -it ccs-dashboard gemini --help
 - **Secrets**: For sensitive values like `CCS_PROXY_AUTH_TOKEN`, consider using Docker secrets or a `.env` file (not committed to git).
 - **Network**: The container exposes ports 3000 and 8317. In production, use a reverse proxy (nginx, traefik) with TLS.
 - **Updates**: Regularly rebuild the image to get security patches: `docker-compose build --pull`
+
+### Image Signatures and SBOM
+
+All `ghcr.io/kaitranntt/ccs` images are signed with [cosign](https://docs.sigstore.dev/cosign/overview/) using keyless OIDC signing tied to the GitHub Actions workflow identity. A software bill of materials (SBOM) is attached to every image at publish time.
+
+**Verify a specific image digest:**
+
+```bash
+cosign verify \
+  --certificate-identity-regexp "https://github.com/kaitranntt/ccs/.github/workflows/docker-release.yml" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/kaitranntt/ccs:<version>
+```
+
+**Inspect the SBOM:**
+
+```bash
+cosign download sbom ghcr.io/kaitranntt/ccs:<version>
+```

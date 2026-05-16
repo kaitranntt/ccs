@@ -12,15 +12,17 @@ on:
         type: string
       promote_to_latest:
         description: >
-          Promote mutable :latest / :full tags (and major/minor aliases).
-          Use only after a successful rc.1 soak period. Defaults to false so
-          the first publish of a tag only pushes the immutable version tags.
+          Promote mutable :latest tags (and major/minor aliases) after rc soak.
+          Skipped by default so the first publish of a tag only pushes the
+          immutable version tag. Use only after rc.N soak confirms stability.
         required: false
         type: boolean
         default: false
 
+# Prevent stale parallel runs for the same tag; never cancel in-progress so
+# a publish + sign + promote sequence always completes atomically.
 concurrency:
-  group: docker-release-${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag || github.ref }}
+  group: docker-release-${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag || github.ref || github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -29,6 +31,7 @@ jobs:
   # ---------------------------------------------------------------------------
   publish-dashboard:
     name: Publish legacy ccs-dashboard image
+    # Skip on prerelease events — rc builds do not publish the legacy image
     if: ${{ github.event_name != 'release' || !github.event.release.prerelease }}
     runs-on: [self-hosted, linux, x64, cliproxy]
 
@@ -65,6 +68,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.target.outputs.tag }}
+          persist-credentials: false
 
       - name: Set up QEMU
         if: steps.tag.outputs.publish == 'true'
@@ -121,6 +125,8 @@ jobs:
           file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
+          provenance: mode=max
+          sbom: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
             org.opencontainers.image.title=ccs-dashboard
@@ -136,21 +142,26 @@ jobs:
           cache-to: type=gha,mode=max,scope=dashboard
 
   # ---------------------------------------------------------------------------
-  # Job 2: Integrated image matrix — minimal (ccs:latest) and full (ccs:full)
+  # Job 2: Integrated image — CCS + CLIProxy (single build, no :full variant)
+  # Publishes ONLY the immutable :<ver> tag here.
+  # Mutable :latest / major / minor aliases are added by promote-mutable-tags
+  # AFTER smoke tests pass, preventing a bad image from reaching :latest.
   # ---------------------------------------------------------------------------
   publish-integrated:
-    name: Publish integrated image (${{ matrix.flavor }})
-    if: ${{ github.event_name != 'release' || !github.event.release.prerelease }}
+    name: Publish integrated image
+    # Prerelease events (rc.N) publish the immutable version tag only.
+    # Mutable tags are never set on rc builds — promotion is always explicit.
     runs-on: [self-hosted, linux, x64, cliproxy]
 
     permissions:
       contents: read
       packages: write
+      id-token: write  # required for keyless cosign signing
 
-    strategy:
-      fail-fast: false
-      matrix:
-        flavor: [minimal, full]
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      image_ref: ${{ steps.meta.outputs.image_ref }}
+      publish: ${{ steps.tag.outputs.publish }}
 
     steps:
       - name: Resolve target tag
@@ -166,21 +177,24 @@ jobs:
           fi
           echo "tag=${TARGET_TAG}" >> "$GITHUB_OUTPUT"
 
-      - name: Validate stable semver tag
+      - name: Validate semver tag (stable or rc)
         id: tag
         run: |
-          if [[ "${{ steps.target.outputs.tag }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          TAG="${{ steps.target.outputs.tag }}"
+          # Accept stable (vX.Y.Z) and prerelease rc (vX.Y.Z-rc.N)
+          if [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
             echo "publish=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "publish=false" >> "$GITHUB_OUTPUT"
-          echo "Skipping non-stable semver tag ${{ steps.target.outputs.tag }}"
+          echo "Skipping unrecognised tag format: ${TAG}"
 
       - name: Checkout release tag
         if: steps.tag.outputs.publish == 'true'
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.target.outputs.tag }}
+          persist-credentials: false
 
       - name: Set up QEMU
         if: steps.tag.outputs.publish == 'true'
@@ -193,9 +207,6 @@ jobs:
       - name: Derive image metadata
         if: steps.tag.outputs.publish == 'true'
         id: meta
-        env:
-          FLAVOR: ${{ matrix.flavor }}
-          PROMOTE_TO_LATEST: ${{ inputs.promote_to_latest || 'false' }}
         run: |
           VERSION="${{ steps.target.outputs.tag }}"
           VERSION="${VERSION#v}"
@@ -205,27 +216,10 @@ jobs:
           IMAGE="ghcr.io/${OWNER_LOWER}/ccs"
           REVISION=$(git rev-parse HEAD)
 
-          # Determine tag prefix for the full flavor
-          if [[ "${FLAVOR}" == "full" ]]; then
-            PREFIX="full-"
-            MUTABLE_TAG="${IMAGE}:full"
-          else
-            PREFIX=""
-            MUTABLE_TAG="${IMAGE}:latest"
-          fi
-
-          # Immutable version-pinned tag is always published
-          TAGS="${IMAGE}:${PREFIX}${VERSION}"
-
-          # Mutable tags (:latest / :full / major / minor aliases) are published only when:
-          #   - triggered by a GitHub release event (not a prerelease), OR
-          #   - workflow_dispatch with promote_to_latest=true
-          if [[ "${GITHUB_EVENT_NAME}" == "release" || "${PROMOTE_TO_LATEST}" == "true" ]]; then
-            TAGS="${TAGS}
-          ${IMAGE}:${PREFIX}${MINOR}
-          ${IMAGE}:${PREFIX}${MAJOR}
-          ${MUTABLE_TAG}"
-          fi
+          # Only the immutable version-pinned tag is pushed here.
+          # Mutable tags (:latest, :MAJOR, :MINOR) are added by promote-mutable-tags.
+          TAGS="${IMAGE}:${VERSION}"
+          IMAGE_REF="${IMAGE}:${VERSION}"
 
           {
             echo "version=${VERSION}"
@@ -233,7 +227,7 @@ jobs:
             echo "major=${MAJOR}"
             echo "image=${IMAGE}"
             echo "revision=${REVISION}"
-            echo "prefix=${PREFIX}"
+            echo "image_ref=${IMAGE_REF}"
             echo "tags<<EOF"
             echo "${TAGS}"
             echo "EOF"
@@ -247,94 +241,71 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push integrated image (${{ matrix.flavor }})
+      - name: Build and push integrated image
         if: steps.tag.outputs.publish == 'true'
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile.integrated
           platforms: linux/amd64,linux/arm64
           push: true
+          provenance: mode=max
+          sbom: true
           build-args: |
-            FLAVOR=${{ matrix.flavor }}
             CCS_NPM_VERSION=${{ steps.meta.outputs.version }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
             org.opencontainers.image.title=ccs
-            org.opencontainers.image.description=CCS integrated image (${{ matrix.flavor }} flavor)
+            org.opencontainers.image.description=CCS integrated image — CLIProxy + CCS CLI
             org.opencontainers.image.url=https://github.com/${{ github.repository }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.meta.outputs.version }}
             org.opencontainers.image.revision=${{ steps.meta.outputs.revision }}
           annotations: |
             index:org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            index:org.opencontainers.image.description=CCS integrated image (${{ matrix.flavor }} flavor)
-          cache-from: type=gha,scope=integrated-${{ matrix.flavor }}
-          cache-to: type=gha,mode=max,scope=integrated-${{ matrix.flavor }}
+            index:org.opencontainers.image.description=CCS integrated image — CLIProxy + CCS CLI
+          cache-from: type=gha,scope=integrated
+          cache-to: type=gha,mode=max,scope=integrated
+
+      - name: Install cosign
+        if: steps.tag.outputs.publish == 'true'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image with cosign (keyless OIDC)
+        if: steps.tag.outputs.publish == 'true'
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          DIGEST="${{ steps.build.outputs.digest }}"
+          OWNER_LOWER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          cosign sign --yes "ghcr.io/${OWNER_LOWER}/ccs@${DIGEST}"
+          echo "[OK] Signed ghcr.io/${OWNER_LOWER}/ccs@${DIGEST}"
 
   # ---------------------------------------------------------------------------
-  # Job 3: Post-publish smoke test — pull each variant and verify it boots
+  # Job 3: Smoke test — pull the immutable :<ver> tag and verify it boots
+  # Runs after publish-integrated; mutable tags are only added if this passes.
   # ---------------------------------------------------------------------------
   smoke-test:
-    name: Smoke test ${{ matrix.image }}
-    needs: [publish-integrated]
-    if: ${{ github.event_name != 'release' || !github.event.release.prerelease }}
+    name: Smoke test integrated image
+    needs: [publish-integrated, publish-dashboard]
+    # Run on both rc and stable releases; skip if integrated publish was skipped
+    if: ${{ needs.publish-integrated.outputs.publish == 'true' }}
     runs-on: [self-hosted, linux, x64, cliproxy]
 
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - flavor: minimal
-            image_suffix: ""
-            max_bytes: "367001600"
-          - flavor: full
-            image_suffix: "full-"
-            max_bytes: "629145600"
-
     steps:
-      - name: Resolve target tag
-        id: target
-        env:
-          MANUAL_TAG: ${{ inputs.tag }}
-          RELEASE_EVENT_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
-            TARGET_TAG="${RELEASE_EVENT_TAG}"
-          else
-            TARGET_TAG="${MANUAL_TAG}"
-          fi
-          echo "tag=${TARGET_TAG}" >> "$GITHUB_OUTPUT"
-
-      - name: Validate stable semver tag
-        id: tag
-        run: |
-          if [[ "${{ steps.target.outputs.tag }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "publish=false" >> "$GITHUB_OUTPUT"
-
       - name: Checkout release tag (for test scripts)
-        if: steps.tag.outputs.publish == 'true'
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.target.outputs.tag }}
+          ref: ${{ needs.publish-integrated.outputs.version != '' && format('v{0}', needs.publish-integrated.outputs.version) || github.ref }}
+          persist-credentials: false
 
       - name: Derive image reference
-        if: steps.tag.outputs.publish == 'true'
         id: image
-        env:
-          IMAGE_SUFFIX: ${{ matrix.image_suffix }}
         run: |
-          VERSION="${{ steps.target.outputs.tag }}"
-          VERSION="${VERSION#v}"
-          OWNER_LOWER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
-          IMAGE_REF="ghcr.io/${OWNER_LOWER}/ccs:${IMAGE_SUFFIX}${VERSION}"
-          echo "ref=${IMAGE_REF}" >> "$GITHUB_OUTPUT"
+          echo "ref=${{ needs.publish-integrated.outputs.image_ref }}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
-        if: steps.tag.outputs.publish == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -342,20 +313,21 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull image
-        if: steps.tag.outputs.publish == 'true'
         run: docker pull "${{ steps.image.outputs.ref }}"
 
-      - name: Assert image size budget
-        if: steps.tag.outputs.publish == 'true'
+      - name: Assert image size budget (amd64)
         run: |
           chmod +x tests/docker/image-size.sh
-          tests/docker/image-size.sh "${{ steps.image.outputs.ref }}" "${{ matrix.max_bytes }}"
+          tests/docker/image-size.sh "${{ steps.image.outputs.ref }}" "367001600" "--platform" "linux/amd64"
+
+      - name: Assert image size budget (arm64)
+        run: |
+          tests/docker/image-size.sh "${{ steps.image.outputs.ref }}" "367001600" "--platform" "linux/arm64"
 
       - name: Boot container and wait for healthcheck
-        if: steps.tag.outputs.publish == 'true'
         id: boot
         run: |
-          CONTAINER_NAME="ccs-smoke-${{ matrix.flavor }}-${{ github.run_id }}"
+          CONTAINER_NAME="ccs-smoke-${{ github.run_id }}"
           echo "container=${CONTAINER_NAME}" >> "$GITHUB_OUTPUT"
 
           docker run -d \
@@ -381,8 +353,11 @@ jobs:
             sleep 5
           done
 
+      - name: Run network-contract test
+        run: |
+          bash tests/docker/network-contract.sh "${{ steps.image.outputs.ref }}"
+
       - name: Probe dashboard port 3000
-        if: steps.tag.outputs.publish == 'true'
         run: |
           HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 http://127.0.0.1:13000/ || echo "000")
           if [[ "${HTTP_CODE}" == "000" ]]; then
@@ -392,7 +367,6 @@ jobs:
           echo "[OK] Dashboard port 3000 responded with HTTP ${HTTP_CODE}"
 
       - name: Probe CLIProxy port 8317
-        if: steps.tag.outputs.publish == 'true'
         run: |
           HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 http://127.0.0.1:18317/ || echo "000")
           if [[ "${HTTP_CODE}" == "000" ]]; then
@@ -402,6 +376,54 @@ jobs:
           echo "[OK] CLIProxy port 8317 responded with HTTP ${HTTP_CODE}"
 
       - name: Stop smoke test container
-        if: always() && steps.tag.outputs.publish == 'true'
+        if: always()
         run: |
-          docker stop "ccs-smoke-${{ matrix.flavor }}-${{ github.run_id }}" 2>/dev/null || true
+          docker stop "ccs-smoke-${{ github.run_id }}" 2>/dev/null || true
+
+  # ---------------------------------------------------------------------------
+  # Job 4: Promote mutable tags — runs ONLY after smoke tests pass
+  # Adds :latest, :<major>, :<minor> aliases pointing to the immutable digest.
+  # Never runs for prerelease (rc) events.
+  # ---------------------------------------------------------------------------
+  promote-mutable-tags:
+    name: Promote mutable tags (:latest / major / minor)
+    needs: [smoke-test, publish-integrated]
+    # Only promote on stable release events or explicit promote_to_latest dispatch
+    if: |
+      needs.publish-integrated.outputs.publish == 'true' && (
+        (github.event_name == 'release' && !github.event.release.prerelease) ||
+        (github.event_name == 'workflow_dispatch' && inputs.promote_to_latest == true)
+      )
+    runs-on: [self-hosted, linux, x64, cliproxy]
+
+    permissions:
+      contents: read
+      packages: write
+      id-token: write  # for cosign re-sign of mutable aliases
+
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote :latest / major / minor aliases
+        env:
+          IMAGE_REF: ${{ needs.publish-integrated.outputs.image_ref }}
+          VERSION: ${{ needs.publish-integrated.outputs.version }}
+        run: |
+          OWNER_LOWER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          IMAGE="ghcr.io/${OWNER_LOWER}/ccs"
+          MINOR="${VERSION%.*}"
+          MAJOR="${VERSION%%.*}"
+
+          echo "[i] Pointing mutable tags to ${IMAGE_REF}"
+          docker buildx imagetools create \
+            --tag "${IMAGE}:latest" \
+            --tag "${IMAGE}:${MINOR}" \
+            --tag "${IMAGE}:${MAJOR}" \
+            "${IMAGE_REF}"
+
+          echo "[OK] Promoted: :latest :${MINOR} :${MAJOR} → ${IMAGE_REF}"
