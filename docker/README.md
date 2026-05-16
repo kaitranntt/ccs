@@ -23,6 +23,110 @@ Persistent config, restart on reboot.
 
 Both `ccs:latest` and `ccs:full` also publish pinned version tags (`ccs:<major>.<minor>.<patch>`, `ccs:<major>.<minor>`, `ccs:<major>`) for reproducible deployments. The `:full` variants carry the `full-` prefix: `ccs:full-<ver>`, `ccs:full-<minor>`, etc.
 
+## Connect Your App to CLIProxy
+
+The CCS container joins a Docker network named `ccs-net`. This network name is a **stable, public contract** — it will not change without a SemVer-major release.
+
+### Network Contract
+
+| Resource | Stable name | Notes |
+|---|---|---|
+| Network | `ccs-net` | Attach any sibling container to this network |
+| Service DNS | `ccs` | Resolves to the CCS container from inside `ccs-net` |
+| CLIProxy port | `8317` | OAuth proxy — use as `OPENAI_BASE_URL` / `CLIPROXY_URL` |
+| Dashboard port | `3000` | Web UI |
+| Env-friendly URL | `http://ccs:8317` | Drop into your app's env without port-mapping on the host |
+
+### Pattern A — Same Compose File
+
+Declare `ccs-net` as external in your own compose file and add your service to it:
+
+```yaml
+services:
+  my-app:
+    image: my-app:latest
+    environment:
+      CLIPROXY_URL: http://ccs:8317
+    networks:
+      - ccs-net
+
+networks:
+  ccs-net:
+    external: true
+```
+
+Start CCS first so the network exists:
+
+```bash
+docker compose -f docker/compose.yaml up -d   # or: ccs docker up
+docker compose -f my-app/compose.yaml up -d
+```
+
+### Pattern B — `docker run`
+
+Attach a container at runtime without modifying any compose file:
+
+```bash
+docker run --rm \
+  --network ccs-net \
+  -e CLIPROXY_URL=http://ccs:8317 \
+  my-app:latest
+```
+
+### Troubleshooting Network Issues
+
+**Service not resolvable from sibling container**
+
+Verify both containers are on `ccs-net`:
+
+```bash
+docker network inspect ccs-net
+```
+
+The output should list both `ccs` and your app container under `Containers`.
+
+**Network not found**
+
+The `ccs-net` network is created when the CCS stack starts. Run:
+
+```bash
+docker compose -f docker/compose.yaml up -d
+# or: ccs docker up
+```
+
+**Conflict with an existing `ccs-net`**
+
+If you already have a network named `ccs-net` from unrelated tooling, either rename yours or scope
+the CCS project via `COMPOSE_PROJECT_NAME`:
+
+```bash
+COMPOSE_PROJECT_NAME=myproject docker compose -f docker/compose.yaml up -d
+# Network becomes: myproject_ccs-net
+```
+
+Note: scoping changes the network name, so sibling compose files must use the same project name.
+
+**Podman / rootless containers**
+
+On rootless Podman, network names and DNS resolution may behave differently. Verify your Podman
+version supports `--network` with named networks (`podman network ls`) and that `aardvark-dns` or
+equivalent is installed for container-name resolution.
+
+**Low MTU on Hetzner and other cloud providers**
+
+Some cloud environments set a low MTU (e.g., 1450) on their overlay networks. If you see packet
+fragmentation or stalled requests, add a custom MTU to the network in `compose.yaml`:
+
+```yaml
+networks:
+  ccs-net:
+    name: ccs-net
+    driver_opts:
+      com.docker.network.driver.mtu: "1450"
+```
+
+---
+
 ## Preferred: `ccs docker`
 
 The CLI now ships a first-class Docker command suite for the integrated CCS + CLIProxy stack:

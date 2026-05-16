@@ -20,7 +20,7 @@ Anthropic-compatible APIs without config thrash.
 
 </div>
 
-> **[Docker]** `ghcr.io/kaitranntt/ccs-dashboard:latest` is deprecated. Use `ghcr.io/kaitranntt/ccs:latest` instead. See [#1251](https://github.com/kaitranntt/ccs/issues/1251) and [docker/README.md](docker/README.md#choosing-an-image) for migration details.
+> **[Docker]** `ghcr.io/kaitranntt/ccs-dashboard:latest` is deprecated. Use `ghcr.io/kaitranntt/ccs:latest` instead. See [#1251](https://github.com/kaitranntt/ccs/issues/1251) and [docker/README.md](docker/README.md#choosing-an-image) for migration details. To wire a sibling container to CLIProxy, see [Connect your app to CLIProxy](docker/README.md#connect-your-app-to-cliproxy).
 
 ## Why CCS
 

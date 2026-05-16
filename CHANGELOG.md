@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+* **docker:** Stable Docker network contract — external network `ccs-net` with service DNS `ccs` resolving to the CCS container. CLIProxy reachable at `http://ccs:8317`; dashboard at `http://ccs:3000`. Sibling containers can attach via `--network ccs-net` or by declaring `ccs-net` as an external network in their own compose file. Changing the network name or service name is a **SemVer-major breaking change**. See [docker/README.md](docker/README.md#connect-your-app-to-cliproxy) for usage patterns and troubleshooting. Verified by `tests/docker/network-contract.sh`.
+
 ### Deprecated
 
 * **docker:** `ghcr.io/kaitranntt/ccs-dashboard:latest` Docker image is deprecated — migrate to `ghcr.io/kaitranntt/ccs:latest` (minimal, CCS + CLIProxy) or `ghcr.io/kaitranntt/ccs:full` (with claude-code, gemini-cli, grok-cli, opencode). The legacy image continues publishing for 2 more releases and emits a startup warning. See [#1251](https://github.com/kaitranntt/ccs/issues/1251).

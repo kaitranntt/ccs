@@ -59,3 +59,18 @@ jobs:
 
           echo "[OK] Both ports healthy"
           docker compose -f /tmp/ccs-compose.yaml down -v
+
+      - name: Verify ccs-net network contract (sibling DNS resolution)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.do_up == true }}
+        run: |
+          set -euo pipefail
+
+          # Checkout repo so tests/docker/network-contract.sh is available
+          # The script needs to run from a directory that contains docker/compose.yaml.
+          # We re-use the compose file from the repo rather than /tmp to avoid path drift.
+          REPO_ROOT="$(mktemp -d)"
+          git clone --depth=1 --no-tags \
+            "https://github.com/kaitranntt/ccs.git" "$REPO_ROOT"
+
+          cd "$REPO_ROOT"
+          bash tests/docker/network-contract.sh
