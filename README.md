@@ -22,21 +22,23 @@ Anthropic-compatible APIs without config thrash.
 
 > **[Docker]** `ghcr.io/kaitranntt/ccs-dashboard:latest` is deprecated. Use `ghcr.io/kaitranntt/ccs:latest` instead. See [#1251](https://github.com/kaitranntt/ccs/issues/1251) and [docker/README.md](docker/README.md#choosing-an-image) for migration details. To wire a sibling container to CLIProxy, see [Connect your app to CLIProxy](docker/README.md#connect-your-app-to-cliproxy).
 
-## Why CCS
+<!-- quickstart-snippet-start -->
+## Quick Start (Docker)
 
-CCS gives you one stable command surface while letting you switch between:
+With Docker installed:
 
-- multiple runtimes such as Claude Code, Factory Droid, and Codex CLI
-- multiple Claude subscriptions and isolated account contexts
-- OAuth providers like Codex, Kiro, Claude, Qwen, Kimi, and more, with legacy
-  Copilot compatibility for existing setups
-- API and local-model profiles like GLM, Kimi, OpenRouter, Ollama, llama.cpp,
-  Novita, and Alibaba Coding Plan
+```bash
+curl -fsSL https://ccs.kaitran.ca/docker-compose.yaml -o docker-compose.yaml
+docker compose up -d
+```
 
-The goal is simple: stop rewriting config files, stop breaking active sessions,
-and move between providers in seconds.
+Dashboard at http://localhost:3000 · CLIProxy at http://localhost:8317.
 
-## Quick Start
+Need a corporate-proxy alternative? Download directly:
+`https://github.com/kaitranntt/ccs/blob/main/docker/compose.yaml`
+<!-- quickstart-snippet-end -->
+
+## Install on Host (npm)
 
 ```bash
 npm install -g @kaitranntt/ccs
@@ -52,6 +54,20 @@ ccs --target droid glm
 ccs glm
 ccs ollama
 ```
+
+## Why CCS
+
+CCS gives you one stable command surface while letting you switch between:
+
+- multiple runtimes such as Claude Code, Factory Droid, and Codex CLI
+- multiple Claude subscriptions and isolated account contexts
+- OAuth providers like Codex, Kiro, Claude, Qwen, Kimi, and more, with legacy
+  Copilot compatibility for existing setups
+- API and local-model profiles like GLM, Kimi, OpenRouter, Ollama, llama.cpp,
+  Novita, and Alibaba Coding Plan
+
+The goal is simple: stop rewriting config files, stop breaking active sessions,
+and move between providers in seconds.
 
 ## OpenAI-Compatible Routing
 

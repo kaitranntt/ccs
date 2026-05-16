@@ -1,0 +1,31 @@
+name: Docs – Quickstart Snippet Parity
+
+on:
+  push:
+    paths:
+      - "docs/quickstart-snippet.md"
+      - "README.md"
+      - "docker/README.md"
+      - "tests/docs/quickstart-parity.sh"
+      - ".github/workflows/docs-parity.yml"
+  pull_request:
+    paths:
+      - "docs/quickstart-snippet.md"
+      - "README.md"
+      - "docker/README.md"
+      - "tests/docs/quickstart-parity.sh"
+      - ".github/workflows/docs-parity.yml"
+
+jobs:
+  quickstart-parity:
+    name: Assert quickstart snippet matches in README.md and docker/README.md
+    runs-on: [self-hosted, linux, x64, cliproxy]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run quickstart parity check
+        run: bash tests/docs/quickstart-parity.sh
