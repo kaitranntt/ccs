@@ -277,10 +277,10 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "1"
         run: |
-          IMAGE_REF="${{ steps.meta.outputs.image_ref }}"
           DIGEST="${{ steps.build.outputs.digest }}"
-          cosign sign --yes "ghcr.io/${GITHUB_REPOSITORY_OWNER@L}/ccs@${DIGEST}"
-          echo "[OK] Signed ghcr.io/${GITHUB_REPOSITORY_OWNER@L}/ccs@${DIGEST}"
+          OWNER_LOWER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          cosign sign --yes "ghcr.io/${OWNER_LOWER}/ccs@${DIGEST}"
+          echo "[OK] Signed ghcr.io/${OWNER_LOWER}/ccs@${DIGEST}"
 
   # ---------------------------------------------------------------------------
   # Job 3: Smoke test — pull the immutable :<ver> tag and verify it boots
