@@ -19,6 +19,9 @@ on:
 jobs:
   quickstart-parity:
     name: Assert quickstart snippet matches in README.md and docker/README.md
+    if: >-
+      contains(fromJSON('["COLLABORATOR","MEMBER","OWNER"]'), github.event.pull_request.author_association)
+      || github.event_name == 'push'
     runs-on: [self-hosted, linux, x64, cliproxy]
 
     steps:
