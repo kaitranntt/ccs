@@ -20,6 +20,11 @@ services:
       - "3000:3000"
       - "8317:8317"
     volumes:
+      # /root/.ccs matches the HOME used inside the integrated image.
+      # entrypoint-integrated.sh runs as root (supervisord user=root) and
+      # explicitly mkdir -p /root/.ccs, so state always lands here.
+      # Note: docker/entrypoint.sh (legacy dashboard image) uses a different
+      # default — it does NOT apply to this integrated image.
       - ccs_home:/root/.ccs
       - ccs_logs:/var/log/ccs
     networks:

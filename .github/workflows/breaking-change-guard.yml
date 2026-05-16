@@ -41,7 +41,14 @@ jobs:
           set -euo pipefail
 
           BASE="origin/${{ github.base_ref }}"
-          DIFF=$(git diff "${BASE}"...HEAD -- docker/compose.yaml)
+
+          # Guard: if docker/compose.yaml does not exist in the base branch, this
+          # is a new file — no contract existed before, so no regression is possible.
+          if ! git cat-file -e "${BASE}:docker/compose.yaml" 2>/dev/null; then
+            echo "[i] docker/compose.yaml is new in this PR (not present on ${BASE}) — skipping contract check"
+            echo "breaking=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           BREAKING=0
 

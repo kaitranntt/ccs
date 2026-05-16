@@ -288,7 +288,11 @@ jobs:
   # ---------------------------------------------------------------------------
   smoke-test:
     name: Smoke test integrated image
-    needs: [publish-integrated, publish-dashboard]
+    # Depends only on publish-integrated, NOT publish-dashboard.
+    # publish-dashboard is skipped on prerelease (rc.N) events — if it were
+    # listed here, GitHub Actions would also skip smoke-test and
+    # promote-mutable-tags on every rc publish, breaking the rc soak flow.
+    needs: [publish-integrated]
     # Run on both rc and stable releases; skip if integrated publish was skipped
     if: ${{ needs.publish-integrated.outputs.publish == 'true' }}
     runs-on: [self-hosted, linux, x64, cliproxy]
@@ -355,7 +359,11 @@ jobs:
 
       - name: Run network-contract test
         run: |
-          bash tests/docker/network-contract.sh "${{ steps.image.outputs.ref }}"
+          # network-contract.sh signature: <compose-file> [image-ref]
+          # Pass compose.yaml as $1 and the pinned image ref as $2 so the
+          # smoke test exercises the canonical compose file with the exact
+          # image that was just published, not whatever tag is in the file.
+          bash tests/docker/network-contract.sh docker/compose.yaml "${{ steps.image.outputs.ref }}"
 
       - name: Probe dashboard port 3000
         run: |
