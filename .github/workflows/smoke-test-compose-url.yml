@@ -11,18 +11,24 @@ on:
     inputs:
       do_up:
         description: >
-          Also run `docker compose up -d`, wait for healthcheck, curl ports, then
-          `docker compose down -v`. Skipped by default (parse-only).
+          Also run `docker compose up -d`, wait for healthcheck, run the
+          network-contract test against the downloaded URL compose file, then
+          tear down. Skipped by default (parse-only).
         required: false
         type: boolean
         default: false
 
 jobs:
   smoke-test:
-    name: curl + parse (+ optional up/down)
+    name: curl + parse (+ optional up/down + network-contract)
     runs-on: [self-hosted, linux, x64, cliproxy]
 
     steps:
+      - name: Checkout (for test scripts)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Download compose from canonical URL
         run: |
           curl -fsSL https://ccs.kaitran.ca/docker-compose.yaml -o /tmp/ccs-compose.yaml
@@ -32,45 +38,13 @@ jobs:
       - name: Validate compose parses (docker compose config)
         run: docker compose -f /tmp/ccs-compose.yaml config
 
-      - name: Bring stack up, verify healthcheck, tear down
+      - name: Run network-contract test against downloaded compose
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.do_up == true }}
         run: |
           set -euo pipefail
-
-          docker compose -f /tmp/ccs-compose.yaml up -d
-
-          echo "Waiting for healthcheck to pass (max 90s)..."
-          for i in $(seq 1 18); do
-            STATUS=$(docker compose -f /tmp/ccs-compose.yaml ps --format json \
-              | python3 -c "import sys,json; data=sys.stdin.read().strip(); rows=json.loads('['+','.join(data.splitlines())+']') if data else []; print(next((r.get('Health','') for r in rows if 'ccs' in r.get('Service','')), 'unknown'))" 2>/dev/null || echo "unknown")
-            echo "Health: $STATUS"
-            if [ "$STATUS" = "healthy" ]; then
-              break
-            fi
-            sleep 5
-          done
-
-          # Verify ports respond
-          curl -fsSL --retry 3 --retry-delay 2 http://localhost:3000 -o /dev/null || \
-            { echo "[X] Dashboard port 3000 did not respond"; docker compose -f /tmp/ccs-compose.yaml down -v; exit 1; }
-
-          curl -fsSL --retry 3 --retry-delay 2 http://localhost:8317 -o /dev/null || \
-            { echo "[X] CLIProxy port 8317 did not respond"; docker compose -f /tmp/ccs-compose.yaml down -v; exit 1; }
-
-          echo "[OK] Both ports healthy"
-          docker compose -f /tmp/ccs-compose.yaml down -v
-
-      - name: Verify ccs-net network contract (sibling DNS resolution)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.do_up == true }}
-        run: |
-          set -euo pipefail
-
-          # Checkout repo so tests/docker/network-contract.sh is available
-          # The script needs to run from a directory that contains docker/compose.yaml.
-          # We re-use the compose file from the repo rather than /tmp to avoid path drift.
-          REPO_ROOT="$(mktemp -d)"
-          git clone --depth=1 --no-tags \
-            "https://github.com/kaitranntt/ccs.git" "$REPO_ROOT"
-
-          cd "$REPO_ROOT"
-          bash tests/docker/network-contract.sh
+          # network-contract.sh accepts the compose file as first argument.
+          # This exercises the exact file served at the canonical URL rather
+          # than the repo copy, ensuring URL-delivered compose works end-to-end.
+          # The script handles up, healthcheck wait, sibling DNS probes, and
+          # teardown (via EXIT trap) — no separate up/down steps needed.
+          bash tests/docker/network-contract.sh /tmp/ccs-compose.yaml
