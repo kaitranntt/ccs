@@ -1,0 +1,69 @@
+name: Promote rc to Stable Release
+
+# Manual workflow to promote a pre-release rc tag to a stable GitHub release.
+#
+# Flow:
+#   1. Flip the GitHub release from prerelease=true to prerelease=false using
+#      `gh release edit --prerelease=false`.
+#   2. The resulting `release: published` event (with prerelease=false) triggers
+#      docker-release.yml, which builds/signs the image, runs smoke tests, then
+#      adds the mutable :latest/:MAJOR/:MINOR Docker tags via promote-mutable-tags.
+#
+# Pre-conditions:
+#   - The rc tag must already exist as a GitHub prerelease (cut by semantic-release).
+#   - Smoke tests on the rc image must have passed (manual verification step).
+#
+# See docs/release-process.md for the full soak + promote procedure.
+
+on:
+  workflow_dispatch:
+    inputs:
+      rc_tag:
+        description: >
+          Pre-release rc tag to promote, e.g. v7.80.0-rc.1.
+          Must already exist as a GitHub prerelease.
+        required: true
+        type: string
+
+jobs:
+  promote:
+    name: Promote ${{ inputs.rc_tag }} to stable
+    runs-on: [self-hosted, linux, x64, cliproxy]
+
+    permissions:
+      contents: write  # required to edit GitHub releases
+
+    steps:
+      - name: Validate rc tag format
+        run: |
+          if [[ "${{ inputs.rc_tag }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+            echo "[OK] Tag format valid: ${{ inputs.rc_tag }}"
+          else
+            echo "[X] Expected vX.Y.Z-rc.N format, got: ${{ inputs.rc_tag }}"
+            exit 1
+          fi
+
+      - name: Verify release exists and is a prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          IS_PRERELEASE=$(gh release view "${{ inputs.rc_tag }}" \
+            --repo "${{ github.repository }}" \
+            --json isPrerelease --jq '.isPrerelease')
+          if [[ "${IS_PRERELEASE}" != "true" ]]; then
+            echo "[X] Release ${{ inputs.rc_tag }} is not a prerelease (isPrerelease=${IS_PRERELEASE})"
+            echo "    Either it was already promoted, or the tag does not exist."
+            exit 1
+          fi
+          echo "[OK] Release ${{ inputs.rc_tag }} is a prerelease — proceeding with promotion"
+
+      - name: Promote release to stable
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release edit "${{ inputs.rc_tag }}" \
+            --repo "${{ github.repository }}" \
+            --prerelease=false \
+            --latest
+          echo "[OK] Promoted ${{ inputs.rc_tag }} to stable (prerelease=false, latest=true)"
+          echo "[i] docker-release.yml will now trigger to add :latest/:MAJOR/:MINOR Docker tags"

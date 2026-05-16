@@ -37,6 +37,9 @@ const releaseNotesGenerator = [
         { type: 'feat', section: 'Features' },
         { type: 'fix', section: 'Bug Fixes' },
         { type: 'hotfix', section: 'Hotfixes' },
+        // Breaking changes (feat! / fix!) surface under Features/Bug Fixes
+        // with a BREAKING CHANGE footer note — no separate section needed.
+        { type: 'revert', section: 'Reverts' },
         { type: 'docs', section: 'Documentation' },
         { type: 'style', section: 'Styles' },
         { type: 'refactor', section: 'Code Refactoring' },
@@ -44,6 +47,9 @@ const releaseNotesGenerator = [
         { type: 'test', section: 'Tests' },
         { type: 'build', section: 'Build System' },
         { type: 'ci', section: 'CI' },
+        // chore commits are intentionally hidden from release notes (no section).
+        // "### Removed" sections come from feat!/fix! BREAKING CHANGE footers,
+        // not from a separate commit type.
       ],
     },
   },
@@ -87,8 +93,18 @@ const devConfig = {
 };
 
 // Production release configuration
+// Every merge to main auto-cuts as vX.Y.Z-rc.N (prerelease channel "rc").
+// A separate promote-release.yml workflow_dispatch promotes a specific rc tag
+// to stable by flipping the GitHub release to non-prerelease, which triggers
+// docker-release.yml to add the mutable :latest/:MAJOR/:MINOR Docker tags.
+// See docs/release-process.md for the full soak + promote procedure.
 const productionConfig = {
-  branches: ['main'],
+  branches: [
+    {
+      name: 'main',
+      prerelease: 'rc',
+    },
+  ],
   plugins: [
     commitAnalyzer,
     releaseNotesGenerator,
@@ -102,9 +118,11 @@ const productionConfig = {
     [
       '@semantic-release/github',
       {
+        // rc releases are prerelease — use a minimal comment; stable promotion
+        // gets the full resolution comment via the promote-release workflow.
         successComment:
-          ':tada: This issue has been resolved in version ${nextRelease.version} :tada:\n\nThe release is available on:\n- [npm package (@latest)](https://www.npmjs.com/package/@kaitranntt/ccs)\n- [GitHub release](${releases[0].url})',
-        releasedLabels: ['released'],
+          'This issue is included in pre-release version ${nextRelease.version}. A stable release will follow after the rc soak period.',
+        releasedLabels: ['pending-release'],
       },
     ],
     [
