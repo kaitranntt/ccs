@@ -10,15 +10,27 @@ on:
         description: Stable tag to publish manually, for example v7.55.0
         required: true
         type: string
+      promote_to_latest:
+        description: >
+          Promote mutable :latest / :full tags (and major/minor aliases).
+          Use only after a successful rc.1 soak period. Defaults to false so
+          the first publish of a tag only pushes the immutable version tags.
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: docker-release-${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag || github.ref }}
   cancel-in-progress: false
 
 jobs:
-  publish:
+  # ---------------------------------------------------------------------------
+  # Job 1: Legacy ccs-dashboard image (2-release sunset window)
+  # ---------------------------------------------------------------------------
+  publish-dashboard:
+    name: Publish legacy ccs-dashboard image
     if: ${{ github.event_name != 'release' || !github.event.release.prerelease }}
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, linux, x64, cliproxy]
 
     permissions:
       contents: read
@@ -36,7 +48,6 @@ jobs:
           else
             TARGET_TAG="${MANUAL_TAG}"
           fi
-
           echo "tag=${TARGET_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Validate stable semver tag
@@ -46,7 +57,6 @@ jobs:
             echo "publish=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
           echo "publish=false" >> "$GITHUB_OUTPUT"
           echo "Skipping non-stable semver tag ${{ steps.target.outputs.tag }}"
 
@@ -67,8 +77,6 @@ jobs:
       - name: Derive image metadata
         if: steps.tag.outputs.publish == 'true'
         id: meta
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ steps.target.outputs.tag }}"
           VERSION="${VERSION#v}"
@@ -105,7 +113,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push release image
+      - name: Build and push legacy dashboard image
         if: steps.tag.outputs.publish == 'true'
         uses: docker/build-push-action@v6
         with:
@@ -116,13 +124,284 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
             org.opencontainers.image.title=ccs-dashboard
-            org.opencontainers.image.description=CCS Dashboard container image
+            org.opencontainers.image.description=CCS Dashboard container image (deprecated - migrate to ghcr.io/kaitranntt/ccs:latest)
             org.opencontainers.image.url=https://github.com/${{ github.repository }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.meta.outputs.version }}
             org.opencontainers.image.revision=${{ steps.meta.outputs.revision }}
           annotations: |
             index:org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            index:org.opencontainers.image.description=CCS Dashboard container image
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            index:org.opencontainers.image.description=CCS Dashboard container image (deprecated - migrate to ghcr.io/kaitranntt/ccs:latest)
+          cache-from: type=gha,scope=dashboard
+          cache-to: type=gha,mode=max,scope=dashboard
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Integrated image matrix — minimal (ccs:latest) and full (ccs:full)
+  # ---------------------------------------------------------------------------
+  publish-integrated:
+    name: Publish integrated image (${{ matrix.flavor }})
+    if: ${{ github.event_name != 'release' || !github.event.release.prerelease }}
+    runs-on: [self-hosted, linux, x64, cliproxy]
+
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [minimal, full]
+
+    steps:
+      - name: Resolve target tag
+        id: target
+        env:
+          MANUAL_TAG: ${{ inputs.tag }}
+          RELEASE_EVENT_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+            TARGET_TAG="${RELEASE_EVENT_TAG}"
+          else
+            TARGET_TAG="${MANUAL_TAG}"
+          fi
+          echo "tag=${TARGET_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate stable semver tag
+        id: tag
+        run: |
+          if [[ "${{ steps.target.outputs.tag }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "publish=false" >> "$GITHUB_OUTPUT"
+          echo "Skipping non-stable semver tag ${{ steps.target.outputs.tag }}"
+
+      - name: Checkout release tag
+        if: steps.tag.outputs.publish == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.tag }}
+
+      - name: Set up QEMU
+        if: steps.tag.outputs.publish == 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: steps.tag.outputs.publish == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Derive image metadata
+        if: steps.tag.outputs.publish == 'true'
+        id: meta
+        env:
+          FLAVOR: ${{ matrix.flavor }}
+          PROMOTE_TO_LATEST: ${{ inputs.promote_to_latest || 'false' }}
+        run: |
+          VERSION="${{ steps.target.outputs.tag }}"
+          VERSION="${VERSION#v}"
+          MINOR="${VERSION%.*}"
+          MAJOR="${VERSION%%.*}"
+          OWNER_LOWER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          IMAGE="ghcr.io/${OWNER_LOWER}/ccs"
+          REVISION=$(git rev-parse HEAD)
+
+          # Determine tag prefix for the full flavor
+          if [[ "${FLAVOR}" == "full" ]]; then
+            PREFIX="full-"
+            MUTABLE_TAG="${IMAGE}:full"
+          else
+            PREFIX=""
+            MUTABLE_TAG="${IMAGE}:latest"
+          fi
+
+          # Immutable version-pinned tag is always published
+          TAGS="${IMAGE}:${PREFIX}${VERSION}"
+
+          # Mutable tags (:latest / :full / major / minor aliases) are published only when:
+          #   - triggered by a GitHub release event (not a prerelease), OR
+          #   - workflow_dispatch with promote_to_latest=true
+          if [[ "${GITHUB_EVENT_NAME}" == "release" || "${PROMOTE_TO_LATEST}" == "true" ]]; then
+            TAGS="${TAGS}
+          ${IMAGE}:${PREFIX}${MINOR}
+          ${IMAGE}:${PREFIX}${MAJOR}
+          ${MUTABLE_TAG}"
+          fi
+
+          {
+            echo "version=${VERSION}"
+            echo "minor=${MINOR}"
+            echo "major=${MAJOR}"
+            echo "image=${IMAGE}"
+            echo "revision=${REVISION}"
+            echo "prefix=${PREFIX}"
+            echo "tags<<EOF"
+            echo "${TAGS}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        if: steps.tag.outputs.publish == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push integrated image (${{ matrix.flavor }})
+        if: steps.tag.outputs.publish == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.integrated
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            FLAVOR=${{ matrix.flavor }}
+            CCS_NPM_VERSION=${{ steps.meta.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=ccs
+            org.opencontainers.image.description=CCS integrated image (${{ matrix.flavor }} flavor)
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.revision=${{ steps.meta.outputs.revision }}
+          annotations: |
+            index:org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            index:org.opencontainers.image.description=CCS integrated image (${{ matrix.flavor }} flavor)
+          cache-from: type=gha,scope=integrated-${{ matrix.flavor }}
+          cache-to: type=gha,mode=max,scope=integrated-${{ matrix.flavor }}
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Post-publish smoke test — pull each variant and verify it boots
+  # ---------------------------------------------------------------------------
+  smoke-test:
+    name: Smoke test ${{ matrix.image }}
+    needs: [publish-integrated]
+    if: ${{ github.event_name != 'release' || !github.event.release.prerelease }}
+    runs-on: [self-hosted, linux, x64, cliproxy]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flavor: minimal
+            image_suffix: ""
+            max_bytes: "367001600"
+          - flavor: full
+            image_suffix: "full-"
+            max_bytes: "629145600"
+
+    steps:
+      - name: Resolve target tag
+        id: target
+        env:
+          MANUAL_TAG: ${{ inputs.tag }}
+          RELEASE_EVENT_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+            TARGET_TAG="${RELEASE_EVENT_TAG}"
+          else
+            TARGET_TAG="${MANUAL_TAG}"
+          fi
+          echo "tag=${TARGET_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate stable semver tag
+        id: tag
+        run: |
+          if [[ "${{ steps.target.outputs.tag }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "publish=false" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout release tag (for test scripts)
+        if: steps.tag.outputs.publish == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.tag }}
+
+      - name: Derive image reference
+        if: steps.tag.outputs.publish == 'true'
+        id: image
+        env:
+          IMAGE_SUFFIX: ${{ matrix.image_suffix }}
+        run: |
+          VERSION="${{ steps.target.outputs.tag }}"
+          VERSION="${VERSION#v}"
+          OWNER_LOWER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_REF="ghcr.io/${OWNER_LOWER}/ccs:${IMAGE_SUFFIX}${VERSION}"
+          echo "ref=${IMAGE_REF}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        if: steps.tag.outputs.publish == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull image
+        if: steps.tag.outputs.publish == 'true'
+        run: docker pull "${{ steps.image.outputs.ref }}"
+
+      - name: Assert image size budget
+        if: steps.tag.outputs.publish == 'true'
+        run: |
+          chmod +x tests/docker/image-size.sh
+          tests/docker/image-size.sh "${{ steps.image.outputs.ref }}" "${{ matrix.max_bytes }}"
+
+      - name: Boot container and wait for healthcheck
+        if: steps.tag.outputs.publish == 'true'
+        id: boot
+        run: |
+          CONTAINER_NAME="ccs-smoke-${{ matrix.flavor }}-${{ github.run_id }}"
+          echo "container=${CONTAINER_NAME}" >> "$GITHUB_OUTPUT"
+
+          docker run -d \
+            --name "${CONTAINER_NAME}" \
+            --rm \
+            -p 13000:3000 \
+            -p 18317:8317 \
+            "${{ steps.image.outputs.ref }}"
+
+          echo "[i] Waiting for container healthcheck (up to 60s)..."
+          for i in $(seq 1 12); do
+            STATUS=$(docker inspect "${CONTAINER_NAME}" --format='{{.State.Health.Status}}' 2>/dev/null || echo "missing")
+            if [[ "${STATUS}" == "healthy" ]]; then
+              echo "[OK] Container is healthy after $((i * 5))s"
+              break
+            fi
+            if [[ "${STATUS}" == "unhealthy" ]]; then
+              echo "[X] Container marked unhealthy"
+              docker logs "${CONTAINER_NAME}" --tail 50 >&2
+              exit 1
+            fi
+            echo "    [${i}/12] status=${STATUS}, waiting 5s..."
+            sleep 5
+          done
+
+      - name: Probe dashboard port 3000
+        if: steps.tag.outputs.publish == 'true'
+        run: |
+          HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 http://127.0.0.1:13000/ || echo "000")
+          if [[ "${HTTP_CODE}" == "000" ]]; then
+            echo "[X] Could not reach dashboard on :3000 (connection failed)"
+            exit 1
+          fi
+          echo "[OK] Dashboard port 3000 responded with HTTP ${HTTP_CODE}"
+
+      - name: Probe CLIProxy port 8317
+        if: steps.tag.outputs.publish == 'true'
+        run: |
+          HTTP_CODE=$(curl -o /dev/null -s -w "%{http_code}" --max-time 10 http://127.0.0.1:18317/ || echo "000")
+          if [[ "${HTTP_CODE}" == "000" ]]; then
+            echo "[X] Could not reach CLIProxy on :8317 (connection failed)"
+            exit 1
+          fi
+          echo "[OK] CLIProxy port 8317 responded with HTTP ${HTTP_CODE}"
+
+      - name: Stop smoke test container
+        if: always() && steps.tag.outputs.publish == 'true'
+        run: |
+          docker stop "ccs-smoke-${{ matrix.flavor }}-${{ github.run_id }}" 2>/dev/null || true
