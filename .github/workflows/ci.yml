@@ -146,3 +146,17 @@ jobs:
         env:
           CCS_E2E_SKIP_BUILD: '1'
         run: bun run test:e2e
+
+  compose-parity:
+    if: >-
+      contains(fromJSON('["COLLABORATOR","MEMBER","OWNER"]'), github.event.pull_request.author_association)
+    runs-on: [self-hosted, linux, x64, cliproxy]
+    name: compose-parity
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Assert compose parity (compose.yaml vs docker-compose.integrated.yml)
+        run: bash tests/docker/compose-parity.sh
