@@ -1,0 +1,39 @@
+# Canonical CCS docker-compose. Served at https://ccs.kaitran.ca/docker-compose.yaml.
+# Source of truth: kaitranntt/ccs:docker/compose.yaml
+#
+# Quick start:
+#   curl -fsSL https://ccs.kaitran.ca/docker-compose.yaml -o compose.yaml
+#   docker compose up -d
+#
+# Ports:
+#   3000 — CCS Dashboard
+#   8317 — CLIProxy API
+
+services:
+  ccs:
+    image: ghcr.io/kaitranntt/ccs:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "8317:8317"
+    volumes:
+      - ccs_home:/root/.ccs
+      - ccs_logs:/var/log/ccs
+    networks:
+      - ccs-net
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - >
+          node -e "require('http').get('http://127.0.0.1:8317/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  ccs_home:
+  ccs_logs:
+
+networks:
+  ccs-net:
+    name: ccs-net
