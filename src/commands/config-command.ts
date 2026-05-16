@@ -176,7 +176,7 @@ export async function handleConfigCommand(
       port,
       dev: options.dev,
     };
-    if (options.hostProvided && options.host) {
+    if (options.host) {
       serverOptions.host = normalizeDashboardHost(options.host);
     }
 

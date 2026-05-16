@@ -18,6 +18,7 @@ import { getProxyTarget } from '../cliproxy/proxy/proxy-target-resolver';
 import { startAutoSyncWatcher, stopAutoSyncWatcher } from '../cliproxy/sync';
 import { shutdownUsageAggregator } from './usage/aggregator';
 import { createLogger } from '../services/logging';
+import { DEFAULT_DASHBOARD_HOST } from '../commands/config-dashboard-host';
 
 export interface ServerOptions {
   port: number;
@@ -38,6 +39,7 @@ const logger = createLogger('web-server');
  * Start Express server with WebSocket support
  */
 export async function startServer(options: ServerOptions): Promise<ServerInstance> {
+  const bindHost = options.host || DEFAULT_DASHBOARD_HOST;
   const app = express();
   const server = http.createServer(app);
   const wss = new WebSocketServer({
@@ -142,7 +144,7 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
       logger.error('server.listen_failed', 'Dashboard server failed to start', {
         code: error.code || 'unknown',
         message: error.message,
-        host: options.host || null,
+        host: bindHost,
         port: options.port,
       });
       cleanup();
@@ -154,7 +156,7 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
     const onListening = () => {
       server.off('error', onError);
       logger.info('server.listening', 'Dashboard server listening', {
-        host: options.host || '0.0.0.0',
+        host: bindHost,
         port: options.port,
         dev: Boolean(options.dev),
       });
@@ -164,12 +166,7 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
     };
 
     try {
-      if (options.host) {
-        server.listen(options.port, options.host, onListening);
-        return;
-      }
-
-      server.listen(options.port, onListening);
+      server.listen(options.port, bindHost, onListening);
     } catch (error) {
       server.off('error', onError);
       cleanup();

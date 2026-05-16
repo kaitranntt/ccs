@@ -1,5 +1,6 @@
 import { extractOption, hasAnyFlag, scanCommandArgs } from './arg-extractor';
 import { getOfficialChannelsSupportMessage } from '../channels/official-channels-runtime';
+import { DEFAULT_DASHBOARD_HOST } from './config-dashboard-host';
 
 const CONFIG_COMMAND_FLAGS = ['--help', '-h', '--port', '-p', '--host', '-H', '--dev'] as const;
 
@@ -22,6 +23,7 @@ function formatUnexpectedArgsError(tokens: string[]): string {
 
 export function parseConfigCommandArgs(args: string[]): ConfigCommandParseResult {
   const options: ConfigCommandOptions = {
+    host: DEFAULT_DASHBOARD_HOST,
     hostProvided: false,
     dev: false,
   };
@@ -121,14 +123,14 @@ export function showConfigCommandHelp(): void {
   console.log('');
   console.log('Options:');
   console.log('  --port, -p PORT    Specify server port (default: auto-detect)');
-  console.log('  --host, -H HOST    Bind dashboard server host (default: system default)');
+  console.log('  --host, -H HOST    Bind dashboard server host (default: 0.0.0.0)');
   console.log('  --dev              Development mode with Vite HMR');
   console.log('  --help, -h         Show this help message');
   console.log('');
   console.log('Examples:');
   console.log('  ccs config                       Auto-detect available port');
   console.log('  ccs config --port 3000           Use specific port');
-  console.log('  ccs config --host 0.0.0.0        Force all-interface binding for remote devices');
+  console.log('  ccs config --host 0.0.0.0        Bind all IPv4 interfaces for remote devices');
   console.log('  ccs config --host 127.0.0.1      Restrict dashboard to this machine');
   console.log('  ccs config --dev                 Development mode with hot reload');
   console.log('  ccs config auth setup            Configure dashboard login');

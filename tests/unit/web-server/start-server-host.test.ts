@@ -20,11 +20,13 @@ afterEach(async () => {
 });
 
 describe('startServer host binding', () => {
-  it('binds with system-default host when no host is provided', async () => {
+  it('binds to the IPv4 wildcard host when no host is provided', async () => {
     const instance = await startServer({ port: 0 });
     instances.push(instance);
 
     const address = instance.server.address() as AddressInfo;
+    expect(address.address).toBe('0.0.0.0');
+    expect(address.family).toBe('IPv4');
     expect(address.port).toBeGreaterThan(0);
   });
 

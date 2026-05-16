@@ -18,7 +18,7 @@ From project root:
 bun run dev
 ```
 
-This starts the CCS server, opens a local browser URL, and prints bind/network details for the dashboard.
+This starts the CCS server, opens a local browser URL, and binds the dashboard to the default IPv4 wildcard host (`0.0.0.0`).
 If the runtime bind is reachable beyond loopback, CCS also prints an auth reminder.
 
 For remote device access during development, run:

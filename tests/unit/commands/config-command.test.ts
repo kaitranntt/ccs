@@ -79,7 +79,7 @@ beforeEach(() => {
   errorLines = [];
   dashboardAuthEnabled = false;
   startServerError = null;
-  mockServerBindHost = '::';
+  mockServerBindHost = '0.0.0.0';
 
   originalConsoleLog = console.log;
   originalConsoleError = console.error;
@@ -140,15 +140,15 @@ describe('config command dashboard startup', () => {
     expect(errorLines.join('\n')).toContain('Unexpected arguments: bogus');
   });
 
-  it('keeps the default startup path free of an explicit host override', async () => {
+  it('uses an explicit IPv4 wildcard host for the default startup path', async () => {
     await handleConfigCommand([], createTestDeps());
 
     expect(startServerCalls).toHaveLength(1);
-    expect(startServerCalls[0]).toEqual({ port: 3000, dev: false });
+    expect(startServerCalls[0]).toEqual({ port: 3000, dev: false, host: '0.0.0.0' });
 
     const rendered = logLines.join('\n');
     expect(rendered).toContain('Dashboard: http://localhost:3000');
-    expect(rendered).toContain('Bind host: ::');
+    expect(rendered).toContain('Bind host: 0.0.0.0');
     expect(rendered).toContain(
       'Dashboard may be reachable from other devices that can connect to this machine.'
     );
@@ -206,7 +206,7 @@ describe('config command dashboard startup', () => {
 
       const rendered = logLines.join('\n');
       expect(rendered).toContain('Dashboard: http://localhost:3000');
-      expect(rendered).toContain('Bind host: ::');
+      expect(rendered).toContain('Bind host: 0.0.0.0');
       expect(errorLines).toHaveLength(0);
     } finally {
       networkInterfacesSpy.mockRestore();
