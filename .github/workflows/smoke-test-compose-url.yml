@@ -1,0 +1,61 @@
+name: Smoke Test – ccs.kaitran.ca/docker-compose.yaml
+
+on:
+  release:
+    types:
+      - published
+  schedule:
+    # Nightly at 07:00 UTC
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      do_up:
+        description: >
+          Also run `docker compose up -d`, wait for healthcheck, curl ports, then
+          `docker compose down -v`. Skipped by default (parse-only).
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  smoke-test:
+    name: curl + parse (+ optional up/down)
+    runs-on: [self-hosted, linux, x64, cliproxy]
+
+    steps:
+      - name: Download compose from canonical URL
+        run: |
+          curl -fsSL https://ccs.kaitran.ca/docker-compose.yaml -o /tmp/ccs-compose.yaml
+          echo "--- downloaded compose ---"
+          cat /tmp/ccs-compose.yaml
+
+      - name: Validate compose parses (docker compose config)
+        run: docker compose -f /tmp/ccs-compose.yaml config
+
+      - name: Bring stack up, verify healthcheck, tear down
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.do_up == true }}
+        run: |
+          set -euo pipefail
+
+          docker compose -f /tmp/ccs-compose.yaml up -d
+
+          echo "Waiting for healthcheck to pass (max 90s)..."
+          for i in $(seq 1 18); do
+            STATUS=$(docker compose -f /tmp/ccs-compose.yaml ps --format json \
+              | python3 -c "import sys,json; data=sys.stdin.read().strip(); rows=json.loads('['+','.join(data.splitlines())+']') if data else []; print(next((r.get('Health','') for r in rows if 'ccs' in r.get('Service','')), 'unknown'))" 2>/dev/null || echo "unknown")
+            echo "Health: $STATUS"
+            if [ "$STATUS" = "healthy" ]; then
+              break
+            fi
+            sleep 5
+          done
+
+          # Verify ports respond
+          curl -fsSL --retry 3 --retry-delay 2 http://localhost:3000 -o /dev/null || \
+            { echo "[X] Dashboard port 3000 did not respond"; docker compose -f /tmp/ccs-compose.yaml down -v; exit 1; }
+
+          curl -fsSL --retry 3 --retry-delay 2 http://localhost:8317 -o /dev/null || \
+            { echo "[X] CLIProxy port 8317 did not respond"; docker compose -f /tmp/ccs-compose.yaml down -v; exit 1; }
+
+          echo "[OK] Both ports healthy"
+          docker compose -f /tmp/ccs-compose.yaml down -v
