@@ -77,14 +77,28 @@ fi
 
 # ---------------------------------------------------------------------------
 # 2. Exposed ports — both must expose 3000 and 8317
+# Matches both quoted ("HOST:CONTAINER") and unquoted (HOST:CONTAINER) forms,
+# as well as variable-interpolated host ports like "${VAR:-3000}:3000".
 # ---------------------------------------------------------------------------
 log "Checking exposed port parity..."
 
+port_exposed() {
+  local file="$1" port="$2"
+  # Match container port in: "anything:PORT" or anything:PORT (quoted or bare)
+  grep -E "(\"[^\"]*:${port}\"|[[:space:]]-[[:space:]]+[^\"]*:${port}[^0-9])" "$file" \
+    > /dev/null 2>&1
+}
+
 REQUIRED_PORTS=("3000" "8317")
 for port in "${REQUIRED_PORTS[@]}"; do
-  if grep -q "\"[0-9]*:${port}\"" "$CANONICAL" && grep -q "\"[0-9]*:${port}\"" "$INTEGRATED"; then
+  IN_CANONICAL=0
+  IN_INTEGRATED=0
+  port_exposed "$CANONICAL" "$port"   && IN_CANONICAL=1 || true
+  port_exposed "$INTEGRATED" "$port"  && IN_INTEGRATED=1 || true
+
+  if [[ "$IN_CANONICAL" -eq 1 && "$IN_INTEGRATED" -eq 1 ]]; then
     ok "Port ${port} exposed in both compose files"
-  elif ! grep -q "\"[0-9]*:${port}\"" "$CANONICAL"; then
+  elif [[ "$IN_CANONICAL" -eq 0 ]]; then
     fail "Port ${port} missing from ${CANONICAL}"
   else
     fail "Port ${port} missing from ${INTEGRATED}"
