@@ -14,7 +14,16 @@ RUN apk add --no-cache \
     npm \
     supervisor
 
-# Install CCS CLI
+# Install CCS CLI.
+# Tradeoff: `npm install -g` does not use a lockfile — the package is already
+# version-pinned via CCS_NPM_VERSION (e.g. "7.80.0"), so transitive drift is
+# bounded to patch-level updates of CCS's own production dependencies between
+# publish time and image build time. This is intentional: pinning an exact
+# lockfile in a Docker global-install layer is fragile (lockfile format ties to
+# npm/Node version in the base image). The --mount=type=cache layer ensures the
+# resolved dependency tree is stable within a single build host's cache.
+# Regression test: tests/docker/image-size.sh asserts the image stays within
+# the size budget, which catches unexpected dep bloat.
 RUN --mount=type=cache,target=/root/.npm \
     npm install -g @kaitranntt/ccs@${CCS_NPM_VERSION} \
   && ln -sf /usr/local/lib/node_modules/@kaitranntt/ccs/dist/docker/docker-bootstrap.js /usr/local/bin/ccs-docker-bootstrap

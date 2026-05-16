@@ -8,6 +8,9 @@
 # Ports:
 #   3000 — CCS Dashboard
 #   8317 — CLIProxy API
+#
+# restart: unless-stopped ensures the container restarts automatically on
+# system reboot or crash, but honours a deliberate `docker compose stop`.
 
 services:
   ccs:
@@ -22,10 +25,23 @@ services:
     networks:
       - ccs-net
     healthcheck:
+      # Probes both Dashboard (:3000) and CLIProxy (:8317) before reporting
+      # healthy — a container with only one service running is not considered
+      # ready. Uses a 4.5s internal timeout to stay well within the 5s Docker
+      # timeout budget.
       test:
         - "CMD-SHELL"
         - >
-          node -e "require('http').get('http://127.0.0.1:8317/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"
+          node -e "
+            const http = require('http');
+            let pending = 2; let ok = true;
+            const check = (port) => http.get('http://127.0.0.1:'+port+'/', r => {
+              if (r.statusCode >= 500) ok = false;
+              if (--pending === 0) process.exit(ok ? 0 : 1);
+            }).on('error', () => { ok = false; if (--pending === 0) process.exit(1); });
+            check(3000); check(8317);
+            setTimeout(() => process.exit(1), 4500);
+          "
       interval: 30s
       timeout: 5s
       retries: 3
