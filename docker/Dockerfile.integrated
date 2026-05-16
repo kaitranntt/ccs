@@ -1,16 +1,31 @@
 FROM eceasy/cli-proxy-api:latest
 
 ARG CCS_NPM_VERSION=latest
+# FLAVOR=minimal installs CCS only; FLAVOR=full adds claude-code, gemini-cli, grok-cli, opencode
+ARG FLAVOR=minimal
 
 RUN apk add --no-cache \
+    bash \
     curl \
     jq \
     nodejs \
     npm \
     supervisor
 
-RUN npm install -g @kaitranntt/ccs@${CCS_NPM_VERSION} \
+# Install CCS CLI (always present in both flavors)
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g @kaitranntt/ccs@${CCS_NPM_VERSION} \
   && ln -sf /usr/local/lib/node_modules/@kaitranntt/ccs/dist/docker/docker-bootstrap.js /usr/local/bin/ccs-docker-bootstrap
+
+# Install AI CLIs only in the full flavor (all 4 bundled as one layer)
+RUN --mount=type=cache,target=/root/.npm \
+    if [ "$FLAVOR" = "full" ]; then \
+      npm install -g --ignore-scripts \
+        @anthropic-ai/claude-code \
+        @google/gemini-cli \
+        @vibe-kit/grok-cli \
+      && curl -fsSL https://opencode.ai/install | sh -s -- --no-modify-path 2>/dev/null || true; \
+    fi
 
 COPY supervisord.conf /etc/supervisord.conf
 COPY entrypoint-integrated.sh /entrypoint-integrated.sh
