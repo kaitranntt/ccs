@@ -19,7 +19,8 @@ describe('pr ci workflow', () => {
     expect(workflow).toContain('name: CI');
     expect(workflow).toContain('pull_request:');
     expect(workflow).toContain('branches: [main, dev]');
-    expect(workflow.split(trustedAuthorGate).length - 1).toBe(3);
+    // 4 jobs: validate (matrix), build, test, compose-parity — each gated
+    expect(workflow.split(trustedAuthorGate).length - 1).toBe(4);
     expect(workflow).toContain('group: ci-${{ github.ref }}');
     expect(workflow).toContain('cancel-in-progress: true');
     expect(workflow).toContain('fail-fast: false');
