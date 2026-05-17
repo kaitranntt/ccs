@@ -3,9 +3,13 @@ FROM eceasy/cli-proxy-api:latest
 ARG CCS_NPM_VERSION=latest
 
 # CCS integrated image: CCS CLI + CLIProxy + supervisord.
-# No AI CLIs (claude-code, gemini-cli, etc.) are bundled.
-# To use AI CLIs alongside CLIProxy, run them in sibling containers
-# attached to ccs-net — see docker/README.md#connect-your-app-to-cliproxy.
+# Design choice (issue #1251 final scope): single-image strategy. The originally-
+# proposed `:full` variant bundling claude-code/gemini-cli/grok-cli/opencode was
+# DROPPED on maintainer review. Rationale: smaller surface area, fewer supply-
+# chain dependencies, simpler tag taxonomy. Users needing AI CLIs run them in
+# sibling containers attached to ccs-net — the public DNS contract guarantees
+# http://ccs:8317 reachability. See docker/README.md#connect-your-app-to-
+# cliproxy. Historical record: CHANGELOG.md "### Removed" entry.
 
 RUN apk add --no-cache \
     curl \

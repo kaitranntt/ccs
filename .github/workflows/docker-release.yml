@@ -400,10 +400,19 @@ jobs:
   # ---------------------------------------------------------------------------
   # Job 4: Promote mutable tags — runs ONLY after smoke tests pass
   # Adds :latest, :<major>, :<minor> aliases pointing to the immutable digest.
-  # Never triggered automatically by release events — requires an explicit
-  # workflow_dispatch with promote_to_latest=true (via promote-release.yml or
-  # direct gh CLI call) after the operator confirms the immutable :<ver> image
-  # is stable. This is the sole rc.1 soak gate for Docker mutable tags.
+  #
+  # INTENTIONAL DESIGN (issue #1251 rc.1 soak — see docs/release-process.md):
+  # GitHub release events publish ONLY the immutable :<ver> tag. The mutable
+  # :latest / :<major> / :<minor> aliases STAY POINTED AT THE PRIOR STABLE
+  # RELEASE until an operator manually promotes after a soak window (~24h).
+  # Trade-off: zero-install users (curl ccs.kaitran.ca/docker-compose.yaml &&
+  # docker compose up -d) keep receiving last-known-good :latest during the
+  # soak; operators wanting the new version pull :<ver> directly.
+  #
+  # Operator promotion:
+  #   gh workflow run promote-release.yml -f tag=v<X.Y.Z>
+  # (or equivalently: gh workflow run "Publish Docker Image" -f tag=v<X.Y.Z>
+  # -f promote_to_latest=true)
   # ---------------------------------------------------------------------------
   promote-mutable-tags:
     name: Promote mutable tags (:latest / major / minor)
