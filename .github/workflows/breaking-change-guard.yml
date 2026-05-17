@@ -7,6 +7,7 @@ name: Breaking Change Guard – Docker Compose Contract
 #   services.ccs.image (the image *name*, not the tag)
 #   networks.ccs-net.name
 #   services.ccs.container_name (if set)
+#   services keys (Docker DNS uses the service key; renaming "ccs:" changes http://ccs:8317)
 #
 # If any of these fields change in a PR, the workflow fails unless at least
 # one commit in the PR includes a breaking-change marker (feat!: or fix!:).
@@ -77,6 +78,30 @@ jobs:
           NEW_CN=$(grep 'container_name:' docker/compose.yaml | tr -d ' ' || echo "")
           if [[ "${OLD_CN}" != "${NEW_CN}" ]]; then
             echo "[!] BREAKING: container_name changed: '${OLD_CN}' -> '${NEW_CN}'"
+            BREAKING=1
+          fi
+
+          # 4. Service key rename — public DNS contract on ccs-net depends on the
+          #    service key being "ccs". Docker's service-name DNS resolves sibling
+          #    containers via the compose service KEY (e.g. http://ccs:8317). A
+          #    rename from "ccs:" to anything else silently breaks every sibling
+          #    container in the wild even when image/network/container_name match.
+          #
+          #    Extraction logic: find lines that look like top-level service keys
+          #    (two-space indent + identifier + colon, NOT sub-keys like "image:").
+          #    This matches YAML service keys without requiring an external YAML parser.
+          OLD_KEYS=$(git show "${BASE}:docker/compose.yaml" 2>/dev/null \
+            | awk '/^services:/{s=1;next} s && /^  [a-zA-Z0-9_-]+:/{print $1} /^[^ ]/{s=0}' \
+            | tr -d ':' | sort | tr '\n' ' ' | sed 's/ $//')
+          NEW_KEYS=$(awk '/^services:/{s=1;next} s && /^  [a-zA-Z0-9_-]+:/{print $1} /^[^ ]/{s=0}' \
+            docker/compose.yaml \
+            | tr -d ':' | sort | tr '\n' ' ' | sed 's/ $//')
+          if ! echo " ${NEW_KEYS} " | grep -q " ccs "; then
+            echo "[!] BREAKING: services.ccs key missing from docker/compose.yaml — sibling containers on ccs-net rely on DNS hostname 'ccs'"
+            BREAKING=1
+          fi
+          if [[ "${OLD_KEYS}" != "${NEW_KEYS}" ]]; then
+            echo "[!] BREAKING: services keys changed: '${OLD_KEYS}' -> '${NEW_KEYS}'"
             BREAKING=1
           fi
 
