@@ -65,19 +65,37 @@ volume_targets() {
 }
 
 # ---------------------------------------------------------------------------
-# 1. Image name (repo without tag) — both should reference kaitranntt/ccs
+# Expected image names (without tag) — source of truth for this assertion.
+#
+# canonical (docker/compose.yaml):
+#   Pulls from the public registry. Default image is ghcr.io/kaitranntt/ccs.
+#
+# integrated (docker/docker-compose.integrated.yml):
+#   Built locally from Dockerfile.integrated; the resulting image is tagged
+#   ccs-cliproxy (no registry prefix) so it stays separate from the public
+#   image but is still clearly a CCS-family image.
+# ---------------------------------------------------------------------------
+EXPECTED_CANONICAL_IMAGE="ghcr.io/kaitranntt/ccs"
+EXPECTED_INTEGRATED_IMAGE="ccs-cliproxy"
+
+# ---------------------------------------------------------------------------
+# 1. Image name (repo without tag) — assert exact match against expected names
 # ---------------------------------------------------------------------------
 log "Checking image name parity..."
 
 CANONICAL_IMAGE=$(image_name "$CANONICAL" "ccs")
 INTEGRATED_IMAGE=$(image_name "$INTEGRATED" "ccs-cliproxy")
 
-# Both must contain kaitranntt/ccs (integrated builds locally but from the same Dockerfile)
-if echo "$CANONICAL_IMAGE" | grep -q "kaitranntt/ccs" && \
-   echo "$INTEGRATED_IMAGE" | grep -q "ccs"; then
-  ok "Image names reference expected repo (canonical: ${CANONICAL_IMAGE}, integrated: ${INTEGRATED_IMAGE})"
+if [[ "${CANONICAL_IMAGE}" != "${EXPECTED_CANONICAL_IMAGE}" ]]; then
+  fail "Canonical image name mismatch — expected='${EXPECTED_CANONICAL_IMAGE}' got='${CANONICAL_IMAGE}'"
 else
-  fail "Image name mismatch — canonical='${CANONICAL_IMAGE}' integrated='${INTEGRATED_IMAGE}'"
+  ok "Canonical image name matches expected (${CANONICAL_IMAGE})"
+fi
+
+if [[ "${INTEGRATED_IMAGE}" != "${EXPECTED_INTEGRATED_IMAGE}" ]]; then
+  fail "Integrated image name mismatch — expected='${EXPECTED_INTEGRATED_IMAGE}' got='${INTEGRATED_IMAGE}'"
+else
+  ok "Integrated image name matches expected (${INTEGRATED_IMAGE})"
 fi
 
 # ---------------------------------------------------------------------------
