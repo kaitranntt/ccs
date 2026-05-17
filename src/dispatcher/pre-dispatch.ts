@@ -59,6 +59,14 @@ export async function runPreDispatchHandlers(ctx: PreDispatchContext): Promise<b
     }
   }
 
+  // CCS_NO_PRE_DISPATCH guard — set by `ccsx auth use` to keep stdout clean
+  // for shell eval. Must be checked BEFORE autoMigrate/recovery, both of which
+  // write to stdout and would otherwise contaminate `eval "$(ccsx auth use <name>)"`.
+  // See: src/codex-auth/commands/use-command.ts (C2 in plan.md §Validation findings)
+  if (process.env.CCS_NO_PRE_DISPATCH === '1') {
+    return false;
+  }
+
   // Auto-migrate to unified config format (silent if already migrated)
   // Skip if user is explicitly running migrate command
   if (firstArg !== 'migrate') {

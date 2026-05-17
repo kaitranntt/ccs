@@ -60,6 +60,17 @@ describe('self-hosted runner policy', () => {
     }
   });
 
+  test('breaking-change guard scopes compose contract checks to services.ccs', () => {
+    const workflow = fs.readFileSync(path.join(workflowsDir(), 'breaking-change-guard.yml'), 'utf8');
+
+    expect(workflow).toContain('OLD_RAW=$(service_field_value "$BASE_COMPOSE" ccs image)');
+    expect(workflow).toContain('NEW_RAW=$(service_field_value docker/compose.yaml ccs image)');
+    expect(workflow).toContain('has_service_network_effective_name docker/compose.yaml ccs ccs-net');
+    expect(workflow).toContain('OLD_CN=$(service_field_value "$BASE_COMPOSE" ccs container_name');
+    expect(workflow).not.toContain("grep -m1 '^[[:space:]]*image:'");
+    expect(workflow).not.toContain('services.ccs.hostname override');
+  });
+
   test('gates pull-request self-hosted worker deploys to trusted authors', () => {
     const workflow = fs.readFileSync(path.join(workflowsDir(), 'deploy-ccs-worker.yml'), 'utf8');
 

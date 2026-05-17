@@ -152,6 +152,92 @@ describe('ai-provider service stable ids', () => {
     ).toBe('sk-openrouter');
   });
 
+  it('redacts custom headers and URL userinfo in provider list views', async () => {
+    const { listAiProviders } = await loadAiProviderService();
+
+    writeCliproxyConfig(tempHome, {
+      'claude-api-key': [
+        {
+          id: 'claude-secret-route',
+          'api-key': 'sk-ant-provider-secret-1234',
+          'base-url': 'https://baseuser:basepass@anthropic.example/v1',
+          'proxy-url': 'http://proxyuser:proxypass@example.internal:8080',
+          headers: {
+            Authorization: 'Bearer HEADER-SECRET-123456',
+            'X-API-Key': 'x-api-key-secret-abcdef',
+          },
+        },
+      ],
+      'openai-compatibility': [
+        {
+          id: 'openrouter-secret-route',
+          name: 'openrouter',
+          'base-url': 'https://routeruser:routerpass@openrouter.example/api/v1',
+          headers: {
+            Authorization: 'Bearer OPENAI-COMPAT-HEADER-SECRET',
+          },
+          'api-key-entries': [{ 'api-key': 'sk-openrouter-secret-9999' }],
+        },
+      ],
+    });
+
+    const listed = await listAiProviders();
+    const claudeEntry = listed.families.find((entry) => entry.id === 'claude-api-key')?.entries[0];
+    const openAiEntry = listed.families.find((entry) => entry.id === 'openai-compatibility')
+      ?.entries[0];
+
+    expect(claudeEntry?.baseUrl).toBe('https://***:***@anthropic.example/v1');
+    expect(claudeEntry?.proxyUrl).toBe('http://***:***@example.internal:8080/');
+    expect(claudeEntry?.headers).toEqual([
+      { key: 'Authorization', value: '...3456' },
+      { key: 'X-API-Key', value: '...cdef' },
+    ]);
+    expect(openAiEntry?.baseUrl).toBe('https://***:***@openrouter.example/api/v1');
+    expect(openAiEntry?.headers).toEqual([{ key: 'Authorization', value: '...CRET' }]);
+  });
+
+  it('preserves stored header and URL secrets when saving unchanged redacted values', async () => {
+    const { listAiProviders, updateAiProviderEntry } = await loadAiProviderService();
+
+    writeCliproxyConfig(tempHome, {
+      'claude-api-key': [
+        {
+          id: 'claude-secret-route',
+          'api-key': 'sk-ant-provider-secret-1234',
+          'base-url': 'https://baseuser:basepass@anthropic.example/v1',
+          'proxy-url': 'http://proxyuser:proxypass@example.internal:8080',
+          headers: {
+            Authorization: 'Bearer HEADER-SECRET-123456',
+            'X-Project': 'public-routing-context',
+          },
+        },
+      ],
+    });
+
+    const listed = await listAiProviders();
+    const entry = listed.families.find((family) => family.id === 'claude-api-key')?.entries[0];
+
+    expect(entry).toBeDefined();
+
+    await updateAiProviderEntry('claude-api-key', 'claude-secret-route', {
+      apiKey: 'sk-ant-provider-secret-1234',
+      baseUrl: entry?.baseUrl,
+      proxyUrl: entry?.proxyUrl,
+      headers: entry?.headers,
+      preserveSecrets: true,
+    });
+
+    const persisted = readCliproxyConfig(tempHome)['claude-api-key'] as Array<
+      Record<string, unknown>
+    >;
+    expect(persisted[0]?.['base-url']).toBe('https://baseuser:basepass@anthropic.example/v1');
+    expect(persisted[0]?.['proxy-url']).toBe('http://proxyuser:proxypass@example.internal:8080');
+    expect(persisted[0]?.headers).toEqual({
+      Authorization: 'Bearer HEADER-SECRET-123456',
+      'X-Project': 'public-routing-context',
+    });
+  });
+
   it('normalizes plain openai-compatible model rules without aliases', async () => {
     const { listAiProviders } = await loadAiProviderService();
 

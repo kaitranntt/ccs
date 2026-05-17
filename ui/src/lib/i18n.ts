@@ -2175,6 +2175,46 @@ const resources = {
         featureAppsDesc: 'Enable ChatGPT Apps and connectors support.',
         featureSmartApprovalsLabel: 'Smart approvals',
         featureSmartApprovalsDesc: 'Route eligible approvals through the guardian flow.',
+        auth: {
+          terminalOnlyTooltip:
+            'Use ccsx auth switch <name> or ccsx auth remove <name> in terminal.',
+          terminalOnlyTooltipRich:
+            'Use <code>ccsx auth switch &lt;name&gt;</code> or <code>ccsx auth remove &lt;name&gt;</code> in terminal.',
+          activeSourceBadge: '{{source}}',
+          statusOk: 'OK',
+          statusInvalid: '[!] auth invalid',
+          loading: 'Loading auth profiles...',
+          loadError: '[!] Failed to load codex-auth profiles.',
+          emptyRegistry: '[i] No codex-auth profiles. Run ccsx auth create <name> to create one.',
+          emptyRegistryRich:
+            '[i] No codex-auth profiles. Run <code>ccsx auth create &lt;name&gt;</code> to create one.',
+          legacyCodexHome: 'Codex will use the default ~/.codex location.',
+          legacyCodexHomeRich: 'Codex will use the default <code>~/.codex</code> location.',
+          legacyMode:
+            '[i] No active profile. Using ~/.codex (legacy). Run ccsx auth switch <name> in terminal to activate one.',
+          legacyModeRich:
+            '[i] No active profile. Using <code>~/.codex</code> (legacy). Run <code>ccsx auth switch &lt;name&gt;</code> in terminal to activate one.',
+          externalCodexHome:
+            '[i] $CODEX_HOME set externally to {{path}}. Profile registry not in use for this session.',
+          externalCodexHomeRich:
+            '[i] <code>$CODEX_HOME</code> set externally to <code>{{path}}</code>. Profile registry not in use for this session.',
+          activeProfile: 'Active profile:',
+          unknownProfile: '(unknown)',
+          planLabel: 'Plan:',
+          switchAction: 'Switch',
+          removeAction: 'Remove',
+          sourceDefault: 'default',
+          sourceEnv: '$CCS_CODEX_PROFILE',
+          sourceExplicitCodexHome: '$CODEX_HOME',
+          col: {
+            name: 'Name',
+            email: 'Email',
+            plan: 'Plan',
+            lastUsed: 'Last used',
+            status: 'Status',
+            actions: 'Actions',
+          },
+        },
       },
       droidSettings: {
         quickControls: 'Quick Controls',
@@ -2628,6 +2668,7 @@ const resources = {
         controlCenter: 'Control Center',
         overview: 'Overview',
         docs: 'Docs',
+        authProfiles: 'Auth Profiles',
         nativeRuntime: 'Native Runtime',
         ccsProvider: 'CCS Provider',
         setup: 'Setup',
@@ -4739,6 +4780,44 @@ const resources = {
         yes: '是',
         no: '否',
         warningsTitle: '警告',
+        auth: {
+          terminalOnlyTooltip: '在终端使用 ccsx auth switch <name> 或 ccsx auth remove <name>。',
+          terminalOnlyTooltipRich:
+            '在终端使用 <code>ccsx auth switch &lt;name&gt;</code> 或 <code>ccsx auth remove &lt;name&gt;</code>。',
+          activeSourceBadge: '{{source}}',
+          statusOk: '正常',
+          statusInvalid: '[!] 认证无效',
+          loading: '正在加载认证配置...',
+          loadError: '[!] 加载 codex-auth 配置失败。',
+          emptyRegistry: '[i] 没有 codex-auth 配置。运行 ccsx auth create <name> 创建一个。',
+          emptyRegistryRich:
+            '[i] 没有 codex-auth 配置。运行 <code>ccsx auth create &lt;name&gt;</code> 创建一个。',
+          legacyCodexHome: 'Codex 将使用默认 ~/.codex 位置。',
+          legacyCodexHomeRich: 'Codex 将使用默认 <code>~/.codex</code> 位置。',
+          legacyMode:
+            '[i] 没有活动配置。正在使用 ~/.codex（旧模式）。在终端运行 ccsx auth switch <name> 激活一个。',
+          legacyModeRich:
+            '[i] 没有活动配置。正在使用 <code>~/.codex</code>（旧模式）。在终端运行 <code>ccsx auth switch &lt;name&gt;</code> 激活一个。',
+          externalCodexHome: '[i] $CODEX_HOME 外部设置为 {{path}}。本会话未使用配置注册表。',
+          externalCodexHomeRich:
+            '[i] <code>$CODEX_HOME</code> 外部设置为 <code>{{path}}</code>。本会话未使用配置注册表。',
+          activeProfile: '活动配置：',
+          unknownProfile: '（未知）',
+          planLabel: '套餐：',
+          switchAction: '切换',
+          removeAction: '移除',
+          sourceDefault: '默认',
+          sourceEnv: '$CCS_CODEX_PROFILE',
+          sourceExplicitCodexHome: '$CODEX_HOME',
+          col: {
+            name: '名称',
+            email: '邮箱',
+            plan: '套餐',
+            lastUsed: '上次使用',
+            status: '状态',
+            actions: '操作',
+          },
+        },
       },
       droidSettings: {
         quickControls: '快捷控制',
@@ -5168,6 +5247,7 @@ const resources = {
         controlCenter: '控制中心',
         overview: '概览',
         docs: '文档',
+        authProfiles: '认证配置',
         nativeRuntime: '原生运行时',
         ccsProvider: 'CCS 提供商',
         setup: '安装',
@@ -7389,6 +7469,46 @@ const resources = {
         yes: 'Có',
         no: 'Không',
         warningsTitle: 'Cảnh báo',
+        auth: {
+          terminalOnlyTooltip:
+            'Dùng ccsx auth switch <name> hoặc ccsx auth remove <name> trong terminal.',
+          terminalOnlyTooltipRich:
+            'Dùng <code>ccsx auth switch &lt;name&gt;</code> hoặc <code>ccsx auth remove &lt;name&gt;</code> trong terminal.',
+          activeSourceBadge: '{{source}}',
+          statusOk: 'OK',
+          statusInvalid: '[!] auth không hợp lệ',
+          loading: 'Đang tải hồ sơ auth...',
+          loadError: '[!] Không tải được hồ sơ codex-auth.',
+          emptyRegistry: '[i] Chưa có hồ sơ codex-auth. Chạy ccsx auth create <name> để tạo.',
+          emptyRegistryRich:
+            '[i] Chưa có hồ sơ codex-auth. Chạy <code>ccsx auth create &lt;name&gt;</code> để tạo.',
+          legacyCodexHome: 'Codex sẽ dùng vị trí mặc định ~/.codex.',
+          legacyCodexHomeRich: 'Codex sẽ dùng vị trí mặc định <code>~/.codex</code>.',
+          legacyMode:
+            '[i] Chưa có hồ sơ active. Đang dùng ~/.codex (legacy). Chạy ccsx auth switch <name> trong terminal để kích hoạt.',
+          legacyModeRich:
+            '[i] Chưa có hồ sơ active. Đang dùng <code>~/.codex</code> (legacy). Chạy <code>ccsx auth switch &lt;name&gt;</code> trong terminal để kích hoạt.',
+          externalCodexHome:
+            '[i] $CODEX_HOME được đặt bên ngoài là {{path}}. Registry hồ sơ không dùng trong phiên này.',
+          externalCodexHomeRich:
+            '[i] <code>$CODEX_HOME</code> được đặt bên ngoài là <code>{{path}}</code>. Registry hồ sơ không dùng trong phiên này.',
+          activeProfile: 'Hồ sơ active:',
+          unknownProfile: '(không rõ)',
+          planLabel: 'Gói:',
+          switchAction: 'Chuyển',
+          removeAction: 'Xóa',
+          sourceDefault: 'mặc định',
+          sourceEnv: '$CCS_CODEX_PROFILE',
+          sourceExplicitCodexHome: '$CODEX_HOME',
+          col: {
+            name: 'Tên',
+            email: 'Email',
+            plan: 'Gói',
+            lastUsed: 'Dùng lần cuối',
+            status: 'Trạng thái',
+            actions: 'Thao tác',
+          },
+        },
       },
       droidSettings: {
         quickControls: 'Điều khiển nhanh',
@@ -7830,6 +7950,7 @@ const resources = {
         controlCenter: 'Trung tâm điều khiển',
         overview: 'Tổng quan',
         docs: 'Tài liệu',
+        authProfiles: 'Hồ sơ auth',
         nativeRuntime: 'Runtime gốc',
         ccsProvider: 'CCS Provider',
         setup: 'Thiết lập',
@@ -9765,12 +9886,54 @@ const resources = {
         yes: 'はい',
         no: 'いいえ',
         warningsTitle: '警告',
+        auth: {
+          terminalOnlyTooltip:
+            'ターミナルで ccsx auth switch <name> または ccsx auth remove <name> を使用します。',
+          terminalOnlyTooltipRich:
+            'ターミナルで <code>ccsx auth switch &lt;name&gt;</code> または <code>ccsx auth remove &lt;name&gt;</code> を使用します。',
+          activeSourceBadge: '{{source}}',
+          statusOk: 'OK',
+          statusInvalid: '[!] 認証が無効',
+          loading: '認証プロファイルを読み込み中...',
+          loadError: '[!] codex-auth プロファイルの読み込みに失敗しました。',
+          emptyRegistry:
+            '[i] codex-auth プロファイルがありません。ccsx auth create <name> を実行して作成します。',
+          emptyRegistryRich:
+            '[i] codex-auth プロファイルがありません。<code>ccsx auth create &lt;name&gt;</code> を実行して作成します。',
+          legacyCodexHome: 'Codex はデフォルトの ~/.codex を使用します。',
+          legacyCodexHomeRich: 'Codex はデフォルトの <code>~/.codex</code> を使用します。',
+          legacyMode:
+            '[i] アクティブなプロファイルがありません。~/.codex（レガシー）を使用中です。ターミナルで ccsx auth switch <name> を実行して有効化します。',
+          legacyModeRich:
+            '[i] アクティブなプロファイルがありません。<code>~/.codex</code>（レガシー）を使用中です。ターミナルで <code>ccsx auth switch &lt;name&gt;</code> を実行して有効化します。',
+          externalCodexHome:
+            '[i] $CODEX_HOME は外部で {{path}} に設定されています。このセッションではプロファイル registry は使われません。',
+          externalCodexHomeRich:
+            '[i] <code>$CODEX_HOME</code> は外部で <code>{{path}}</code> に設定されています。このセッションではプロファイル registry は使われません。',
+          activeProfile: 'アクティブプロファイル:',
+          unknownProfile: '(不明)',
+          planLabel: 'プラン:',
+          switchAction: '切り替え',
+          removeAction: '削除',
+          sourceDefault: 'デフォルト',
+          sourceEnv: '$CCS_CODEX_PROFILE',
+          sourceExplicitCodexHome: '$CODEX_HOME',
+          col: {
+            name: '名前',
+            email: 'メール',
+            plan: 'プラン',
+            lastUsed: '最終使用',
+            status: 'ステータス',
+            actions: '操作',
+          },
+        },
       },
       codexPage: {
         title: 'Codex',
         controlCenter: 'コントロールセンター',
         overview: '概要',
         docs: 'ドキュメント',
+        authProfiles: '認証プロファイル',
         nativeRuntime: 'ネイティブランタイム',
         ccsProvider: 'CCS プロバイダー',
         setup: 'セットアップ',
@@ -12735,6 +12898,47 @@ const resources = {
         featureAppsDesc: 'ChatGPT 앱 및 커넥터 지원을 활성화합니다.',
         featureSmartApprovalsLabel: '스마트 승인',
         featureSmartApprovalsDesc: '가디언 흐름을 통해 적격 승인을 라우팅합니다.',
+        auth: {
+          terminalOnlyTooltip:
+            '터미널에서 ccsx auth switch <name> 또는 ccsx auth remove <name>을 사용하세요.',
+          terminalOnlyTooltipRich:
+            '터미널에서 <code>ccsx auth switch &lt;name&gt;</code> 또는 <code>ccsx auth remove &lt;name&gt;</code>을 사용하세요.',
+          activeSourceBadge: '{{source}}',
+          statusOk: 'OK',
+          statusInvalid: '[!] 인증이 유효하지 않음',
+          loading: '인증 프로필 로드 중...',
+          loadError: '[!] codex-auth 프로필을 로드하지 못했습니다.',
+          emptyRegistry:
+            '[i] codex-auth 프로필이 없습니다. ccsx auth create <name>을 실행해 생성하세요.',
+          emptyRegistryRich:
+            '[i] codex-auth 프로필이 없습니다. <code>ccsx auth create &lt;name&gt;</code>을 실행해 생성하세요.',
+          legacyCodexHome: 'Codex는 기본 ~/.codex 위치를 사용합니다.',
+          legacyCodexHomeRich: 'Codex는 기본 <code>~/.codex</code> 위치를 사용합니다.',
+          legacyMode:
+            '[i] 활성 프로필이 없습니다. ~/.codex(레거시)를 사용 중입니다. 터미널에서 ccsx auth switch <name>을 실행해 활성화하세요.',
+          legacyModeRich:
+            '[i] 활성 프로필이 없습니다. <code>~/.codex</code>(레거시)를 사용 중입니다. 터미널에서 <code>ccsx auth switch &lt;name&gt;</code>을 실행해 활성화하세요.',
+          externalCodexHome:
+            '[i] $CODEX_HOME이 외부에서 {{path}}로 설정되었습니다. 이 세션에서는 프로필 registry를 사용하지 않습니다.',
+          externalCodexHomeRich:
+            '[i] <code>$CODEX_HOME</code>이 외부에서 <code>{{path}}</code>로 설정되었습니다. 이 세션에서는 프로필 registry를 사용하지 않습니다.',
+          activeProfile: '활성 프로필:',
+          unknownProfile: '(알 수 없음)',
+          planLabel: '플랜:',
+          switchAction: '전환',
+          removeAction: '제거',
+          sourceDefault: '기본값',
+          sourceEnv: '$CCS_CODEX_PROFILE',
+          sourceExplicitCodexHome: '$CODEX_HOME',
+          col: {
+            name: '이름',
+            email: '이메일',
+            plan: '플랜',
+            lastUsed: '마지막 사용',
+            status: '상태',
+            actions: '작업',
+          },
+        },
       },
       droidSettings: {
         quickControls: '빠른 제어',
@@ -13190,6 +13394,7 @@ const resources = {
         controlCenter: '제어 센터',
         overview: '개요',
         docs: '문서',
+        authProfiles: '인증 프로필',
         nativeRuntime: '네이티브 런타임',
         ccsProvider: 'CCS 프로바이더',
         setup: '설정',

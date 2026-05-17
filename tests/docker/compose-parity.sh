@@ -15,8 +15,8 @@
 #
 set -euo pipefail
 
-CANONICAL="docker/compose.yaml"
-INTEGRATED="docker/docker-compose.integrated.yml"
+CANONICAL="${COMPOSE_PARITY_CANONICAL:-docker/compose.yaml}"
+INTEGRATED="${COMPOSE_PARITY_INTEGRATED:-docker/docker-compose.integrated.yml}"
 
 fail=0
 
@@ -44,10 +44,19 @@ image_name() {
   #      (e.g. registry:5000/owner/repo keeps its port colon intact)
   #
   # Mirrors the extract_image_name() logic in .github/workflows/breaking-change-guard.yml.
-  grep -A 50 "^  ${service}:" "$file" \
-    | grep -m1 '^\s*image:' \
-    | sed 's/.*image:\s*//' \
+  awk -v service="$service" '
+    /^services:[[:space:]]*$/ { in_services = 1; next }
+    in_services && /^[^[:space:]]/ { in_services = 0; in_service = 0 }
+    in_services && $0 ~ "^  " service ":[[:space:]]*$" { in_service = 1; next }
+    in_service && /^  [A-Za-z0-9_-]+:[[:space:]]*$/ { in_service = 0 }
+    in_service && /^[[:space:]]*image:/ {
+      sub(/^[[:space:]]*image:[[:space:]]*/, "", $0)
+      print
+      exit
+    }
+  ' "$file" \
     | tr -d ' ' \
+    | sed -E "s/^[\"']//; s/[\"']$//" \
     | sed -E 's/^\$\{[A-Za-z_][A-Za-z0-9_]*:-//; s/\}$//' \
     | sed 's|:[^:/]*$||'
 }
@@ -58,7 +67,7 @@ image_name() {
 exposed_ports() {
   local file="$1"
   # Match port mappings: "HOST:CONTAINER" — extract CONTAINER port number
-  grep -E '^\s+- "[0-9]+:[0-9]+"' "$file" \
+  grep -E '^[[:space:]]+- "[0-9]+:[0-9]+"' "$file" \
     | sed 's/.*:\([0-9]*\)".*/\1/' \
     | sort -n
 }
@@ -69,7 +78,7 @@ exposed_ports() {
 volume_targets() {
   local file="$1"
   # Match volume entries: - name:/container/path
-  grep -E '^\s+- [a-z_]+:/' "$file" \
+  grep -E '^[[:space:]]+- [a-z_]+:/' "$file" \
     | sed 's/.*:\(\/[^[:space:]]*\).*/\1/' \
     | sort
 }

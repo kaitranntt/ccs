@@ -28,6 +28,12 @@ describe('run-test-bucket', () => {
     }
   });
 
+  test('keeps web-server integration tests that bind ports in the slow bucket', () => {
+    const slowSet = bucket.getSlowSet();
+
+    expect(slowSet.has('tests/integration/web-server/codex-profiles-endpoint.test.ts')).toBe(true);
+  });
+
   test('forces npm tests into the slow bucket', () => {
     expect(bucket.shouldForceSlow('tests/npm/cli.test.js')).toBe(true);
   });

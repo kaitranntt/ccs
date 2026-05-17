@@ -239,6 +239,18 @@ describe('Dashboard Auth', () => {
       expect(isDashboardWebSocketUpgradeAllowed(request)).toBe(true);
     });
 
+    it('blocks 127-prefixed DNS names from loopback websocket origin aliases', () => {
+      process.env.CCS_DASHBOARD_AUTH_ENABLED = 'false';
+      const request = makeUpgradeRequest('127.0.0.1', false, {
+        host: 'localhost:3001',
+        origin: 'http://127.evil.example.test:3001',
+      });
+
+      expect(isDashboardWebSocketOriginAllowed(request)).toBe(false);
+      expect(isDashboardWebSocketUpgradeAllowed(request)).toBe(false);
+      expect(getDashboardWebSocketRejectionStatus(request)).toBe(403);
+    });
+
     it('blocks cross-site websocket origins even with an authenticated session', () => {
       process.env.CCS_DASHBOARD_AUTH_ENABLED = 'true';
       const request = makeUpgradeRequest('127.0.0.1', true, {

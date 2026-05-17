@@ -71,15 +71,137 @@ jobs:
           extract_image_name() {
             # $1 = raw image line content (everything after "image: ")
             local raw="$1"
+            raw=$(printf '%s' "$raw" | sed -E "s/^[\"']//; s/[\"']$//")
             # Strip ${VAR:-default} wrapper if present
             raw=$(printf '%s' "$raw" | sed -E 's/^\$\{[A-Za-z_][A-Za-z0-9_]*:-//; s/\}$//')
             # Strip only the trailing :tag — preserve internal colons (e.g. registry:5000/owner/repo)
             printf '%s' "$raw" | sed 's|:[^:/]*$||'
           }
-          OLD_RAW=$(git show "${BASE}:docker/compose.yaml" \
-            | grep -m1 '^\s*image:' | sed 's/.*image:\s*//' | tr -d ' ')
-          NEW_RAW=$(grep -m1 '^\s*image:' docker/compose.yaml \
-            | sed 's/.*image:\s*//' | tr -d ' ')
+
+          service_field_value() {
+            local file="$1" service="$2" field="$3"
+            awk -v service="$service" -v field="$field" '
+              function trim(s) {
+                sub(/^[[:space:]]+/, "", s)
+                sub(/[[:space:]]+$/, "", s)
+                return s
+              }
+              /^services:[[:space:]]*$/ { in_services = 1; next }
+              in_services && /^[^[:space:]]/ { in_services = 0; in_service = 0 }
+              in_services && $0 ~ "^  " service ":[[:space:]]*$" { in_service = 1; next }
+              in_service && /^  [A-Za-z0-9_-]+:[[:space:]]*$/ { in_service = 0 }
+              in_service {
+                prefix = "^    " field ":[[:space:]]*"
+                if ($0 ~ prefix) {
+                  line = $0
+                  sub(prefix, "", line)
+                  print trim(line)
+                  exit
+                }
+              }
+            ' "$file"
+          }
+
+          service_network_refs() {
+            local file="$1" service="$2"
+            awk -v service="$service" '
+              function trim(s) {
+                sub(/^[[:space:]]+/, "", s)
+                sub(/[[:space:]]+$/, "", s)
+                return s
+              }
+              function emit_inline(value, parts, count, i) {
+                gsub(/[\[\]]/, "", value)
+                count = split(value, parts, ",")
+                for (i = 1; i <= count; i++) {
+                  if (trim(parts[i]) != "") print trim(parts[i])
+                }
+              }
+              /^services:[[:space:]]*$/ { in_services = 1; next }
+              in_services && /^[^[:space:]]/ { in_services = 0; in_service = 0; in_networks = 0 }
+              in_services && $0 ~ "^  " service ":[[:space:]]*$" { in_service = 1; in_networks = 0; next }
+              in_service && /^  [A-Za-z0-9_-]+:[[:space:]]*$/ { in_service = 0; in_networks = 0 }
+              in_service {
+                if ($0 ~ /^    networks:[[:space:]]*\[/) {
+                  line = $0
+                  sub(/^    networks:[[:space:]]*/, "", line)
+                  emit_inline(line)
+                  next
+                }
+                if ($0 ~ /^    networks:[[:space:]]*$/) {
+                  in_networks = 1
+                  next
+                }
+                if ($0 ~ /^    networks:[[:space:]]+/) {
+                  line = $0
+                  sub(/^    networks:[[:space:]]+/, "", line)
+                  print trim(line)
+                  next
+                }
+                if (in_networks && $0 ~ /^    [A-Za-z0-9_-]+:/) {
+                  in_networks = 0
+                }
+                if (in_networks && $0 ~ /^      -[[:space:]]*/) {
+                  line = $0
+                  sub(/^      -[[:space:]]*/, "", line)
+                  print trim(line)
+                  next
+                }
+                if (in_networks && $0 ~ /^      [A-Za-z0-9_-]+:/) {
+                  line = $0
+                  sub(/^      /, "", line)
+                  sub(/:.*/, "", line)
+                  print trim(line)
+                  next
+                }
+              }
+            ' "$file"
+          }
+
+          network_effective_name() {
+            local file="$1" ref="$2"
+            awk -v ref="$ref" '
+              function trim(s) {
+                sub(/^[[:space:]]+/, "", s)
+                sub(/[[:space:]]+$/, "", s)
+                return s
+              }
+              /^networks:[[:space:]]*$/ { in_networks = 1; next }
+              in_networks && /^[^[:space:]]/ { in_networks = 0; in_target = 0 }
+              in_networks && $0 ~ "^  " ref ":[[:space:]]*$" {
+                in_target = 1
+                found = 1
+                effective = ref
+                next
+              }
+              in_target && /^  [A-Za-z0-9_-]+:[[:space:]]*$/ { in_target = 0 }
+              in_target && /^    name:[[:space:]]*/ {
+                line = $0
+                sub(/^    name:[[:space:]]*/, "", line)
+                effective = trim(line)
+              }
+              END { if (found) print effective }
+            ' "$file"
+          }
+
+          has_service_network_effective_name() {
+            local file="$1" service="$2" expected="$3" ref effective
+            while IFS= read -r ref; do
+              [[ -z "$ref" ]] && continue
+              effective=$(network_effective_name "$file" "$ref")
+              if [[ "$effective" == "$expected" ]]; then
+                return 0
+              fi
+            done < <(service_network_refs "$file" "$service")
+            return 1
+          }
+
+          BASE_COMPOSE="$(mktemp)"
+          trap 'rm -f "$BASE_COMPOSE"' EXIT
+          git show "${BASE}:docker/compose.yaml" > "$BASE_COMPOSE"
+
+          OLD_RAW=$(service_field_value "$BASE_COMPOSE" ccs image)
+          NEW_RAW=$(service_field_value docker/compose.yaml ccs image)
           OLD_IMAGE=$(extract_image_name "$OLD_RAW")
           NEW_IMAGE=$(extract_image_name "$NEW_RAW")
           if [[ "${OLD_IMAGE}" != "${NEW_IMAGE}" ]]; then
@@ -87,29 +209,17 @@ jobs:
             BREAKING=1
           fi
 
-          # 2. ccs-net network name — positive assertion: the canonical name MUST
-          #    still be present in the NEW file. Comparing old vs new string only
-          #    catches modifications; if BOTH files lack it (rename to something
-          #    else) both vars are empty and the diff is zero — breaking change
-          #    goes undetected. The positive assertion catches renames AND removals.
-          if ! grep -qE '^\s+name:\s+ccs-net\s*$' docker/compose.yaml; then
-            echo "[!] BREAKING: networks.ccs-net is missing or renamed — public DNS contract relies on this name"
-            BREAKING=1
-          fi
-
-          # 2b. hostname override guard (covers M2): if a service sets
-          #     'hostname:', Docker uses that instead of the service key as the
-          #     DNS name on ccs-net, silently breaking http://ccs:8317 for
-          #     sibling containers even if the service key stays "ccs".
-          if grep -qE '^\s+hostname:' docker/compose.yaml; then
-            echo "[!] BREAKING: services.ccs.hostname override changes DNS name — public contract requires 'ccs'"
+          # 2. ccs-net network attachment — positive assertion: services.ccs MUST
+          #    attach to a network whose effective Compose name is ccs-net. Merely
+          #    keeping an unused top-level ccs-net definition is not enough.
+          if ! has_service_network_effective_name docker/compose.yaml ccs ccs-net; then
+            echo "[!] BREAKING: services.ccs is not attached to effective network name ccs-net"
             BREAKING=1
           fi
 
           # 3. container_name change (if present in either version)
-          OLD_CN=$(git show "${BASE}:docker/compose.yaml" \
-            | grep 'container_name:' | tr -d ' ' || echo "")
-          NEW_CN=$(grep 'container_name:' docker/compose.yaml | tr -d ' ' || echo "")
+          OLD_CN=$(service_field_value "$BASE_COMPOSE" ccs container_name | tr -d ' ')
+          NEW_CN=$(service_field_value docker/compose.yaml ccs container_name | tr -d ' ')
           if [[ "${OLD_CN}" != "${NEW_CN}" ]]; then
             echo "[!] BREAKING: container_name changed: '${OLD_CN}' -> '${NEW_CN}'"
             BREAKING=1

@@ -9,6 +9,7 @@ import session from 'express-session';
 import rateLimit from 'express-rate-limit';
 
 import crypto from 'crypto';
+import * as net from 'net';
 import fs from 'fs';
 import path from 'path';
 import {
@@ -161,7 +162,7 @@ function isLoopbackHostname(value: string | undefined): boolean {
   return (
     normalized === 'localhost' ||
     normalized.endsWith('.localhost') ||
-    isLoopbackRemoteAddress(normalized)
+    (net.isIP(normalized) !== 0 && isLoopbackRemoteAddress(normalized))
   );
 }
 

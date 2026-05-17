@@ -50,22 +50,16 @@ function asObject(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function normalizeLocalProviderUrl(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
+function isValidCodexCliproxyBaseUrl(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
   const trimmed = value.trim();
+  if (!trimmed) return false;
   try {
     const url = new URL(trimmed);
-    if (
-      (url.hostname === 'localhost' || url.hostname === '127.0.0.1') &&
-      url.pathname === '/api/provider/codex'
-    ) {
-      url.hostname = '127.0.0.1';
-      return url.toString().replace(/\/$/, '');
-    }
+    return url.protocol === 'http:' || url.protocol === 'https:';
   } catch {
-    return null;
+    return false;
   }
-  return null;
 }
 
 function resolveProviderEnvKey(provider: Record<string, unknown> | null): string {
@@ -76,14 +70,10 @@ function resolveProviderEnvKey(provider: Record<string, unknown> | null): string
   return CODEX_CLIPROXY_PROVIDER_ENV_KEY;
 }
 
-function isProviderReady(
-  provider: Record<string, unknown>,
-  expectedBaseUrl: string,
-  envKey: string
-): boolean {
+function isProviderReady(provider: Record<string, unknown>, envKey: string): boolean {
   return (
     provider.name === CODEX_CLIPROXY_PROVIDER_NAME &&
-    normalizeLocalProviderUrl(provider.base_url) === expectedBaseUrl &&
+    isValidCodexCliproxyBaseUrl(provider.base_url) &&
     provider.env_key === envKey &&
     provider.wire_api === 'responses' &&
     provider.requires_openai_auth === false &&
@@ -100,6 +90,17 @@ function buildProviderConfig(baseUrl: string, envKey: string): Record<string, un
     requires_openai_auth: false,
     supports_websockets: false,
   };
+}
+
+function resolveProviderBaseUrl(
+  provider: Record<string, unknown>,
+  fallbackBaseUrl: string
+): string {
+  const baseUrl = provider.base_url;
+  if (isValidCodexCliproxyBaseUrl(baseUrl)) {
+    return baseUrl.trim();
+  }
+  return fallbackBaseUrl;
 }
 
 function appendProviderBlock(rawText: string, baseUrl: string): string {
@@ -179,12 +180,12 @@ export async function ensureCodexCliproxyProviderConfig(
   }
 
   const envKey = resolveProviderEnvKey(currentProvider);
-  const providerReady = isProviderReady(currentProvider, expectedBaseUrl, envKey);
+  const providerReady = isProviderReady(currentProvider, envKey);
 
   if (!providerReady) {
     providers[CODEX_CLIPROXY_PROVIDER_ID] = {
       ...currentProvider,
-      ...buildProviderConfig(expectedBaseUrl, envKey),
+      ...buildProviderConfig(resolveProviderBaseUrl(currentProvider, expectedBaseUrl), envKey),
     };
   }
 

@@ -7,9 +7,10 @@ const ccsPath = require.resolve('../../../src/ccs.ts');
 
 describe('ccsxp runtime wrapper', () => {
   const originalArgv = process.argv;
-  const originalEntryTarget = process.env.CCS_INTERNAL_ENTRY_TARGET;
-  const originalCodexHome = process.env.CODEX_HOME;
-  const originalCcsxpCodexHome = process.env.CCSXP_CODEX_HOME;
+    const originalEntryTarget = process.env.CCS_INTERNAL_ENTRY_TARGET;
+    const originalCodexHome = process.env.CODEX_HOME;
+    const originalCcsCodexProfile = process.env.CCS_CODEX_PROFILE;
+    const originalCcsxpCodexHome = process.env.CCSXP_CODEX_HOME;
 
   beforeEach(() => {
     delete require.cache[wrapperPath];
@@ -28,6 +29,11 @@ describe('ccsxp runtime wrapper', () => {
       delete process.env.CODEX_HOME;
     } else {
       process.env.CODEX_HOME = originalCodexHome;
+    }
+    if (originalCcsCodexProfile === undefined) {
+      delete process.env.CCS_CODEX_PROFILE;
+    } else {
+      process.env.CCS_CODEX_PROFILE = originalCcsCodexProfile;
     }
     if (originalCcsxpCodexHome === undefined) {
       delete process.env.CCSXP_CODEX_HOME;
@@ -73,6 +79,27 @@ describe('ccsxp runtime wrapper', () => {
     require(wrapperPath);
 
     expect(process.env.CODEX_HOME).toBe('/tmp/explicit-ccsxp-codex-home');
+  });
+
+  it('emits a notice when CCS_CODEX_PROFILE is ignored by ccsxp', () => {
+    process.env.CCS_CODEX_PROFILE = 'work';
+    process.argv = ['node', wrapperPath, '--version'];
+    require.cache[ccsPath] = { exports: {} } as NodeJS.Module;
+
+    const stderrChunks: string[] = [];
+    const origWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (chunk: string | Uint8Array): boolean => {
+      stderrChunks.push(typeof chunk === 'string' ? chunk : chunk.toString());
+      return true;
+    };
+    try {
+      require(wrapperPath);
+    } finally {
+      process.stderr.write = origWrite;
+    }
+
+    expect(process.env.CODEX_HOME).toBe(path.join(os.homedir(), '.codex'));
+    expect(stderrChunks.join('')).toContain('CCS_CODEX_PROFILE is ignored by ccsxp');
   });
 
   it('keeps flag-only invocations routed through the native cliproxy shortcut', () => {

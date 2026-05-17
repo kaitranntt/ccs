@@ -68,6 +68,16 @@ function resolveCcsxpCodexHome() {
   return path.join(os.homedir(), '.codex');
 }
 
+// H5: CCS_CODEX_PROFILE is ignored by ccsxp. The ccsx auth profile system
+// (src/codex-auth/) is intentionally NOT consulted here — ccsxp serves the
+// cliproxy round-robin pool, not per-user-account profiles. Emit a one-line
+// notice so users who set CCS_CODEX_PROFILE in their shell don't get confused
+// when ccsxp silently ignores it and overwrites CODEX_HOME below.
+if (process.env.CCS_CODEX_PROFILE) {
+  process.stderr.write(
+    "[i] CCS_CODEX_PROFILE is ignored by ccsxp; profile applies to native 'codex' only.\n"
+  );
+}
 process.env.CODEX_HOME = resolveCcsxpCodexHome();
 
 // ccsxp is the Codex + cliproxy shortcut. Keep the native Codex history root,

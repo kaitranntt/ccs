@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { GripVertical, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { CodexAuthProfilesCard } from '@/components/compatible-cli/codex-auth-profiles-card';
 import { CodexControlCenterTab } from '@/components/compatible-cli/codex-control-center-tab';
 import { CodexDocsTab } from '@/components/compatible-cli/codex-docs-tab';
 import { useCodex } from '@/hooks/use-codex';
@@ -178,10 +179,11 @@ export function CodexPage() {
     return (
       <Tabs defaultValue="overview" className="flex h-full flex-col">
         <div className="shrink-0 px-4 pt-4">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="overview">{t('codexPage.overview')}</TabsTrigger>
             <TabsTrigger value="controls">{t('codexPage.controlCenter')}</TabsTrigger>
             <TabsTrigger value="docs">{t('codexPage.docs')}</TabsTrigger>
+            <TabsTrigger value="auth-profiles">{t('codexPage.authProfiles')}</TabsTrigger>
           </TabsList>
         </div>
 
@@ -210,6 +212,12 @@ export function CodexPage() {
 
           <TabsContent value="docs" className={tabContentClassName}>
             <CodexDocsTab diagnostics={diagnostics} />
+          </TabsContent>
+
+          <TabsContent value="auth-profiles" className={tabContentClassName}>
+            <div className="h-full overflow-auto p-1">
+              <CodexAuthProfilesCard />
+            </div>
           </TabsContent>
         </div>
       </Tabs>
