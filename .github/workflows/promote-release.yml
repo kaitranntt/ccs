@@ -1,69 +1,98 @@
-name: Promote rc to Stable Release
+name: Promote Stable Release to Docker Latest
 
-# Manual workflow to promote a pre-release rc tag to a stable GitHub release.
+# Manual workflow to promote a stable vX.Y.Z release to Docker mutable tags
+# (:latest, :MAJOR, :MINOR) after the rc.1 soak window.
 #
 # Flow:
-#   1. Flip the GitHub release from prerelease=true to prerelease=false using
-#      `gh release edit --prerelease=false`.
-#   2. The resulting `release: published` event (with prerelease=false) triggers
-#      docker-release.yml, which builds/signs the image, runs smoke tests, then
-#      adds the mutable :latest/:MAJOR/:MINOR Docker tags via promote-mutable-tags.
+#   1. Validate that the input tag exists as a stable (non-prerelease) GitHub release.
+#   2. Dispatch docker-release.yml with promote_to_latest=true for the given tag.
+#      This triggers the promote-mutable-tags job (gated on workflow_dispatch
+#      with promote_to_latest=true) which adds :latest/:MAJOR/:MINOR Docker aliases.
 #
 # Pre-conditions:
-#   - The rc tag must already exist as a GitHub prerelease (cut by semantic-release).
-#   - Smoke tests on the rc image must have passed (manual verification step).
+#   - The stable tag must already exist as a GitHub release (created automatically
+#     by semantic-release when the PR merges to main).
+#   - The immutable :<ver> Docker image must already be published and smoke-tested
+#     (done automatically by docker-release.yml on the release: published event).
+#   - Operator has verified the immutable image is stable (24h soak recommended).
 #
 # See docs/release-process.md for the full soak + promote procedure.
 
 on:
   workflow_dispatch:
     inputs:
-      rc_tag:
+      tag:
         description: >
-          Pre-release rc tag to promote, e.g. v7.80.0-rc.1.
-          Must already exist as a GitHub prerelease.
+          Stable tag to promote, e.g. v7.80.0.
+          Must already exist as a GitHub stable release with the immutable
+          Docker :<ver> image already published and smoke-tested.
         required: true
         type: string
 
 jobs:
   promote:
-    name: Promote ${{ inputs.rc_tag }} to stable
+    name: Promote ${{ inputs.tag }} Docker mutable tags
     runs-on: [self-hosted, linux, x64, cliproxy]
 
     permissions:
-      contents: write  # required to edit GitHub releases
+      contents: read   # to verify the release
+      actions: write   # to dispatch docker-release.yml
 
     steps:
-      - name: Validate rc tag format
+      - name: Validate stable semver tag format
         run: |
-          if [[ "${{ inputs.rc_tag }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
-            echo "[OK] Tag format valid: ${{ inputs.rc_tag }}"
+          if [[ "${{ inputs.tag }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "[OK] Tag format valid: ${{ inputs.tag }}"
           else
-            echo "[X] Expected vX.Y.Z-rc.N format, got: ${{ inputs.rc_tag }}"
+            echo "[X] Expected vX.Y.Z format, got: ${{ inputs.tag }}"
+            echo "    For rc tags use docker-release.yml directly with promote_to_latest=true."
             exit 1
           fi
 
-      - name: Verify release exists and is a prerelease
+      - name: Verify release exists and is stable (not a prerelease)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          IS_PRERELEASE=$(gh release view "${{ inputs.rc_tag }}" \
+          IS_PRERELEASE=$(gh release view "${{ inputs.tag }}" \
             --repo "${{ github.repository }}" \
             --json isPrerelease --jq '.isPrerelease')
-          if [[ "${IS_PRERELEASE}" != "true" ]]; then
-            echo "[X] Release ${{ inputs.rc_tag }} is not a prerelease (isPrerelease=${IS_PRERELEASE})"
-            echo "    Either it was already promoted, or the tag does not exist."
+          if [[ "${IS_PRERELEASE}" == "true" ]]; then
+            echo "[X] Release ${{ inputs.tag }} is still a prerelease (isPrerelease=true)"
+            echo "    Semantic-release publishes stable releases to main automatically."
+            echo "    Check that the tag was created from a main merge, not a dev prerelease."
             exit 1
           fi
-          echo "[OK] Release ${{ inputs.rc_tag }} is a prerelease — proceeding with promotion"
+          if [[ "${IS_PRERELEASE}" != "false" ]]; then
+            echo "[X] Could not read release state for ${{ inputs.tag }} (got: ${IS_PRERELEASE})"
+            echo "    Verify the tag exists: gh release view ${{ inputs.tag }} --repo ${{ github.repository }}"
+            exit 1
+          fi
+          echo "[OK] Release ${{ inputs.tag }} is stable — proceeding with Docker mutable tag promotion"
 
-      - name: Promote release to stable
+      - name: Verify immutable Docker image exists
+        run: |
+          TAG_SANS_V="${{ inputs.tag }}"
+          TAG_SANS_V="${TAG_SANS_V#v}"
+          OWNER_LOWER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_REF="ghcr.io/${OWNER_LOWER}/ccs:${TAG_SANS_V}"
+          echo "[i] Verifying immutable image: ${IMAGE_REF}"
+          if ! docker manifest inspect "${IMAGE_REF}" > /dev/null 2>&1; then
+            echo "[X] Immutable image ${IMAGE_REF} not found in ghcr.io"
+            echo "    Run docker-release.yml for this tag first, or wait for smoke tests to complete."
+            exit 1
+          fi
+          echo "[OK] Immutable image ${IMAGE_REF} confirmed in registry"
+
+      - name: Dispatch Docker mutable tag promotion
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release edit "${{ inputs.rc_tag }}" \
+          RUN_URL=$(gh workflow run "Publish Docker Image" \
             --repo "${{ github.repository }}" \
-            --prerelease=false \
-            --latest
-          echo "[OK] Promoted ${{ inputs.rc_tag }} to stable (prerelease=false, latest=true)"
-          echo "[i] docker-release.yml will now trigger to add :latest/:MAJOR/:MINOR Docker tags"
+            --field "tag=${{ inputs.tag }}" \
+            --field "promote_to_latest=true" \
+            2>&1)
+          echo "[OK] Dispatched docker-release.yml with tag=${{ inputs.tag }} promote_to_latest=true"
+          echo "[i] Monitor the run at: https://github.com/${{ github.repository }}/actions/workflows/docker-release.yml"
+          echo "[i] After the run completes, verify with:"
+          echo "    docker buildx imagetools inspect ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/ccs:latest"

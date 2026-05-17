@@ -3,7 +3,13 @@
  *
  * Branch-aware config:
  * - dev branch: Uses dev release configuration (prerelease)
- * - main branch: Uses production release configuration
+ * - main branch: Uses production release configuration (stable, npm @latest)
+ *
+ * RC soak window for Docker mutable tags is handled entirely in docker-release.yml:
+ * every release event publishes the immutable :<ver> Docker tag immediately;
+ * mutable :latest/:MAJOR/:MINOR tags require an explicit operator action via
+ * `gh workflow run promote-release.yml -f tag=vX.Y.Z` (workflow_dispatch).
+ * npm @latest is always set immediately on stable release — no rc soak needed.
  */
 
 const currentBranch =
@@ -93,18 +99,12 @@ const devConfig = {
 };
 
 // Production release configuration
-// Every merge to main auto-cuts as vX.Y.Z-rc.N (prerelease channel "rc").
-// A separate promote-release.yml workflow_dispatch promotes a specific rc tag
-// to stable by flipping the GitHub release to non-prerelease, which triggers
-// docker-release.yml to add the mutable :latest/:MAJOR/:MINOR Docker tags.
-// See docs/release-process.md for the full soak + promote procedure.
+// Every merge to main publishes a stable vX.Y.Z release immediately to npm @latest.
+// Docker immutable :<ver> tag is pushed by docker-release.yml on the release: published event.
+// Docker mutable :latest/:MAJOR/:MINOR tags require a separate manual promote step — see
+// docs/release-process.md and promote-release.yml for the soak + promote procedure.
 const productionConfig = {
-  branches: [
-    {
-      name: 'main',
-      prerelease: 'rc',
-    },
-  ],
+  branches: ['main'],
   plugins: [
     commitAnalyzer,
     releaseNotesGenerator,
@@ -118,11 +118,9 @@ const productionConfig = {
     [
       '@semantic-release/github',
       {
-        // rc releases are prerelease — use a minimal comment; stable promotion
-        // gets the full resolution comment via the promote-release workflow.
         successComment:
-          'This issue is included in pre-release version ${nextRelease.version}. A stable release will follow after the rc soak period.',
-        releasedLabels: ['pending-release'],
+          ':tada: This issue has been resolved in version ${nextRelease.version} :tada:\n\nThe release is available on:\n- [npm package (@latest)](https://www.npmjs.com/package/@kaitranntt/ccs)\n- [GitHub release](${releases[0].url})',
+        releasedLabels: ['released'],
       },
     ],
     [
