@@ -25,14 +25,19 @@ ok()   { printf '[OK] %s\n' "$*"; }
 fail() { printf '[X] %s\n' "$*" >&2; fail=1; }
 
 # ---------------------------------------------------------------------------
-# Helper: extract image name (repo path without tag) for a service
+# Helper: extract image name (repo path without tag) for a service.
+# Handles both plain image references and ${VAR:-default} shell variable
+# syntax (e.g. image: ${CCS_IMAGE:-ghcr.io/kaitranntt/ccs:latest}).
 # ---------------------------------------------------------------------------
 image_name() {
   local file="$1" service="$2"
-  # Match lines like:  image: ghcr.io/owner/repo:tag  or  image: name:tag
+  # Match lines like:
+  #   image: ghcr.io/owner/repo:tag
+  #   image: ${CCS_IMAGE:-ghcr.io/owner/repo:tag}
   grep -A 50 "^  ${service}:" "$file" \
     | grep -m1 '^\s*image:' \
     | sed 's/.*image:\s*//' \
+    | sed 's/\${[^:-]*:-\([^}]*\)}/\1/' \
     | sed 's/:.*//' \
     | tr -d ' '
 }
