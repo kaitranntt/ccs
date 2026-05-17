@@ -522,6 +522,7 @@ ccsxp
 → injects native `model_provider="cliproxy"` override
 → pins CODEX_HOME to native `~/.codex` unless `CCSXP_CODEX_HOME` is set
 → repairs `[model_providers.cliproxy]` in the active Codex `config.toml`
+→ preserves valid custom `base_url` values for remote or non-default CLIProxy endpoints
 → injects the effective CCS CLIProxy auth token into the provider's configured `env_key`
 → ignores the configured CCS default account/profile and stays in native Codex default mode
 ```

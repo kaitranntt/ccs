@@ -828,6 +828,60 @@ supports_websockets = false
     ]);
   });
 
+  it('preserves a custom cliproxy provider base_url for ccsxp launches', () => {
+    if (process.platform === 'win32') return;
+
+    const codexHome = path.join(tmpHome, '.codex');
+    fs.mkdirSync(codexHome, { recursive: true });
+    fs.writeFileSync(
+      path.join(codexHome, 'config.toml'),
+      `[model_providers.cliproxy]
+name = "CLIProxy Codex"
+base_url = "https://cliproxy.example.com/api/provider/codex/responses"
+env_key = "CCS_REMOTE_CLIPROXY_TOKEN"
+wire_api = "responses"
+requires_openai_auth = false
+supports_websockets = false
+`,
+      'utf8'
+    );
+
+    const result = runCcsxpAlias(['fix failing tests'], {
+      ...process.env,
+      CI: '1',
+      NO_COLOR: '1',
+      HOME: tmpHome,
+      CCS_HOME: tmpHome,
+      CCS_CODEX_PATH: fakeCodexPath,
+      CCS_TEST_CODEX_ARGS_OUT: codexArgsLogPath,
+      CCS_TEST_CODEX_ENV_OUT: codexEnvLogPath,
+      CCS_TEST_CODEX_LOG_ENV_KEYS: 'CCS_REMOTE_CLIPROXY_TOKEN',
+    });
+
+    expect(result.status).toBe(0);
+    expect(readLoggedCodexCalls(codexArgsLogPath)).toEqual([
+      ['--config', 'model_provider="cliproxy"', 'fix failing tests'],
+    ]);
+    const codexConfig = fs.readFileSync(path.join(codexHome, 'config.toml'), 'utf8');
+    expect(codexConfig).toContain(
+      'base_url = "https://cliproxy.example.com/api/provider/codex/responses"'
+    );
+    expect(codexConfig).toContain('env_key = "CCS_REMOTE_CLIPROXY_TOKEN"');
+    expect(readLoggedCodexEnv(codexEnvLogPath)).toEqual([
+      {
+        CODEX_HOME: codexHome,
+        CODEX_CI: undefined,
+        CODEX_MANAGED_BY_BUN: undefined,
+        CODEX_THREAD_ID: undefined,
+        ANTHROPIC_BASE_URL: undefined,
+        CCS_REMOTE_CLIPROXY_TOKEN: 'ccs-internal-managed',
+        CCS_BROWSER_USER_DATA_DIR: undefined,
+        CCS_BROWSER_PROFILE_DIR: undefined,
+        CCS_BROWSER_DEVTOOLS_WS_URL: undefined,
+      },
+    ]);
+  });
+
   it('keeps ccsxp native when the CCS default profile is a Claude account', () => {
     if (process.platform === 'win32') return;
 
