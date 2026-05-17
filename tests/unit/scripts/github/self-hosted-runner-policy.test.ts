@@ -7,6 +7,17 @@ function workflowsDir() {
   return path.resolve(import.meta.dir, '../../../../.github/workflows');
 }
 
+  // Documented exceptions to the self-hosted-first policy (see CLAUDE.md "Self-Hosted Runner Policy").
+  // Each entry must include a justification comment explaining why GitHub-hosted runners
+  // are required for correctness (not just convenience).
+  const GITHUB_HOSTED_RUNNER_EXCEPTIONS: Record<string, string> = {
+    // Pure YAML diff parser — no untrusted code execution. Must cover ALL PRs including
+    // forks to prevent forked contributors from bypassing the breaking-change check.
+    // Gating on trusted-author association would silently allow contract-breaking changes
+    // from forks. No build, install, or arbitrary PR-branch scripts are run here.
+    'breaking-change-guard.yml': 'ubuntu-latest — fork-safe YAML diff check; no untrusted code execution',
+  };
+
 describe('self-hosted runner policy', () => {
   test('keeps active workflows on local runners', () => {
     const hostedRunnerLabels = [
@@ -23,6 +34,9 @@ describe('self-hosted runner policy', () => {
     expect(workflowFiles.length).toBeGreaterThan(0);
 
     for (const file of workflowFiles) {
+      // Skip files with documented, justified exceptions to the self-hosted-first policy
+      if (GITHUB_HOSTED_RUNNER_EXCEPTIONS[file]) continue;
+
       const workflow = fs.readFileSync(path.join(workflowsDir(), file), 'utf8');
 
       for (const label of hostedRunnerLabels) {
@@ -32,6 +46,17 @@ describe('self-hosted runner policy', () => {
       }
 
       expect(workflow, `${file} must target a self-hosted runner`).toContain('self-hosted');
+    }
+  });
+
+  test('documented exceptions use github-hosted runners for justified safety reasons', () => {
+    // Verify each documented exception actually uses a GitHub-hosted runner
+    // (prevents stale exception entries that no longer reflect the workflow)
+    for (const [file, reason] of Object.entries(GITHUB_HOSTED_RUNNER_EXCEPTIONS)) {
+      const workflow = fs.readFileSync(path.join(workflowsDir(), file), 'utf8');
+      const hasGitHubHosted = ['ubuntu-latest', 'ubuntu-24.04', 'ubuntu-22.04', 'macos-latest', 'windows-latest']
+        .some((label) => workflow.includes(`runs-on: ${label}`));
+      expect(hasGitHubHosted, `${file} is in exceptions list (reason: ${reason}) but does not use a GitHub-hosted runner — remove the exception or restore the runner type`).toBe(true);
     }
   });
 
@@ -59,6 +84,11 @@ describe('self-hosted runner policy', () => {
           'uses: actions/checkout'
         );
       }
+
+      // Documented exceptions run on GitHub-hosted runners for justified safety reasons
+      // (e.g. must cover forked PRs, no untrusted code execution). These workflows do not
+      // use self-hosted runners for their PR jobs, so the trusted-author gate does not apply.
+      if (GITHUB_HOSTED_RUNNER_EXCEPTIONS[file]) continue;
 
       if (
         workflow.includes('pull_request:') &&
