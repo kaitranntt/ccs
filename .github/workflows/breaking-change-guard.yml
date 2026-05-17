@@ -87,12 +87,22 @@ jobs:
             BREAKING=1
           fi
 
-          # 2. ccs-net network name change
-          OLD_NET=$(git show "${BASE}:docker/compose.yaml" \
-            | grep 'name: ccs-net' | tr -d ' ' || echo "")
-          NEW_NET=$(grep 'name: ccs-net' docker/compose.yaml | tr -d ' ' || echo "")
-          if [[ "${OLD_NET}" != "${NEW_NET}" ]]; then
-            echo "[!] BREAKING: ccs-net network name changed"
+          # 2. ccs-net network name — positive assertion: the canonical name MUST
+          #    still be present in the NEW file. Comparing old vs new string only
+          #    catches modifications; if BOTH files lack it (rename to something
+          #    else) both vars are empty and the diff is zero — breaking change
+          #    goes undetected. The positive assertion catches renames AND removals.
+          if ! grep -qE '^\s+name:\s+ccs-net\s*$' docker/compose.yaml; then
+            echo "[!] BREAKING: networks.ccs-net is missing or renamed — public DNS contract relies on this name"
+            BREAKING=1
+          fi
+
+          # 2b. hostname override guard (covers M2): if a service sets
+          #     'hostname:', Docker uses that instead of the service key as the
+          #     DNS name on ccs-net, silently breaking http://ccs:8317 for
+          #     sibling containers even if the service key stays "ccs".
+          if grep -qE '^\s+hostname:' docker/compose.yaml; then
+            echo "[!] BREAKING: services.ccs.hostname override changes DNS name — public contract requires 'ccs'"
             BREAKING=1
           fi
 
