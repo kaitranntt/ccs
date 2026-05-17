@@ -22,9 +22,17 @@ on:
 jobs:
   guard:
     name: Verify breaking changes are intentional
-    if: >-
-      contains(fromJSON('["COLLABORATOR","MEMBER","OWNER"]'), github.event.pull_request.author_association)
-    runs-on: [self-hosted, linux, x64, cliproxy]
+    # Exception to self-hosted-first policy (documented in CLAUDE.md "Self-Hosted Runner Policy"):
+    # This workflow MUST cover ALL PRs including forks — a forked contributor can rename
+    # services.ccs or change the image namespace without a breaking-change marker, which
+    # silently breaks sibling-container setups for every user. Gating on trusted-author
+    # association would let forked PRs bypass the check entirely.
+    #
+    # Safety justification: this workflow does ONLY pure YAML diff parsing (git show / git diff
+    # + shell + awk). It checks out the code with persist-credentials: false and runs no build,
+    # install, or arbitrary scripts from the PR branch. There is no untrusted code execution,
+    # so running on a GitHub-hosted runner is safe and required for universal coverage.
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout PR branch
@@ -54,10 +62,26 @@ jobs:
           BREAKING=0
 
           # 1. Image name change (repo path, not tag — tags change every release)
-          OLD_IMAGE=$(git show "${BASE}:docker/compose.yaml" \
-            | grep -m1 '^\s*image:' | sed 's/.*image:\s*//' | sed 's/:.*//' | tr -d ' ')
-          NEW_IMAGE=$(grep -m1 '^\s*image:' docker/compose.yaml \
-            | sed 's/.*image:\s*//' | sed 's/:.*//' | tr -d ' ')
+          #
+          #    compose.yaml uses ${CCS_IMAGE:-ghcr.io/kaitranntt/ccs:latest}. A naive
+          #    sed 's/:.*//' truncates at the FIRST colon, yielding "${CCS_IMAGE" instead
+          #    of the actual image name. We strip the ${VAR:-default} wrapper first, then
+          #    strip only the trailing :tag suffix (preserving internal colons such as
+          #    those in registry:port/owner/repo).
+          extract_image_name() {
+            # $1 = raw image line content (everything after "image: ")
+            local raw="$1"
+            # Strip ${VAR:-default} wrapper if present
+            raw=$(printf '%s' "$raw" | sed -E 's/^\$\{[A-Za-z_][A-Za-z0-9_]*:-//; s/\}$//')
+            # Strip only the trailing :tag — preserve internal colons (e.g. registry:5000/owner/repo)
+            printf '%s' "$raw" | sed 's|:[^:/]*$||'
+          }
+          OLD_RAW=$(git show "${BASE}:docker/compose.yaml" \
+            | grep -m1 '^\s*image:' | sed 's/.*image:\s*//' | tr -d ' ')
+          NEW_RAW=$(grep -m1 '^\s*image:' docker/compose.yaml \
+            | sed 's/.*image:\s*//' | tr -d ' ')
+          OLD_IMAGE=$(extract_image_name "$OLD_RAW")
+          NEW_IMAGE=$(extract_image_name "$NEW_RAW")
           if [[ "${OLD_IMAGE}" != "${NEW_IMAGE}" ]]; then
             echo "[!] BREAKING: image name changed: '${OLD_IMAGE}' -> '${NEW_IMAGE}'"
             BREAKING=1
