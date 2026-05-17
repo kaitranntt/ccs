@@ -31,7 +31,8 @@ jobs:
   # ---------------------------------------------------------------------------
   publish-dashboard:
     name: Publish legacy ccs-dashboard image
-    # Skip on prerelease events — rc builds do not publish the legacy image
+    # Skip on prerelease release events — only stable vX.Y.Z GitHub releases
+    # publish the legacy image. workflow_dispatch always passes through.
     if: ${{ github.event_name != 'release' || !github.event.release.prerelease }}
     runs-on: [self-hosted, linux, x64, cliproxy]
 
@@ -143,14 +144,15 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Job 2: Integrated image — CCS + CLIProxy (single build, no :full variant)
-  # Publishes ONLY the immutable :<ver> tag here.
+  # Publishes ONLY the immutable :<ver> tag here on every release event.
   # Mutable :latest / major / minor aliases are added by promote-mutable-tags
-  # AFTER smoke tests pass, preventing a bad image from reaching :latest.
+  # ONLY via explicit workflow_dispatch (promote_to_latest=true) after the
+  # operator has verified the immutable image is stable. This keeps the rc.1
+  # soak window entirely in the Docker promotion path — npm @latest is always
+  # published immediately by semantic-release on the stable release.
   # ---------------------------------------------------------------------------
   publish-integrated:
     name: Publish integrated image
-    # Prerelease events (rc.N) publish the immutable version tag only.
-    # Mutable tags are never set on rc builds — promotion is always explicit.
     runs-on: [self-hosted, linux, x64, cliproxy]
 
     permissions:
@@ -284,16 +286,15 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Job 3: Smoke test — pull the immutable :<ver> tag and verify it boots
-  # Runs after publish-integrated; mutable tags are only added if this passes.
+  # Runs after publish-integrated; mutable tags are only promoted if this passes.
   # ---------------------------------------------------------------------------
   smoke-test:
     name: Smoke test integrated image
     # Depends only on publish-integrated, NOT publish-dashboard.
-    # publish-dashboard is skipped on prerelease (rc.N) events — if it were
-    # listed here, GitHub Actions would also skip smoke-test and
-    # promote-mutable-tags on every rc publish, breaking the rc soak flow.
+    # publish-dashboard is skipped on GitHub prerelease events — if it were
+    # listed here, GitHub Actions would also skip smoke-test when that condition
+    # is not met, preventing the immutable tag from being verified.
     needs: [publish-integrated]
-    # Run on both rc and stable releases; skip if integrated publish was skipped
     if: ${{ needs.publish-integrated.outputs.publish == 'true' }}
     runs-on: [self-hosted, linux, x64, cliproxy]
 
@@ -399,17 +400,19 @@ jobs:
   # ---------------------------------------------------------------------------
   # Job 4: Promote mutable tags — runs ONLY after smoke tests pass
   # Adds :latest, :<major>, :<minor> aliases pointing to the immutable digest.
-  # Never runs for prerelease (rc) events.
+  # Never triggered automatically by release events — requires an explicit
+  # workflow_dispatch with promote_to_latest=true (via promote-release.yml or
+  # direct gh CLI call) after the operator confirms the immutable :<ver> image
+  # is stable. This is the sole rc.1 soak gate for Docker mutable tags.
   # ---------------------------------------------------------------------------
   promote-mutable-tags:
     name: Promote mutable tags (:latest / major / minor)
     needs: [smoke-test, publish-integrated]
-    # Only promote on stable release events or explicit promote_to_latest dispatch
+    # Only promote on explicit operator dispatch — never on automatic release events.
+    # Release events publish the immutable :<ver> tag only (see publish-integrated).
     if: |
-      needs.publish-integrated.outputs.publish == 'true' && (
-        (github.event_name == 'release' && !github.event.release.prerelease) ||
-        (github.event_name == 'workflow_dispatch' && inputs.promote_to_latest == true)
-      )
+      needs.publish-integrated.outputs.publish == 'true' &&
+      github.event_name == 'workflow_dispatch' && inputs.promote_to_latest == true
     runs-on: [self-hosted, linux, x64, cliproxy]
 
     permissions:
