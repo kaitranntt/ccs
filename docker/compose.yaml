@@ -14,7 +14,7 @@
 
 services:
   ccs:
-    image: ghcr.io/kaitranntt/ccs:latest
+    image: ${CCS_IMAGE:-ghcr.io/kaitranntt/ccs:latest}
     restart: unless-stopped
     ports:
       - "3000:3000"
