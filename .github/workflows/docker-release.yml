@@ -342,10 +342,12 @@ jobs:
             "${{ steps.image.outputs.ref }}"
 
           echo "[i] Waiting for container healthcheck (up to 60s)..."
+          HEALTHY=0
           for i in $(seq 1 12); do
             STATUS=$(docker inspect "${CONTAINER_NAME}" --format='{{.State.Health.Status}}' 2>/dev/null || echo "missing")
             if [[ "${STATUS}" == "healthy" ]]; then
               echo "[OK] Container is healthy after $((i * 5))s"
+              HEALTHY=1
               break
             fi
             if [[ "${STATUS}" == "unhealthy" ]]; then
@@ -356,6 +358,12 @@ jobs:
             echo "    [${i}/12] status=${STATUS}, waiting 5s..."
             sleep 5
           done
+          if [[ "${HEALTHY}" -ne 1 ]]; then
+            echo "[X] Container did not become healthy within 60s (last status: ${STATUS})" >&2
+            docker logs "${CONTAINER_NAME}" --tail 100 >&2
+            docker inspect "${CONTAINER_NAME}" --format='{{json .State}}' >&2 || true
+            exit 1
+          fi
 
       - name: Run network-contract test
         run: |
