@@ -16,7 +16,13 @@ require_estimate_effort_to_review = true
 require_can_be_split_review = true
 require_security_review = true
 require_todo_scan = true
-require_ticket_analysis_review = true
+# Ticket analysis disabled: PR-Agent's fetch_sub_issues crashes with an
+# unguarded `.get()` on a null GraphQL response when the PR body references
+# numeric PR shortcodes (e.g. "see #1257") — GraphQL `repository.issue(number)`
+# returns null when the number is a PR, not an issue, and pr-agent
+# (github_provider.py:1048) does not handle that. Re-enable once upstream
+# adds the None guard.
+require_ticket_analysis_review = false
 publish_output_no_suggestions = true
 persistent_comment = true
 num_max_findings = 10
