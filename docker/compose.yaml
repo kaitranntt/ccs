@@ -14,6 +14,11 @@
 
 services:
   ccs:
+    # image uses Docker Compose env-var-with-default syntax so CI smoke tests can
+    # override via CCS_IMAGE=ghcr.io/.../ccs:<rc-tag> docker compose up -d while
+    # end users get the documented :latest by default. The Cloudflare Worker that
+    # serves this file at ccs.kaitran.ca validates that the default part starts
+    # with the canonical ghcr.io/kaitranntt/ccs prefix.
     image: ${CCS_IMAGE:-ghcr.io/kaitranntt/ccs:latest}
     restart: unless-stopped
     ports:
@@ -41,7 +46,7 @@ services:
             const http = require('http');
             let pending = 2; let ok = true;
             const check = (port) => http.get('http://127.0.0.1:'+port+'/', r => {
-              if (r.statusCode >= 500) ok = false;
+              if (r.statusCode >= 400) ok = false;
               if (--pending === 0) process.exit(ok ? 0 : 1);
             }).on('error', () => { ok = false; if (--pending === 0) process.exit(1); });
             check(3000); check(8317);

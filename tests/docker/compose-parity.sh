@@ -34,12 +34,22 @@ image_name() {
   # Match lines like:
   #   image: ghcr.io/owner/repo:tag
   #   image: ${CCS_IMAGE:-ghcr.io/owner/repo:tag}
+  #   image: registry.local:5000/owner/repo:tag   (registry with port — must NOT truncate at first colon)
+  #
+  # Pipeline:
+  #   1. Extract raw image value (strip "image:" prefix and whitespace)
+  #   2. Strip ${VAR:-default} wrapper if present — must happen AFTER whitespace
+  #      removal so the anchor ^ matches at position 0
+  #   3. Strip only the trailing :tag suffix, preserving internal colons
+  #      (e.g. registry:5000/owner/repo keeps its port colon intact)
+  #
+  # Mirrors the extract_image_name() logic in .github/workflows/breaking-change-guard.yml.
   grep -A 50 "^  ${service}:" "$file" \
     | grep -m1 '^\s*image:' \
     | sed 's/.*image:\s*//' \
-    | sed 's/\${[^:-]*:-\([^}]*\)}/\1/' \
-    | sed 's/:.*//' \
-    | tr -d ' '
+    | tr -d ' ' \
+    | sed -E 's/^\$\{[A-Za-z_][A-Za-z0-9_]*:-//; s/\}$//' \
+    | sed 's|:[^:/]*$||'
 }
 
 # ---------------------------------------------------------------------------
