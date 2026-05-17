@@ -80,9 +80,10 @@ if [[ -n "$PLATFORM" ]]; then
   fi
 
   if [[ -z "$ACTUAL_BYTES" || "$ACTUAL_BYTES" == "0" ]]; then
-    echo "[!] Could not determine size for ${IMAGE} platform=${PLATFORM} — skipping budget check" >&2
-    echo "    (imagetools may not support format templates on this buildx version)" >&2
-    exit 0
+    echo "[X] Could not determine size for ${IMAGE} platform=${PLATFORM}" >&2
+    echo "    Possible causes: buildx version too old, manifest format unsupported, image not pushed yet" >&2
+    echo "    Refusing to silently pass — fix the inspection or push the image first" >&2
+    exit 1
   fi
 else
   # Local-image path: use docker image inspect (host architecture only)
