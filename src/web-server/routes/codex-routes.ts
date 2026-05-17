@@ -1,4 +1,4 @@
-import type { Request, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import { Router } from 'express';
 import {
   CodexRawConfigConflictError,
@@ -8,8 +8,17 @@ import {
   patchCodexConfig,
   saveCodexRawConfig,
 } from '../services/codex-dashboard-service';
+import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
 
 const router = Router();
+const CODEX_LOCAL_ACCESS_ERROR =
+  'Codex dashboard endpoints require localhost access when dashboard auth is disabled.';
+
+router.use((req: Request, res: Response, next: NextFunction): void => {
+  if (requireLocalAccessWhenAuthDisabled(req, res, CODEX_LOCAL_ACCESS_ERROR)) {
+    next();
+  }
+});
 
 router.get('/diagnostics', async (_req: Request, res: Response): Promise<void> => {
   try {

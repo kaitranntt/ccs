@@ -20,6 +20,7 @@ describe('api-routes remote write guard', () => {
   let tempHome = '';
   let originalDashboardAuthEnabled: string | undefined;
   let originalCcsHome: string | undefined;
+  let originalCodexHome: string | undefined;
 
   beforeAll(async () => {
     const app = express();
@@ -53,8 +54,10 @@ describe('api-routes remote write guard', () => {
   beforeEach(() => {
     originalDashboardAuthEnabled = process.env.CCS_DASHBOARD_AUTH_ENABLED;
     originalCcsHome = process.env.CCS_HOME;
+    originalCodexHome = process.env.CODEX_HOME;
     tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-api-routes-remote-write-guard-'));
     process.env.CCS_HOME = tempHome;
+    process.env.CODEX_HOME = path.join(tempHome, '.codex');
     process.env.CCS_DASHBOARD_AUTH_ENABLED = 'false';
     forcedRemoteAddress = '10.10.0.24';
   });
@@ -70,6 +73,12 @@ describe('api-routes remote write guard', () => {
       process.env.CCS_HOME = originalCcsHome;
     } else {
       delete process.env.CCS_HOME;
+    }
+
+    if (originalCodexHome !== undefined) {
+      process.env.CODEX_HOME = originalCodexHome;
+    } else {
+      delete process.env.CODEX_HOME;
     }
 
     if (tempHome && fs.existsSync(tempHome)) {
@@ -173,6 +182,25 @@ describe('api-routes remote write guard', () => {
     } finally {
       deleteSessionLockForPort(8317);
     }
+  });
+
+  it('blocks remote Codex raw config reads when dashboard auth is disabled', async () => {
+    const codexHome = process.env.CODEX_HOME;
+    if (!codexHome) {
+      throw new Error('CODEX_HOME was not initialized for the test');
+    }
+    fs.mkdirSync(codexHome, { recursive: true });
+    fs.writeFileSync(
+      path.join(codexHome, 'config.toml'),
+      'model_provider = "sensitive"\n[model_providers.sensitive]\nexperimental_bearer_token = "secret-token"\n'
+    );
+
+    const response = await fetch(`${baseUrl}/api/codex/config/raw`);
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: 'Codex dashboard endpoints require localhost access when dashboard auth is disabled.',
+    });
   });
 
   it('blocks remote PATCH requests when dashboard auth is disabled', async () => {
