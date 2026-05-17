@@ -1,4 +1,9 @@
-FROM eceasy/cli-proxy-api:latest
+# Base image pinned by digest for reproducible builds.
+# To refresh: docker pull eceasy/cli-proxy-api:latest && docker inspect --format='{{index .RepoDigests 0}}' eceasy/cli-proxy-api:latest
+# Refresh cadence: quarterly OR on security advisory from upstream.
+# TODO: pin apk packages once apk-digest pinning workflow exists in CI (apk add nodejs npm are currently unpinned;
+#       alpine package versions can be pinned but require per-package version discovery and maintenance).
+FROM eceasy/cli-proxy-api:latest@sha256:4fa722b9ff83adfbe6e350d433b7dcb754756aa63df95a7a6349767dc13b2cb7
 
 ARG CCS_NPM_VERSION=latest
 
