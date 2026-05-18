@@ -1,6 +1,6 @@
 # Target Adapters
 
-Last Updated: 2026-03-28
+Last Updated: 2026-05-18
 
 Detailed documentation of the target adapter pattern and implementations.
 
@@ -515,7 +515,8 @@ ccs-codex
 ccsx
 → dist/bin/codex-runtime.js
 → CCS_INTERNAL_ENTRY_TARGET=codex
-→ passes native Codex diagnostics and `resume` through before CCS profile detection
+→ passes native Codex diagnostics plus known upstream Codex subcommands and aliases through before CCS profile detection
+→ reserves CCS-owned `auth`, `doctor`, and `update`
 
 ccsxp
 → dist/bin/ccsxp-runtime.js

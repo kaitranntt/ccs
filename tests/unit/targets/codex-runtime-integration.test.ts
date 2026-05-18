@@ -498,10 +498,32 @@ process.exit(0);
     });
   }
 
-  it('passes ccsx resume straight through to the native Codex binary', () => {
+  for (const subcommand of ['exec', 'e', 'apply', 'a', 'mcp', 'plugin', 'completion', 'resume']) {
+    it(`passes ccsx ${subcommand} straight through to the native Codex binary`, () => {
+      if (process.platform === 'win32') return;
+
+      const result = runCodexAlias([subcommand, '--help'], {
+        ...process.env,
+        CI: '1',
+        NO_COLOR: '1',
+        CCS_HOME: tmpHome,
+        CODEX_HOME: path.join(tmpHome, '.codex'),
+        CCS_CODEX_PATH: fakeCodexPath,
+        CCS_TEST_CODEX_ARGS_OUT: codexArgsLogPath,
+        CCS_TEST_CODEX_HELP: `Native ${subcommand} help`,
+      });
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain(`Native ${subcommand} help`);
+      expect(result.stderr).not.toContain(`Profile not found: ${subcommand}`);
+      expect(readLoggedCodexCalls(codexArgsLogPath)).toEqual([[subcommand, '--help']]);
+    });
+  }
+
+  it('passes nested ccsx codex subcommands through to the native Codex binary', () => {
     if (process.platform === 'win32') return;
 
-    const result = runCodexAlias(['resume', '--help'], {
+    const result = runCodexAlias(['codex', 'exec', '--help'], {
       ...process.env,
       CI: '1',
       NO_COLOR: '1',
@@ -509,13 +531,13 @@ process.exit(0);
       CODEX_HOME: path.join(tmpHome, '.codex'),
       CCS_CODEX_PATH: fakeCodexPath,
       CCS_TEST_CODEX_ARGS_OUT: codexArgsLogPath,
-      CCS_TEST_CODEX_HELP: 'Resume a previous interactive session',
+      CCS_TEST_CODEX_HELP: 'Native exec help',
     });
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('Resume a previous interactive session');
-    expect(result.stderr).not.toContain('Profile not found: resume');
-    expect(readLoggedCodexCalls(codexArgsLogPath)).toEqual([['resume', '--help']]);
+    expect(result.stdout).toContain('Native exec help');
+    expect(result.stderr).not.toContain('Profile not found: codex');
+    expect(readLoggedCodexCalls(codexArgsLogPath)).toEqual([['exec', '--help']]);
   });
 
   it('strips nested Codex session env from passthrough launches while keeping CODEX_HOME', () => {

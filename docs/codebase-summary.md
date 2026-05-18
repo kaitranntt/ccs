@@ -1,6 +1,6 @@
 # CCS Codebase Summary
 
-Last Updated: 2026-04-26
+Last Updated: 2026-05-18
 
 Comprehensive overview of the modularized CCS codebase structure following the Phase 9 modularization effort (Settings, Analytics, Auth Monitor splits + Test Infrastructure), v7.1 Remote CLIProxy feature, v7.2 Kiro + GitHub Copilot (ghcp) OAuth providers, v7.14 Hybrid Quota Management, v7.34 Image Analysis Hook, account-context validation hardening, Official Claude Channels runtime support, native Codex runtime target support, native Codex/Droid usage collectors, and models.dev-backed model pricing metadata.
 
@@ -273,7 +273,7 @@ src/
 ### Native Codex Runtime Target
 
 - Dedicated runtime entrypoints: `ccs-codex` and `ccsx` resolve through `src/bin/codex-runtime.ts`, while `ccsxp` resolves through `src/bin/ccsxp-runtime.ts`; all three set `CCS_INTERNAL_ENTRY_TARGET=codex` before delegating to `src/targets/target-resolver.ts`.
-- Native Codex passthrough: `ccsx --help`, `ccsx --version`, and `ccsx resume ...` short-circuit before CCS profile detection, so Codex diagnostics and session resume behavior stay aligned with the upstream Codex CLI. CCS-owned `ccsx auth` remains the managed Codex profile namespace.
+- Native Codex passthrough: `ccsx --help`, `ccsx --version`, and known upstream Codex subcommands such as `ccsx exec ...`, `ccsx apply ...`, `ccsx mcp ...`, `ccsx plugin ...`, `ccsx completion ...`, and `ccsx resume ...` short-circuit before CCS profile detection; upstream aliases such as `ccsx e ...` and `ccsx a ...` are included. CCS-owned `ccsx auth`, `ccsx doctor`, and `ccsx update` remain reserved for CCS.
 - Provider shortcut behavior: `ccsxp` strips user-supplied `--target` overrides and prepends `--config model_provider="cliproxy"` so it behaves like native Codex plus the CLIProxy provider recipe. The stricter CCS-managed bridge remains available explicitly through `ccs codex --target codex`. It pins `CODEX_HOME` to native `~/.codex` by default so inherited launcher state does not send history/config writes to a nonstandard Codex root; `CCSXP_CODEX_HOME` is the explicit override. On launch, CCS repairs the native `[model_providers.cliproxy]` stanza in `config.toml`, preserves a valid custom `base_url`, reads that provider's configured `env_key` (default `CLIPROXY_API_KEY`), and injects the effective CLIProxy auth token into that key for the child Codex process.
 - Implicit Codex launches such as `ccs --target codex` and `ccsxp` use native Codex default mode even when the CCS default profile is a Claude account. Explicit unsupported profiles such as `ccs work --target codex` still fail fast with native-vs-pool guidance.
 - `argv[0]` alias mapping still exists in `src/targets/target-resolver.ts` for same-binary/custom alias scenarios, but the built-in npm bins above do not depend on that map at runtime.

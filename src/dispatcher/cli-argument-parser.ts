@@ -175,7 +175,30 @@ export const CODEX_RUNTIME_REASONING_LEVELS = new Set([
 ]);
 
 export const CODEX_NATIVE_PASSTHROUGH_FLAGS = new Set(['--help', '-h', '--version', '-v']);
-export const CODEX_NATIVE_PASSTHROUGH_SUBCOMMANDS = new Set(['resume']);
+export const CODEX_NATIVE_PASSTHROUGH_SUBCOMMANDS = new Set([
+  'a',
+  'app',
+  'app-server',
+  'apply',
+  'cloud',
+  'completion',
+  'debug',
+  'e',
+  'exec',
+  'exec-server',
+  'features',
+  'fork',
+  'help',
+  'login',
+  'logout',
+  'mcp',
+  'mcp-server',
+  'plugin',
+  'remote-control',
+  'resume',
+  'review',
+  'sandbox',
+]);
 
 export const NATIVE_CLAUDE_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 

@@ -16,7 +16,7 @@
 
 ### Bug Fixes
 
-* **codex:** Pass `ccsx resume` through to native Codex instead of treating `resume` as a CCS profile.
+* **codex:** Pass native `ccsx` Codex subcommands such as `exec`, `apply`, `mcp`, `plugin`, `completion`, and `resume` plus upstream aliases such as `e` and `a` through before CCS profile detection while keeping CCS-owned commands reserved.
 
 ## [7.79.1](https://github.com/kaitranntt/ccs/compare/v7.79.0...v7.79.1) (2026-05-14)
 
