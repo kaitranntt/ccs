@@ -14,6 +14,10 @@
 
 * **docker:** `ghcr.io/kaitranntt/ccs-dashboard:latest` Docker image is deprecated — migrate to `ghcr.io/kaitranntt/ccs:latest` (CCS + CLIProxy). The legacy image continues publishing for 2 more releases and emits a startup warning. See [#1251](https://github.com/kaitranntt/ccs/issues/1251).
 
+### Bug Fixes
+
+* **codex:** Pass `ccsx resume` through to native Codex instead of treating `resume` as a CCS profile.
+
 ## [7.79.1](https://github.com/kaitranntt/ccs/compare/v7.79.0...v7.79.1) (2026-05-14)
 
 ### Hotfixes

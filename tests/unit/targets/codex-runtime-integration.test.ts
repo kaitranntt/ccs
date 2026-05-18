@@ -498,6 +498,26 @@ process.exit(0);
     });
   }
 
+  it('passes ccsx resume straight through to the native Codex binary', () => {
+    if (process.platform === 'win32') return;
+
+    const result = runCodexAlias(['resume', '--help'], {
+      ...process.env,
+      CI: '1',
+      NO_COLOR: '1',
+      CCS_HOME: tmpHome,
+      CODEX_HOME: path.join(tmpHome, '.codex'),
+      CCS_CODEX_PATH: fakeCodexPath,
+      CCS_TEST_CODEX_ARGS_OUT: codexArgsLogPath,
+      CCS_TEST_CODEX_HELP: 'Resume a previous interactive session',
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('Resume a previous interactive session');
+    expect(result.stderr).not.toContain('Profile not found: resume');
+    expect(readLoggedCodexCalls(codexArgsLogPath)).toEqual([['resume', '--help']]);
+  });
+
   it('strips nested Codex session env from passthrough launches while keeping CODEX_HOME', () => {
     if (process.platform === 'win32') return;
 

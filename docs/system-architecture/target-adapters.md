@@ -515,6 +515,7 @@ ccs-codex
 ccsx
 → dist/bin/codex-runtime.js
 → CCS_INTERNAL_ENTRY_TARGET=codex
+→ passes native Codex diagnostics and `resume` through before CCS profile detection
 
 ccsxp
 → dist/bin/ccsxp-runtime.js
