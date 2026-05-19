@@ -96,17 +96,19 @@ describe('ccs-browser MCP server - recording and replay', () => {
   });
 
   it('cleans up recording state when stop finalization fails', async () => {
-    const responses = await runMcpRequests(
-      [
-        {
-          id: 'page-1',
-          title: 'Broken Stop Recording Page',
-          currentUrl: 'https://example.com/broken-stop-recording',
-          recording: {
-            finalizeError: 'recording finalize failed',
-          },
+    const pages: MockPageState[] = [
+      {
+        id: 'page-1',
+        title: 'Broken Stop Recording Page',
+        currentUrl: 'https://example.com/broken-stop-recording',
+        recording: {
+          finalizeError: 'recording finalize failed',
         },
-      ],
+      },
+    ];
+
+    const stopResponses = await runMcpRequests(
+      pages,
       [
         {
           jsonrpc: '2.0',
@@ -120,19 +122,25 @@ describe('ccs-browser MCP server - recording and replay', () => {
           method: 'tools/call',
           params: { name: 'browser_stop_recording', arguments: {} },
         },
-        {
-          jsonrpc: '2.0',
-          id: 1019_3,
-          method: 'tools/call',
-          params: { name: 'browser_start_recording', arguments: {} },
-        },
       ]
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 1019_2))).toContain(
+    expect(getResponseText(stopResponses.find((message) => message.id === 1019_2))).toContain(
       'recording finalize failed'
     );
-    expect(getResponseText(responses.find((message) => message.id === 1019_3))).toContain(
+    expect(pages[0].recording?.installed).toBe(false);
+    expect(pages[0].recording?.teardownCalls).toBe(1);
+
+    const restartResponses = await runMcpRequests(pages, [
+      {
+        jsonrpc: '2.0',
+        id: 1019_3,
+        method: 'tools/call',
+        params: { name: 'browser_start_recording', arguments: {} },
+      },
+    ]);
+
+    expect(getResponseText(restartResponses.find((message) => message.id === 1019_3))).toContain(
       'status: recording'
     );
   });

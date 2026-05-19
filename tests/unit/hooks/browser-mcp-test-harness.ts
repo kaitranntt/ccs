@@ -207,6 +207,8 @@ type MockRecordingPlan = {
   warnings?: MockRecordingWarning[];
   injectionError?: string;
   finalizeError?: string;
+  installed?: boolean;
+  teardownCalls?: number;
 };
 
 type MockFrameState = {
@@ -1174,6 +1176,10 @@ function createMockBrowser(pagesInput: MockPageState[]) {
             return;
           }
 
+          if (plan.installed) {
+            plan.teardownCalls = (plan.teardownCalls || 0) + 1;
+          }
+          plan.installed = true;
           if (
             recordingPayload &&
             (recordingPayload.events?.length || recordingPayload.warnings?.length)
@@ -1187,9 +1193,8 @@ function createMockBrowser(pagesInput: MockPageState[]) {
         }
 
         if (
-          expression.includes(
-            'globalThis.__CCS_BROWSER_RECORDING_RECORDER__ || { events: [], warnings: [] }'
-          )
+          expression.includes('const recorder = globalThis.__CCS_BROWSER_RECORDING_RECORDER__') &&
+          expression.includes('return { events, warnings }')
         ) {
           const plan = getMockRecordingPlan(page);
           if (plan.finalizeError) {
@@ -1201,6 +1206,10 @@ function createMockBrowser(pagesInput: MockPageState[]) {
             );
             return;
           }
+          if (plan.installed) {
+            plan.teardownCalls = (plan.teardownCalls || 0) + 1;
+          }
+          plan.installed = false;
           reply({
             result: {
               type: 'object',
@@ -1210,6 +1219,19 @@ function createMockBrowser(pagesInput: MockPageState[]) {
               },
             },
           });
+          return;
+        }
+
+        if (
+          expression.includes('const recorder = globalThis.__CCS_BROWSER_RECORDING_RECORDER__') &&
+          expression.includes('return { installed: false }')
+        ) {
+          const plan = getMockRecordingPlan(page);
+          if (plan.installed) {
+            plan.teardownCalls = (plan.teardownCalls || 0) + 1;
+          }
+          plan.installed = false;
+          reply({ result: { type: 'object', value: { installed: false } } });
           return;
         }
 
