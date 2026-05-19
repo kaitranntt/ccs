@@ -53,6 +53,7 @@ describe('docker executor', () => {
     expect(calls[0].options?.env?.CCS_NPM_VERSION).toBe('7.59.0');
     expect(calls[0].options?.env?.CCS_DASHBOARD_PORT).toBe('4000');
     expect(calls[0].options?.env?.CCS_CLIPROXY_PORT).toBe('9317');
+    expect(calls[0].options?.env?.CCS_DOCKER_BIND_HOST).toBe('127.0.0.1');
     expect(calls[0].options?.timeoutMs).toBe(300_000);
   });
 
@@ -89,6 +90,7 @@ describe('docker executor', () => {
     expect(calls[2].args[1]).toContain("export CCS_NPM_VERSION='7.59.0'");
     expect(calls[2].args[1]).toContain("export CCS_DASHBOARD_PORT='3000'");
     expect(calls[2].args[1]).toContain("export CCS_CLIPROXY_PORT='8317'");
+    expect(calls[2].args[1]).toContain("export CCS_DOCKER_BIND_HOST='127.0.0.1'");
     expect(calls[2].args[1]).toContain('docker-compose version >/dev/null 2>&1');
     expect(calls[2].options?.timeoutMs).toBe(300_000);
   });

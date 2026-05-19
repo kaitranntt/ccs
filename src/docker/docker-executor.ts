@@ -202,6 +202,7 @@ export class DockerExecutor {
           CCS_NPM_VERSION: this.getInstalledCcsVersion(),
           CCS_DASHBOARD_PORT: String(options.port),
           CCS_CLIPROXY_PORT: String(options.proxyPort),
+          CCS_DOCKER_BIND_HOST: process.env.CCS_DOCKER_BIND_HOST || '127.0.0.1',
         },
         REMOTE_DOCKER_BUILD_TIMEOUT_MS
       ),

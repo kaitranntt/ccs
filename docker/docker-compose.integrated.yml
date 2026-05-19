@@ -10,8 +10,8 @@ services:
     restart: unless-stopped
     init: true
     ports:
-      - "${CCS_DASHBOARD_PORT:-3000}:3000"
-      - "${CCS_CLIPROXY_PORT:-8317}:8317"
+      - "${CCS_DOCKER_BIND_HOST:-127.0.0.1}:${CCS_DASHBOARD_PORT:-3000}:3000"
+      - "${CCS_DOCKER_BIND_HOST:-127.0.0.1}:${CCS_CLIPROXY_PORT:-8317}:8317"
     environment:
       CCS_PORT: 3000
       NODE_ENV: production

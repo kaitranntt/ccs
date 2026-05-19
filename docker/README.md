@@ -45,7 +45,22 @@ The `ccs docker` flow uses the integrated assets in this directory:
 - `docker/supervisord.conf`
 - `docker/entrypoint-integrated.sh`
 
-### Post-Deployment: Enable Dashboard Auth (Required for Remote Access)
+### Network Binding and Dashboard Auth
+
+The integrated Docker stack publishes the dashboard and CLIProxy ports on `127.0.0.1` by default. This keeps the services reachable from the Docker host and SSH tunnels without exposing them on every host interface.
+
+For remote hosts, prefer an SSH tunnel:
+
+```bash
+ssh -L 3000:localhost:3000 my-server
+# Then open http://localhost:3000 in browser
+```
+
+Only bind publicly when you have enabled dashboard authentication and have intentionally placed the host behind trusted network controls:
+
+```bash
+CCS_DOCKER_BIND_HOST=0.0.0.0 ccs docker up --host my-server
+```
 
 When accessing the dashboard from a different machine (not `localhost`), the API blocks requests with **403 Forbidden** unless authentication is configured. Without auth, the dashboard appears empty (no providers, no version).
 
@@ -78,12 +93,9 @@ After configuring auth, restart the dashboard:
 docker exec ccs-cliproxy supervisorctl -c /etc/supervisord.conf restart ccs-dashboard
 ```
 
-If accessing from `localhost` only (e.g., via SSH tunnel), auth is not required:
+### Docker CLIProxy Secrets
 
-```bash
-ssh -L 3000:localhost:3000 my-server
-# Then open http://localhost:3000 in browser
-```
+On first startup, the integrated container generates per-install CLIProxy API and management secrets when the config is missing custom values. If you have already configured `cliproxy.auth.api_key` or `cliproxy.auth.management_secret`, Docker preserves those custom values.
 
 ### Post-Deployment: Migrate Existing Auth Tokens
 
@@ -302,10 +314,12 @@ lsof -i :3000
 lsof -i :8317
 
 # Use different ports
-docker run -p 4000:3000 -p 9317:8317 ...
+docker run -p 127.0.0.1:4000:3000 -p 127.0.0.1:9317:8317 ...
 
 # Or with compose
 CCS_DASHBOARD_PORT=4000 CCS_CLIPROXY_PORT=9317 docker-compose up -d
+# Public bind is opt-in:
+CCS_DOCKER_BIND_HOST=0.0.0.0 docker-compose up -d
 ```
 
 ### Container Keeps Restarting
