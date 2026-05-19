@@ -176,8 +176,15 @@ export function buildUsageResponseFromCliproxyLogLines(lines: string[]): Cliprox
   return buildUsageResponseFromQueueRecords(records);
 }
 
+const MAX_LOG_BYTES = 2 * 1024 * 1024;
+
 function readLogFile(filePath: string): string | null {
   if (!fs.existsSync(filePath)) {
+    return null;
+  }
+
+  const stats = fs.statSync(filePath);
+  if (stats.size > MAX_LOG_BYTES) {
     return null;
   }
 
