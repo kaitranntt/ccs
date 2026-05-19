@@ -1779,6 +1779,46 @@ describe('ccs-browser MCP server - session and interception', () => {
     );
   });
 
+  it('rejects intercept rules that match sensitive request headers', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 1003,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: {
+              headerMatchers: [{ name: 'Cookie', valueRegex: '^session=' }],
+              action: 'continue',
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 1004,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: {
+              headerMatchers: [{ name: 'authorization', valueIncludes: 'Bearer ' }],
+              action: 'continue',
+            },
+          },
+        },
+      ]
+    );
+
+    for (const id of [1003, 1004]) {
+      const response = responses.find((message) => message.id === id);
+      expect((response?.result as { isError?: boolean }).isError).toBe(true);
+      expect(getResponseText(response)).toContain(
+        'Browser MCP failed: headerMatchers.name cannot target sensitive request header'
+      );
+    }
+  });
+
   it('removes fulfill rules and request summaries after the bound page is closed', async () => {
     const responses = await runMcpRequests(
       [
