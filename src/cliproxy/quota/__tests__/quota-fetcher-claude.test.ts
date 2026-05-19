@@ -622,6 +622,64 @@ describe('Claude Quota Fetcher', () => {
       expect(result.coreUsage?.fiveHour?.remainingPercent).toBe(60);
     });
 
+    it('clears the request timeout before retrying a retryable HTTP error', async () => {
+      createClaudeAccount('claude-retry-timeout@example.com', {
+        access_token: 'retry-timeout-token',
+        expired: '2099-01-01T00:00:00.000Z',
+        type: 'claude',
+      });
+
+      const originalSetTimeout = globalThis.setTimeout;
+      const originalClearTimeout = globalThis.clearTimeout;
+      const activeTimers = new Set<number>();
+      let nextTimerId = 0;
+
+      globalThis.setTimeout = mock(((handler: TimerHandler, timeout?: number) => {
+        void handler;
+        void timeout;
+        const timerId = ++nextTimerId;
+        activeTimers.add(timerId);
+        return timerId as unknown as ReturnType<typeof setTimeout>;
+      }) as typeof setTimeout);
+
+      globalThis.clearTimeout = mock(((timerId?: ReturnType<typeof setTimeout>) => {
+        activeTimers.delete(timerId as unknown as number);
+      }) as typeof clearTimeout);
+
+      let attempt = 0;
+      global.fetch = mock(() => {
+        attempt += 1;
+        if (attempt === 1) {
+          return Promise.resolve(new Response('', { status: 500 }));
+        }
+
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              five_hour: {
+                utilization: 25,
+                resets_at: '2026-03-01T01:00:00Z',
+              },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+        );
+      }) as typeof fetch;
+
+      try {
+        const result = await fetchClaudeQuota('claude-retry-timeout@example.com');
+
+        expect(result.success).toBe(true);
+        expect(attempt).toBe(2);
+        expect(globalThis.setTimeout).toHaveBeenCalledTimes(2);
+        expect(globalThis.clearTimeout).toHaveBeenCalledTimes(2);
+        expect(activeTimers.size).toBe(0);
+      } finally {
+        globalThis.setTimeout = originalSetTimeout;
+        globalThis.clearTimeout = originalClearTimeout;
+      }
+    });
+
     it('retries once after AbortError and succeeds', async () => {
       createClaudeAccount('claude-timeout@example.com', {
         access_token: 'timeout-token',

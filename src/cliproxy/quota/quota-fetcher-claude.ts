@@ -287,6 +287,7 @@ export async function fetchClaudeQuota(
           attempt < CLAUDE_QUOTA_MAX_ATTEMPTS &&
           (response.status === 429 || response.status >= 500)
         ) {
+          clearTimeout(timeoutId);
           continue;
         }
         clearTimeout(timeoutId);
