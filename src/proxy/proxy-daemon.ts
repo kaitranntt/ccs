@@ -226,11 +226,16 @@ async function getOpenAICompatProxyStatusForProfile(
     return { running: false, profileName, pid: state.pid || undefined };
   }
 
+  const pid = state.pid;
+  if (!pid || verifyProxyProcessOwnership(pid, profileName) !== 'owned') {
+    return { running: false, profileName };
+  }
+
   const port = session.port;
   const running = await isOpenAICompatProxyRunning(port, profileName);
   return {
     running,
-    pid: running ? state.pid || undefined : undefined,
+    pid: running ? pid : undefined,
     ...session,
   };
 }
@@ -242,12 +247,20 @@ async function getLegacyOpenAICompatProxyStatus(): Promise<OpenAICompatProxyStat
     return null;
   }
 
+  const profileName = session?.profileName;
+  const hasOwnedPid =
+    typeof pid === 'number' &&
+    typeof profileName === 'string' &&
+    profileName.length > 0 &&
+    verifyProxyProcessOwnership(pid, profileName) === 'owned';
   const port = session?.port;
   const running =
-    typeof port === 'number' ? await isOpenAICompatProxyRunning(port, session?.profileName) : false;
+    hasOwnedPid && typeof port === 'number'
+      ? await isOpenAICompatProxyRunning(port, session?.profileName)
+      : false;
   return {
     running,
-    pid: running ? pid || undefined : pid || undefined,
+    pid: running ? pid || undefined : undefined,
     ...session,
   };
 }
