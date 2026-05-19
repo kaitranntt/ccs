@@ -9,7 +9,37 @@ import { describe, it, expect, beforeEach, afterEach, mock, spyOn } from 'bun:te
 import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
-import { bootstrapAndParseEarlyCli } from '../cli-argument-parser';
+import {
+  bootstrapAndParseEarlyCli,
+  CODEX_NATIVE_PASSTHROUGH_SUBCOMMANDS,
+  getNativeCodexPassthroughArgs,
+} from '../cli-argument-parser';
+import { setGlobalConfigDir } from '../../utils/config-manager';
+
+const EXPECTED_NATIVE_CODEX_SUBCOMMANDS = [
+  'a',
+  'app',
+  'app-server',
+  'apply',
+  'cloud',
+  'completion',
+  'debug',
+  'e',
+  'exec',
+  'exec-server',
+  'features',
+  'fork',
+  'help',
+  'login',
+  'logout',
+  'mcp',
+  'mcp-server',
+  'plugin',
+  'remote-control',
+  'resume',
+  'review',
+  'sandbox',
+];
 
 // ========== Helpers ==========
 
@@ -53,6 +83,7 @@ describe('bootstrapAndParseEarlyCli', () => {
       configurable: true,
     });
     delete process.env['CI'];
+    setGlobalConfigDir(undefined);
     exitSpy.mockRestore();
   });
 
@@ -148,5 +179,32 @@ describe('bootstrapAndParseEarlyCli', () => {
   it('returns browserLaunchOverride=undefined when no browser flags are present', async () => {
     const result = await bootstrapAndParseEarlyCli(['gemini']);
     expect(result.browserLaunchOverride).toBeUndefined();
+  });
+});
+
+describe('native Codex passthrough parsing', () => {
+  it('keeps the native Codex passthrough subcommand list explicit', () => {
+    expect([...CODEX_NATIVE_PASSTHROUGH_SUBCOMMANDS].sort()).toEqual(
+      EXPECTED_NATIVE_CODEX_SUBCOMMANDS
+    );
+
+    for (const subcommand of EXPECTED_NATIVE_CODEX_SUBCOMMANDS) {
+      expect(getNativeCodexPassthroughArgs(['--target', 'codex', subcommand, '--help'])).toEqual([
+        subcommand,
+        '--help',
+      ]);
+      expect(
+        getNativeCodexPassthroughArgs(['--target', 'codex', 'codex', subcommand, '--help'])
+      ).toEqual([subcommand, '--help']);
+    }
+  });
+
+  it('keeps CCS-owned codex runtime commands out of native passthrough', () => {
+    for (const subcommand of ['auth', 'doctor', 'update']) {
+      expect(getNativeCodexPassthroughArgs(['--target', 'codex', subcommand, '--help'])).toBeNull();
+      expect(
+        getNativeCodexPassthroughArgs(['--target', 'codex', 'codex', subcommand, '--help'])
+      ).toBeNull();
+    }
   });
 });

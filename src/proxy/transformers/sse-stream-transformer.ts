@@ -50,6 +50,7 @@ export function createAnthropicErrorResponse(
 ): Response {
   const responseHeaders = new Headers(headers);
   responseHeaders.set('Content-Type', 'application/json');
+  responseHeaders.delete('Content-Encoding');
   responseHeaders.delete('Content-Length');
 
   return new Response(JSON.stringify(createAnthropicErrorPayload(type, message)), {

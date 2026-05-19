@@ -217,6 +217,18 @@ If you cannot run the full suite, that is still fine for early or docs-only PRs.
 - Update `ui/src/` and any affected tests.
 - Run UI validation from `ui/`.
 
+### If you change the Docker network or service name
+
+The `ccs-net` network name and the `ccs` service name in `docker/compose.yaml` are a **public contract**. Users attach their own containers to `ccs-net` and resolve CLIProxy at `http://ccs:8317`.
+
+Changing either of these values is a **SemVer-major breaking change**. Before modifying `services.ccs.name` or `networks.ccs-net.name` in `docker/compose.yaml`:
+
+- Open an issue to discuss the migration path.
+- Update `docker/README.md`, `CHANGELOG.md`, and any docs that reference the stable names.
+- Bump the major version (via a `feat!:` or `fix!:` commit with a `BREAKING CHANGE:` footer).
+
+If you are unsure whether your change affects the contract, check `tests/docker/network-contract.sh` — the test will fail if the network or service DNS resolution breaks.
+
 ### If you change config, providers, or architecture
 
 - Update the relevant docs in `docs/`.

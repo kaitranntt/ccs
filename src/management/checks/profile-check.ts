@@ -7,6 +7,7 @@ import * as path from 'path';
 import { ok, fail, warn, info } from '../../utils/ui';
 import { HealthCheck, IHealthChecker, createSpinner } from './types';
 import { getCcsDir } from '../../config/config-loader-facade';
+import { listAccountInstanceNames } from '../instance-directory';
 
 const ora = createSpinner();
 
@@ -144,9 +145,7 @@ export class InstancesChecker implements IHealthChecker {
       return;
     }
 
-    const instances = fs.readdirSync(instancesDir).filter((name) => {
-      return fs.statSync(path.join(instancesDir, name)).isDirectory();
-    });
+    const instances = listAccountInstanceNames(instancesDir);
 
     if (instances.length === 0) {
       spinner.info();

@@ -1,0 +1,50 @@
+name: Smoke Test – ccs.kaitran.ca/docker-compose.yaml
+
+on:
+  release:
+    types:
+      - published
+  schedule:
+    # Nightly at 07:00 UTC
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      do_up:
+        description: >
+          Also run `docker compose up -d`, wait for healthcheck, run the
+          network-contract test against the downloaded URL compose file, then
+          tear down. Skipped by default (parse-only).
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  smoke-test:
+    name: curl + parse (+ optional up/down + network-contract)
+    runs-on: [self-hosted, linux, x64, cliproxy]
+
+    steps:
+      - name: Checkout (for test scripts)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download compose from canonical URL
+        run: |
+          curl -fsSL https://ccs.kaitran.ca/docker-compose.yaml -o /tmp/ccs-compose.yaml
+          echo "--- downloaded compose ---"
+          cat /tmp/ccs-compose.yaml
+
+      - name: Validate compose parses (docker compose config)
+        run: docker compose -f /tmp/ccs-compose.yaml config
+
+      - name: Run network-contract test against downloaded compose
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.do_up == true }}
+        run: |
+          set -euo pipefail
+          # network-contract.sh accepts the compose file as first argument.
+          # This exercises the exact file served at the canonical URL rather
+          # than the repo copy, ensuring URL-delivered compose works end-to-end.
+          # The script handles up, healthcheck wait, sibling DNS probes, and
+          # teardown (via EXIT trap) — no separate up/down steps needed.
+          bash tests/docker/network-contract.sh /tmp/ccs-compose.yaml

@@ -63,11 +63,88 @@ const { logRouteError, respondInternalError } = createRouteErrorHelpers('setting
 
 function resolvePathWithin(basePath: string, targetPath: string): string {
   const resolvedBase = path.resolve(basePath);
-  const resolvedTarget = path.resolve(targetPath);
-  if (resolvedTarget !== resolvedBase && !resolvedTarget.startsWith(`${resolvedBase}${path.sep}`)) {
+  const resolvedTarget = path.resolve(
+    path.isAbsolute(targetPath) ? targetPath : path.join(resolvedBase, targetPath)
+  );
+  if (!isPathWithin(resolvedBase, resolvedTarget)) {
     throw new Error('Invalid settings path');
   }
   return resolvedTarget;
+}
+
+function normalizePathForComparison(targetPath: string): string {
+  const resolvedPath = path.resolve(targetPath);
+  return process.platform === 'win32' ? resolvedPath.toLowerCase() : resolvedPath;
+}
+
+function isPathWithin(basePath: string, targetPath: string): boolean {
+  const normalizedBase = normalizePathForComparison(basePath);
+  const normalizedTarget = normalizePathForComparison(targetPath);
+  const relative = path.relative(normalizedBase, normalizedTarget);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function safeRealPath(targetPath: string): string | null {
+  try {
+    return fs.realpathSync.native(targetPath);
+  } catch {
+    return null;
+  }
+}
+
+function getRealCcsDir(): string {
+  return safeRealPath(getCcsDir()) ?? path.resolve(getCcsDir());
+}
+
+function requirePathWithinRealCcsDir(targetPath: string): void {
+  if (!isPathWithin(getRealCcsDir(), targetPath)) {
+    throw new Error('Invalid settings path');
+  }
+}
+
+function requireExistingSettingsPathWithinCcs(settingsPath: string): boolean {
+  const realSettingsPath = safeRealPath(settingsPath);
+  if (!realSettingsPath) {
+    return false;
+  }
+
+  requirePathWithinRealCcsDir(realSettingsPath);
+  return true;
+}
+
+function findExistingParentRealPath(targetPath: string): string | null {
+  let currentPath = path.dirname(targetPath);
+
+  while (true) {
+    const realParentPath = safeRealPath(currentPath);
+    if (realParentPath) {
+      return realParentPath;
+    }
+
+    const parentPath = path.dirname(currentPath);
+    if (parentPath === currentPath) {
+      return null;
+    }
+    currentPath = parentPath;
+  }
+}
+
+function requireWritableSettingsPathWithinCcs(settingsPath: string): void {
+  const realSettingsPath = safeRealPath(settingsPath);
+  if (realSettingsPath) {
+    requirePathWithinRealCcsDir(realSettingsPath);
+    return;
+  }
+
+  const realParentPath = findExistingParentRealPath(settingsPath);
+  if (!realParentPath) {
+    throw new Error('Invalid settings path');
+  }
+  requirePathWithinRealCcsDir(realParentPath);
+}
+
+function resolveSettingsCandidatePath(ccsDir: string, settingsPath: string): string {
+  return resolvePathWithin(ccsDir, expandPath(settingsPath));
 }
 
 function requireSensitiveLocalAccess(req: Request, res: Response): boolean {
@@ -114,23 +191,24 @@ function resolveSettingsPath(profileOrVariant: string): string {
         path.join(resolvedCcsDir, `${profileOrVariant}.settings.json`)
       );
     }
-    return path.resolve(resolveProviderSettingsPath(directProvider));
+    return resolvePathWithin(resolvedCcsDir, resolveProviderSettingsPath(directProvider));
   }
 
   // Check if this is a variant
   const variants = listVariants();
   const variant = variants[profileOrVariant];
   if (variant?.settings) {
-    return path.resolve(expandPath(variant.settings));
+    return resolveSettingsCandidatePath(resolvedCcsDir, variant.settings);
   }
 
+  let configuredSettingsPath: string | undefined;
   try {
-    const configuredSettingsPath = loadConfigSafe().profiles[profileOrVariant];
-    if (typeof configuredSettingsPath === 'string' && configuredSettingsPath.trim().length > 0) {
-      return path.resolve(expandPath(configuredSettingsPath));
-    }
+    configuredSettingsPath = loadConfigSafe().profiles[profileOrVariant];
   } catch {
     // Fall back to the conventional ~/.ccs/<profile>.settings.json path below.
+  }
+  if (typeof configuredSettingsPath === 'string' && configuredSettingsPath.trim().length > 0) {
+    return resolveSettingsCandidatePath(resolvedCcsDir, configuredSettingsPath);
   }
 
   // Regular profile settings
@@ -328,13 +406,21 @@ async function resolvePreviewImageAnalysisStatus(profileOrVariant: string, setti
 }
 
 function writeSettingsAtomically(settingsPath: string, settings: Settings): void {
+  requireWritableSettingsPathWithinCcs(settingsPath);
   const tempPath = `${settingsPath}.tmp.${process.pid}`;
-  fs.writeFileSync(tempPath, JSON.stringify(settings, null, 2) + '\n');
+  requireWritableSettingsPathWithinCcs(tempPath);
+  fs.writeFileSync(tempPath, JSON.stringify(settings, null, 2) + '\n', { flag: 'wx' });
   fs.renameSync(tempPath, settingsPath);
 }
 
 function withSettingsFileLock<T>(settingsPath: string, callback: () => T): T {
-  const lockTarget = fs.existsSync(settingsPath) ? settingsPath : path.dirname(settingsPath);
+  requireWritableSettingsPathWithinCcs(settingsPath);
+  const lockTarget = safeRealPath(settingsPath)
+    ? settingsPath
+    : findExistingParentRealPath(settingsPath);
+  if (!lockTarget) {
+    throw new Error('Invalid settings path');
+  }
   let release: (() => void) | undefined;
 
   try {
@@ -357,6 +443,10 @@ function loadCanonicalProfileSettings(
   persist = false,
   strictPersist = false
 ): Settings {
+  if (!requireExistingSettingsPathWithinCcs(settingsPath)) {
+    throw new Error('Settings not found');
+  }
+
   const loaded = loadSettings(settingsPath);
   const canonicalized = canonicalizeProfileSettings(profileOrVariant, loaded);
 
@@ -399,7 +489,7 @@ router.get('/:profile', async (req: Request, res: Response): Promise<void> => {
     const { profile } = req.params;
     const settingsPath = resolveSettingsPath(profile);
 
-    if (!fs.existsSync(settingsPath)) {
+    if (!requireExistingSettingsPathWithinCcs(settingsPath)) {
       res.status(404).json({ error: 'Settings not found' });
       return;
     }
@@ -435,7 +525,7 @@ router.get('/:profile/raw', async (req: Request, res: Response): Promise<void> =
     const { profile } = req.params;
     const settingsPath = resolveSettingsPath(profile);
 
-    if (!fs.existsSync(settingsPath)) {
+    if (!requireExistingSettingsPathWithinCcs(settingsPath)) {
       res.status(404).json({ error: 'Settings not found' });
       return;
     }
@@ -556,11 +646,13 @@ router.put('/:profile', (req: Request, res: Response): void => {
         const existingContent = fs.readFileSync(settingsPath, 'utf8');
         if (existingContent !== newContent) {
           const backupDir = path.join(ccsDir, 'backups');
+          requireWritableSettingsPathWithinCcs(path.join(backupDir, '.settings-backup-probe'));
           if (!fs.existsSync(backupDir)) {
             fs.mkdirSync(backupDir, { recursive: true });
           }
           const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
           backupPath = path.join(backupDir, `${profile}.${timestamp}.settings.json`);
+          requireWritableSettingsPathWithinCcs(backupPath);
           fs.copyFileSync(settingsPath, backupPath);
         }
       } else {
@@ -569,7 +661,8 @@ router.put('/:profile', (req: Request, res: Response): void => {
       }
 
       const tempPath = `${settingsPath}.tmp.${process.pid}`;
-      fs.writeFileSync(tempPath, newContent);
+      requireWritableSettingsPathWithinCcs(tempPath);
+      fs.writeFileSync(tempPath, newContent, { flag: 'wx' });
       fs.renameSync(tempPath, settingsPath);
       newMtime = fs.statSync(settingsPath).mtime.getTime();
     });
@@ -604,7 +697,7 @@ router.get('/:profile/presets', (req: Request, res: Response): void => {
     const { profile } = req.params;
     const settingsPath = resolveSettingsPath(profile);
 
-    if (!fs.existsSync(settingsPath)) {
+    if (!requireExistingSettingsPathWithinCcs(settingsPath)) {
       res.json({ presets: [] });
       return;
     }

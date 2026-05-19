@@ -7,7 +7,7 @@ function resolvePath(relativePath: string) {
 }
 
 describe('PR-Agent review lane migration', () => {
-  test('keeps ai-review.yml as the PR-Agent workflow on the self-hosted cliproxy runner', () => {
+  test('keeps ai-review.yml as the PR-Agent workflow on the self-hosted cliproxy runner with trusted PR gating', () => {
     const workflowPath = resolvePath('../../../../.github/workflows/ai-review.yml');
     const prAgentConfigPath = resolvePath('../../../../.pr_agent.toml');
 
@@ -23,6 +23,14 @@ describe('PR-Agent review lane migration', () => {
     expect(workflow).toContain('uses: qodo-ai/pr-agent');
     expect(appTokenUsages).toHaveLength(2);
     expect(workflow).toContain('OPENAI.API_BASE');
+    expect(workflow).toContain("github.event_name == 'pull_request_target' &&");
+    expect(workflow).toContain(
+      'contains(fromJSON(\'["COLLABORATOR","MEMBER","OWNER"]\'), github.event.pull_request.author_association)'
+    );
+    expect(workflow).toContain(
+      'contains(fromJSON(\'["COLLABORATOR","MEMBER","OWNER"]\'), github.event.issue.author_association)'
+    );
+    expect(workflow).toContain('github.event.issue.author_association');
     expect(workflow).toContain('OPENAI_KEY');
     expect(workflow).toContain('vars.AI_REVIEW_BASE_URL');
     expect(workflow).toContain('vars.AI_REVIEW_MODEL');

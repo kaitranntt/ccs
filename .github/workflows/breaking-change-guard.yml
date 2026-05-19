@@ -1,0 +1,284 @@
+name: Breaking Change Guard – Docker Compose Contract
+
+# Guards against accidental breaking changes to the stable ccs-net contract
+# defined in docker/compose.yaml. The following fields are considered stable
+# API — changing them breaks existing sibling-container setups:
+#
+#   services.ccs.image (the image *name*, not the tag)
+#   networks.ccs-net.name
+#   services.ccs.container_name (if set)
+#   services keys (Docker DNS uses the service key; renaming "ccs:" changes http://ccs:8317)
+#
+# If any of these fields change in a PR, the workflow fails unless at least
+# one commit in the PR includes a breaking-change marker (feat!: or fix!:).
+# This enforces a deliberate, visible decision to change the contract.
+
+on:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - "docker/compose.yaml"
+
+jobs:
+  guard:
+    name: Verify breaking changes are intentional
+    # Exception to self-hosted-first policy (documented in CLAUDE.md "Self-Hosted Runner Policy"):
+    # This workflow MUST cover ALL PRs including forks — a forked contributor can rename
+    # services.ccs or change the image namespace without a breaking-change marker, which
+    # silently breaks sibling-container setups for every user. Gating on trusted-author
+    # association would let forked PRs bypass the check entirely.
+    #
+    # Safety justification: this workflow does ONLY pure YAML diff parsing (git show / git diff
+    # + shell + awk). It checks out the code with persist-credentials: false and runs no build,
+    # install, or arbitrary scripts from the PR branch. There is no untrusted code execution,
+    # so running on a GitHub-hosted runner is safe and required for universal coverage.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.base_ref }} --depth=50
+
+      - name: Check for contract-breaking changes
+        id: contract
+        run: |
+          set -euo pipefail
+
+          BASE="origin/${{ github.base_ref }}"
+
+          # Guard: if docker/compose.yaml does not exist in the base branch, this
+          # is a new file — no contract existed before, so no regression is possible.
+          if ! git cat-file -e "${BASE}:docker/compose.yaml" 2>/dev/null; then
+            echo "[i] docker/compose.yaml is new in this PR (not present on ${BASE}) — skipping contract check"
+            echo "breaking=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BREAKING=0
+
+          # 1. Image name change (repo path, not tag — tags change every release)
+          #
+          #    compose.yaml uses ${CCS_IMAGE:-ghcr.io/kaitranntt/ccs:latest}. A naive
+          #    sed 's/:.*//' truncates at the FIRST colon, yielding "${CCS_IMAGE" instead
+          #    of the actual image name. We strip the ${VAR:-default} wrapper first, then
+          #    strip only the trailing :tag suffix (preserving internal colons such as
+          #    those in registry:port/owner/repo).
+          extract_image_name() {
+            # $1 = raw image line content (everything after "image: ")
+            local raw="$1"
+            raw=$(printf '%s' "$raw" | sed -E "s/^[\"']//; s/[\"']$//")
+            # Strip ${VAR:-default} wrapper if present
+            raw=$(printf '%s' "$raw" | sed -E 's/^\$\{[A-Za-z_][A-Za-z0-9_]*:-//; s/\}$//')
+            # Strip only the trailing :tag — preserve internal colons (e.g. registry:5000/owner/repo)
+            printf '%s' "$raw" | sed 's|:[^:/]*$||'
+          }
+
+          service_field_value() {
+            local file="$1" service="$2" field="$3"
+            awk -v service="$service" -v field="$field" '
+              function trim(s) {
+                sub(/^[[:space:]]+/, "", s)
+                sub(/[[:space:]]+$/, "", s)
+                return s
+              }
+              /^services:[[:space:]]*$/ { in_services = 1; next }
+              in_services && /^[^[:space:]]/ { in_services = 0; in_service = 0 }
+              in_services && $0 ~ "^  " service ":[[:space:]]*$" { in_service = 1; next }
+              in_service && /^  [A-Za-z0-9_-]+:[[:space:]]*$/ { in_service = 0 }
+              in_service {
+                prefix = "^    " field ":[[:space:]]*"
+                if ($0 ~ prefix) {
+                  line = $0
+                  sub(prefix, "", line)
+                  print trim(line)
+                  exit
+                }
+              }
+            ' "$file"
+          }
+
+          service_network_refs() {
+            local file="$1" service="$2"
+            awk -v service="$service" '
+              function trim(s) {
+                sub(/^[[:space:]]+/, "", s)
+                sub(/[[:space:]]+$/, "", s)
+                return s
+              }
+              function emit_inline(value, parts, count, i) {
+                gsub(/[\[\]]/, "", value)
+                count = split(value, parts, ",")
+                for (i = 1; i <= count; i++) {
+                  if (trim(parts[i]) != "") print trim(parts[i])
+                }
+              }
+              /^services:[[:space:]]*$/ { in_services = 1; next }
+              in_services && /^[^[:space:]]/ { in_services = 0; in_service = 0; in_networks = 0 }
+              in_services && $0 ~ "^  " service ":[[:space:]]*$" { in_service = 1; in_networks = 0; next }
+              in_service && /^  [A-Za-z0-9_-]+:[[:space:]]*$/ { in_service = 0; in_networks = 0 }
+              in_service {
+                if ($0 ~ /^    networks:[[:space:]]*\[/) {
+                  line = $0
+                  sub(/^    networks:[[:space:]]*/, "", line)
+                  emit_inline(line)
+                  next
+                }
+                if ($0 ~ /^    networks:[[:space:]]*$/) {
+                  in_networks = 1
+                  next
+                }
+                if ($0 ~ /^    networks:[[:space:]]+/) {
+                  line = $0
+                  sub(/^    networks:[[:space:]]+/, "", line)
+                  print trim(line)
+                  next
+                }
+                if (in_networks && $0 ~ /^    [A-Za-z0-9_-]+:/) {
+                  in_networks = 0
+                }
+                if (in_networks && $0 ~ /^      -[[:space:]]*/) {
+                  line = $0
+                  sub(/^      -[[:space:]]*/, "", line)
+                  print trim(line)
+                  next
+                }
+                if (in_networks && $0 ~ /^      [A-Za-z0-9_-]+:/) {
+                  line = $0
+                  sub(/^      /, "", line)
+                  sub(/:.*/, "", line)
+                  print trim(line)
+                  next
+                }
+              }
+            ' "$file"
+          }
+
+          network_effective_name() {
+            local file="$1" ref="$2"
+            awk -v ref="$ref" '
+              function trim(s) {
+                sub(/^[[:space:]]+/, "", s)
+                sub(/[[:space:]]+$/, "", s)
+                return s
+              }
+              /^networks:[[:space:]]*$/ { in_networks = 1; next }
+              in_networks && /^[^[:space:]]/ { in_networks = 0; in_target = 0 }
+              in_networks && $0 ~ "^  " ref ":[[:space:]]*$" {
+                in_target = 1
+                found = 1
+                effective = ref
+                next
+              }
+              in_target && /^  [A-Za-z0-9_-]+:[[:space:]]*$/ { in_target = 0 }
+              in_target && /^    name:[[:space:]]*/ {
+                line = $0
+                sub(/^    name:[[:space:]]*/, "", line)
+                effective = trim(line)
+              }
+              END { if (found) print effective }
+            ' "$file"
+          }
+
+          has_service_network_effective_name() {
+            local file="$1" service="$2" expected="$3" ref effective
+            while IFS= read -r ref; do
+              [[ -z "$ref" ]] && continue
+              effective=$(network_effective_name "$file" "$ref")
+              if [[ "$effective" == "$expected" ]]; then
+                return 0
+              fi
+            done < <(service_network_refs "$file" "$service")
+            return 1
+          }
+
+          BASE_COMPOSE="$(mktemp)"
+          trap 'rm -f "$BASE_COMPOSE"' EXIT
+          git show "${BASE}:docker/compose.yaml" > "$BASE_COMPOSE"
+
+          OLD_RAW=$(service_field_value "$BASE_COMPOSE" ccs image)
+          NEW_RAW=$(service_field_value docker/compose.yaml ccs image)
+          OLD_IMAGE=$(extract_image_name "$OLD_RAW")
+          NEW_IMAGE=$(extract_image_name "$NEW_RAW")
+          if [[ "${OLD_IMAGE}" != "${NEW_IMAGE}" ]]; then
+            echo "[!] BREAKING: image name changed: '${OLD_IMAGE}' -> '${NEW_IMAGE}'"
+            BREAKING=1
+          fi
+
+          # 2. ccs-net network attachment — positive assertion: services.ccs MUST
+          #    attach to a network whose effective Compose name is ccs-net. Merely
+          #    keeping an unused top-level ccs-net definition is not enough.
+          if ! has_service_network_effective_name docker/compose.yaml ccs ccs-net; then
+            echo "[!] BREAKING: services.ccs is not attached to effective network name ccs-net"
+            BREAKING=1
+          fi
+
+          # 3. container_name change (if present in either version)
+          OLD_CN=$(service_field_value "$BASE_COMPOSE" ccs container_name | tr -d ' ')
+          NEW_CN=$(service_field_value docker/compose.yaml ccs container_name | tr -d ' ')
+          if [[ "${OLD_CN}" != "${NEW_CN}" ]]; then
+            echo "[!] BREAKING: container_name changed: '${OLD_CN}' -> '${NEW_CN}'"
+            BREAKING=1
+          fi
+
+          # 4. Service key contract — Docker DNS on ccs-net uses the compose service
+          #    KEY as the hostname (e.g. http://ccs:8317). Renaming or removing
+          #    "ccs:" breaks every sibling container in the wild. Adding new service
+          #    keys (e.g. a sidecar) does NOT affect the "ccs" DNS contract and is
+          #    therefore allowed without a breaking-change marker.
+          #
+          #    Extraction logic: find lines that look like top-level service keys
+          #    (two-space indent + identifier + colon, NOT sub-keys like "image:").
+          #    This matches YAML service keys without requiring an external YAML parser.
+          NEW_KEYS=$(awk '/^services:/{s=1;next} s && /^  [a-zA-Z0-9_-]+:/{print $1} /^[^ ]/{s=0}' \
+            docker/compose.yaml \
+            | tr -d ':' | sort | tr '\n' ' ' | sed 's/ $//')
+          if ! echo " ${NEW_KEYS} " | grep -q " ccs "; then
+            echo "[!] BREAKING: services.ccs key missing from docker/compose.yaml — sibling containers on ccs-net rely on DNS hostname 'ccs'"
+            BREAKING=1
+          fi
+
+          echo "breaking=${BREAKING}" >> "$GITHUB_OUTPUT"
+
+      - name: Require breaking-change commit marker if contract changed
+        if: steps.contract.outputs.breaking == '1'
+        run: |
+          set -euo pipefail
+
+          BASE="origin/${{ github.base_ref }}"
+
+          # Check all commit messages in the PR for feat! or fix! marker
+          HAS_BREAKING_MARKER=$(
+            git log "${BASE}"...HEAD --format="%s" \
+            | grep -cE "^(feat|fix)(\([^)]+\))?!:" || true
+          )
+
+          if [[ "${HAS_BREAKING_MARKER}" -eq 0 ]]; then
+            echo ""
+            echo "[X] Breaking change guard FAILED"
+            echo ""
+            echo "    docker/compose.yaml was modified in a way that changes the stable"
+            echo "    ccs-net contract (image name, network name, or container_name)."
+            echo ""
+            echo "    These fields are relied upon by sibling containers. Changing them"
+            echo "    without a breaking-change marker is a silent breaking change."
+            echo ""
+            echo "    To proceed, rename at least one commit to use the feat! or fix!"
+            echo "    breaking-change format:"
+            echo ""
+            echo "      feat!: rename ccs service image to ghcr.io/owner/newname"
+            echo "      fix!: align container_name with new naming convention"
+            echo ""
+            echo "    See: https://www.conventionalcommits.org/en/v1.0.0/#specification"
+            exit 1
+          fi
+
+          echo "[OK] Breaking-change commit marker found — contract change is intentional"
+
+      - name: No contract-breaking changes detected
+        if: steps.contract.outputs.breaking == '0'
+        run: echo "[OK] No contract-breaking changes in docker/compose.yaml"

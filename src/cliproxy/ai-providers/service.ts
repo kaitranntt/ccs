@@ -17,14 +17,39 @@ function maskSecret(value: string | undefined): string | undefined {
   return value.length > 8 ? `...${value.slice(-4)}` : '***';
 }
 
+function sanitizeUrlForView(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.username) parsed.username = '***';
+    if (parsed.password) parsed.password = '***';
+    return parsed.toString();
+  } catch {
+    return trimmed;
+  }
+}
+
+function restoreMaskedViewValue(
+  value: string | undefined,
+  existing: string | undefined,
+  sanitizeForView: (value: string | undefined) => string | undefined = maskSecret
+): string | undefined {
+  const next = value?.trim() || undefined;
+  if (!next || !existing) return next;
+  return next === sanitizeForView(existing) ? existing : next;
+}
+
 function normalizeHeaders(
-  headers: Array<{ key: string; value: string }> | undefined
+  headers: Array<{ key: string; value: string }> | undefined,
+  existing?: Record<string, string>
 ): Record<string, string> | undefined {
   if (!headers) return undefined;
   const normalized = headers.reduce<Record<string, string>>((acc, header) => {
     const key = header.key.trim();
     if (!key) return acc;
-    acc[key] = header.value;
+    acc[key] = restoreMaskedViewValue(header.value, existing?.[key]) || '';
     return acc;
   }, {});
   return Object.keys(normalized).length > 0 ? normalized : undefined;
@@ -33,7 +58,10 @@ function normalizeHeaders(
 function toHeaderPairs(
   headers: Record<string, string> | undefined
 ): Array<{ key: string; value: string }> {
-  return Object.entries(headers || {}).map(([key, value]) => ({ key, value }));
+  return Object.entries(headers || {}).map(([key, value]) => ({
+    key,
+    value: maskSecret(value) || '***',
+  }));
 }
 
 function readModelRulePart(model: unknown, key: keyof AiProviderModelAlias) {
@@ -62,9 +90,9 @@ function buildApiKeyEntryView(
   return {
     id: entry.id || `${family}:${index}`,
     index,
-    label: entry.prefix?.trim() || entry['base-url']?.trim() || `Entry ${index + 1}`,
-    baseUrl: entry['base-url']?.trim() || undefined,
-    proxyUrl: entry['proxy-url']?.trim() || undefined,
+    label: entry.prefix?.trim() || sanitizeUrlForView(entry['base-url']) || `Entry ${index + 1}`,
+    baseUrl: sanitizeUrlForView(entry['base-url']),
+    proxyUrl: sanitizeUrlForView(entry['proxy-url']),
     prefix: entry.prefix?.trim() || undefined,
     headers: toHeaderPairs(entry.headers),
     excludedModels: [...(entry['excluded-models'] || [])],
@@ -80,7 +108,7 @@ function buildOpenAiCompatEntryView(entry: OpenAICompatEntry, index: number): Ai
     index,
     name: entry.name,
     label: entry.name,
-    baseUrl: entry['base-url']?.trim() || undefined,
+    baseUrl: sanitizeUrlForView(entry['base-url']),
     headers: toHeaderPairs(entry.headers),
     excludedModels: [],
     models: normalizeModelAliases(entry.models),
@@ -142,10 +170,14 @@ function toApiKeyEntry(
   return {
     id: existing?.id,
     'api-key': nextSecret,
-    'base-url': input.baseUrl?.trim() || undefined,
-    'proxy-url': input.proxyUrl?.trim() || undefined,
+    'base-url': restoreMaskedViewValue(input.baseUrl, existing?.['base-url'], sanitizeUrlForView),
+    'proxy-url': restoreMaskedViewValue(
+      input.proxyUrl,
+      existing?.['proxy-url'],
+      sanitizeUrlForView
+    ),
     prefix: input.prefix?.trim() || undefined,
-    headers: normalizeHeaders(input.headers),
+    headers: normalizeHeaders(input.headers, existing?.headers),
     'excluded-models': (input.excludedModels || [])
       .map((value) => value.trim())
       .filter((value) => value.length > 0),
@@ -167,8 +199,11 @@ function toOpenAiCompatEntry(
   return {
     id: existing?.id,
     name: input.name?.trim() || existing?.name || 'connector',
-    'base-url': input.baseUrl?.trim() || existing?.['base-url'] || '',
-    headers: normalizeHeaders(input.headers),
+    'base-url':
+      restoreMaskedViewValue(input.baseUrl, existing?.['base-url'], sanitizeUrlForView) ||
+      existing?.['base-url'] ||
+      '',
+    headers: normalizeHeaders(input.headers, existing?.headers),
     'api-key-entries': nextApiKeys.map((apiKey) => ({ 'api-key': apiKey })),
     models: normalizeModelAliases(input.models),
   };

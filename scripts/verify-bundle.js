@@ -16,7 +16,10 @@ const path = require('path');
 const zlib = require('zlib');
 
 const UI_DIR = path.join(__dirname, '../dist/ui');
-const MAX_SIZE = 1.5 * 1024 * 1024; // 1.5MB - reasonable for full-featured React dashboard
+// 1.75MB - bumped from 1.5MB when the code editor moved from
+// react-simple-code-editor + prism-react-renderer (~18KB) to CodeMirror 6
+// (~80KB gzipped) to restore native selection/copy in the raw config viewers.
+const MAX_SIZE = 1.75 * 1024 * 1024;
 
 function getGzipSize(filePath) {
   const content = fs.readFileSync(filePath);

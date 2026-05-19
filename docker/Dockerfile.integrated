@@ -1,6 +1,20 @@
-FROM eceasy/cli-proxy-api:latest
+# Base image pinned by digest for reproducible builds.
+# To refresh: docker pull eceasy/cli-proxy-api:latest && docker inspect --format='{{index .RepoDigests 0}}' eceasy/cli-proxy-api:latest
+# Refresh cadence: quarterly OR on security advisory from upstream.
+# TODO: pin apk packages once apk-digest pinning workflow exists in CI (apk add nodejs npm are currently unpinned;
+#       alpine package versions can be pinned but require per-package version discovery and maintenance).
+FROM eceasy/cli-proxy-api:latest@sha256:4fa722b9ff83adfbe6e350d433b7dcb754756aa63df95a7a6349767dc13b2cb7
 
 ARG CCS_NPM_VERSION=latest
+
+# CCS integrated image: CCS CLI + CLIProxy + supervisord.
+# Design choice (issue #1251 final scope): single-image strategy. The originally-
+# proposed `:full` variant bundling claude-code/gemini-cli/grok-cli/opencode was
+# DROPPED on maintainer review. Rationale: smaller surface area, fewer supply-
+# chain dependencies, simpler tag taxonomy. Users needing AI CLIs run them in
+# sibling containers attached to ccs-net — the public DNS contract guarantees
+# http://ccs:8317 reachability. See docker/README.md#connect-your-app-to-
+# cliproxy. Historical record: CHANGELOG.md "### Removed" entry.
 
 RUN apk add --no-cache \
     curl \
@@ -9,7 +23,18 @@ RUN apk add --no-cache \
     npm \
     supervisor
 
-RUN npm install -g @kaitranntt/ccs@${CCS_NPM_VERSION} \
+# Install CCS CLI.
+# Tradeoff: `npm install -g` does not use a lockfile — the package is already
+# version-pinned via CCS_NPM_VERSION (e.g. "7.80.0"), so transitive drift is
+# bounded to patch-level updates of CCS's own production dependencies between
+# publish time and image build time. This is intentional: pinning an exact
+# lockfile in a Docker global-install layer is fragile (lockfile format ties to
+# npm/Node version in the base image). The --mount=type=cache layer ensures the
+# resolved dependency tree is stable within a single build host's cache.
+# Regression test: tests/docker/image-size.sh asserts the image stays within
+# the size budget, which catches unexpected dep bloat.
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g @kaitranntt/ccs@${CCS_NPM_VERSION} \
   && ln -sf /usr/local/lib/node_modules/@kaitranntt/ccs/dist/docker/docker-bootstrap.js /usr/local/bin/ccs-docker-bootstrap
 
 COPY supervisord.conf /etc/supervisord.conf

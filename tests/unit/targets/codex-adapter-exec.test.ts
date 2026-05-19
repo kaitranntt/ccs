@@ -94,7 +94,7 @@ describe('codex-adapter exec', () => {
         string,
         Record<string, unknown> | undefined,
       ];
-      expect(options?.shell).toBe('cmd.exe');
+      expect(options?.shell).toBe('C:\\Windows\\System32\\cmd.exe');
       expect(command).toContain(fakeCodex);
       expect(command).toContain('mcp_servers.ccs_browser.args=');
       expect(command).toContain('@playwright/mcp@0.0.70');

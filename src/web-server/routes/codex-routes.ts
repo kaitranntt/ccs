@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
+import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
 import {
   CodexRawConfigConflictError,
   CodexRawConfigValidationError,
@@ -8,12 +9,36 @@ import {
   patchCodexConfig,
   saveCodexRawConfig,
 } from '../services/codex-dashboard-service';
+import { getCodexAuthProfilesSummary } from '../../codex-auth/codex-auth-dashboard-service';
 
 const router = Router();
+const CODEX_CONFIG_ACCESS_ERROR =
+  'Codex configuration endpoints require localhost access when dashboard auth is disabled.';
+
+router.use('/config', (req: Request, res: Response, next) => {
+  if (requireLocalAccessWhenAuthDisabled(req, res, CODEX_CONFIG_ACCESS_ERROR)) {
+    next();
+  }
+});
 
 router.get('/diagnostics', async (_req: Request, res: Response): Promise<void> => {
   try {
     res.json(await getCodexDashboardDiagnostics());
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// H6: email is PII — require localhost access when dashboard auth is disabled.
+const CODEX_PROFILES_ACCESS_ERROR =
+  'Codex auth profiles endpoint requires localhost access when dashboard auth is disabled.';
+
+router.get('/profiles', async (req: Request, res: Response): Promise<void> => {
+  if (!requireLocalAccessWhenAuthDisabled(req, res, CODEX_PROFILES_ACCESS_ERROR)) {
+    return;
+  }
+  try {
+    res.json(await getCodexAuthProfilesSummary());
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

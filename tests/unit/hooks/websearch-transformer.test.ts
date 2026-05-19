@@ -131,6 +131,15 @@ function runHookWithMockedFetch(mode: 'success' | 'empty' | 'non-result' | 'fail
   }
 }
 
+describe('websearch-transformer legacy CLI safety', () => {
+  it('does not enable shell execution for query-derived legacy CLI prompts', () => {
+    const source = readFileSync(hookPath, 'utf8');
+
+    expect(source).not.toContain('shell: isWindows');
+    expect(source.match(/shell: false/g) || []).toHaveLength(3);
+  });
+});
+
 describe('websearch-transformer hook helpers', () => {
   it('parses Retry-After seconds and HTTP dates', () => {
     expect(hook.parseRetryAfterSeconds('2')).toBe(2);

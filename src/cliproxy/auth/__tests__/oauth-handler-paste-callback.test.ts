@@ -14,6 +14,13 @@ const remoteTarget: ProxyTarget = {
   isRemote: true,
 };
 
+const localTarget: ProxyTarget = {
+  host: '127.0.0.1',
+  port: 8317,
+  protocol: 'http',
+  isRemote: false,
+};
+
 afterEach(() => {
   restoreFetch();
 });
@@ -77,6 +84,31 @@ describe('requestPasteCallbackStart', () => {
     await expect(
       requestPasteCallbackStart('kiro', remoteTarget, { kiroMethod: 'aws-authcode' })
     ).rejects.toThrow(/paste-callback start is not available/i);
+  });
+});
+
+describe('OAuth start failure guidance', () => {
+  it('explains Codex paste-callback recovery in headless local mode', async () => {
+    const { buildOAuthStartFailureGuidance, formatOAuthStartFailureForCli } = await import(
+      `../oauth-start-failure-guidance?codex-local-guidance=${Date.now()}`
+    );
+
+    const guidance = buildOAuthStartFailureGuidance('codex', {
+      target: localTarget,
+      startPath: '/v0/management/codex-auth-url?is_webui=true',
+      cause: new Error('fetch failed'),
+      addAccount: true,
+    });
+    const cliOutput = formatOAuthStartFailureForCli(guidance).join('\n');
+
+    expect(guidance.message).toContain('OpenAI Codex OAuth could not start');
+    expect(guidance.endpoint).toBe(
+      'http://127.0.0.1:8317/v0/management/codex-auth-url?is_webui=true'
+    );
+    expect(cliOutput).toContain('ccs cliproxy start');
+    expect(cliOutput).toContain('ccs codex --auth --add --paste-callback');
+    expect(cliOutput).toContain('ssh -L 1455:localhost:1455 <USER>@<HOST>');
+    expect(cliOutput).toContain('ccs codex --auth --add --port-forward');
   });
 });
 

@@ -3,7 +3,7 @@
  * and top-level profile dispatcher (Phase E switch).
  *
  * Extracted from src/ccs.ts (lines 291-295, 394-426).
- * Handles direct execution of native Codex flag passthrough (--help, --version, etc.)
+ * Handles direct execution of native Codex passthrough commands (--help, resume, etc.)
  * before the main profile dispatch loop runs.
  *
  * dispatchProfile() collapses the 6-branch switch in main() to a single call.
@@ -29,9 +29,9 @@ export interface ProfileError extends Error {
   suggestions?: string[];
 }
 
-// ========== Native Codex Flag Command Executor ==========
+// ========== Native Codex Command Executor ==========
 
-export function execNativeCodexFlagCommand(args: string[]): void {
+export function execNativeCodexCommand(args: string[]): void {
   const adapter = getTarget('codex');
   if (!adapter) {
     console.error(fail('Target adapter not found for "codex"'));

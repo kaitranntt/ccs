@@ -378,13 +378,13 @@ export function AddAccountDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="sm:max-w-md"
+        className="grid max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-md grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0 sm:max-w-md"
         onInteractOutside={(e) => {
           // Prevent accidental close by clicking outside during auth
           if (showAuthUI) e.preventDefault();
         }}
       >
-        <DialogHeader>
+        <DialogHeader className="min-w-0 px-6 pt-6 pr-12">
           <DialogTitle>{t('addAccountDialog.title', { displayName })}</DialogTitle>
           <DialogDescription>
             {isKiro
@@ -395,7 +395,7 @@ export function AddAccountDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="min-h-0 space-y-4 overflow-y-auto px-6 py-4">
           {requiresAgyResponsibilityFlow && !showAuthUI && (
             <AntigravityResponsibilityChecklist
               value={agyRiskChecklist}
@@ -733,7 +733,11 @@ export function AddAccountDialog({
           )}
 
           {/* Persist error visibility outside auth-only UI states */}
-          {errorMessage && <p className="text-xs text-center text-destructive">{errorMessage}</p>}
+          {errorMessage && (
+            <p className="text-xs text-center text-destructive whitespace-pre-line">
+              {errorMessage}
+            </p>
+          )}
 
           {/* Kiro import loading */}
           {kiroImportMutation.isPending && (
@@ -744,12 +748,17 @@ export function AddAccountDialog({
           )}
 
           {/* Action buttons */}
-          <div className="flex items-center justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={handleCancel}>
+          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:items-center sm:justify-end">
+            <Button variant="ghost" onClick={handleCancel} className="w-full sm:w-auto">
               {t('addAccountDialog.cancel')}
             </Button>
             {isKiro && !showAuthUI && (
-              <Button variant="outline" onClick={handleKiroImport} disabled={isPending}>
+              <Button
+                variant="outline"
+                onClick={handleKiroImport}
+                disabled={isPending}
+                className="w-full sm:w-auto"
+              >
                 {kiroImportMutation.isPending ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -766,6 +775,7 @@ export function AddAccountDialog({
             {!showAuthUI && (
               <Button
                 onClick={handleAuthenticate}
+                className="w-full sm:w-auto"
                 disabled={
                   isPending ||
                   isPowerUserModePending ||

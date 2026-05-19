@@ -14,6 +14,7 @@ import {
   hasManagedPromptFileArg,
   PROMPT_FLAG_INLINE,
 } from '../prompt-injection-strategy';
+import { isClaudeSubcommandInvocation } from '../claude-subcommand-detector';
 
 const IMAGE_ANALYSIS_STEERING_PROMPT = {
   name: 'ccs-prompt-image-analysis-tool',
@@ -46,6 +47,8 @@ function ensureImageAnalysisSteeringPrompt(args: string[]): string[] {
 }
 
 export function appendThirdPartyImageAnalysisToolArgs(args: string[]): string[] {
+  // Subcommands reject session-only prompt flags. Issue #1218.
+  if (isClaudeSubcommandInvocation(args)) return args;
   return ensureImageAnalysisSteeringPrompt(args);
 }
 

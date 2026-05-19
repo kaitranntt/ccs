@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -20,7 +21,40 @@ export interface OpenAICompatProxySession {
 }
 
 function ensureProxyDir(): void {
-  fs.mkdirSync(getOpenAICompatProxyDir(), { recursive: true });
+  const proxyDir = getOpenAICompatProxyDir();
+  fs.mkdirSync(proxyDir, { recursive: true, mode: 0o700 });
+  fs.chmodSync(proxyDir, 0o700);
+}
+
+function encodeProfileFileKey(profileName: string): string {
+  return encodeURIComponent(profileName);
+}
+
+export function writeOpenAICompatProxyAuthTokenFile(
+  profileName: string,
+  authToken: string
+): string {
+  ensureProxyDir();
+  const tokenPath = path.join(
+    getOpenAICompatProxyDir(),
+    `.${encodeProfileFileKey(profileName)}.${crypto.randomBytes(8).toString('hex')}.token`
+  );
+  const fd = fs.openSync(tokenPath, 'wx', 0o600);
+  try {
+    fs.writeFileSync(fd, authToken, 'utf8');
+  } finally {
+    fs.closeSync(fd);
+  }
+  fs.chmodSync(tokenPath, 0o600);
+  return tokenPath;
+}
+
+export function removeOpenAICompatProxyAuthTokenFile(tokenPath: string): void {
+  try {
+    fs.unlinkSync(tokenPath);
+  } catch {
+    // Best-effort cleanup.
+  }
 }
 
 function readPid(pidPath: string): number | null {
@@ -43,7 +77,11 @@ export function getLegacyOpenAICompatProxyPid(): number | null {
 
 export function writeOpenAICompatProxyPid(profileName: string, pid: number): void {
   ensureProxyDir();
-  fs.writeFileSync(getOpenAICompatProxyPidPath(profileName), String(pid), 'utf8');
+  fs.writeFileSync(getOpenAICompatProxyPidPath(profileName), String(pid), {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
+  fs.chmodSync(getOpenAICompatProxyPidPath(profileName), 0o600);
 }
 
 export function removeOpenAICompatProxyPid(profileName: string): void {
@@ -80,11 +118,12 @@ export function readLegacyOpenAICompatProxySession(): OpenAICompatProxySession |
 
 export function writeOpenAICompatProxySession(session: OpenAICompatProxySession): void {
   ensureProxyDir();
-  fs.writeFileSync(
-    getOpenAICompatProxySessionPath(session.profileName),
-    JSON.stringify(session, null, 2) + '\n',
-    'utf8'
-  );
+  const sessionPath = getOpenAICompatProxySessionPath(session.profileName);
+  fs.writeFileSync(sessionPath, JSON.stringify(session, null, 2) + '\n', {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
+  fs.chmodSync(sessionPath, 0o600);
 }
 
 export function removeOpenAICompatProxySession(profileName: string): void {

@@ -96,6 +96,7 @@ describe('Dashboard i18n', () => {
   it.each([
     { locale: 'vi', label: 'Vietnamese', browserLocale: 'vi-VN' },
     { locale: 'ja', label: 'Japanese', browserLocale: 'ja-JP' },
+    { locale: 'ko', label: 'Korean', browserLocale: 'ko-KR' },
   ])(
     'supports $locale locale in switcher and persistence',
     async ({ locale, label, browserLocale }) => {

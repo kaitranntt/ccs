@@ -219,7 +219,24 @@ export class ClaudeSettingsChecker implements IHealthChecker {
     // Validate JSON
     try {
       const content = fs.readFileSync(settingsPath, 'utf8');
-      JSON.parse(content);
+      const settings = JSON.parse(content) as {
+        env?: Record<string, unknown>;
+      };
+      const baseUrl =
+        settings.env && typeof settings.env.ANTHROPIC_BASE_URL === 'string'
+          ? settings.env.ANTHROPIC_BASE_URL
+          : '';
+      if (baseUrl.includes('/api/provider/codex')) {
+        spinner.warn();
+        console.log(`  ${warn(settingsName.padEnd(22))}  Codex CLIProxy bridge persisted`);
+        results.addCheck(
+          'Claude Settings',
+          'warning',
+          'Claude settings route Claude Code through the Codex CLIProxy translator',
+          'Run: ccs persist default --yes; use ccsxp or ccs codex --target codex for Codex'
+        );
+        return;
+      }
       spinner.succeed();
       console.log(`  ${ok(settingsName.padEnd(22))}  Valid`);
       results.addCheck('Claude Settings', 'success');

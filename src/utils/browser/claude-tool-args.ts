@@ -2,6 +2,7 @@ import {
   hasExactFlagValue as hasExactClaudeFlagValue,
   splitArgsAtTerminator as splitClaudeArgsAtTerminator,
 } from '../claude-tool-args';
+import { isClaudeSubcommandInvocation } from '../claude-subcommand-detector';
 
 const APPEND_SYSTEM_PROMPT_FLAG = '--append-system-prompt';
 const BROWSER_STEERING_PROMPT =
@@ -18,5 +19,7 @@ function ensureBrowserSteeringPrompt(args: string[]): string[] {
 }
 
 export function appendBrowserToolArgs(args: string[]): string[] {
+  // Subcommands reject `--append-system-prompt`. Issue #1218.
+  if (isClaudeSubcommandInvocation(args)) return args;
   return ensureBrowserSteeringPrompt(args);
 }

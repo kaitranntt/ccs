@@ -256,11 +256,10 @@ describe('SharedPage', () => {
     await userEvent.click(screen.getByRole('tab', { name: /Settings/ }));
 
     expect(await screen.findByText('Showing 1 of 1 settings')).toBeInTheDocument();
-    expect(
-      await screen.findByText((content) =>
-        content.includes('"ANTHROPIC_MODEL": "claude-sonnet-4-5"')
-      )
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      const cmContent = document.querySelector('.cm-content');
+      expect(cmContent?.textContent ?? '').toContain('"ANTHROPIC_MODEL": "claude-sonnet-4-5"');
+    });
     expect(screen.getByText('/tmp/.ccs/shared/settings.json')).toBeInTheDocument();
 
     const requestedUrls = fetchMock.mock.calls.map(([input]) => requestUrl(input));

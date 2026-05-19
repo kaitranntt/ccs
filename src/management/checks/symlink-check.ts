@@ -8,6 +8,7 @@ import * as os from 'os';
 import { ok, fail, warn } from '../../utils/ui';
 import { HealthCheck, IHealthChecker, createSpinner } from './types';
 import { getCcsDir } from '../../config/config-loader-facade';
+import { listAccountInstanceNames } from '../instance-directory';
 
 const ora = createSpinner();
 
@@ -180,9 +181,7 @@ export class SettingsSymlinksChecker implements IHealthChecker {
         return;
       }
 
-      const instances = fs
-        .readdirSync(instancesDir)
-        .filter((n) => fs.statSync(path.join(instancesDir, n)).isDirectory());
+      const instances = listAccountInstanceNames(instancesDir);
 
       const broken = instances.filter((inst) => {
         const instSettings = path.join(instancesDir, inst, 'settings.json');

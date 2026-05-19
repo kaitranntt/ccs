@@ -15,6 +15,7 @@ import {
   hasManagedPromptFileArg,
   PROMPT_FLAG_INLINE,
 } from '../prompt-injection-strategy';
+import { isClaudeSubcommandInvocation } from '../claude-subcommand-detector';
 
 const NATIVE_WEBSEARCH_TOOL = 'WebSearch';
 const DISALLOWED_TOOLS_FLAG = '--disallowedTools';
@@ -135,5 +136,8 @@ function ensureWebSearchSteeringPrompt(args: string[]): string[] {
 }
 
 export function appendThirdPartyWebSearchToolArgs(args: string[]): string[] {
+  // Claude subcommands (agents, doctor, mcp, ...) reject top-level session flags
+  // like `--append-system-prompt` and `--disallowedTools`. Issue #1218.
+  if (isClaudeSubcommandInvocation(args)) return args;
   return ensureWebSearchSteeringPrompt(ensureDisallowedNativeWebSearchTool(args));
 }

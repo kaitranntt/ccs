@@ -9,6 +9,7 @@ import {
   isClaudeCliVersionAtLeast,
   type ClaudeAuthStatus,
 } from '../utils/claude-detector';
+import { isClaudeSubcommandInvocation } from '../utils/claude-subcommand-detector';
 
 export interface OfficialChannelDefinition {
   id: OfficialChannelId;
@@ -329,6 +330,17 @@ export function resolveOfficialChannelsLaunchPlan(
   const skippedMessages: string[] = [];
 
   if (config.selected.length === 0) {
+    return {
+      applied: false,
+      wantsPermissionBypass: false,
+      appliedChannels: [],
+      skippedMessages,
+    };
+  }
+
+  // Claude subcommands (agents, doctor, mcp, ...) don't accept official-channels
+  // plugin args. Skip silently — channels are session-only. Issue #1218.
+  if (isClaudeSubcommandInvocation(args)) {
     return {
       applied: false,
       wantsPermissionBypass: false,

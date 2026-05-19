@@ -26,8 +26,15 @@ describe('dev release workflow', () => {
     expect(workflow).toContain('branches: [dev]');
     expect(workflow.match(/runs-on: \[self-hosted, linux, x64\]/g)).toHaveLength(2);
     expect(workflow).not.toContain('runs-on: ubuntu-latest');
-    expect(checkoutSection).toContain("token: ${{ secrets.PAT_TOKEN }}");
+    expect(checkoutSection).toContain('persist-credentials: false');
+    expect(checkoutSection).not.toContain('token: ${{ secrets.PAT_TOKEN }}');
     expect(checkoutSection).not.toContain('token: ${{ github.token }}');
+    expect(releaseSection).toContain('echo "::add-mask::${auth_header}"');
+    expect(releaseSection).toContain('GIT_CONFIG_COUNT=2');
+    expect(releaseSection).toContain('GIT_CONFIG_KEY_0=http.https://github.com/kaitranntt/ccs.extraheader');
+    expect(releaseSection).toContain('GIT_CONFIG_VALUE_0="AUTHORIZATION: basic ${auth_header}"');
+    expect(releaseSection).toContain('GIT_CONFIG_KEY_1=http.https://github.com/kaitranntt/ccs.git.extraheader');
+    expect(releaseSection).toContain('GIT_CONFIG_VALUE_1="AUTHORIZATION: basic ${auth_header}"');
     expect(releaseSection).toContain('GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}');
     expect(releaseSection).toContain('GH_TOKEN: ${{ secrets.PAT_TOKEN }}');
     expect(releaseSection).not.toContain('GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}');

@@ -15,6 +15,7 @@ const hookState = vi.hoisted(() => ({
         >;
       }
     | undefined,
+  startAuthData: {} as Record<string, unknown>,
 }));
 
 const applyDefaultPresetMock = vi.hoisted(() => vi.fn());
@@ -43,7 +44,7 @@ vi.mock('@/hooks/use-cliproxy', () => ({
   useStartAuth: () => ({
     isPending: false,
     mutate: (_args: unknown, options?: { onSuccess?: (data: Record<string, unknown>) => void }) => {
-      options?.onSuccess?.({});
+      options?.onSuccess?.(hookState.startAuthData);
     },
   }),
   useCancelAuth: () => ({
@@ -72,7 +73,22 @@ vi.mock('@/components/setup/wizard/steps/account-step', () => ({
 }));
 
 vi.mock('@/components/setup/wizard/steps/variant-step', () => ({
-  VariantStep: () => <div>variant-step</div>,
+  VariantStep: ({
+    variantName,
+    onVariantNameChange,
+  }: {
+    variantName: string;
+    onVariantNameChange: (value: string) => void;
+  }) => (
+    <label>
+      Runtime Variant Name
+      <input
+        aria-label="Runtime Variant Name"
+        value={variantName}
+        onChange={(event) => onVariantNameChange(event.target.value)}
+      />
+    </label>
+  ),
 }));
 
 vi.mock('@/components/setup/wizard/steps/success-step', () => ({
@@ -84,6 +100,7 @@ import { QuickSetupWizard } from '@/components/setup/wizard';
 describe('QuickSetupWizard preset catalog reuse', () => {
   beforeEach(() => {
     hookState.catalogData = undefined;
+    hookState.startAuthData = {};
     applyDefaultPresetMock.mockReset();
     applyDefaultPresetMock.mockResolvedValue({ success: true, presetName: 'Gemini Pro' });
   });
@@ -125,5 +142,11 @@ describe('QuickSetupWizard preset catalog reuse', () => {
         })
       )
     );
+  });
+
+  it('labels the wizard as advanced variant setup', () => {
+    render(<QuickSetupWizard open onClose={vi.fn()} />);
+
+    expect(screen.getByRole('dialog')).toHaveTextContent('Advanced Variant Setup');
   });
 });

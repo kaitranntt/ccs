@@ -3,11 +3,16 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
+  getOpenAICompatProxyDir,
   getLegacyOpenAICompatProxySessionPath,
   getOpenAICompatProxyPidPath,
   getOpenAICompatProxySessionPath,
 } from '../../../src/proxy/proxy-daemon-paths';
-import { listOpenAICompatProxyProfileNames } from '../../../src/proxy/proxy-daemon-state';
+import {
+  listOpenAICompatProxyProfileNames,
+  removeOpenAICompatProxyAuthTokenFile,
+  writeOpenAICompatProxyAuthTokenFile,
+} from '../../../src/proxy/proxy-daemon-state';
 
 let originalCcsHome: string | undefined;
 let tempDir: string;
@@ -49,5 +54,26 @@ describe('listOpenAICompatProxyProfileNames', () => {
     fs.writeFileSync(getOpenAICompatProxyPidPath('ccg'), '123\n', 'utf8');
 
     expect(listOpenAICompatProxyProfileNames()).toEqual(['ccg']);
+  });
+});
+
+describe('writeOpenAICompatProxyAuthTokenFile', () => {
+  it('writes a private token file under the CCS proxy dir and removes it', () => {
+    const authToken = 'proxy-token-regression-secret';
+    const tokenPath = writeOpenAICompatProxyAuthTokenFile('ccg', authToken);
+    const proxyDir = getOpenAICompatProxyDir();
+
+    expect(path.dirname(tokenPath)).toBe(proxyDir);
+    expect(tokenPath.startsWith(`${proxyDir}${path.sep}`)).toBe(true);
+    expect(fs.readFileSync(tokenPath, 'utf8')).toBe(authToken);
+
+    if (process.platform !== 'win32') {
+      expect(fs.statSync(proxyDir).mode & 0o777).toBe(0o700);
+      expect(fs.statSync(tokenPath).mode & 0o777).toBe(0o600);
+    }
+
+    removeOpenAICompatProxyAuthTokenFile(tokenPath);
+
+    expect(fs.existsSync(tokenPath)).toBe(false);
   });
 });

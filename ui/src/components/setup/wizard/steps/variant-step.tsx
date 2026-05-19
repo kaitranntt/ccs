@@ -73,12 +73,12 @@ export function VariantStep({
   return (
     <div className="space-y-4">
       {selectedAccount && (
-        <div className="flex items-start gap-2 p-2 bg-muted/50 rounded-md text-sm">
-          <User className="w-4 h-4" />
-          <div className="space-y-1">
+        <div className="flex min-w-0 items-start gap-2 rounded-md bg-muted/50 p-2 text-sm">
+          <User className="w-4 h-4 shrink-0" />
+          <div className="min-w-0 space-y-1">
             <span>
               {t('setupVariant.using')}{' '}
-              <span className={cn(privacyMode && PRIVACY_BLUR_CLASS)}>
+              <span className={cn('break-all', privacyMode && PRIVACY_BLUR_CLASS)}>
                 {selectedAccountIdentity?.email}
               </span>
             </span>
@@ -167,16 +167,18 @@ export function VariantStep({
             value={catalogModels.some((m) => m.id === modelName) ? modelName : ''}
             onValueChange={handleModelSelect}
           >
-            <SelectTrigger>
+            <SelectTrigger className="min-w-0">
               <SelectValue placeholder={t('setupVariant.selectModel')} />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-w-[calc(100vw-2rem)]">
               {catalogModels.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
-                  <div className="flex items-center gap-2">
-                    <span>{m.name}</span>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate">{m.name}</span>
                     {m.description && (
-                      <span className="text-xs text-muted-foreground">- {m.description}</span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        - {m.description}
+                      </span>
                     )}
                   </div>
                 </SelectItem>
@@ -196,12 +198,12 @@ export function VariantStep({
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-2">
-        <Button variant="ghost" onClick={onBack}>
+      <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
+        <Button variant="ghost" onClick={onBack} className="justify-start">
           <ArrowLeft className="w-4 h-4 mr-2" />
           {t('setupVariant.back')}
         </Button>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
           <Button variant="ghost" onClick={onSkip}>
             {t('setupVariant.skip')}
           </Button>

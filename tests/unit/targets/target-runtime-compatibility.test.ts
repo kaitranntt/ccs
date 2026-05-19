@@ -87,16 +87,21 @@ describe('evaluateTargetRuntimeCompatibility', () => {
       profileType: 'settings',
     });
     expect(genericSettingsCompatibility.supported).toBe(false);
-    expect(genericSettingsCompatibility.reason).toMatch(/currently supports native default sessions/);
+    expect(genericSettingsCompatibility.reason).toMatch(
+      /currently supports native default sessions/
+    );
   });
 
   test('rejects account, copilot, and cursor profiles on Codex target', () => {
-    expect(
-      evaluateTargetRuntimeCompatibility({
-        target: 'codex',
-        profileType: 'account',
-      }).supported
-    ).toBe(false);
+    const accountCompatibility = evaluateTargetRuntimeCompatibility({
+      target: 'codex',
+      profileType: 'account',
+    });
+    expect(accountCompatibility.supported).toBe(false);
+    expect(accountCompatibility.suggestion).toContain('ccs --target codex');
+    expect(accountCompatibility.suggestion).toContain('ccs codex --target codex');
+    expect(accountCompatibility.suggestion).toContain('ccs cliproxy routing');
+
     expect(
       evaluateTargetRuntimeCompatibility({
         target: 'codex',

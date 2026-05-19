@@ -10,7 +10,7 @@ let logLines: string[] = [];
 let errorLines: string[] = [];
 let dashboardAuthEnabled = false;
 let startServerError: Error | null = null;
-let mockServerBindHost = '::';
+let mockServerBindHost = '::1';
 let originalConsoleLog: typeof console.log;
 let originalConsoleError: typeof console.error;
 let originalProcessExit: typeof process.exit;
@@ -79,7 +79,7 @@ beforeEach(() => {
   errorLines = [];
   dashboardAuthEnabled = false;
   startServerError = null;
-  mockServerBindHost = '::';
+  mockServerBindHost = '::1';
 
   originalConsoleLog = console.log;
   originalConsoleError = console.error;
@@ -140,19 +140,16 @@ describe('config command dashboard startup', () => {
     expect(errorLines.join('\n')).toContain('Unexpected arguments: bogus');
   });
 
-  it('keeps the default startup path free of an explicit host override', async () => {
+  it('binds the default startup path to localhost only', async () => {
     await handleConfigCommand([], createTestDeps());
 
     expect(startServerCalls).toHaveLength(1);
-    expect(startServerCalls[0]).toEqual({ port: 3000, dev: false });
+    expect(startServerCalls[0]).toEqual({ port: 3000, dev: false, host: 'localhost' });
 
     const rendered = logLines.join('\n');
-    expect(rendered).toContain('Dashboard: http://localhost:3000');
-    expect(rendered).toContain('Bind host: ::');
-    expect(rendered).toContain(
-      'Dashboard may be reachable from other devices that can connect to this machine.'
-    );
-    expect(rendered).toContain('Protect it before sharing: ccs config auth setup');
+    expect(rendered).toContain('Dashboard: http://[::1]:3000');
+    expect(rendered).not.toContain('Dashboard may be reachable from other devices');
+    expect(rendered).not.toContain('Protect it before sharing: ccs config auth setup');
     expect(errorLines).toHaveLength(0);
   });
 
@@ -205,8 +202,8 @@ describe('config command dashboard startup', () => {
       expect(startServerCalls).toHaveLength(1);
 
       const rendered = logLines.join('\n');
-      expect(rendered).toContain('Dashboard: http://localhost:3000');
-      expect(rendered).toContain('Bind host: ::');
+      expect(rendered).toContain('Dashboard: http://[::1]:3000');
+      expect(rendered).not.toContain('Bind host:');
       expect(errorLines).toHaveLength(0);
     } finally {
       networkInterfacesSpy.mockRestore();

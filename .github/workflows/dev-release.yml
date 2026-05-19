@@ -50,9 +50,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: dev
-          # PAT_TOKEN required: dev-release pushes version bump commits to dev,
-          # and protected branches reject github.token writes once status checks are required.
-          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -93,8 +91,16 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          # Use custom dev release script instead of semantic-release
-          # This ensures dev versions follow {stable}-dev.{N} pattern
+          auth_header=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::${auth_header}"
+          export GIT_CONFIG_COUNT=2
+          export GIT_CONFIG_KEY_0=http.https://github.com/kaitranntt/ccs.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic ${auth_header}"
+          export GIT_CONFIG_KEY_1=http.https://github.com/kaitranntt/ccs.git.extraheader
+          export GIT_CONFIG_VALUE_1="AUTHORIZATION: basic ${auth_header}"
+
+          # Use custom dev release script instead of semantic-release.
+          # This ensures dev versions follow {stable}-dev.{N} pattern.
           chmod +x scripts/dev-release.sh
           ./scripts/dev-release.sh
 

@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as http from 'http';
 import * as os from 'os';
 import * as path from 'path';
+import * as zlib from 'zlib';
 import { startOpenAICompatProxyServer } from '../../../src/proxy/server/proxy-server';
 import type { OpenAICompatProfileConfig } from '../../../src/proxy/profile-router';
 
@@ -140,6 +141,36 @@ describe('openai proxy message edge cases', () => {
       error: {
         type: 'rate_limit_error',
         message: 'rate limited',
+      },
+    });
+  });
+
+  it('does not leak upstream content-encoding onto synthesized error responses', async () => {
+    const compressed = zlib.gzipSync(
+      JSON.stringify({ error: { message: 'invalid upstream request' } })
+    );
+
+    await startProxyWithHandler((_req, res) => {
+      res.writeHead(400, {
+        'Content-Type': 'application/json',
+        'Content-Encoding': 'gzip',
+        'Content-Length': String(compressed.length),
+      });
+      res.end(compressed);
+    });
+
+    const response = await requestProxy({
+      model: 'hf-model',
+      messages: [{ role: 'user', content: 'hello' }],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get('content-encoding')).toBeNull();
+    await expect(response.json()).resolves.toMatchObject({
+      type: 'error',
+      error: {
+        type: 'invalid_request_error',
+        message: 'invalid upstream request',
       },
     });
   });

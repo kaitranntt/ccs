@@ -45,6 +45,10 @@ import {
 } from '../../utils/glmt-deprecation';
 import { createOpenAICompatLaunchSettings } from '../../utils/openai-compat-launch-settings';
 import {
+  isClaudeSubcommandInvocation,
+  stripClaudeSubcommandSessionArgs,
+} from '../../utils/claude-subcommand-detector';
+import {
   resolveDroidProvider,
   evaluateTargetRuntimeCompatibility,
   type TargetCredentials,
@@ -367,11 +371,19 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
     delete proxyEnv.ANTHROPIC_API_KEY;
     const launchSettings = createOpenAICompatLaunchSettings(expandedSettingsPath, settings);
 
-    const launchArgs = [
-      '--settings',
-      launchSettings.settingsPath,
-      ...appendThirdPartyWebSearchToolArgs(browserArgs),
-    ];
+    // Claude subcommands reject `--settings` (it flips `agents` to list mode).
+    // Routing env vars still flow via proxyEnv. Issue #1218.
+    const isSubcommand = isClaudeSubcommandInvocation(browserArgs);
+    const subcommandArgs = isSubcommand
+      ? stripClaudeSubcommandSessionArgs(browserArgs)
+      : browserArgs;
+    const launchArgs = isSubcommand
+      ? appendThirdPartyWebSearchToolArgs(subcommandArgs)
+      : [
+          '--settings',
+          launchSettings.settingsPath,
+          ...appendThirdPartyWebSearchToolArgs(browserArgs),
+        ];
     const traceEnv = createWebSearchTraceContext({
       launcher: 'ccs.settings-profile.proxy',
       args: launchArgs,
@@ -384,11 +396,13 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
     return;
   }
 
-  const launchArgs = [
-    '--settings',
-    expandedSettingsPath,
-    ...appendThirdPartyWebSearchToolArgs(browserArgs),
-  ];
+  // Skip `--settings` for Claude subcommands so the interactive agent view
+  // works; env vars from the settings file still flow via envVars. Issue #1218.
+  const isSubcommand = isClaudeSubcommandInvocation(browserArgs);
+  const subcommandArgs = isSubcommand ? stripClaudeSubcommandSessionArgs(browserArgs) : browserArgs;
+  const launchArgs = isSubcommand
+    ? appendThirdPartyWebSearchToolArgs(subcommandArgs)
+    : ['--settings', expandedSettingsPath, ...appendThirdPartyWebSearchToolArgs(browserArgs)];
   const traceEnv = createWebSearchTraceContext({
     launcher: 'ccs.settings-profile',
     args: launchArgs,

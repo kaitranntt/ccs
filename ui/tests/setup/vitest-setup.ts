@@ -38,6 +38,35 @@ class ResizeObserverMock {
 }
 global.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
 
+// CodeMirror uses Range.getClientRects() for cursor measurement, which JSDOM
+// does not implement. Polyfill it with empty rects so the editor mounts cleanly.
+if (typeof Range !== 'undefined') {
+  Range.prototype.getClientRects =
+    Range.prototype.getClientRects ||
+    function getClientRects() {
+      return {
+        item: () => null,
+        length: 0,
+        [Symbol.iterator]: function* () {},
+      } as unknown as DOMRectList;
+    };
+  Range.prototype.getBoundingClientRect =
+    Range.prototype.getBoundingClientRect ||
+    function getBoundingClientRect() {
+      return {
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        bottom: 0,
+        right: 0,
+        width: 0,
+        height: 0,
+        toJSON: () => ({}),
+      } as DOMRect;
+    };
+}
+
 // Mock localStorage
 const localStorageMock = {
   getItem: vi.fn(),

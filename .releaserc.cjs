@@ -3,7 +3,13 @@
  *
  * Branch-aware config:
  * - dev branch: Uses dev release configuration (prerelease)
- * - main branch: Uses production release configuration
+ * - main branch: Uses production release configuration (stable, npm @latest)
+ *
+ * RC soak window for Docker mutable tags is handled entirely in docker-release.yml:
+ * every release event publishes the immutable :<ver> Docker tag immediately;
+ * mutable :latest/:MAJOR/:MINOR tags require an explicit operator action via
+ * `gh workflow run promote-release.yml -f tag=vX.Y.Z` (workflow_dispatch).
+ * npm @latest is always set immediately on stable release — no rc soak needed.
  */
 
 const currentBranch =
@@ -37,6 +43,9 @@ const releaseNotesGenerator = [
         { type: 'feat', section: 'Features' },
         { type: 'fix', section: 'Bug Fixes' },
         { type: 'hotfix', section: 'Hotfixes' },
+        // Breaking changes (feat! / fix!) surface under Features/Bug Fixes
+        // with a BREAKING CHANGE footer note — no separate section needed.
+        { type: 'revert', section: 'Reverts' },
         { type: 'docs', section: 'Documentation' },
         { type: 'style', section: 'Styles' },
         { type: 'refactor', section: 'Code Refactoring' },
@@ -44,6 +53,9 @@ const releaseNotesGenerator = [
         { type: 'test', section: 'Tests' },
         { type: 'build', section: 'Build System' },
         { type: 'ci', section: 'CI' },
+        // chore commits are intentionally hidden from release notes (no section).
+        // "### Removed" sections come from feat!/fix! BREAKING CHANGE footers,
+        // not from a separate commit type.
       ],
     },
   },
@@ -87,6 +99,10 @@ const devConfig = {
 };
 
 // Production release configuration
+// Every merge to main publishes a stable vX.Y.Z release immediately to npm @latest.
+// Docker immutable :<ver> tag is pushed by docker-release.yml on the release: published event.
+// Docker mutable :latest/:MAJOR/:MINOR tags require a separate manual promote step — see
+// docs/release-process.md and promote-release.yml for the soak + promote procedure.
 const productionConfig = {
   branches: ['main'],
   plugins: [

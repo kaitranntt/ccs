@@ -5,9 +5,16 @@
  */
 
 import { spawn, spawnSync, ChildProcess, type SpawnOptions } from 'child_process';
+import * as path from 'path';
 import { ErrorManager } from './error-manager';
 import { getWebSearchHookEnv } from './websearch-manager';
 import { wireChildProcessSignals } from './signal-forwarder';
+import {
+  isClaudeSubcommandInvocation,
+  stripClaudeCodeFeatureBlockingEnv,
+  stripClaudeSubcommandSessionArgs,
+  stripSubcommandBlockingEnv,
+} from './claude-subcommand-detector';
 
 import SharedManager from '../management/shared-manager';
 import { loadOrCreateUnifiedConfig } from '../config/config-loader-facade';
@@ -49,6 +56,7 @@ const TMUX_SYNC_ENV_KEYS = [
   ...ANTHROPIC_MODEL_ENV_KEYS,
   ...ANTHROPIC_ROUTING_ENV_KEYS,
 ];
+const DEFAULT_WINDOWS_CMD_SHELL = 'C:\\Windows\\System32\\cmd.exe';
 
 /**
  * Strip inherited Anthropic routing/auth env while preserving model intent.
@@ -210,15 +218,36 @@ export function escapeShellArg(arg: string): string {
 /**
  * Return the shell that matches escapeShellArg() quoting semantics.
  *
- * On Windows, prefer ComSpec over a bare `cmd.exe` so escaped wrapper launches
- * keep the same shell contract without depending on PATH lookup.
+ * On Windows, use an absolute, trusted system cmd.exe path instead of a bare
+ * executable name so wrapper launches cannot be hijacked through the current
+ * directory or PATH. ComSpec is accepted only when it resolves to that same
+ * system shell.
  */
 export function getWindowsEscapedCommandShell(): SpawnOptions['shell'] {
   if (process.platform !== 'win32') {
     return true;
   }
 
-  return process.env.ComSpec || process.env.COMSPEC || 'cmd.exe';
+  const systemRoot = [process.env.SystemRoot, process.env.SYSTEMROOT, process.env.windir].find(
+    (candidate): candidate is string => Boolean(candidate && path.win32.isAbsolute(candidate))
+  );
+  const trustedSystemCmd = systemRoot
+    ? path.win32.normalize(path.win32.join(systemRoot, 'System32', 'cmd.exe'))
+    : DEFAULT_WINDOWS_CMD_SHELL;
+  const trustedSystemCmdLower = trustedSystemCmd.toLowerCase();
+
+  for (const candidate of [process.env.ComSpec, process.env.COMSPEC]) {
+    if (!candidate || !path.win32.isAbsolute(candidate)) {
+      continue;
+    }
+
+    const normalizedCandidate = path.win32.normalize(candidate);
+    if (normalizedCandidate.toLowerCase() === trustedSystemCmdLower) {
+      return normalizedCandidate;
+    }
+  }
+
+  return trustedSystemCmd;
 }
 
 /**
@@ -261,9 +290,21 @@ export function execClaude(
     ? stripAnthropicRoutingEnv(mergedEnv, envVars ?? undefined)
     : mergedEnv;
 
+  const effectiveArgs = isClaudeSubcommandInvocation(args)
+    ? stripClaudeSubcommandSessionArgs(args)
+    : args;
+
   // Strip Claude Code nested session guard env var to allow CCS delegation
   // (Claude Code v2.1.39+ sets CLAUDECODE to detect nested sessions)
-  const env = stripClaudeCodeEnv(effectiveMergedEnv);
+  let env = stripClaudeCodeFeatureBlockingEnv(stripClaudeCodeEnv(effectiveMergedEnv));
+
+  // For Claude subcommand invocations (`agents`, `mcp`, `doctor`, ...) strip
+  // telemetry-disable env vars that cause upstream Claude Code to fall back
+  // to non-interactive list mode instead of opening the subcommand TUI.
+  // Issue #1218.
+  if (isClaudeSubcommandInvocation(effectiveArgs)) {
+    env = stripSubcommandBlockingEnv(env);
+  }
 
   if (profileType !== 'account') {
     try {
@@ -281,7 +322,7 @@ export function execClaude(
   if (isPowerShellScript) {
     child = spawn(
       'powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', claudeCli, ...args],
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', claudeCli, ...effectiveArgs],
       {
         stdio: 'inherit',
         windowsHide: true,
@@ -290,7 +331,7 @@ export function execClaude(
     );
   } else if (needsShell) {
     // When shell needed: concatenate into string to avoid DEP0190 warning
-    const cmdString = [claudeCli, ...args].map(escapeShellArg).join(' ');
+    const cmdString = [claudeCli, ...effectiveArgs].map(escapeShellArg).join(' ');
     child = spawn(cmdString, {
       stdio: 'inherit',
       windowsHide: true,
@@ -299,7 +340,7 @@ export function execClaude(
     });
   } else {
     // When no shell needed: use array form (faster, no shell overhead)
-    child = spawn(claudeCli, args, {
+    child = spawn(claudeCli, effectiveArgs, {
       stdio: 'inherit',
       windowsHide: true,
       env,

@@ -8,7 +8,7 @@
  * - Startup lock coordination
  */
 
-import { ChildProcess } from 'child_process';
+import { ChildProcess, execFileSync } from 'child_process';
 import { info, warn } from '../../utils/ui';
 import { getInstalledCliproxyVersion } from '../binary-manager';
 import { CLIProxyBackend } from '../types';
@@ -31,6 +31,70 @@ export interface ProxySessionResult {
   sessionId?: string;
   proxy?: ChildProcess;
   shouldSpawn: boolean;
+}
+
+export interface SessionProxyKeepAliveOptions {
+  backgroundKeepAliveBaseUrl?: string;
+  keepAlivePollIntervalMs?: number;
+  hasBackgroundWorkerUsingBaseUrl?: (baseUrl: string) => boolean;
+}
+
+export interface ShouldKeepSessionProxiesAliveOptions {
+  code: number | null;
+  signal: NodeJS.Signals | null;
+  backgroundKeepAliveBaseUrl?: string;
+  hasBackgroundWorkerUsingBaseUrl: (baseUrl: string) => boolean;
+}
+
+const CLAUDE_BG_WORKER_ARGS = ['--bg-spare', '--bg-pty-host'] as const;
+
+export function hasClaudeBackgroundWorkerUsingBaseUrlInProcessList(
+  processList: string,
+  baseUrl: string
+): boolean {
+  const envNeedle = `ANTHROPIC_BASE_URL=${baseUrl}`;
+  return processList
+    .split(/\r?\n/)
+    .some(
+      (line) => line.includes(envNeedle) && CLAUDE_BG_WORKER_ARGS.some((arg) => line.includes(arg))
+    );
+}
+
+export function hasClaudeBackgroundWorkerUsingBaseUrl(baseUrl: string): boolean {
+  if (process.platform === 'win32') {
+    return false;
+  }
+
+  for (const args of [['auxEww'], ['auxeww'], ['eww', '-axo', 'pid=,command=']]) {
+    try {
+      const processList = execFileSync('ps', args, {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      if (hasClaudeBackgroundWorkerUsingBaseUrlInProcessList(processList, baseUrl)) {
+        return true;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return false;
+}
+
+export function shouldKeepSessionProxiesAlive(
+  options: ShouldKeepSessionProxiesAliveOptions
+): boolean {
+  if (options.code !== 0 || options.signal) {
+    return false;
+  }
+
+  const baseUrl = options.backgroundKeepAliveBaseUrl;
+  if (!baseUrl) {
+    return false;
+  }
+
+  return options.hasBackgroundWorkerUsingBaseUrl(baseUrl);
 }
 
 /**
@@ -180,7 +244,8 @@ export function setupCleanupHandlers(
   codexReasoningProxy: unknown,
   toolSanitizationProxy: unknown,
   httpsTunnel: unknown,
-  verbose: boolean
+  verbose: boolean,
+  keepAliveOptions: SessionProxyKeepAliveOptions = {}
 ): void {
   const log = (msg: string) => {
     if (verbose) {
@@ -188,66 +253,67 @@ export function setupCleanupHandlers(
     }
   };
 
-  const cleanup = () => {
-    stopQuotaMonitor();
-    log('Parent signal received, cleaning up');
+  let resourcesStopped = false;
 
-    if (
-      codexReasoningProxy &&
-      typeof codexReasoningProxy === 'object' &&
-      'stop' in codexReasoningProxy
-    ) {
-      (codexReasoningProxy as { stop: () => void }).stop();
+  const stopResource = (resource: unknown) => {
+    if (resource && typeof resource === 'object' && 'stop' in resource) {
+      (resource as { stop: () => void }).stop();
     }
-
-    if (
-      toolSanitizationProxy &&
-      typeof toolSanitizationProxy === 'object' &&
-      'stop' in toolSanitizationProxy
-    ) {
-      (toolSanitizationProxy as { stop: () => void }).stop();
-    }
-
-    if (httpsTunnel && typeof httpsTunnel === 'object' && 'stop' in httpsTunnel) {
-      (httpsTunnel as { stop: () => void }).stop();
-    }
-
-    // Unregister session, proxy keeps running (local mode only)
-    if (sessionId) {
-      unregisterSession(sessionId, sessionPort);
-    }
-    claude.kill('SIGTERM');
   };
 
-  claude.on('exit', (code, signal) => {
+  const stopSessionResources = () => {
+    if (resourcesStopped) return;
+    resourcesStopped = true;
     stopQuotaMonitor();
-    log(`Claude exited: code=${code}, signal=${signal}`);
+    stopResource(codexReasoningProxy);
+    stopResource(toolSanitizationProxy);
+    stopResource(httpsTunnel);
 
-    if (
-      codexReasoningProxy &&
-      typeof codexReasoningProxy === 'object' &&
-      'stop' in codexReasoningProxy
-    ) {
-      (codexReasoningProxy as { stop: () => void }).stop();
-    }
-
-    if (
-      toolSanitizationProxy &&
-      typeof toolSanitizationProxy === 'object' &&
-      'stop' in toolSanitizationProxy
-    ) {
-      (toolSanitizationProxy as { stop: () => void }).stop();
-    }
-
-    if (httpsTunnel && typeof httpsTunnel === 'object' && 'stop' in httpsTunnel) {
-      (httpsTunnel as { stop: () => void }).stop();
-    }
-
-    // Unregister this session (proxy keeps running for persistence) - only for local mode
     if (sessionId) {
       unregisterSession(sessionId, sessionPort);
       log(`Session ${sessionId} unregistered, proxy persists for other sessions or future use`);
     }
+  };
+
+  const backgroundProbe =
+    keepAliveOptions.hasBackgroundWorkerUsingBaseUrl ?? hasClaudeBackgroundWorkerUsingBaseUrl;
+
+  const startKeepAliveWatcher = (baseUrl: string) => {
+    const timer = setInterval(() => {
+      if (backgroundProbe(baseUrl)) return;
+      log('No Claude bg worker is using the session proxy; cleaning up');
+      stopSessionResources();
+      process.exit(0);
+    }, keepAliveOptions.keepAlivePollIntervalMs ?? 30000);
+    timer.unref();
+  };
+
+  const cleanup = () => {
+    log('Parent signal received, cleaning up');
+    stopSessionResources();
+    claude.kill('SIGTERM');
+  };
+
+  claude.on('exit', (code, signal) => {
+    log(`Claude exited: code=${code}, signal=${signal}`);
+    const backgroundKeepAliveBaseUrl = keepAliveOptions.backgroundKeepAliveBaseUrl;
+
+    if (
+      shouldKeepSessionProxiesAlive({
+        code,
+        signal,
+        backgroundKeepAliveBaseUrl,
+        hasBackgroundWorkerUsingBaseUrl: backgroundProbe,
+      }) &&
+      backgroundKeepAliveBaseUrl
+    ) {
+      stopQuotaMonitor();
+      log(`Keeping session proxy alive for Claude bg worker: ${backgroundKeepAliveBaseUrl}`);
+      startKeepAliveWatcher(backgroundKeepAliveBaseUrl);
+      return;
+    }
+
+    stopSessionResources();
 
     if (signal) {
       process.kill(process.pid, signal as NodeJS.Signals);
@@ -257,33 +323,8 @@ export function setupCleanupHandlers(
   });
 
   claude.on('error', (error) => {
-    stopQuotaMonitor();
     console.error(require('../../utils/ui').fail(`Claude CLI error: ${error}`));
-
-    if (
-      codexReasoningProxy &&
-      typeof codexReasoningProxy === 'object' &&
-      'stop' in codexReasoningProxy
-    ) {
-      (codexReasoningProxy as { stop: () => void }).stop();
-    }
-
-    if (
-      toolSanitizationProxy &&
-      typeof toolSanitizationProxy === 'object' &&
-      'stop' in toolSanitizationProxy
-    ) {
-      (toolSanitizationProxy as { stop: () => void }).stop();
-    }
-
-    if (httpsTunnel && typeof httpsTunnel === 'object' && 'stop' in httpsTunnel) {
-      (httpsTunnel as { stop: () => void }).stop();
-    }
-
-    // Unregister session, proxy keeps running (local mode only)
-    if (sessionId) {
-      unregisterSession(sessionId, sessionPort);
-    }
+    stopSessionResources();
     process.exit(1);
   });
 

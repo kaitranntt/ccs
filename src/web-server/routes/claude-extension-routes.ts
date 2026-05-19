@@ -26,9 +26,12 @@ import {
   type ClaudeExtensionActionTarget,
   verifyClaudeExtensionBinding,
 } from '../services/claude-extension-settings-service';
+import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
 
 const router = Router();
 const VALID_HOSTS = new Set(CLAUDE_EXTENSION_HOSTS.map((host) => host.id));
+const SETUP_LOCAL_ACCESS_ERROR =
+  'Claude extension setup requires localhost access when dashboard auth is disabled.';
 const VALID_TARGETS = new Set<ClaudeExtensionActionTarget>(['shared', 'ide', 'all']);
 
 function getHostFromRequest(req: Request): ClaudeExtensionHost {
@@ -79,6 +82,10 @@ router.get('/profiles', (_req: Request, res: Response): void => {
 });
 
 router.get('/setup', async (req: Request, res: Response): Promise<void> => {
+  if (!requireLocalAccessWhenAuthDisabled(req, res, SETUP_LOCAL_ACCESS_ERROR)) {
+    return;
+  }
+
   const rawProfile = typeof req.query.profile === 'string' ? req.query.profile.trim() : '';
   if (!rawProfile) {
     res.status(400).json({ error: 'Missing required query parameter: profile' });

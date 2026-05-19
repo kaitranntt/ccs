@@ -24,6 +24,12 @@ import { ToolSanitizationProxy } from '../proxy/tool-sanitization-proxy';
 import { HttpsTunnelProxy } from '../proxy/https-tunnel-proxy';
 import { setupCleanupHandlers } from './session-bridge';
 import { resolveRuntimeQuotaMonitorProviders } from './account-resolution';
+import {
+  isClaudeSubcommandInvocation,
+  stripClaudeCodeFeatureBlockingEnv,
+  stripClaudeSubcommandSessionArgs,
+  stripSubcommandBlockingEnv,
+} from '../../utils/claude-subcommand-detector';
 
 export interface ClaudeLaunchContext {
   /** Path to the Claude CLI executable */
@@ -90,18 +96,25 @@ export async function launchClaude(context: ClaudeLaunchContext): Promise<ChildP
     ? cfg.customSettingsPath.replace(/^~/, os.homedir())
     : getProviderSettingsPath(provider);
 
+  // Claude subcommands (agents, doctor, mcp, ...) don't accept `--settings` —
+  // its presence flips `agents` into list mode instead of opening the
+  // interactive agent view. Provider routing still flows via env vars.
+  // Issue #1218.
+  const isSubcommand = isClaudeSubcommandInvocation(claudeArgs);
+  const claudeSessionArgs = isSubcommand
+    ? stripClaudeSubcommandSessionArgs(claudeArgs)
+    : claudeArgs;
+
   // Assemble final args: image analysis tools → browser tools → web search tools → settings
   const imageAnalysisArgs = imageAnalysisMcpReady
-    ? appendThirdPartyImageAnalysisToolArgs(claudeArgs)
-    : claudeArgs;
+    ? appendThirdPartyImageAnalysisToolArgs(claudeSessionArgs)
+    : claudeSessionArgs;
   const browserArgs = browserRuntimeEnv
     ? appendBrowserToolArgs(imageAnalysisArgs)
     : imageAnalysisArgs;
-  const launchArgs = [
-    '--settings',
-    settingsPath,
-    ...appendThirdPartyWebSearchToolArgs(browserArgs),
-  ];
+  const launchArgs = isSubcommand
+    ? appendThirdPartyWebSearchToolArgs(browserArgs)
+    : ['--settings', settingsPath, ...appendThirdPartyWebSearchToolArgs(browserArgs)];
 
   // Inject web search trace context into env
   const traceEnv = createWebSearchTraceContext({
@@ -112,7 +125,11 @@ export async function launchClaude(context: ClaudeLaunchContext): Promise<ChildP
     settingsPath,
     claudeConfigDir: inheritedClaudeConfigDir,
   });
-  const tracedEnv = { ...env, ...traceEnv };
+  const baseTracedEnv = stripClaudeCodeFeatureBlockingEnv({ ...env, ...traceEnv });
+  // Strip telemetry-disable env vars for subcommands; otherwise Claude's
+  // `agents`/`mcp`/... TUIs silently fall back to non-interactive list mode.
+  // Issue #1218.
+  const tracedEnv = isSubcommand ? stripSubcommandBlockingEnv(baseTracedEnv) : baseTracedEnv;
 
   // Spawn: Windows .cmd/.bat/.ps1 need shell escaping; all others spawn directly
   let claude: ChildProcess;
@@ -146,6 +163,9 @@ export async function launchClaude(context: ClaudeLaunchContext): Promise<ChildP
     }
   }
 
+  const hasSessionProxy = Boolean(codexReasoningProxy || toolSanitizationProxy || httpsTunnel);
+  const backgroundKeepAliveBaseUrl = hasSessionProxy ? tracedEnv.ANTHROPIC_BASE_URL : undefined;
+
   // Wire cleanup handlers (process exit, SIGINT, SIGTERM, proxy teardown)
   setupCleanupHandlers(
     claude,
@@ -154,7 +174,8 @@ export async function launchClaude(context: ClaudeLaunchContext): Promise<ChildP
     codexReasoningProxy,
     toolSanitizationProxy,
     httpsTunnel,
-    verbose
+    verbose,
+    { backgroundKeepAliveBaseUrl }
   );
 
   return claude;

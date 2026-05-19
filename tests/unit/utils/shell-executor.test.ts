@@ -82,41 +82,103 @@ describe('escapeShellArg', () => {
       expect(escapeShellArg('hello!')).toBe('"hello^^!"');
     });
 
-    it('prefers ComSpec when resolving the escaped command shell', async () => {
+    it('accepts ComSpec only when it resolves to the trusted system cmd.exe', async () => {
       const originalComSpec = process.env.ComSpec;
       const originalCOMSPEC = process.env.COMSPEC;
+      const originalSystemRoot = process.env.SystemRoot;
 
       try {
+        process.env.SystemRoot = 'C:\\Windows';
         process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
         delete process.env.COMSPEC;
-        const { getWindowsEscapedCommandShell } = await import(
-          '../../../src/utils/shell-executor'
-        );
+        const { getWindowsEscapedCommandShell } = await import('../../../src/utils/shell-executor');
         expect(getWindowsEscapedCommandShell()).toBe('C:\\Windows\\System32\\cmd.exe');
       } finally {
         if (originalComSpec === undefined) delete process.env.ComSpec;
         else process.env.ComSpec = originalComSpec;
         if (originalCOMSPEC === undefined) delete process.env.COMSPEC;
         else process.env.COMSPEC = originalCOMSPEC;
+        if (originalSystemRoot === undefined) delete process.env.SystemRoot;
+        else process.env.SystemRoot = originalSystemRoot;
       }
     });
 
-    it('falls back to cmd.exe when ComSpec is unavailable', async () => {
+    it('rejects relative or non-system ComSpec values', async () => {
       const originalComSpec = process.env.ComSpec;
       const originalCOMSPEC = process.env.COMSPEC;
+      const originalSystemRoot = process.env.SystemRoot;
 
       try {
-        delete process.env.ComSpec;
-        delete process.env.COMSPEC;
-        const { getWindowsEscapedCommandShell } = await import(
-          '../../../src/utils/shell-executor'
-        );
-        expect(getWindowsEscapedCommandShell()).toBe('cmd.exe');
+        process.env.SystemRoot = 'C:\\Windows';
+        process.env.ComSpec = 'cmd.exe';
+        process.env.COMSPEC = 'C:\\Temp\\cmd.exe';
+        const { getWindowsEscapedCommandShell } = await import('../../../src/utils/shell-executor');
+        expect(getWindowsEscapedCommandShell()).toBe('C:\\Windows\\System32\\cmd.exe');
       } finally {
         if (originalComSpec === undefined) delete process.env.ComSpec;
         else process.env.ComSpec = originalComSpec;
         if (originalCOMSPEC === undefined) delete process.env.COMSPEC;
         else process.env.COMSPEC = originalCOMSPEC;
+        if (originalSystemRoot === undefined) delete process.env.SystemRoot;
+        else process.env.SystemRoot = originalSystemRoot;
+      }
+    });
+
+    it('rejects relative Windows root environment values', async () => {
+      const originalComSpec = process.env.ComSpec;
+      const originalCOMSPEC = process.env.COMSPEC;
+      const originalSystemRoot = process.env.SystemRoot;
+      const originalSYSTEMROOT = process.env.SYSTEMROOT;
+      const originalWindir = process.env.windir;
+
+      try {
+        process.env.SystemRoot = 'Windows';
+        delete process.env.SYSTEMROOT;
+        delete process.env.windir;
+        process.env.ComSpec = 'Windows\\System32\\cmd.exe';
+        process.env.COMSPEC = 'C:\\Temp\\cmd.exe';
+        const { getWindowsEscapedCommandShell } = await import('../../../src/utils/shell-executor');
+        expect(getWindowsEscapedCommandShell()).toBe('C:\\Windows\\System32\\cmd.exe');
+      } finally {
+        if (originalComSpec === undefined) delete process.env.ComSpec;
+        else process.env.ComSpec = originalComSpec;
+        if (originalCOMSPEC === undefined) delete process.env.COMSPEC;
+        else process.env.COMSPEC = originalCOMSPEC;
+        if (originalSystemRoot === undefined) delete process.env.SystemRoot;
+        else process.env.SystemRoot = originalSystemRoot;
+        if (originalSYSTEMROOT === undefined) delete process.env.SYSTEMROOT;
+        else process.env.SYSTEMROOT = originalSYSTEMROOT;
+        if (originalWindir === undefined) delete process.env.windir;
+        else process.env.windir = originalWindir;
+      }
+    });
+
+    it('falls back to the absolute default system cmd.exe when Windows root env is unavailable', async () => {
+      const originalComSpec = process.env.ComSpec;
+      const originalCOMSPEC = process.env.COMSPEC;
+      const originalSystemRoot = process.env.SystemRoot;
+      const originalSYSTEMROOT = process.env.SYSTEMROOT;
+      const originalWindir = process.env.windir;
+
+      try {
+        delete process.env.ComSpec;
+        delete process.env.COMSPEC;
+        delete process.env.SystemRoot;
+        delete process.env.SYSTEMROOT;
+        delete process.env.windir;
+        const { getWindowsEscapedCommandShell } = await import('../../../src/utils/shell-executor');
+        expect(getWindowsEscapedCommandShell()).toBe('C:\\Windows\\System32\\cmd.exe');
+      } finally {
+        if (originalComSpec === undefined) delete process.env.ComSpec;
+        else process.env.ComSpec = originalComSpec;
+        if (originalCOMSPEC === undefined) delete process.env.COMSPEC;
+        else process.env.COMSPEC = originalCOMSPEC;
+        if (originalSystemRoot === undefined) delete process.env.SystemRoot;
+        else process.env.SystemRoot = originalSystemRoot;
+        if (originalSYSTEMROOT === undefined) delete process.env.SYSTEMROOT;
+        else process.env.SYSTEMROOT = originalSYSTEMROOT;
+        if (originalWindir === undefined) delete process.env.windir;
+        else process.env.windir = originalWindir;
       }
     });
   });

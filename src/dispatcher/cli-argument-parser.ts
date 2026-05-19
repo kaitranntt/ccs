@@ -43,7 +43,7 @@ export interface DispatcherBootstrap {
  * - setGlobalConfigDir (--config-dir flag)
  * - Cloud-sync warnings
  * - Completion short-circuit via tryHandleRootCommand
- * - Codex native passthrough via execNativeCodexFlagCommand
+ * - Codex native passthrough via execNativeCodexCommand
  *
  * Adapter registration (registerTarget calls) stays in main() because it is
  * singleton wiring with no dependency on the parsed args.
@@ -141,9 +141,9 @@ export async function bootstrapAndParseEarlyCli(rawArgs: string[]): Promise<Disp
     return { args, isCompletionCommand, browserLaunchOverride: undefined, exitNow: true };
   }
 
-  if (shouldPassthroughNativeCodexFlagCommand(args)) {
-    const { execNativeCodexFlagCommand } = await import('./target-executor');
-    execNativeCodexFlagCommand(args);
+  if (shouldPassthroughNativeCodexCommand(args)) {
+    const { execNativeCodexCommand } = await import('./target-executor');
+    execNativeCodexCommand(args);
     return { args, isCompletionCommand, browserLaunchOverride: undefined, exitNow: true };
   }
 
@@ -175,6 +175,30 @@ export const CODEX_RUNTIME_REASONING_LEVELS = new Set([
 ]);
 
 export const CODEX_NATIVE_PASSTHROUGH_FLAGS = new Set(['--help', '-h', '--version', '-v']);
+export const CODEX_NATIVE_PASSTHROUGH_SUBCOMMANDS = new Set([
+  'a',
+  'app',
+  'app-server',
+  'apply',
+  'cloud',
+  'completion',
+  'debug',
+  'e',
+  'exec',
+  'exec-server',
+  'features',
+  'fork',
+  'help',
+  'login',
+  'logout',
+  'mcp',
+  'mcp-server',
+  'plugin',
+  'remote-control',
+  'resume',
+  'review',
+  'sandbox',
+]);
 
 export const NATIVE_CLAUDE_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 
@@ -314,7 +338,7 @@ export function shouldNormalizeNativeClaudeEffort(
 
 // ========== Native Codex Passthrough ==========
 
-export function shouldPassthroughNativeCodexFlagCommand(args: string[]): boolean {
+export function shouldPassthroughNativeCodexCommand(args: string[]): boolean {
   return getNativeCodexPassthroughArgs(args) !== null;
 }
 
@@ -328,9 +352,15 @@ export function getNativeCodexPassthroughArgs(args: string[]): string[] | null {
   if (CODEX_NATIVE_PASSTHROUGH_FLAGS.has(firstArg)) {
     return targetArgs;
   }
+  if (CODEX_NATIVE_PASSTHROUGH_SUBCOMMANDS.has(firstArg)) {
+    return targetArgs;
+  }
 
   const secondArg = targetArgs[1] || '';
   if (firstArg === 'codex' && CODEX_NATIVE_PASSTHROUGH_FLAGS.has(secondArg)) {
+    return targetArgs.slice(1);
+  }
+  if (firstArg === 'codex' && CODEX_NATIVE_PASSTHROUGH_SUBCOMMANDS.has(secondArg)) {
     return targetArgs.slice(1);
   }
 

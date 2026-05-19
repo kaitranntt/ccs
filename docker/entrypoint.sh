@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "[WARN] ghcr.io/kaitranntt/ccs-dashboard is deprecated. Migrate to ghcr.io/kaitranntt/ccs:latest. See https://github.com/kaitranntt/ccs/issues/1251" >&2
+
 ccs_home_dir="${CCS_HOME_DIR:-/home/node/.ccs}"
 
 mkdir -p "$ccs_home_dir"

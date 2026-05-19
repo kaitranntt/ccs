@@ -1,3 +1,63 @@
+## [Unreleased]
+
+### Added
+
+* **docker:** Stable Docker network contract — external network `ccs-net` with service DNS `ccs` resolving to the CCS container. CLIProxy reachable at `http://ccs:8317`; dashboard at `http://ccs:3000`. Sibling containers can attach via `--network ccs-net` or by declaring `ccs-net` as an external network in their own compose file. Changing the network name or service name is a **SemVer-major breaking change**. See [docker/README.md](docker/README.md#connect-your-app-to-cliproxy) for usage patterns and troubleshooting. Verified by `tests/docker/network-contract.sh`.
+* **docker/ci:** Published images are signed with cosign (keyless OIDC) and include a provenance attestation and SBOM. Verification command documented in [docker/README.md](docker/README.md#image-signatures-and-sbom).
+* **release:** Every merge to `main` now auto-cuts a `vX.Y.Z-rc.N` pre-release. A manual `promote-release` workflow promotes the rc to stable after the soak period. See [docs/release-process.md](docs/release-process.md).
+
+### Removed
+
+* **docker:** Dropped Docker image variant `ccs:full`. AI CLIs (claude-code, gemini-cli, grok-cli, opencode) are no longer bundled. Use sibling containers attached to `ccs-net` instead — see [docker/README.md#connect-your-app-to-cliproxy](docker/README.md#connect-your-app-to-cliproxy). Rationale: smaller surface area, fewer supply-chain dependencies, simpler tag taxonomy. The `:latest` image now covers the only published integrated variant.
+
+### Deprecated
+
+* **docker:** `ghcr.io/kaitranntt/ccs-dashboard:latest` Docker image is deprecated — migrate to `ghcr.io/kaitranntt/ccs:latest` (CCS + CLIProxy). The legacy image continues publishing for 2 more releases and emits a startup warning. See [#1251](https://github.com/kaitranntt/ccs/issues/1251).
+
+### Bug Fixes
+
+* **codex:** Pass native `ccsx` Codex subcommands such as `exec`, `apply`, `mcp`, `plugin`, `completion`, and `resume` plus upstream aliases such as `e` and `a` through before CCS profile detection while keeping CCS-owned commands reserved.
+
+## [7.79.1](https://github.com/kaitranntt/ccs/compare/v7.79.0...v7.79.1) (2026-05-14)
+
+### Hotfixes
+
+* **codex:** tolerate BOM in Codex TOML config ([5b664d2](https://github.com/kaitranntt/ccs/commit/5b664d2105b81ec263c05a37c4549a4a6c409bb3))
+
+## [7.79.0](https://github.com/kaitranntt/ccs/compare/v7.78.1...v7.79.0) (2026-05-14)
+
+### Features
+
+* **dispatcher:** pass through Claude subcommands without interactive-session args ([c2b00b7](https://github.com/kaitranntt/ccs/commit/c2b00b7ad6f01f5d83db6d19e2ceb4e3d10d741b))
+
+### Bug Fixes
+
+* **ci:** run pull request validation on hosted runners ([e7174d6](https://github.com/kaitranntt/ccs/commit/e7174d63bb2ed8b2cf9f013aa69ad178ebbcee4f))
+* clarify CLIProxy setup actions ([ac333dd](https://github.com/kaitranntt/ccs/commit/ac333dd1d50538e8164d921099f8ac85cd914999))
+* **cliproxy:** explain headless Codex OAuth recovery ([29da75c](https://github.com/kaitranntt/ccs/commit/29da75c0d42ed473029d1222c7fe4e5e655f5b03)), closes [#1213](https://github.com/kaitranntt/ccs/issues/1213)
+* **codex:** require local access for dashboard config routes ([bd588a2](https://github.com/kaitranntt/ccs/commit/bd588a271df8be95149d6e87eb302139cb2b4cb9))
+* **codex:** self-heal ccsxp cliproxy provider ([#1243](https://github.com/kaitranntt/ccs/issues/1243)) ([4748c45](https://github.com/kaitranntt/ccs/commit/4748c452bd8bc0c18a0a1267324d5ec015a7a578))
+* **config:** bind dashboard to loopback by default ([d61469e](https://github.com/kaitranntt/ccs/commit/d61469edcbdd162d9fce04b0aefe6c0506568974))
+* ignore internal instance directories in health scans ([667b1d1](https://github.com/kaitranntt/ccs/commit/667b1d1e1f0db7f56f88bb88feaee9e2ce994f5c)), closes [#1236](https://github.com/kaitranntt/ccs/issues/1236)
+* **proxy:** avoid exposing local auth token in daemon argv ([#1230](https://github.com/kaitranntt/ccs/issues/1230)) ([a840793](https://github.com/kaitranntt/ccs/commit/a840793a9b091b911afc7aa6ee91666a1c258366))
+* **proxy:** strip stale encoding from upstream error responses ([1932b2c](https://github.com/kaitranntt/ccs/commit/1932b2ca61f084629654941efdd09fd1b971efed))
+* **proxy:** strip stale encoding from upstream error responses ([#1239](https://github.com/kaitranntt/ccs/issues/1239)) ([54f1aa7](https://github.com/kaitranntt/ccs/commit/54f1aa70c0f16a965608f935ce4a39128e829688))
+* **security:** constrain image fallback hook to workspace ([#1232](https://github.com/kaitranntt/ccs/issues/1232)) ([40300c2](https://github.com/kaitranntt/ccs/commit/40300c286ec9f40e89cb2b040a416cba04680930))
+* **security:** protect dashboard WebSocket upgrades ([f09cdfc](https://github.com/kaitranntt/ccs/commit/f09cdfcf2ba0b14ffd20f69a1c0923343f245a39))
+* **settings:** confine dashboard settings paths ([#1231](https://github.com/kaitranntt/ccs/issues/1231)) ([349db83](https://github.com/kaitranntt/ccs/commit/349db830dfbc1f91b44f287a2aa40426756338a9))
+* support Claude subcommands and background sessions ([35b6210](https://github.com/kaitranntt/ccs/commit/35b6210cd2ef3b79d317cd76926b55a126084b1d))
+* **ui:** keep codex toml tokens inline ([#1219](https://github.com/kaitranntt/ccs/issues/1219)) ([5138741](https://github.com/kaitranntt/ccs/commit/5138741b5c0fdc0da87982bd59227fad56f8a046))
+* **ui:** render codex config as exact text ([#1215](https://github.com/kaitranntt/ccs/issues/1215)) ([225401c](https://github.com/kaitranntt/ccs/commit/225401ceca433705d11c119b3373913c95129c56))
+* **ui:** restore codex config highlighting ([#1216](https://github.com/kaitranntt/ccs/issues/1216)) ([e177724](https://github.com/kaitranntt/ccs/commit/e1777247b371749ac717373f0d4299415990413c))
+* **ui:** wrap codex config highlight editor ([#1217](https://github.com/kaitranntt/ccs/issues/1217)) ([ba761a0](https://github.com/kaitranntt/ccs/commit/ba761a0d1e75dac9090f58848bf1f0f10d855519))
+* **windows:** pin cmd shell for wrapper launches ([#1229](https://github.com/kaitranntt/ccs/issues/1229)) ([9c5d497](https://github.com/kaitranntt/ccs/commit/9c5d4976c51696a86251c507902ea03e4d78a8b0))
+
+## [7.78.1](https://github.com/kaitranntt/ccs/compare/v7.78.0...v7.78.1) (2026-05-12)
+
+### Bug Fixes
+
+* **ci:** harden self-hosted workflow trust boundaries ([2273757](https://github.com/kaitranntt/ccs/commit/2273757c837254edd2277c785530835d6db2a977))
+
 ## [7.78.0](https://github.com/kaitranntt/ccs/compare/v7.77.1...v7.78.0) (2026-05-11)
 
 ### Features

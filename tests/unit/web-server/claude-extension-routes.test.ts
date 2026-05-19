@@ -68,7 +68,8 @@ describe('web-server claude-extension-routes', () => {
     if (originalCcsHome !== undefined) process.env.CCS_HOME = originalCcsHome;
     else delete process.env.CCS_HOME;
 
-    if (originalClaudeConfigDir !== undefined) process.env.CLAUDE_CONFIG_DIR = originalClaudeConfigDir;
+    if (originalClaudeConfigDir !== undefined)
+      process.env.CLAUDE_CONFIG_DIR = originalClaudeConfigDir;
     else delete process.env.CLAUDE_CONFIG_DIR;
   });
 
@@ -127,6 +128,10 @@ describe('web-server claude-extension-routes', () => {
       context_mode: 'isolated',
     };
     config.default = 'work';
+    config.cliproxy.variants.codex = {
+      provider: 'codex',
+      settings: path.join(ccsDir, 'codex.settings.json'),
+    };
     saveUnifiedConfig(config);
   });
 
@@ -154,10 +159,21 @@ describe('web-server claude-extension-routes', () => {
     expect(payload.profiles.some((profile) => profile.name === 'glm')).toBe(true);
     expect(payload.profiles.some((profile) => profile.name === 'work')).toBe(true);
     expect(payload.profiles.some((profile) => profile.name === 'gemini')).toBe(true);
+    expect(payload.profiles.some((profile) => profile.name === 'codex')).toBe(false);
     expect(payload.hosts.map((host) => host.id)).toEqual(['vscode', 'cursor', 'windsurf']);
     expect(payload.hosts.every((host) => host.defaultSettingsPath.endsWith('settings.json'))).toBe(
       true
     );
+  });
+
+  it('rejects Codex CLIProxy setup with native Codex guidance', async () => {
+    const response = await fetch(`${baseUrl}/api/claude-extension/setup?profile=codex&host=vscode`);
+    expect(response.status).toBe(400);
+
+    const payload = (await response.json()) as { error: string };
+    expect(payload.error).toContain('Codex CLIProxy profile');
+    expect(payload.error).toContain('ccsxp');
+    expect(payload.error).toContain('ccs codex --target codex');
   });
 
   it('renders VS Code setup for API profiles with disableLoginPrompt', async () => {
@@ -176,6 +192,47 @@ describe('web-server claude-extension-routes', () => {
     expect(payload.ideSettings.json).toContain('"ANTHROPIC_API_KEY"');
     expect(payload.sharedSettings.command).toBe('ccs persist glm');
     expect(payload.sharedSettings.json).toContain('"env"');
+  });
+
+  it('blocks non-local setup requests when dashboard auth is disabled', async () => {
+    const app = express();
+    app.use((_req, _res, next) => {
+      Object.defineProperty(_req.socket, 'remoteAddress', {
+        configurable: true,
+        value: '10.0.0.25',
+      });
+      next();
+    });
+    app.use('/api/claude-extension', claudeExtensionRoutes);
+
+    const remoteServer = await new Promise<Server>((resolve, reject) => {
+      const instance = app.listen(0, '127.0.0.1');
+      const handleError = (error: Error) => reject(error);
+      instance.once('error', handleError);
+      instance.once('listening', () => {
+        instance.off('error', handleError);
+        resolve(instance);
+      });
+    });
+
+    try {
+      const address = remoteServer.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('Unable to resolve remote test server port');
+      }
+
+      const response = await fetch(
+        `http://127.0.0.1:${address.port}/api/claude-extension/setup?profile=glm&host=vscode`
+      );
+      expect(response.status).toBe(403);
+
+      const payload = (await response.json()) as { error: string };
+      expect(payload.error).toBe(
+        'Claude extension setup requires localhost access when dashboard auth is disabled.'
+      );
+    } finally {
+      await new Promise<void>((resolve) => remoteServer.close(() => resolve()));
+    }
   });
 
   it('normalizes the effective profile CLAUDE_CONFIG_DIR for extension setup', async () => {

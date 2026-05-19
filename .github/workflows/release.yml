@@ -21,9 +21,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # PAT_TOKEN required: semantic-release pushes version bump commits to main,
-          # which needs branch protection bypass. github.token cannot push to protected branches.
-          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -58,12 +56,20 @@ jobs:
         env:
           HUSKY: 0
           # PAT_TOKEN bypasses branch protection so semantic-release can push
-          # version bump + CHANGELOG commits directly to main
+          # version bump + CHANGELOG commits directly to main.
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          auth_header=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::${auth_header}"
+          export GIT_CONFIG_COUNT=2
+          export GIT_CONFIG_KEY_0=http.https://github.com/kaitranntt/ccs.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic ${auth_header}"
+          export GIT_CONFIG_KEY_1=http.https://github.com/kaitranntt/ccs.git.extraheader
+          export GIT_CONFIG_VALUE_1="AUTHORIZATION: basic ${auth_header}"
+
           set +e
           OUTPUT=$(bun x semantic-release 2>&1)
           STATUS=$?

@@ -6,9 +6,9 @@ CLI commands for managing CCS dashboard authentication.
 
 ## Overview
 
-The CCS dashboard (`ccs config`) can be protected with username/password authentication. This is useful whenever the dashboard is reachable from another device, including when the runtime's default bind is network-accessible or when you explicitly bind it beyond loopback with `ccs config --host 0.0.0.0`.
+The CCS dashboard (`ccs config`) can be protected with username/password authentication. This is useful whenever the dashboard is reachable from another device, such as when you explicitly bind it beyond loopback with `ccs config --host 0.0.0.0`.
 
-Authentication is **disabled by default** for backward compatibility. Use the CLI to configure and enable it.
+Authentication is **disabled by default** for backward compatibility, while `ccs config` binds to `localhost` by default. Use the CLI to configure and enable auth before exposing the dashboard to other devices.
 
 CCS does **not** ship a default dashboard username or password. When someone opens the dashboard from a non-loopback/IP address before auth is enabled, the UI now shows a setup state instead of an ambiguous login form. The host owner must run `ccs config auth setup`, or the user should switch back to the localhost URL if they are on the same machine.
 

@@ -11,11 +11,45 @@ Persistent config, restart on reboot.
 
 </div>
 
+> **[Deprecation]** `ghcr.io/kaitranntt/ccs-dashboard:latest` is deprecated.
+> Migrate to `ghcr.io/kaitranntt/ccs:latest`. See [Migration](#migration-from-ccs-dashboardlatest) below.
+
 <br>
 
-## Preferred: `ccs docker`
+<!-- quickstart-snippet-start -->
+## Quick Start (Docker)
 
-The CLI now ships a first-class Docker command suite for the integrated CCS + CLIProxy stack:
+With Docker installed:
+
+```bash
+curl -fsSL https://ccs.kaitran.ca/docker-compose.yaml -o docker-compose.yaml
+docker compose up -d
+```
+
+Dashboard at http://localhost:3000 · CLIProxy at http://localhost:8317.
+
+Need a corporate-proxy alternative? Download directly:
+`https://raw.githubusercontent.com/kaitranntt/ccs/main/docker/compose.yaml`
+<!-- quickstart-snippet-end -->
+
+---
+
+## Choosing an image
+
+| Tag | Use | Approx. size | Status |
+|---|---|---|---|
+| `ghcr.io/kaitranntt/ccs:latest` | CCS + CLIProxy, no AI CLIs bundled | < 350 MB | **Recommended** |
+| `ghcr.io/kaitranntt/ccs-dashboard:latest` | Legacy all-in-one image | > 600 MB | **Deprecated** — migrate to `ccs:latest`. Sunset after 2 releases. See [#1251](https://github.com/kaitranntt/ccs/issues/1251) |
+
+`ccs:latest` also publishes pinned version tags (`ccs:<major>.<minor>.<patch>`, `ccs:<major>.<minor>`, `ccs:<major>`) for reproducible deployments.
+
+**Need claude-code, gemini-cli, grok-cli, or opencode?** Run those tools in a sibling container attached to `ccs-net` — see [Connect your app to CLIProxy](#connect-your-app-to-cliproxy). This keeps each tool independently versioned and prevents supply-chain bloat in the CLIProxy image.
+
+---
+
+## Power-user: `ccs docker`
+
+The CLI ships a first-class Docker command suite for the integrated CCS + CLIProxy stack:
 
 ```bash
 ccs docker up
@@ -145,28 +179,26 @@ Expected healthy output:
 - CLIProxy health: `cliproxy-port: ok, CLIProxy running`
 - Client count matches number of auth token files
 
+---
+
 ## Prebuilt Image Quick Start
 
-This existing image still runs the CCS dashboard and its locally managed CLIProxy inside one
-container. It does not provide the remote staging and in-container self-update flow exposed by
-`ccs docker`.
-
-Pull the latest stable release image from GitHub Container Registry:
+Pull the recommended minimal image (CCS + CLIProxy, no AI CLIs):
 
 ```bash
 docker run -d \
-  --name ccs-dashboard \
+  --name ccs \
   --restart unless-stopped \
   -p 3000:3000 \
   -p 8317:8317 \
   -e CCS_PORT=3000 \
-  -v ccs_home:/home/node/.ccs \
-  ghcr.io/kaitranntt/ccs-dashboard:latest
+  -v ccs_home:/root/.ccs \
+  ghcr.io/kaitranntt/ccs:latest
 ```
 
-Release-tag images are also published as `ghcr.io/kaitranntt/ccs-dashboard:<version>`.
+Release-tag images are published as `ghcr.io/kaitranntt/ccs:<version>` for reproducible deployments.
 
-## Prebuilt Image Build Locally
+### Build Locally
 
 ```bash
 docker build -f docker/Dockerfile -t ccs-dashboard:latest .
@@ -183,6 +215,187 @@ docker run -d \
 Open `http://localhost:3000` (Dashboard).
 
 CCS also starts CLIProxy on `http://localhost:8317` (used by Dashboard features and OAuth providers).
+
+---
+
+## Connect Your App to CLIProxy
+
+The CCS container joins a Docker network named `ccs-net`. This network name is a **stable, public contract** — it will not change without a SemVer-major release.
+
+### Network Contract
+
+| Resource | Stable name | Notes |
+|---|---|---|
+| Network | `ccs-net` | Attach any sibling container to this network |
+| Service DNS | `ccs` | Resolves to the CCS container from inside `ccs-net` |
+| CLIProxy port | `8317` | OAuth proxy — use as `OPENAI_BASE_URL` / `CLIPROXY_URL` |
+| Dashboard port | `3000` | Web UI |
+| Env-friendly URL | `http://ccs:8317` | Drop into your app's env without port-mapping on the host |
+
+### Pattern A — Same Compose File
+
+Declare `ccs-net` as external in your own compose file and add your service to it:
+
+```yaml
+services:
+  my-app:
+    image: my-app:latest
+    environment:
+      CLIPROXY_URL: http://ccs:8317
+    networks:
+      - ccs-net
+
+networks:
+  ccs-net:
+    external: true
+```
+
+Start CCS first so the network exists:
+
+```bash
+docker compose -f docker/compose.yaml up -d   # or: ccs docker up
+docker compose -f my-app/compose.yaml up -d
+```
+
+### Pattern B — `docker run`
+
+Attach a container at runtime without modifying any compose file:
+
+```bash
+docker run --rm \
+  --network ccs-net \
+  -e CLIPROXY_URL=http://ccs:8317 \
+  my-app:latest
+```
+
+### Troubleshooting Network Issues
+
+**Service not resolvable from sibling container**
+
+Verify both containers are on `ccs-net`:
+
+```bash
+docker network inspect ccs-net
+```
+
+The output should list both `ccs` and your app container under `Containers`.
+
+**Network not found**
+
+The `ccs-net` network is created when the CCS stack starts. Run:
+
+```bash
+docker compose -f docker/compose.yaml up -d
+# or: ccs docker up
+```
+
+**Conflict with an existing `ccs-net`**
+
+If you already have a network named `ccs-net` from unrelated tooling, either rename yours or scope
+the CCS project via `COMPOSE_PROJECT_NAME`:
+
+```bash
+COMPOSE_PROJECT_NAME=myproject docker compose -f docker/compose.yaml up -d
+# Network becomes: myproject_ccs-net
+```
+
+Note: scoping changes the network name, so sibling compose files must use the same project name.
+
+**Podman / rootless containers**
+
+On rootless Podman, network names and DNS resolution may behave differently. Verify your Podman
+version supports `--network` with named networks (`podman network ls`) and that `aardvark-dns` or
+equivalent is installed for container-name resolution.
+
+**Low MTU on Hetzner and other cloud providers**
+
+Some cloud environments set a low MTU (e.g., 1450) on their overlay networks. If you see packet
+fragmentation or stalled requests, add a custom MTU to the network in `compose.yaml`:
+
+```yaml
+networks:
+  ccs-net:
+    name: ccs-net
+    driver_opts:
+      com.docker.network.driver.mtu: "1450"
+```
+
+---
+
+## Migration from `ccs-dashboard:latest`
+
+`ghcr.io/kaitranntt/ccs-dashboard:latest` is deprecated and will stop publishing after 2 more
+releases. Migrate to `ghcr.io/kaitranntt/ccs:latest` now.
+
+### Steps
+
+1. **Stop the old stack.**
+
+   ```bash
+   docker compose down
+   # or if running via docker run:
+   docker stop ccs-dashboard && docker rm ccs-dashboard
+   ```
+
+2. **Preserve your data.**
+
+   Existing `~/.ccs` data on the host is not affected by the container change. If you were using
+   a named volume (`ccs_home`), it persists automatically. If you were bind-mounting your host
+   `~/.ccs`, continue doing so — just update the compose file path below.
+
+3. **Get the new compose file.**
+
+   ```bash
+   curl -fsSL https://ccs.kaitran.ca/docker-compose.yaml -o docker-compose.yaml
+   ```
+
+   Or download manually from:
+   `https://raw.githubusercontent.com/kaitranntt/ccs/main/docker/compose.yaml`
+
+4. **If you were bind-mounting `~/.ccs`** (instead of using a named volume), edit the downloaded
+   `docker-compose.yaml` and replace the `ccs_home` named volume with your bind mount:
+
+   ```yaml
+   volumes:
+     - ~/.ccs:/root/.ccs
+   ```
+
+   Otherwise the default named volume (`ccs_home`) works out of the box. Let compose create it
+   automatically, or create it manually first:
+
+   ```bash
+   docker volume create ccs_home
+   ```
+
+5. **Start the new stack.**
+
+   ```bash
+   docker compose up -d
+   ```
+
+   Dashboard at http://localhost:3000 · CLIProxy at http://localhost:8317.
+
+   > **Warning:** Use `docker compose down` (without `-v`) to stop the stack.
+   > `docker compose down -v` deletes named volumes including `ccs_home`, which
+   > permanently removes your CCS configuration and auth tokens. Always omit
+   > `-v` unless you intentionally want a clean wipe.
+
+6. **Verify.**
+
+   ```bash
+   curl -fsS http://localhost:8317/
+   ```
+
+### What changes
+
+| Old | New |
+|---|---|
+| `ghcr.io/kaitranntt/ccs-dashboard:latest` | `ghcr.io/kaitranntt/ccs:latest` |
+| > 600 MB image | < 350 MB image |
+| Monolithic all-in-one | CCS + CLIProxy (AI CLIs via sibling containers on `ccs-net`) |
+| No stable network contract | `ccs-net` network, `ccs` service DNS |
+
+---
 
 ## Environment Variables
 
@@ -226,23 +439,6 @@ docker stop ccs-dashboard
 docker start ccs-dashboard
 docker rm -f ccs-dashboard
 ```
-
-## Prebuilt Image Docker Compose (Optional)
-
-Using the included `docker/docker-compose.yml`:
-
-```bash
-docker-compose -f docker/docker-compose.yml up --build -d
-docker-compose -f docker/docker-compose.yml logs -f
-```
-
-Stop:
-
-```bash
-docker-compose -f docker/docker-compose.yml down
-```
-
-For the integrated CCS + CLIProxy stack managed by the CLI, use `ccs docker up` instead.
 
 ## Persistence
 
@@ -389,3 +585,22 @@ docker exec -it ccs-dashboard gemini --help
 - **Secrets**: For sensitive values like `CCS_PROXY_AUTH_TOKEN`, consider using Docker secrets or a `.env` file (not committed to git).
 - **Network**: The container exposes ports 3000 and 8317. In production, use a reverse proxy (nginx, traefik) with TLS.
 - **Updates**: Regularly rebuild the image to get security patches: `docker-compose build --pull`
+
+### Image Signatures and SBOM
+
+All `ghcr.io/kaitranntt/ccs` images are signed with [cosign](https://docs.sigstore.dev/cosign/overview/) using keyless OIDC signing tied to the GitHub Actions workflow identity. A software bill of materials (SBOM) is attached to every image at publish time.
+
+**Verify a specific image digest:**
+
+```bash
+cosign verify \
+  --certificate-identity-regexp "https://github.com/kaitranntt/ccs/.github/workflows/docker-release.yml" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/kaitranntt/ccs:<version>
+```
+
+**Inspect the SBOM:**
+
+```bash
+cosign download sbom ghcr.io/kaitranntt/ccs:<version>
+```

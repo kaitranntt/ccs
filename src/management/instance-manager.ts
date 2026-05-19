@@ -15,6 +15,7 @@ import type { AccountContextPolicy } from '../auth/account-context';
 import { getCcsHome } from '../utils/config-manager';
 import { createLogger } from '../services/logging';
 import { getCcsDir } from '../config/config-loader-facade';
+import { listAccountInstanceNames } from './instance-directory';
 
 const logger = createLogger('management:instance-manager');
 
@@ -189,18 +190,7 @@ class InstanceManager {
    * List all instance names
    */
   listInstances(): string[] {
-    if (!fs.existsSync(this.instancesDir)) {
-      return [];
-    }
-
-    return fs.readdirSync(this.instancesDir).filter((name) => {
-      if (name.startsWith('.')) {
-        return false;
-      }
-
-      const instancePath = path.join(this.instancesDir, name);
-      return fs.statSync(instancePath).isDirectory();
-    });
+    return listAccountInstanceNames(this.instancesDir);
   }
 
   /**

@@ -9,11 +9,16 @@ function isTomlObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function stripUtf8Bom(rawText: string): string {
+  return rawText.charCodeAt(0) === 0xfeff ? rawText.slice(1) : rawText;
+}
+
 export function parseTomlObject(rawText: string): Record<string, unknown> {
-  const trimmed = rawText.trim();
+  const parseText = stripUtf8Bom(rawText);
+  const trimmed = parseText.trim();
   if (!trimmed) return {};
 
-  const parsed = parse(rawText);
+  const parsed = parse(parseText);
   if (!isTomlObject(parsed)) {
     throw new Error('TOML root must be a table.');
   }

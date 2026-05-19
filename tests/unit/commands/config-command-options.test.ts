@@ -3,12 +3,12 @@ import { describe, expect, it } from 'bun:test';
 import { parseConfigCommandArgs } from '../../../src/commands/config-command-options';
 
 describe('config command options parser', () => {
-  it('defaults to system bind behavior without explicit host', () => {
+  it('defaults to a localhost-only bind without explicit host', () => {
     const result = parseConfigCommandArgs([]);
 
     expect(result.help).toBe(false);
     expect(result.error).toBeUndefined();
-    expect(result.options.host).toBeUndefined();
+    expect(result.options.host).toBe('localhost');
     expect(result.options.hostProvided).toBe(false);
   });
 

@@ -10,16 +10,20 @@ jobs:
     runs-on: [self-hosted, linux, x64]
 
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # PAT_TOKEN is required because this pushes to protected dev and must
-          # trigger follow-up Push CI / Dev Release workflows.
-          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: false
+
+      - name: Harden Git workspace
+        run: |
+          rm -rf .git/hooks
+          mkdir -p .git/hooks
+          git config --local core.hooksPath /dev/null
 
       - name: Configure Git
         run: |
@@ -47,4 +51,14 @@ jobs:
             git commit --no-edit
           fi
 
-          git push origin dev
+          # PAT_TOKEN is required because this pushes to protected dev and must
+          # trigger follow-up Push CI / Dev Release workflows. Keep it scoped to
+          # the final push rather than persisting it in the checkout config.
+          auth_header=$(printf 'x-access-token:%s' "$PAT_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::${auth_header}"
+          git -c core.hooksPath=/dev/null \
+            -c "http.https://github.com/kaitranntt/ccs.extraheader=AUTHORIZATION: basic ${auth_header}" \
+            -c "http.https://github.com/kaitranntt/ccs.git.extraheader=AUTHORIZATION: basic ${auth_header}" \
+            push origin dev
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}

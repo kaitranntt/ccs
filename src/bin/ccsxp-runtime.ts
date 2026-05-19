@@ -1,10 +1,12 @@
 const os = require('os');
 const path = require('path');
+const { CCSXP_CLIPROXY_SHORTCUT_ENV } = require('../targets/codex-cliproxy-provider-config');
 const { stripTargetFlag } = require('../targets/target-resolver');
 const { expandPath } = require('../utils/helpers');
 const { fail } = require('../utils/ui');
 
 process.env.CCS_INTERNAL_ENTRY_TARGET = 'codex';
+process.env[CCSXP_CLIPROXY_SHORTCUT_ENV] = '1';
 const CCSXP_CLIPROXY_OVERRIDE = 'model_provider="cliproxy"';
 const DISALLOWED_CCSXP_CONFIG_KEY_REGEX =
   /^(model_provider|local_provider|profile)\s*=|^model_providers\./i;
@@ -66,6 +68,16 @@ function resolveCcsxpCodexHome() {
   return path.join(os.homedir(), '.codex');
 }
 
+// H5: CCS_CODEX_PROFILE is ignored by ccsxp. The ccsx auth profile system
+// (src/codex-auth/) is intentionally NOT consulted here — ccsxp serves the
+// cliproxy round-robin pool, not per-user-account profiles. Emit a one-line
+// notice so users who set CCS_CODEX_PROFILE in their shell don't get confused
+// when ccsxp silently ignores it and overwrites CODEX_HOME below.
+if (process.env.CCS_CODEX_PROFILE) {
+  process.stderr.write(
+    "[i] CCS_CODEX_PROFILE is ignored by ccsxp; profile applies to native 'codex' only.\n"
+  );
+}
 process.env.CODEX_HOME = resolveCcsxpCodexHome();
 
 // ccsxp is the Codex + cliproxy shortcut. Keep the native Codex history root,
