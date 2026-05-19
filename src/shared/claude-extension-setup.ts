@@ -103,6 +103,30 @@ function describeProfile(profileName: string, result: ProfileDetectionResult): s
   return 'Native Claude profile resolution.';
 }
 
+function resultUsesCodexProvider(result: ProfileDetectionResult): boolean {
+  if (result.type !== 'cliproxy') {
+    return false;
+  }
+
+  if (result.provider === 'codex') {
+    return true;
+  }
+
+  if (!result.isComposite || !result.compositeTiers) {
+    return false;
+  }
+
+  return Object.values(result.compositeTiers).some(
+    (tier) => tier.provider === 'codex' || tier.fallback?.provider === 'codex'
+  );
+}
+
+function createCodexClaudeExtensionError(profileName: string): Error {
+  return new Error(
+    `Profile "${profileName}" is a Codex CLIProxy profile. CCS does not persist Codex CLIProxy profiles into Claude Code or Claude Code Extension settings because that routes Claude traffic through the Codex translator. Use ccsxp or ccs codex --target codex for ChatGPT/Codex subscriptions. To clear stale Claude settings, run ccs persist default --yes.`
+  );
+}
+
 function createProfileOption(
   profileName: string,
   result: ProfileDetectionResult
@@ -140,7 +164,9 @@ export function listClaudeExtensionProfiles(): ClaudeExtensionProfileOption[] {
   }
 
   return deduped
-    .map((profileName) => createProfileOption(profileName, detector.detectProfileType(profileName)))
+    .map((profileName) => ({ profileName, result: detector.detectProfileType(profileName) }))
+    .filter(({ result }) => !resultUsesCodexProvider(result))
+    .map(({ profileName, result }) => createProfileOption(profileName, result))
     .sort((left, right) => deduped.indexOf(left.name) - deduped.indexOf(right.name));
 }
 
@@ -294,6 +320,9 @@ export async function resolveClaudeExtensionSetup(
 ): Promise<ClaudeExtensionSetup> {
   const detector = new ProfileDetector();
   const result = detector.detectProfileType(requestedProfile);
+  if (resultUsesCodexProvider(result)) {
+    throw createCodexClaudeExtensionError(requestedProfile);
+  }
   const resolved = await resolveExtensionEnv(requestedProfile, result);
 
   return {

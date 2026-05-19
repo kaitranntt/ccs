@@ -34,8 +34,9 @@ describe('web-server claude-extension-routes', () => {
     ({ default: SharedManager } = await import('../../../src/management/shared-manager'));
     ({ createEmptyUnifiedConfig } = await import('../../../src/config/unified-config-types'));
     ({ saveUnifiedConfig } = await import('../../../src/config/unified-config-loader'));
-    ({ default: claudeExtensionRoutes } =
-      await import('../../../src/web-server/routes/claude-extension-routes'));
+    ({ default: claudeExtensionRoutes } = await import(
+      '../../../src/web-server/routes/claude-extension-routes'
+    ));
 
     const app = express();
     app.use(express.json());
@@ -127,6 +128,10 @@ describe('web-server claude-extension-routes', () => {
       context_mode: 'isolated',
     };
     config.default = 'work';
+    config.cliproxy.variants.codex = {
+      provider: 'codex',
+      settings: path.join(ccsDir, 'codex.settings.json'),
+    };
     saveUnifiedConfig(config);
   });
 
@@ -154,10 +159,21 @@ describe('web-server claude-extension-routes', () => {
     expect(payload.profiles.some((profile) => profile.name === 'glm')).toBe(true);
     expect(payload.profiles.some((profile) => profile.name === 'work')).toBe(true);
     expect(payload.profiles.some((profile) => profile.name === 'gemini')).toBe(true);
+    expect(payload.profiles.some((profile) => profile.name === 'codex')).toBe(false);
     expect(payload.hosts.map((host) => host.id)).toEqual(['vscode', 'cursor', 'windsurf']);
     expect(payload.hosts.every((host) => host.defaultSettingsPath.endsWith('settings.json'))).toBe(
       true
     );
+  });
+
+  it('rejects Codex CLIProxy setup with native Codex guidance', async () => {
+    const response = await fetch(`${baseUrl}/api/claude-extension/setup?profile=codex&host=vscode`);
+    expect(response.status).toBe(400);
+
+    const payload = (await response.json()) as { error: string };
+    expect(payload.error).toContain('Codex CLIProxy profile');
+    expect(payload.error).toContain('ccsxp');
+    expect(payload.error).toContain('ccs codex --target codex');
   });
 
   it('renders VS Code setup for API profiles with disableLoginPrompt', async () => {

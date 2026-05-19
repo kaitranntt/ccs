@@ -680,7 +680,7 @@ async function showHelp(): Promise<void> {
   console.log('');
   console.log(subheader('Supported Profile Types'));
   console.log(`  ${color('API profiles', 'command')}      glm, km, custom API profiles`);
-  console.log(`  ${color('CLIProxy', 'command')}          gemini, codex, agy, qwen, kiro, ghcp`);
+  console.log(`  ${color('CLIProxy', 'command')}          gemini, agy, qwen, kiro, ghcp`);
   console.log(`  ${color('Copilot', 'command')}           copilot (requires copilot-api daemon)`);
   console.log(
     `  ${color('Account profiles', 'command')}  work, personal, client (persists CLAUDE_CONFIG_DIR)`
@@ -700,7 +700,7 @@ async function showHelp(): Promise<void> {
   console.log(`  ${color('ccs persist glm --permission-mode acceptEdits', 'command')}`);
   console.log('');
   console.log(`  ${dim('# Persist with auto-approve enabled')}`);
-  console.log(`  ${color('ccs persist codex --dangerously-skip-permissions', 'command')}`);
+  console.log(`  ${color('ccs persist glm --dangerously-skip-permissions', 'command')}`);
   console.log('');
   console.log(`  ${dim('# Persist an account profile for IDE/native Claude use')}`);
   console.log(`  ${color('ccs persist work --yes', 'command')}`);
@@ -719,6 +719,9 @@ async function showHelp(): Promise<void> {
   console.log('');
   console.log(subheader('Notes'));
   console.log('  [i] CLIProxy profiles require the proxy to be running.');
+  console.log(
+    '  [i] Codex CLIProxy profiles are native Codex-only: use ccsxp or ccs codex --target codex.'
+  );
   console.log('  [i] Copilot profiles require copilot-api daemon.');
   console.log(
     '  [i] Account/default flows remove stale ANTHROPIC_* overrides before applying new setup.'

@@ -1,6 +1,6 @@
 # CCS Project Roadmap
 
-Last Updated: 2026-05-18
+Last Updated: 2026-05-19
 
 Forward-looking roadmap documenting current priorities, GitHub issues, and future feature plans.
 
@@ -41,6 +41,7 @@ All major modularization work is complete. The codebase evolved from monolithic 
 
 ### Recent Fixes
 
+- **2026-05-19**: **#1252** Claude extension persistence now rejects Codex CLIProxy profiles instead of writing `ANTHROPIC_BASE_URL=/api/provider/codex` into Claude Code settings. Native Codex subscription use stays on `ccsxp` or `ccs codex --target codex`, and `ccs doctor` warns when stale Claude settings still point at the Codex translator.
 - **2026-05-18**: **#1287** `ccsx resume` now passes through to the native Codex `resume` subcommand before CCS profile detection, preserving Codex session continuation while keeping `ccsx auth` on the managed Codex profile namespace.
 - **2026-05-09**: **#1199** Existing Claude auth accounts now have dashboard-visible Shared Resources controls separate from History Sync. Accounts exposes a dedicated Resources action for `shared` vs `profile-local`, `/shared` now inventories commands, skills, agents, plugins, and `settings.json`, plugin directories without docs show factual directory contents, and shared settings content is inspectable read-only through the localhost-gated shared-content API.
 - **2026-05-07**: **#760** Codex GPT fast mode is now a first-class CLIProxy model tuning suffix. CCS accepts `gpt-5.4-fast`, `gpt-5.4-high-fast`, and equivalent canonicalized forms in raw env configs, CLI variant creation, and the dashboard model picker; runtime requests now send the base upstream model with `reasoning.effort` plus `service_tier: "priority"` instead of leaking the suffixed alias to CLIProxy upstream routing.

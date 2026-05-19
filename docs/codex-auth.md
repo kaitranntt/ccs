@@ -66,6 +66,16 @@ codex                         # runs with CODEX_HOME=~/.ccs/codex-instances/pers
 Native `codex` shells only see the persistent default when launched through the `ccsx`
 Codex runtime. For an already-open shell or a plain native `codex` binary, use `auth use`.
 
+Do not use `ccs persist codex` for Claude Code or the Claude Code Extension. That path
+would persist Claude settings that send Claude traffic through the Codex translator. CCS
+blocks Codex CLIProxy profiles from Claude extension setup; use `ccsxp` or
+`ccs codex --target codex` for ChatGPT/Codex subscriptions. If old settings were already
+persisted, clear them with:
+
+```bash
+ccs persist default --yes
+```
+
 Shell syntax for `use`:
 
 ```bash

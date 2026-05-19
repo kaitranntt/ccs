@@ -58,7 +58,11 @@ async function createRestoreFixture(
   };
 
   await fs.promises.mkdir(claudeDir, { recursive: true });
-  await fs.promises.writeFile(settingsPath, JSON.stringify(originalSettings, null, 2) + '\n', 'utf8');
+  await fs.promises.writeFile(
+    settingsPath,
+    JSON.stringify(originalSettings, null, 2) + '\n',
+    'utf8'
+  );
   await fs.promises.writeFile(backupPath, JSON.stringify(backupSettings, null, 2) + '\n', 'utf8');
 
   return { claudeDir, settingsPath, backupPath, timestamp, originalSettings, backupSettings };
@@ -98,15 +102,15 @@ afterEach(async () => {
 
 describe('persist command real handler paths', () => {
   it('throws parseError for missing --permission-mode before profile detection', async () => {
-    await expect(withScopedHome(() => handlePersistCommand(['glm', '--permission-mode']))).rejects.toThrow(
-      'Missing value for --permission-mode'
-    );
+    await expect(
+      withScopedHome(() => handlePersistCommand(['glm', '--permission-mode']))
+    ).rejects.toThrow('Missing value for --permission-mode');
   });
 
   it('throws parseError for empty inline --permission-mode before profile detection', async () => {
-    await expect(withScopedHome(() => handlePersistCommand(['glm', '--permission-mode=']))).rejects.toThrow(
-      'Missing value for --permission-mode'
-    );
+    await expect(
+      withScopedHome(() => handlePersistCommand(['glm', '--permission-mode=']))
+    ).rejects.toThrow('Missing value for --permission-mode');
   });
 
   it('throws parseError for invalid --permission-mode before profile detection', async () => {
@@ -116,34 +120,36 @@ describe('persist command real handler paths', () => {
   });
 
   it('throws parseError for unknown flags on real handler path', async () => {
-    await expect(withScopedHome(() => handlePersistCommand(['glm', '--unknown-flag']))).rejects.toThrow(
-      /Unknown option\(s\)/
-    );
+    await expect(
+      withScopedHome(() => handlePersistCommand(['glm', '--unknown-flag']))
+    ).rejects.toThrow(/Unknown option\(s\)/);
   });
 
   it('throws parseError for list/restore conflict on real handler path', async () => {
-    await expect(withScopedHome(() => handlePersistCommand(['--list-backups', '--restore']))).rejects.toThrow(
-      '--list-backups cannot be used with --restore'
-    );
+    await expect(
+      withScopedHome(() => handlePersistCommand(['--list-backups', '--restore']))
+    ).rejects.toThrow('--list-backups cannot be used with --restore');
   });
 
   it('throws parseError for permission flags with --restore on real handler path', async () => {
-    await expect(withScopedHome(() => handlePersistCommand(['--restore', '--auto-approve']))).rejects.toThrow(
-      /Permission flags are not valid with backup operations/
-    );
+    await expect(
+      withScopedHome(() => handlePersistCommand(['--restore', '--auto-approve']))
+    ).rejects.toThrow(/Permission flags are not valid with backup operations/);
   });
 
   it('shows help when --help is present even with other invalid args', async () => {
-    await expect(withScopedHome(() => handlePersistCommand(['--help', '--permission-mode']))).resolves.toBeUndefined();
+    await expect(
+      withScopedHome(() => handlePersistCommand(['--help', '--permission-mode']))
+    ).resolves.toBeUndefined();
   });
 
   it('does not create CLAUDE_CONFIG_DIR on parseError path', async () => {
     const isolatedClaudeDir = path.join(tempRoot, '.claude-parse-early');
     process.env.CLAUDE_CONFIG_DIR = isolatedClaudeDir;
 
-    await expect(withScopedHome(() => handlePersistCommand(['glm', '--permission-mode=']))).rejects.toThrow(
-      'Missing value for --permission-mode'
-    );
+    await expect(
+      withScopedHome(() => handlePersistCommand(['glm', '--permission-mode=']))
+    ).rejects.toThrow('Missing value for --permission-mode');
     expect(await pathExists(isolatedClaudeDir)).toBe(false);
   });
 });
@@ -294,6 +300,10 @@ describe('persist command Claude extension parity', () => {
       type: 'api',
       settings: path.join(tempRoot, '.ccs', 'glm.settings.json'),
     };
+    config.cliproxy.variants.codex = {
+      provider: 'codex',
+      settings: path.join(tempRoot, '.ccs', 'codex.settings.json'),
+    };
 
     await fs.promises.mkdir(path.join(tempRoot, '.ccs'), { recursive: true });
     await fs.promises.writeFile(
@@ -382,5 +392,51 @@ describe('persist command Claude extension parity', () => {
     expect(persisted.env.ANTHROPIC_MODEL).toBeUndefined();
     expect(persisted.env.CLAUDE_CONFIG_DIR).toBe(path.join(tempRoot, '.ccs', 'instances', 'work'));
     expect(fs.existsSync(persisted.env.CLAUDE_CONFIG_DIR)).toBe(true);
+  });
+
+  it('blocks Codex CLIProxy profiles from Claude settings persistence', async () => {
+    await writeUnifiedConfig();
+
+    const settingsPath = path.join(tempRoot, '.claude', 'settings.json');
+    await fs.promises.mkdir(path.dirname(settingsPath), { recursive: true });
+    await fs.promises.writeFile(
+      settingsPath,
+      JSON.stringify(
+        {
+          env: {
+            KEEP_ME: 'still-here',
+          },
+        },
+        null,
+        2
+      ) + '\n',
+      'utf8'
+    );
+
+    const originalConsoleLog = console.log;
+    const capturedLogs: string[] = [];
+    console.log = (...args: unknown[]) => {
+      capturedLogs.push(args.map((arg) => String(arg)).join(' '));
+    };
+
+    stubProcessExit();
+    try {
+      await expect(withScopedHome(() => handlePersistCommand(['codex', '--yes']))).rejects.toThrow(
+        'process.exit(1)'
+      );
+    } finally {
+      console.log = originalConsoleLog;
+    }
+
+    const renderedLogs = capturedLogs.join('\n');
+    expect(renderedLogs).toContain('Codex CLIProxy profile');
+    expect(renderedLogs).toContain('ccsxp');
+    expect(renderedLogs).toContain('ccs persist default --yes');
+
+    const persisted = JSON.parse(await fs.promises.readFile(settingsPath, 'utf8')) as {
+      env: Record<string, string>;
+    };
+    expect(persisted.env.KEEP_ME).toBe('still-here');
+    expect(persisted.env.ANTHROPIC_BASE_URL).toBeUndefined();
   });
 });
