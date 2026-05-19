@@ -127,9 +127,15 @@ CCS still supports environment-variable overrides for backward compatibility.
 | `CCS_BROWSER_USER_DATA_DIR` | Preferred override for Claude Browser Attach user-data dir |
 | `CCS_BROWSER_PROFILE_DIR` | Legacy alias for the same attach directory |
 | `CCS_BROWSER_DEVTOOLS_PORT` | Explicit DevTools port override |
+| `CCS_BROWSER_INTERCEPT_FULFILL_MODE=enabled` | Dangerous local-testing opt-in for Browser MCP response fulfillment; disabled by default |
 
 If an override is active, Browser status surfaces should report that the current session is being
 managed externally by environment variables.
+
+Browser MCP request interception can continue or fail matched requests by default. Synthetic response
+fulfillment (`action: fulfill`) is more sensitive because it can serve caller-supplied response
+content inside the attached browser's target origin. CCS therefore hides and blocks fulfillment unless
+`CCS_BROWSER_INTERCEPT_FULFILL_MODE=enabled` is set for a trusted local test session.
 
 The saved browser policy still controls default exposure. Env overrides change the effective attach
 path/port for the current shell; they do not bypass `policy: manual`.

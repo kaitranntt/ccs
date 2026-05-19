@@ -3,6 +3,8 @@ import { runMcpRequests, getResponseText } from './browser-mcp-test-harness';
 import type { MockPageState } from './browser-mcp-test-harness';
 
 describe('ccs-browser MCP server - session and interception', () => {
+  const fulfillEnabledEnv = { CCS_BROWSER_INTERCEPT_FULFILL_MODE: 'enabled' };
+
   it('lists browser tools including navigate, click, type, and screenshot', async () => {
     const responses = await runMcpRequests(
       [{ id: 'page-1', title: 'Example Page', currentUrl: 'https://example.com/' }],
@@ -14,7 +16,9 @@ describe('ccs-browser MCP server - session and interception', () => {
         tools: Array<{
           name: string;
           description?: string;
-          inputSchema?: { properties?: Record<string, { type?: string; minimum?: number }> };
+          inputSchema?: {
+            properties?: Record<string, { type?: string; minimum?: number; enum?: string[] }>;
+          };
         }>;
       }
     ).tools;
@@ -106,7 +110,10 @@ describe('ccs-browser MCP server - session and interception', () => {
     expect(addRuleTool?.inputSchema?.properties?.urlRegex).toMatchObject({ type: 'string' });
     expect(addRuleTool?.inputSchema?.properties?.headerMatchers).toMatchObject({ type: 'array' });
     expect(addRuleTool?.inputSchema?.properties?.priority).toMatchObject({ type: 'integer' });
-    expect(addRuleTool?.inputSchema?.properties?.action).toMatchObject({ type: 'string' });
+    expect(addRuleTool?.inputSchema?.properties?.action).toMatchObject({
+      type: 'string',
+      enum: ['continue', 'fail'],
+    });
     expect(addRuleTool?.inputSchema?.properties?.statusCode).toMatchObject({ type: 'integer' });
     expect(addRuleTool?.inputSchema?.properties?.responseHeaders).toMatchObject({ type: 'array' });
     expect(addRuleTool?.inputSchema?.properties?.headers).toBeUndefined();
@@ -1148,6 +1155,7 @@ describe('ccs-browser MCP server - session and interception', () => {
         },
       ],
       {
+        childEnv: fulfillEnabledEnv,
         responseTimeoutMs: 12000,
       }
     );
@@ -1217,6 +1225,7 @@ describe('ccs-browser MCP server - session and interception', () => {
         },
       ],
       {
+        childEnv: fulfillEnabledEnv,
         responseTimeoutMs: 12000,
       }
     );
@@ -1372,6 +1381,7 @@ describe('ccs-browser MCP server - session and interception', () => {
         },
       ],
       {
+        childEnv: fulfillEnabledEnv,
         responseTimeoutMs: 12000,
       }
     );
@@ -1435,6 +1445,46 @@ describe('ccs-browser MCP server - session and interception', () => {
     expect(pages[0]?.intercept?.continuedRequestIds).toContain('req-header-regex');
   });
 
+  it('exposes fulfill interception only with the explicit dangerous opt-in', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
+      [
+        { jsonrpc: '2.0', id: 958, method: 'tools/list' },
+        {
+          jsonrpc: '2.0',
+          id: 959,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: {
+              urlIncludes: '/api/mock',
+              action: 'fulfill',
+              statusCode: 200,
+              body: 'blocked',
+            },
+          },
+        },
+      ]
+    );
+
+    const tools = (
+      responses.find((message) => message.id === 958)?.result as {
+        tools: Array<{
+          name: string;
+          inputSchema?: { properties?: Record<string, { enum?: string[] }> };
+        }>;
+      }
+    ).tools;
+    const addRuleTool = tools.find((tool) => tool.name === 'browser_add_intercept_rule');
+    expect(addRuleTool?.inputSchema?.properties?.action?.enum).toEqual(['continue', 'fail']);
+
+    const response = responses.find((message) => message.id === 959);
+    expect((response?.result as { isError?: boolean }).isError).toBe(true);
+    expect(getResponseText(response)).toContain(
+      'Browser MCP failed: action fulfill is disabled by CCS_BROWSER_INTERCEPT_FULFILL_MODE=disabled'
+    );
+  });
+
   it('adds a fulfill interception rule and lists its response summary', async () => {
     const responses = await runMcpRequests(
       [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
@@ -1461,7 +1511,8 @@ describe('ccs-browser MCP server - session and interception', () => {
           method: 'tools/call',
           params: { name: 'browser_list_intercept_rules', arguments: {} },
         },
-      ]
+      ],
+      { childEnv: fulfillEnabledEnv }
     );
 
     const listText = getResponseText(responses.find((message) => message.id === 962));
@@ -1515,6 +1566,7 @@ describe('ccs-browser MCP server - session and interception', () => {
         },
       ],
       {
+        childEnv: fulfillEnabledEnv,
         responseTimeoutMs: 12000,
       }
     );
@@ -1577,6 +1629,7 @@ describe('ccs-browser MCP server - session and interception', () => {
         },
       ],
       {
+        childEnv: fulfillEnabledEnv,
         responseTimeoutMs: 12000,
       }
     );
@@ -1610,7 +1663,8 @@ describe('ccs-browser MCP server - session and interception', () => {
             },
           },
         },
-      ]
+      ],
+      { childEnv: fulfillEnabledEnv }
     );
 
     const addText = getResponseText(responses.find((message) => message.id === 967));
@@ -1636,7 +1690,8 @@ describe('ccs-browser MCP server - session and interception', () => {
             },
           },
         },
-      ]
+      ],
+      { childEnv: fulfillEnabledEnv }
     );
 
     const response = responses.find((message) => message.id === 968);
@@ -1664,7 +1719,8 @@ describe('ccs-browser MCP server - session and interception', () => {
             },
           },
         },
-      ]
+      ],
+      { childEnv: fulfillEnabledEnv }
     );
 
     const response = responses.find((message) => message.id === 969);
@@ -1692,7 +1748,8 @@ describe('ccs-browser MCP server - session and interception', () => {
             },
           },
         },
-      ]
+      ],
+      { childEnv: fulfillEnabledEnv }
     );
 
     const response = responses.find((message) => message.id === 970);
@@ -1719,7 +1776,8 @@ describe('ccs-browser MCP server - session and interception', () => {
             },
           },
         },
-      ]
+      ],
+      { childEnv: fulfillEnabledEnv }
     );
 
     const response = responses.find((message) => message.id === 971);
@@ -1845,6 +1903,7 @@ describe('ccs-browser MCP server - session and interception', () => {
         },
       ],
       {
+        childEnv: fulfillEnabledEnv,
         responseTimeoutMs: 12000,
       }
     );
