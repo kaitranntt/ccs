@@ -263,3 +263,5 @@ If CCS reports `unsupported_build`, upgrade Codex and rerun `ccs browser status`
 - Prefer a dedicated automation user-data dir instead of your everyday browser profile
 - Do not commit browser paths, secrets, or generated session state to version control
 - Treat `~/.ccs/config.yaml`, `~/.claude.json`, and the browser user-data directory as local machine state
+- `browser_wait_for_event` requires explicit scoping for network request events (`urlIncludes`) and download events (`urlIncludes` or `suggestedFilenameIncludes`)
+- Event details redact observed navigation, request, and download URLs before returning them to the MCP caller so observed browser metadata does not expose query strings, fragments, or path-scoped bearer values

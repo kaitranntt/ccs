@@ -750,7 +750,7 @@ describe('ccs-browser MCP server - advanced interactions', () => {
     );
   });
 
-  it('ignores child-frame navigations when waiting for a page navigation event', async () => {
+  it('ignores child-frame navigations and redacts matched navigation URLs', async () => {
     const responses = await runMcpRequests(
       [
         {
@@ -759,8 +759,13 @@ describe('ccs-browser MCP server - advanced interactions', () => {
           currentUrl: 'https://example.com/',
           events: {
             navigations: [
-              { url: 'https://example.com/embedded-checkout', parentId: 'frame-1' },
-              { url: 'https://example.com/checkout' },
+              {
+                url: 'https://example.com/embedded-checkout?code=child-secret',
+                parentId: 'frame-1',
+              },
+              {
+                url: 'https://example.com/checkout/session-token-123?code=secret-state#done',
+              },
             ],
           },
         },
@@ -774,7 +779,7 @@ describe('ccs-browser MCP server - advanced interactions', () => {
             name: 'browser_wait_for_event',
             arguments: {
               timeoutMs: 1000,
-              event: { kind: 'navigation', urlIncludes: '/checkout' },
+              event: { kind: 'navigation', urlIncludes: '/checkout/session-token-123' },
             },
           },
         },
@@ -783,8 +788,69 @@ describe('ccs-browser MCP server - advanced interactions', () => {
 
     const text = getResponseText(responses.find((message) => message.id === 58));
     expect(text).toContain('status: observed');
-    expect(text).toContain('"url":"https://example.com/checkout"');
+    expect(text).toContain('"url":"https://example.com"');
     expect(text).not.toContain('embedded-checkout');
+    expect(text).not.toContain('session-token-123');
+    expect(text).not.toContain('secret-state');
+  });
+
+  it('requires request event URL scoping and redacts observed request URLs', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Request Page',
+          currentUrl: 'https://example.com/',
+          events: {
+            requests: [
+              {
+                url: 'https://api.example.com/oauth/callback?code=secret-code&state=secret-state',
+                method: 'GET',
+              },
+            ],
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 59,
+          method: 'tools/call',
+          params: {
+            name: 'browser_wait_for_event',
+            arguments: {
+              timeoutMs: 1000,
+              event: { kind: 'request' },
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 60,
+          method: 'tools/call',
+          params: {
+            name: 'browser_wait_for_event',
+            arguments: {
+              timeoutMs: 1000,
+              event: { kind: 'request', urlIncludes: '/oauth/callback' },
+            },
+          },
+        },
+      ]
+    );
+
+    const unscopedText = getResponseText(responses.find((message) => message.id === 59));
+    expect(unscopedText).toContain(
+      'Browser MCP failed: request events require urlIncludes to limit network metadata exposure'
+    );
+
+    const scopedText = getResponseText(responses.find((message) => message.id === 60));
+    expect(scopedText).toContain('status: observed');
+    expect(scopedText).toContain('"url":"https://api.example.com"');
+    expect(scopedText).toContain('"method":"GET"');
+    expect(scopedText).not.toContain('secret-code');
+    expect(scopedText).not.toContain('secret-state');
+    expect(scopedText).not.toContain('/oauth/callback');
   });
 
   it('filters download events by the selected page frame when pageIndex is provided', async () => {

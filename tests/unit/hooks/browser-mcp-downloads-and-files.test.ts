@@ -262,6 +262,52 @@ describe('ccs-browser MCP server - downloads and file inputs', () => {
     expect(getResponseText(responses.find((message) => message.id === 62))).toContain(
       'status: observed'
     );
+    const text = getResponseText(responses.find((message) => message.id === 62));
+    expect(text).toContain('status: observed');
+    expect(text).toContain('"url":"https://example.com"');
+    expect(text).not.toContain('/files/export.zip');
+  });
+
+  it('requires download event scoping before observing browser-level download URLs', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Event Page',
+          currentUrl: 'https://example.com/',
+          events: {
+            downloads: [
+              {
+                guid: 'download-guid-3',
+                url: 'https://example.com/files/private.zip?signature=secret',
+                suggestedFilename: 'private.zip',
+              },
+            ],
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 63,
+          method: 'tools/call',
+          params: {
+            name: 'browser_wait_for_event',
+            arguments: {
+              timeoutMs: 1000,
+              event: { kind: 'download' },
+            },
+          },
+        },
+      ],
+      { responseTimeoutMs: 12000 }
+    );
+
+    const text = getResponseText(responses.find((message) => message.id === 63));
+    expect(text).toContain(
+      'Browser MCP failed: download events require urlIncludes or suggestedFilenameIncludes to limit metadata exposure'
+    );
+    expect(text).not.toContain('signature=secret');
   });
 
   it('sets files on selected-page, frameSelector, and pierceShadow file inputs', async () => {
