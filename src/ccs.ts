@@ -6,6 +6,7 @@ import { fail } from './utils/ui';
 import { handleError, runCleanup } from './errors';
 
 import { createLogger, runWithRequestId } from './services/logging';
+import { redactArgv } from './services/logging/log-redaction';
 // Import target adapter system
 import { registerTarget, ClaudeAdapter, DroidAdapter, CodexAdapter } from './targets';
 
@@ -143,7 +144,7 @@ const cliEntryStartedAt = Date.now();
 const cliEntryLogger = createLogger('cli:entry');
 runWithRequestId(() => {
   cliEntryLogger.stage('intake', 'cli.command.start', 'CLI invocation started', {
-    argv: process.argv.slice(2),
+    argv: redactArgv(process.argv.slice(2)),
   });
   return main()
     .then(() => {
