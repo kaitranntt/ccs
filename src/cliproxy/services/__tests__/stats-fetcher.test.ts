@@ -636,6 +636,45 @@ describe('fetchCliproxyUsageRaw', () => {
     });
   });
 
+  it('skips oversized CLIProxy main logs and falls back to API-key totals', async () => {
+    writeCliproxyMainLog([
+      '2026-05-05T18:45:00.000Z INFO request_id=req-1 Use OAuth provider=codex auth_file=codex-user@example.com-pro.json for model gpt-5.5',
+      'x'.repeat(2 * 1024 * 1024 + 64),
+      '2026-05-05T18:45:01.000Z INFO request_id=req-1 POST "/api/provider/codex/v1/messages?beta=true" status=200',
+    ]);
+    let apiKeyUsageCalls = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+
+      if (url.endsWith('/v0/management/usage')) {
+        return jsonResponse({ error: 'not found' }, 404);
+      }
+      if (url.includes('/v0/management/usage-queue?count=1000')) {
+        return jsonResponse([]);
+      }
+      if (url.endsWith('/v0/management/api-key-usage')) {
+        apiKeyUsageCalls++;
+        return jsonResponse({
+          codex: {
+            'oauth|codex-user@example.com-pro.json': {
+              success: 3,
+              failed: 0,
+            },
+          },
+        });
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    }) as typeof fetch;
+
+    const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19221));
+
+    expect(apiKeyUsageCalls).toBe(1);
+    expect(raw?.usage?.total_requests).toBe(3);
+    expect(raw?.usage?.success_count).toBe(3);
+    expect(raw?.usage?.apis?.codex.total_requests).toBe(3);
+    expect(raw?.usage?.apis?.codex.models?.['gpt-5.5']).toBeUndefined();
+  });
+
   it('parses bracketed CLIProxy main.log request ids and local timestamps', async () => {
     writeCliproxyMainLog([
       '[2026-05-05 18:45:00] [req-a] [debug] Use OAuth provider=codex auth_file=codex-user-a@example.com-pro.json for model gpt-5.5',
