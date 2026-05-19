@@ -13,6 +13,7 @@ import {
 import { resolveOpenAICompatProxyPreferredPort } from '../../../src/proxy/proxy-port-resolver';
 import { resolveOpenAICompatProfileConfig } from '../../../src/proxy/profile-router';
 import {
+  OPENAI_COMPAT_PROXY_SERVICE_NAME,
   OPENAI_COMPAT_PROXY_ADAPTIVE_PORT_END,
   OPENAI_COMPAT_PROXY_ADAPTIVE_PORT_START,
   getLegacyOpenAICompatProxyPidPath,
@@ -91,6 +92,24 @@ function readProcessCommandLine(pid: number): string | null {
   } catch {
     return null;
   }
+}
+
+function startSpoofedOpenAICompatHealthServer(port: number, profileName: string) {
+  return Bun.serve({
+    hostname: '127.0.0.1',
+    port,
+    fetch(request) {
+      const { pathname } = new URL(request.url);
+      if (pathname === '/health') {
+        return Response.json({
+          service: OPENAI_COMPAT_PROXY_SERVICE_NAME,
+          profile: profileName,
+        });
+      }
+
+      return new Response('not found', { status: 404 });
+    },
+  });
 }
 
 describe('openai proxy daemon lifecycle', () => {
@@ -574,6 +593,144 @@ describe('openai proxy daemon lifecycle', () => {
     expect(started.port).not.toBe(stalePort);
   });
 
+  it('does not reuse a profile session when its recorded pid is not owned by the proxy daemon', async () => {
+    const profileName = await findProfileNameWithFreeAdaptivePort('unowned-profile-session');
+    const preferredPort = resolveOpenAICompatProxyPreferredPort(profileName);
+    const stalePort = await getPortOutsideOpenAICompatAdaptiveRange();
+    const settingsPath = path.join(tempDir, `${profileName}.settings.json`);
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        env: {
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:11434',
+          ANTHROPIC_AUTH_TOKEN: 'ollama-unowned-profile-session',
+          ANTHROPIC_MODEL: 'qwen3-coder',
+          CCS_DROID_PROVIDER: 'generic-chat-completion-api',
+        },
+      }),
+      'utf8'
+    );
+
+    const profile = resolveOpenAICompatProfileConfig(profileName, settingsPath, {
+      ANTHROPIC_BASE_URL: 'http://127.0.0.1:11434',
+      ANTHROPIC_AUTH_TOKEN: 'ollama-unowned-profile-session',
+      ANTHROPIC_MODEL: 'qwen3-coder',
+      CCS_DROID_PROVIDER: 'generic-chat-completion-api',
+    });
+    if (!profile) {
+      throw new Error('Expected an unowned-profile-session OpenAI-compatible profile');
+    }
+
+    const attackerServer = startSpoofedOpenAICompatHealthServer(stalePort, profileName);
+
+    try {
+      fs.mkdirSync(path.dirname(getOpenAICompatProxySessionPath(profileName)), { recursive: true });
+      fs.writeFileSync(getOpenAICompatProxyPidPath(profileName), String(process.pid), 'utf8');
+      fs.writeFileSync(
+        getOpenAICompatProxySessionPath(profileName),
+        JSON.stringify(
+          {
+            profileName: profile.profileName,
+            settingsPath: profile.settingsPath,
+            host: '127.0.0.1',
+            port: stalePort,
+            baseUrl: profile.baseUrl,
+            authToken: 'stale-token',
+            model: profile.model,
+          },
+          null,
+          2
+        ) + '\n',
+        'utf8'
+      );
+
+      const status = await getOpenAICompatProxyStatus(profileName);
+      expect(status.running).toBe(false);
+      expect(status.port).toBe(stalePort);
+      expect(status.pid).toBeUndefined();
+      expect(status.authToken).toBeUndefined();
+      expect(status.baseUrl).toBeUndefined();
+
+      const started = await startOpenAICompatProxy(profile);
+      expect(started.success).toBe(true);
+      expect(started.alreadyRunning).not.toBe(true);
+      expect(started.port).toBe(preferredPort);
+      expect(started.port).not.toBe(stalePort);
+      expect(started.authToken).not.toBe('stale-token');
+    } finally {
+      attackerServer.stop(true);
+    }
+  });
+
+  it('does not reuse a legacy session when its recorded pid is not owned by the proxy daemon', async () => {
+    const profileName = await findProfileNameWithFreeAdaptivePort('unowned-legacy-session');
+    const preferredPort = resolveOpenAICompatProxyPreferredPort(profileName);
+    const stalePort = await getPortOutsideOpenAICompatAdaptiveRange();
+    const settingsPath = path.join(tempDir, `${profileName}.settings.json`);
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        env: {
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:11434',
+          ANTHROPIC_AUTH_TOKEN: 'ollama-unowned-legacy-session',
+          ANTHROPIC_MODEL: 'qwen3-coder',
+          CCS_DROID_PROVIDER: 'generic-chat-completion-api',
+        },
+      }),
+      'utf8'
+    );
+
+    const profile = resolveOpenAICompatProfileConfig(profileName, settingsPath, {
+      ANTHROPIC_BASE_URL: 'http://127.0.0.1:11434',
+      ANTHROPIC_AUTH_TOKEN: 'ollama-unowned-legacy-session',
+      ANTHROPIC_MODEL: 'qwen3-coder',
+      CCS_DROID_PROVIDER: 'generic-chat-completion-api',
+    });
+    if (!profile) {
+      throw new Error('Expected an unowned-legacy-session OpenAI-compatible profile');
+    }
+
+    const attackerServer = startSpoofedOpenAICompatHealthServer(stalePort, profileName);
+
+    try {
+      fs.mkdirSync(path.dirname(getLegacyOpenAICompatProxySessionPath()), { recursive: true });
+      fs.writeFileSync(getLegacyOpenAICompatProxyPidPath(), String(process.pid), 'utf8');
+      fs.writeFileSync(
+        getLegacyOpenAICompatProxySessionPath(),
+        JSON.stringify(
+          {
+            profileName: profile.profileName,
+            settingsPath: profile.settingsPath,
+            host: '127.0.0.1',
+            port: stalePort,
+            baseUrl: profile.baseUrl,
+            authToken: 'stale-token',
+            model: profile.model,
+          },
+          null,
+          2
+        ) + '\n',
+        'utf8'
+      );
+
+      const status = await getOpenAICompatProxyStatus(profileName);
+      expect(status.running).toBe(false);
+      expect(status.port).toBe(stalePort);
+      expect(status.pid).toBeUndefined();
+      expect(status.authToken).toBeUndefined();
+      expect(status.baseUrl).toBeUndefined();
+
+      const started = await startOpenAICompatProxy(profile);
+      expect(started.success).toBe(true);
+      expect(started.alreadyRunning).not.toBe(true);
+      expect(started.port).toBe(preferredPort);
+      expect(started.port).not.toBe(stalePort);
+      expect(started.authToken).not.toBe('stale-token');
+    } finally {
+      attackerServer.stop(true);
+    }
+  });
+
   it('does not keep a stopped shared-default profile anchored to legacy port 3456', async () => {
     const settingsPath = path.join(tempDir, 'legacy-shared-default.settings.json');
     fs.writeFileSync(
@@ -819,11 +976,15 @@ describe('openai proxy daemon lifecycle', () => {
       }),
       'utf8'
     );
-    const firstProfile = resolveOpenAICompatProfileConfig('profile-b-stale-pid', firstSettingsPath, {
-      ANTHROPIC_BASE_URL: 'https://api.openai.com/v1',
-      ANTHROPIC_AUTH_TOKEN: 'sk-profile-b-stale-pid',
-      ANTHROPIC_MODEL: 'gpt-4.1',
-    });
+    const firstProfile = resolveOpenAICompatProfileConfig(
+      'profile-b-stale-pid',
+      firstSettingsPath,
+      {
+        ANTHROPIC_BASE_URL: 'https://api.openai.com/v1',
+        ANTHROPIC_AUTH_TOKEN: 'sk-profile-b-stale-pid',
+        ANTHROPIC_MODEL: 'gpt-4.1',
+      }
+    );
     if (!firstProfile) {
       throw new Error('Expected first OpenAI-compatible profile');
     }
@@ -844,11 +1005,15 @@ describe('openai proxy daemon lifecycle', () => {
       }),
       'utf8'
     );
-    const secondProfile = resolveOpenAICompatProfileConfig('profile-a-stale-pid', secondSettingsPath, {
-      ANTHROPIC_BASE_URL: 'https://api.openai.com/v1',
-      ANTHROPIC_AUTH_TOKEN: 'sk-profile-a-stale-pid',
-      ANTHROPIC_MODEL: 'gpt-4.1',
-    });
+    const secondProfile = resolveOpenAICompatProfileConfig(
+      'profile-a-stale-pid',
+      secondSettingsPath,
+      {
+        ANTHROPIC_BASE_URL: 'https://api.openai.com/v1',
+        ANTHROPIC_AUTH_TOKEN: 'sk-profile-a-stale-pid',
+        ANTHROPIC_MODEL: 'gpt-4.1',
+      }
+    );
     if (!secondProfile) {
       throw new Error('Expected second OpenAI-compatible profile');
     }

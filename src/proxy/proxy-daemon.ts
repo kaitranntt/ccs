@@ -228,7 +228,7 @@ async function getOpenAICompatProxyStatusForProfile(
 
   const pid = state.pid;
   if (!pid || verifyProxyProcessOwnership(pid, profileName) !== 'owned') {
-    return { running: false, profileName };
+    return { running: false, profileName, port: session.port };
   }
 
   const port = session.port;
@@ -260,6 +260,7 @@ async function getLegacyOpenAICompatProxyStatus(): Promise<OpenAICompatProxyStat
       : false;
   return {
     running,
+    port,
     pid: running ? pid || undefined : undefined,
     ...session,
   };
