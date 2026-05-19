@@ -302,10 +302,26 @@ export async function handleProxyMessagesRequest(
       logger.stage('respond', 'request.respond', 'Proxy response written', undefined, {
         latencyMs: Date.now() - startedAt,
       });
-      await ephemeralInsecureDispatcher?.close();
     } finally {
       clearTimeout(timeout);
       cleanupDisconnectHandlers();
+      if (ephemeralInsecureDispatcher) {
+        try {
+          await ephemeralInsecureDispatcher.close();
+        } catch (closeError) {
+          logger.stage(
+            'cleanup',
+            'request.dispatcher_close_failed',
+            'Failed to close per-request insecure dispatcher',
+            {
+              profileName: profile.profileName,
+              routedProfileName: upstream.route.profile.profileName,
+              error: closeError instanceof Error ? closeError.message : String(closeError),
+            },
+            { level: 'warn' }
+          );
+        }
+      }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown proxy error';
