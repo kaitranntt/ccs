@@ -76,6 +76,10 @@ persisted, clear them with:
 ccs persist default --yes
 ```
 
+The command prints a config receipt after writing settings: cleared managed keys,
+written managed keys, whether and where any `/api/provider/codex` translator URL
+remains, and the native Codex targets to use next.
+
 Shell syntax for `use`:
 
 ```bash

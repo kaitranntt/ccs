@@ -37,6 +37,14 @@ interface ResolvedEnv {
   notes?: string[];
 }
 
+interface PersistReceipt {
+  clearedKeys: string[];
+  clearedCodexTranslatorUrlKeys: string[];
+  writtenKeys: string[];
+  unchangedWrittenKeys: string[];
+  codexTranslatorUrlPaths: string[];
+}
+
 const PERSIST_KNOWN_FLAGS = [
   '--yes',
   '-y',
@@ -54,6 +62,8 @@ const PERSIST_LOCK_STALE_MS = 10000;
 const PERSIST_LOCK_RETRIES = 5;
 const PERSIST_LOCK_RETRY_MIN_MS = 100;
 const PERSIST_LOCK_RETRY_MAX_MS = 500;
+const CODEX_TRANSLATOR_URL_MARKER = '/api/provider/codex';
+const NATIVE_CODEX_TARGETS = ['ccsxp', 'ccs codex --target codex'];
 
 type PermissionMode = (typeof VALID_PERMISSION_MODES)[number];
 
@@ -509,6 +519,112 @@ function isSensitiveEnvKey(key: string): boolean {
   );
 }
 
+function formatSettingsPathSegment(basePath: string, segment: string | number): string {
+  if (typeof segment === 'number') {
+    return `${basePath}[${segment}]`;
+  }
+
+  if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(segment)) {
+    return basePath ? `${basePath}.${segment}` : segment;
+  }
+
+  return `${basePath}[${JSON.stringify(segment)}]`;
+}
+
+function findCodexTranslatorUrlPaths(value: unknown, path = ''): string[] {
+  if (typeof value === 'string') {
+    return value.includes(CODEX_TRANSLATOR_URL_MARKER) ? [path || '(root)'] : [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) =>
+      findCodexTranslatorUrlPaths(item, formatSettingsPathSegment(path, index))
+    );
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    return Object.entries(value).flatMap(([key, item]) =>
+      findCodexTranslatorUrlPaths(item, formatSettingsPathSegment(path, key))
+    );
+  }
+
+  return [];
+}
+
+function buildPersistReceipt(
+  existingEnv: Record<string, string>,
+  mergedSettings: Record<string, unknown>,
+  resolved: ResolvedEnv
+): PersistReceipt {
+  const mergedEnv =
+    typeof mergedSettings.env === 'object' &&
+    mergedSettings.env !== null &&
+    !Array.isArray(mergedSettings.env)
+      ? (mergedSettings.env as Record<string, string>)
+      : {};
+
+  const clearedKeys = resolved.clearEnvKeys.filter(
+    (key) => Object.prototype.hasOwnProperty.call(existingEnv, key) && mergedEnv[key] === undefined
+  );
+  const clearedCodexTranslatorUrlKeys = clearedKeys.filter(
+    (key) => findCodexTranslatorUrlPaths(existingEnv[key]).length > 0
+  );
+  const writtenKeys = Object.entries(resolved.env)
+    .filter(([key, value]) => existingEnv[key] !== value)
+    .map(([key]) => key)
+    .sort((left, right) => left.localeCompare(right));
+  const unchangedWrittenKeys = Object.entries(resolved.env)
+    .filter(([key, value]) => existingEnv[key] === value)
+    .map(([key]) => key)
+    .sort((left, right) => left.localeCompare(right));
+
+  return {
+    clearedKeys,
+    clearedCodexTranslatorUrlKeys,
+    writtenKeys,
+    unchangedWrittenKeys,
+    codexTranslatorUrlPaths: findCodexTranslatorUrlPaths(mergedSettings),
+  };
+}
+
+function formatKeyList(keys: string[]): string {
+  return keys.length > 0 ? keys.join(', ') : 'none';
+}
+
+function formatSettingsPathList(paths: string[]): string {
+  const visiblePaths = paths.slice(0, 5);
+  const remainingCount = paths.length - visiblePaths.length;
+  return remainingCount > 0
+    ? `${visiblePaths.join(', ')} (+${remainingCount} more)`
+    : visiblePaths.join(', ');
+}
+
+function printPersistReceipt(receipt: PersistReceipt): void {
+  console.log(subheader('Config Receipt'));
+  console.log(`  Settings: ${getClaudeSettingsDisplayPath()}`);
+  console.log(`  Cleared managed keys: ${formatKeyList(receipt.clearedKeys)}`);
+  console.log(`  Written/rewritten managed keys: ${formatKeyList(receipt.writtenKeys)}`);
+  if (receipt.unchangedWrittenKeys.length > 0) {
+    console.log(`  Already current keys: ${formatKeyList(receipt.unchangedWrittenKeys)}`);
+  }
+
+  const hadCodexTranslatorCleanup = receipt.clearedCodexTranslatorUrlKeys.length > 0;
+  if (receipt.codexTranslatorUrlPaths.length > 0) {
+    console.log(
+      warn(
+        `  Codex translator URL: still found at ${formatSettingsPathList(
+          receipt.codexTranslatorUrlPaths
+        )} (${CODEX_TRANSLATOR_URL_MARKER})`
+      )
+    );
+  } else {
+    console.log(ok('  Codex translator URL: not found'));
+  }
+  if (hadCodexTranslatorCleanup || receipt.codexTranslatorUrlPaths.length > 0) {
+    console.log(`  Native Codex target: ${NATIVE_CODEX_TARGETS.join(' or ')}`);
+  }
+}
+
 /** Resolve shared Claude settings payload for a profile */
 async function resolveProfileEnvVars(profileName: string): Promise<ResolvedEnv> {
   const setup = await resolveClaudeExtensionSetup(profileName);
@@ -927,6 +1043,16 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
       }
 
       await writeClaudeSettings(mergedSettings);
+      const persistedSettings = await readClaudeSettings();
+      const receipt = buildPersistReceipt(existingEnv, persistedSettings, resolved);
+
+      console.log('');
+      console.log(
+        ok(`Profile '${parsedArgs.profile}' written to ${getClaudeSettingsDisplayPath()}`)
+      );
+      console.log('');
+      printPersistReceipt(receipt);
+      console.log('');
     });
   } catch (error) {
     const message = (error as Error).message;
@@ -943,9 +1069,6 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
     }
     process.exit(1);
   }
-  console.log('');
-  console.log(ok(`Profile '${parsedArgs.profile}' written to ${getClaudeSettingsDisplayPath()}`));
-  console.log('');
   console.log(info('Claude Code will now use this profile by default.'));
   console.log(dim('    To revert, restore the backup or edit settings.json manually.'));
   console.log('');
