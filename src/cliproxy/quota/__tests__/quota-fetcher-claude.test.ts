@@ -563,6 +563,31 @@ describe('Claude Quota Fetcher', () => {
       expect(result.windows).toHaveLength(0);
     });
 
+    it('falls back to status-only message when error payload is too large', async () => {
+      createClaudeAccount('claude-large-error@example.com', {
+        access_token: 'oauth-token',
+        expired: '2099-01-01T00:00:00.000Z',
+        type: 'claude',
+      });
+
+      global.fetch = mock(() =>
+        Promise.resolve(
+          new Response('x'.repeat(9000), {
+            status: 400,
+            headers: {
+              'Content-Type': 'text/plain',
+              'Content-Length': '9000',
+            },
+          })
+        )
+      ) as typeof fetch;
+
+      const result = await fetchClaudeQuota('claude-large-error@example.com');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Claude OAuth usage API error: 400');
+    });
+
     it('retries once on transient 500 then succeeds', async () => {
       createClaudeAccount('claude-retry@example.com', {
         access_token: 'retry-token',

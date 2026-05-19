@@ -21,6 +21,7 @@ export const CLAUDE_OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage
 const CLAUDE_QUOTA_TIMEOUT_MS = 10000;
 const CLAUDE_QUOTA_MAX_ATTEMPTS = 2;
 const CLAUDE_OAUTH_BETA_HEADER = 'oauth-2025-04-20';
+const CLAUDE_QUOTA_ERROR_BODY_MAX_BYTES = 8192;
 
 interface ClaudeAuthData {
   accessToken: string;
@@ -79,8 +80,32 @@ function extractErrorMessage(payload: unknown): string | null {
 
 async function readResponseErrorMessage(response: Response): Promise<string | null> {
   try {
-    const body = await response.text();
-    if (!body || body.trim().length === 0) return null;
+    const contentLength = Number(response.headers.get('content-length') ?? '0');
+    if (Number.isFinite(contentLength) && contentLength > CLAUDE_QUOTA_ERROR_BODY_MAX_BYTES) {
+      return null;
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) return null;
+
+    const decoder = new TextDecoder();
+    const chunks: string[] = [];
+    let totalBytes = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > CLAUDE_QUOTA_ERROR_BODY_MAX_BYTES) return null;
+
+      chunks.push(decoder.decode(value, { stream: true }));
+    }
+
+    chunks.push(decoder.decode());
+    const body = chunks.join('').trim();
+    if (!body) return null;
 
     try {
       const parsed = JSON.parse(body) as unknown;
@@ -90,7 +115,7 @@ async function readResponseErrorMessage(response: Response): Promise<string | nu
       // fall through to plain-text fallback
     }
 
-    return body.trim();
+    return body;
   } catch {
     return null;
   }
@@ -230,13 +255,13 @@ export async function fetchClaudeQuota(
         },
       });
 
-      clearTimeout(timeoutId);
       if (verbose) {
         console.error(`[i] Claude OAuth usage status: ${response.status} (attempt ${attempt})`);
       }
 
       if (response.status === 401) {
         const errorMessage = await readResponseErrorMessage(response);
+        clearTimeout(timeoutId);
         return buildEmptyResult(
           errorMessage || 'Authentication required for Claude OAuth usage',
           accountId,
@@ -245,10 +270,12 @@ export async function fetchClaudeQuota(
       }
 
       if (response.status === 404) {
+        clearTimeout(timeoutId);
         return buildEmptyResult('Claude OAuth usage endpoint not found', accountId);
       }
 
       if (response.status === 403) {
+        clearTimeout(timeoutId);
         return buildEmptyResult('Not authorized for Claude OAuth usage', accountId);
       }
 
@@ -262,6 +289,7 @@ export async function fetchClaudeQuota(
         ) {
           continue;
         }
+        clearTimeout(timeoutId);
         return buildEmptyResult(lastError, accountId);
       }
 
@@ -269,15 +297,19 @@ export async function fetchClaudeQuota(
       try {
         payload = await response.json();
       } catch {
+        clearTimeout(timeoutId);
         return buildEmptyResult('Invalid Claude OAuth usage format', accountId);
       }
 
       if (!toObject(payload)) {
+        clearTimeout(timeoutId);
         return buildEmptyResult('Invalid Claude OAuth usage format', accountId);
       }
 
       const windows = buildClaudeQuotaWindows(payload as Record<string, unknown>);
       const coreUsage = buildClaudeCoreUsageSummary(windows);
+
+      clearTimeout(timeoutId);
 
       return {
         success: true,
@@ -304,6 +336,7 @@ export async function fetchClaudeQuota(
       }
 
       if (attempt >= CLAUDE_QUOTA_MAX_ATTEMPTS) {
+        clearTimeout(timeoutId);
         return buildEmptyResult(lastError, accountId);
       }
     }
