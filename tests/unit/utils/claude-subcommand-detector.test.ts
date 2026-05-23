@@ -56,6 +56,12 @@ describe('isClaudeSubcommandInvocation', () => {
     expect(isClaudeSubcommandInvocation(['--name', 'auth'])).toBe(false);
   });
 
+
+  it('treats --print prompt mode as non-subcommand even with subcommand-like prompt text', () => {
+    expect(isClaudeSubcommandInvocation(['--print', 'agents'])).toBe(false);
+    expect(isClaudeSubcommandInvocation(['--print', 'doctor'])).toBe(false);
+  });
+
   it('handles --flag=value forms', () => {
     expect(isClaudeSubcommandInvocation(['--model=sonnet', 'agents'])).toBe(true);
   });
@@ -199,6 +205,13 @@ describe('subcommand passthrough — injectors short-circuit', () => {
   it('appendBrowserToolArgs returns args unchanged for subcommand invocations', () => {
     expect(appendBrowserToolArgs(['agents'])).toEqual(['agents']);
     expect(appendBrowserToolArgs(['remote-control'])).toEqual(['remote-control']);
+  });
+
+
+  it('injectors still inject in --print prompt mode with subcommand-like prompt text', () => {
+    const out = appendThirdPartyWebSearchToolArgs(['--print', 'agents']);
+    expect(out).toContain('--append-system-prompt');
+    expect(out).toContain('--disallowedTools');
   });
 
   it('injectors still inject for non-subcommand interactive launches', () => {

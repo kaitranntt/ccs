@@ -119,9 +119,11 @@ const SUBCOMMAND_ALLOWED_SESSION_FLAGS: Record<string, ReadonlySet<string>> = {
  *
  * Heuristic:
  *   1. Walk args until the `--` terminator or end.
- *   2. Skip known value-taking flags together with their next token.
- *   3. Skip unknown `--flag=value` forms and bare `--flag` / `-x` tokens.
- *   4. The first remaining positional token is the candidate.
+ *   2. If `--print` is present before the first positional token, treat as
+ *      prompt/headless session mode (never a subcommand launch).
+ *   3. Skip known value-taking flags together with their next token.
+ *   4. Skip unknown `--flag=value` forms and bare `--flag` / `-x` tokens.
+ *   5. The first remaining positional token is the candidate.
  *   5. Match against CLAUDE_SUBCOMMANDS.
  *
  * Anything after the candidate is irrelevant — once a subcommand is in play,
@@ -141,6 +143,8 @@ export function getClaudeSubcommandName(args: readonly string[]): string | null 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
     if (arg === '--') return null;
+
+    if (arg === '--print') return false;
 
     if (arg.startsWith('-')) {
       if (VALUE_TAKING_FLAGS.has(arg)) {
