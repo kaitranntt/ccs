@@ -56,12 +56,12 @@ function writeRegistry(providers: Record<string, unknown>): void {
 
 // Helper: write unified config
 function writeConfig(quotaConfig: unknown): void {
-  const configDir = path.join(tmpDir, '.ccs', 'config');
+  const configDir = path.join(tmpDir, '.ccs');
   fs.mkdirSync(configDir, { recursive: true });
   fs.writeFileSync(
-    path.join(configDir, 'unified-config.json'),
+    path.join(configDir, 'config.yaml'),
     JSON.stringify({
-      version: 2,
+      version: 13,
       quota_management: quotaConfig,
     })
   );
@@ -572,6 +572,258 @@ describe('Quota Exhaustion Handlers', () => {
       expect(
         fs.existsSync(
           path.join(tmpDir, '.ccs', 'cliproxy', 'auth-paused', 'codex-preflight-exhausted.json')
+        )
+      ).toBe(true);
+    });
+
+    it('should self-pause exhausted non-default Codex accounts before CLIProxy rotation', async () => {
+      writeRegistry({
+        codex: {
+          default: 'rotation-default@example.com',
+          accounts: {
+            'rotation-default@example.com': {
+              email: 'rotation-default@example.com',
+              tokenFile: 'codex-rotation-default.json',
+            },
+            'rotation-exhausted@example.com': {
+              email: 'rotation-exhausted@example.com',
+              tokenFile: 'codex-rotation-exhausted.json',
+            },
+            'rotation-healthy@example.com': {
+              email: 'rotation-healthy@example.com',
+              tokenFile: 'codex-rotation-healthy.json',
+            },
+          },
+        },
+      });
+
+      writeConfig({
+        mode: 'auto',
+        auto: {
+          tier_priority: ['ultra', 'pro', 'free'],
+          exhaustion_threshold: 5,
+          cooldown_minutes: 10,
+          preflight_check: true,
+        },
+        runtime_monitor: {
+          enabled: true,
+          normal_interval_seconds: 300,
+          critical_interval_seconds: 60,
+          warn_threshold: 20,
+          exhaustion_threshold: 5,
+          cooldown_minutes: 10,
+        },
+      });
+
+      writeCodexAuth(
+        'codex-rotation-default.json',
+        'rotation-default@example.com',
+        'rotation-default-token'
+      );
+      writeCodexAuth(
+        'codex-rotation-exhausted.json',
+        'rotation-exhausted@example.com',
+        'rotation-exhausted-token'
+      );
+      writeCodexAuth(
+        'codex-rotation-healthy.json',
+        'rotation-healthy@example.com',
+        'rotation-healthy-token'
+      );
+
+      global.fetch = mock((_url: string, options?: RequestInit) => {
+        const accountHeader = new Headers(options?.headers).get('ChatGPT-Account-Id') ?? '';
+        const usedPercent = accountHeader === 'chatgpt-rotation-exhausted@example.com' ? 100 : 10;
+        return Promise.resolve(
+          Response.json({
+            plan_type: 'pro',
+            rate_limit: {
+              primary_window: { used_percent: usedPercent, reset_after_seconds: 3600 },
+              secondary_window: { used_percent: usedPercent, reset_after_seconds: 604800 },
+            },
+          })
+        );
+      }) as typeof fetch;
+
+      const { preflightCheck } = await import('../../quota/quota-manager');
+      const result = await preflightCheck('codex');
+      const { getAccount, getDefaultAccount } = await import('../account-manager');
+
+      expect(result.accountId).toBe('rotation-default@example.com');
+      expect(result.switchedFrom).toBeUndefined();
+      expect(getDefaultAccount('codex')?.id).toBe('rotation-default@example.com');
+      expect(getAccount('codex', 'rotation-default@example.com')?.paused).not.toBe(true);
+      expect(getAccount('codex', 'rotation-healthy@example.com')?.paused).not.toBe(true);
+      expect(getAccount('codex', 'rotation-exhausted@example.com')?.paused).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(tmpDir, '.ccs', 'cliproxy', 'auth-paused', 'codex-rotation-exhausted.json')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(tmpDir, '.ccs', 'cliproxy', 'auth', 'codex-rotation-exhausted.json')
+        )
+      ).toBe(false);
+    });
+
+    it('should durably pause non-default Codex accounts already on cooldown', async () => {
+      writeRegistry({
+        codex: {
+          default: 'cooldown-default@example.com',
+          accounts: {
+            'cooldown-default@example.com': {
+              email: 'cooldown-default@example.com',
+              tokenFile: 'codex-cooldown-default.json',
+            },
+            'cooldown-exhausted@example.com': {
+              email: 'cooldown-exhausted@example.com',
+              tokenFile: 'codex-cooldown-exhausted.json',
+            },
+          },
+        },
+      });
+
+      writeConfig({
+        mode: 'auto',
+        auto: {
+          tier_priority: ['ultra', 'pro', 'free'],
+          exhaustion_threshold: 5,
+          cooldown_minutes: 10,
+          preflight_check: true,
+        },
+        runtime_monitor: {
+          enabled: true,
+          normal_interval_seconds: 300,
+          critical_interval_seconds: 60,
+          warn_threshold: 20,
+          exhaustion_threshold: 5,
+          cooldown_minutes: 10,
+        },
+      });
+
+      writeCodexAuth(
+        'codex-cooldown-default.json',
+        'cooldown-default@example.com',
+        'cooldown-default-token'
+      );
+      writeCodexAuth(
+        'codex-cooldown-exhausted.json',
+        'cooldown-exhausted@example.com',
+        'cooldown-exhausted-token'
+      );
+
+      const { applyCooldown, preflightCheck } = await import('../../quota/quota-manager');
+      applyCooldown('codex', 'cooldown-exhausted@example.com', 10);
+
+      global.fetch = mock((_url: string, options?: RequestInit) => {
+        const accountHeader = new Headers(options?.headers).get('ChatGPT-Account-Id') ?? '';
+        const usedPercent = accountHeader === 'chatgpt-cooldown-default@example.com' ? 10 : 100;
+        return Promise.resolve(
+          Response.json({
+            plan_type: 'pro',
+            rate_limit: {
+              primary_window: { used_percent: usedPercent, reset_after_seconds: 3600 },
+              secondary_window: { used_percent: usedPercent, reset_after_seconds: 604800 },
+            },
+          })
+        );
+      }) as typeof fetch;
+
+      const result = await preflightCheck('codex');
+      const { getAccount } = await import('../account-manager');
+
+      expect(result.accountId).toBe('cooldown-default@example.com');
+      expect(getAccount('codex', 'cooldown-exhausted@example.com')?.paused).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(tmpDir, '.ccs', 'cliproxy', 'auth-paused', 'codex-cooldown-exhausted.json')
+        )
+      ).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(tmpDir, '.ccs', 'cliproxy', 'auth', 'codex-cooldown-exhausted.json')
+        )
+      ).toBe(false);
+    });
+
+    it('should reconcile exhausted rotation accounts before honoring forced default', async () => {
+      writeRegistry({
+        codex: {
+          default: 'forced-default@example.com',
+          accounts: {
+            'forced-default@example.com': {
+              email: 'forced-default@example.com',
+              tokenFile: 'codex-forced-default.json',
+            },
+            'forced-exhausted@example.com': {
+              email: 'forced-exhausted@example.com',
+              tokenFile: 'codex-forced-exhausted.json',
+            },
+            'forced-healthy@example.com': {
+              email: 'forced-healthy@example.com',
+              tokenFile: 'codex-forced-healthy.json',
+            },
+          },
+        },
+      });
+
+      writeConfig({
+        mode: 'auto',
+        auto: {
+          tier_priority: ['ultra', 'pro', 'free'],
+          exhaustion_threshold: 5,
+          cooldown_minutes: 10,
+          preflight_check: true,
+        },
+        manual: {
+          forced_default: 'forced-default@example.com',
+        },
+        runtime_monitor: {
+          enabled: true,
+          normal_interval_seconds: 300,
+          critical_interval_seconds: 60,
+          warn_threshold: 20,
+          exhaustion_threshold: 5,
+          cooldown_minutes: 10,
+        },
+      });
+
+      writeCodexAuth('codex-forced-default.json', 'forced-default@example.com', 'forced-token');
+      writeCodexAuth(
+        'codex-forced-exhausted.json',
+        'forced-exhausted@example.com',
+        'forced-exhausted-token'
+      );
+      writeCodexAuth('codex-forced-healthy.json', 'forced-healthy@example.com', 'healthy-token');
+
+      global.fetch = mock((_url: string, options?: RequestInit) => {
+        const accountHeader = new Headers(options?.headers).get('ChatGPT-Account-Id') ?? '';
+        const usedPercent = accountHeader === 'chatgpt-forced-exhausted@example.com' ? 100 : 10;
+        return Promise.resolve(
+          Response.json({
+            plan_type: 'pro',
+            rate_limit: {
+              primary_window: { used_percent: usedPercent, reset_after_seconds: 3600 },
+              secondary_window: { used_percent: usedPercent, reset_after_seconds: 604800 },
+            },
+          })
+        );
+      }) as typeof fetch;
+
+      const { preflightCheck } = await import('../../quota/quota-manager');
+      const result = await preflightCheck('codex');
+      const { getAccount, getDefaultAccount } = await import('../account-manager');
+
+      expect(result.accountId).toBe('forced-default@example.com');
+      expect(result.reason).toBe('Forced default override');
+      expect(getDefaultAccount('codex')?.id).toBe('forced-default@example.com');
+      expect(getAccount('codex', 'forced-default@example.com')?.paused).not.toBe(true);
+      expect(getAccount('codex', 'forced-healthy@example.com')?.paused).not.toBe(true);
+      expect(getAccount('codex', 'forced-exhausted@example.com')?.paused).toBe(true);
+      expect(
+        fs.existsSync(
+          path.join(tmpDir, '.ccs', 'cliproxy', 'auth-paused', 'codex-forced-exhausted.json')
         )
       ).toBe(true);
     });

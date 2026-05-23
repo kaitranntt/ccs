@@ -41,6 +41,12 @@ All major modularization work is complete. The codebase evolved from monolithic 
 
 ### Recent Fixes
 
+- **2026-05-22**: **#1337** CLIProxy quota preflight now reconciles the entire
+  active provider account pool before local proxy startup. Known-exhausted
+  non-default accounts move out of live `auth/` rotation when another healthy
+  account exists, preventing round-robin requests from stalling on already
+  exhausted accounts while preserving manual pause/resume and cooldown
+  auto-resume behavior.
 - **2026-05-22**: **#1332** `ccsx auth` profiles now link native Codex
   `agents/` and `skills/` resources alongside `config.toml`, and `ccsx <profile>`
   repairs missing resource links at launch so relative agent role `config_file`

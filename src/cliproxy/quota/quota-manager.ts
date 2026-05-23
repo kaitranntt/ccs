@@ -476,6 +476,75 @@ export async function findHealthyAccount(
   return selectable[0];
 }
 
+export async function reconcileExhaustedRotationAccounts(
+  provider: CLIProxyProvider
+): Promise<string[]> {
+  if (!isManagedQuotaProvider(provider)) {
+    return [];
+  }
+
+  const { pauseAccountForQuotaCooldown, restoreExpiredQuotaPauses } = await import(
+    '../accounts/account-safety'
+  );
+  restoreExpiredQuotaPauses();
+
+  const config = loadOrCreateUnifiedConfig();
+  const threshold = config.quota_management?.auto?.exhaustion_threshold ?? 5;
+  const cooldownMinutes = config.quota_management?.auto?.cooldown_minutes ?? 5;
+
+  const activeAccounts = getProviderAccounts(provider).filter(
+    (account) => !isAccountPaused(provider, account.id)
+  );
+  if (activeAccounts.length < 2) {
+    return [];
+  }
+
+  const accountsWithQuota = await batchedMap(
+    activeAccounts,
+    async (account) => {
+      let quota = getCachedQuota(provider, account.id);
+      if (!quota) {
+        quota = await fetchQuotaWithDedup(provider, account.id);
+      }
+
+      return {
+        account,
+        quotaPercent: calculateQuotaPercent(provider, quota),
+      };
+    },
+    10
+  );
+
+  const healthyAccountIds = new Set(
+    accountsWithQuota
+      .filter(({ account, quotaPercent }) => {
+        if (isOnCooldown(provider, account.id)) return false;
+        return quotaPercent !== null && quotaPercent >= threshold;
+      })
+      .map(({ account }) => account.id)
+  );
+  if (healthyAccountIds.size === 0) {
+    return [];
+  }
+
+  const pausedAccountIds: string[] = [];
+  for (const { account, quotaPercent } of accountsWithQuota) {
+    const exhaustedByQuota = quotaPercent !== null && quotaPercent < threshold;
+    const exhaustedByCooldown = isOnCooldown(provider, account.id);
+    if (!exhaustedByQuota && !exhaustedByCooldown) continue;
+
+    const hasOtherHealthyAccount = [...healthyAccountIds].some((id) => id !== account.id);
+    if (!hasOtherHealthyAccount) continue;
+
+    applyCooldown(provider, account.id, cooldownMinutes);
+    if (pauseAccountForQuotaCooldown(provider, account.id, cooldownMinutes)) {
+      pausedAccountIds.push(account.id);
+    }
+  }
+
+  return pausedAccountIds;
+}
+
 /**
  * Find and switch to a healthy account
  */
@@ -543,11 +612,13 @@ export async function preflightCheck(provider: CLIProxyProvider): Promise<Prefli
     return { proceed: false, accountId: '', reason: 'No accounts configured' };
   }
 
+  await reconcileExhaustedRotationAccounts(provider);
+
   // Check forced_default override (manual mode)
   const forcedDefault = quotaConfig.manual?.forced_default;
   if (forcedDefault) {
     const forcedAccount = getProviderAccounts(provider).find((a) => a.id === forcedDefault);
-    if (forcedAccount) {
+    if (forcedAccount && !isAccountPaused(provider, forcedAccount.id)) {
       return { proceed: true, accountId: forcedAccount.id, reason: 'Forced default override' };
     }
   }

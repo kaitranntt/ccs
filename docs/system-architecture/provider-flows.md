@@ -269,7 +269,7 @@ async function checkRemoteProxyHealth(config: ResolvedProxyConfig): Promise<bool
 ### Overview
 
 Hybrid quota management enables automatic detection of exhausted accounts and failover to next available account.
-When CCS detects exhaustion and a healthy fallback exists, it temporarily pauses the exhausted account out of CLIProxy rotation and automatically resumes that pause after the configured cooldown expires. This durable self-pause uses the same account registry and token movement path as dashboard/manual pause, so the dashboard shows the account as paused and CLIProxy cannot rediscover its token from the live `auth/` folder.
+Before local CLIProxy startup, CCS reconciles the whole active account pool for the provider, not only the default account. When CCS detects any quota-exhausted account and a healthy fallback exists, it temporarily pauses the exhausted account out of CLIProxy rotation and automatically resumes that pause after the configured cooldown expires. This durable self-pause uses the same account registry and token movement path as dashboard/manual pause, so the dashboard shows the account as paused and CLIProxy cannot rediscover its token from the live `auth/` folder.
 
 ```
 +===========================================================================+
@@ -304,6 +304,8 @@ When CCS detects exhaustion and a healthy fallback exists, it temporarily pauses
         |           +---> Detect tier (free/paid/unknown)
         |           |
         |           +---> Check exhaustion status
+        |
+        +---> Pause exhausted non-default accounts when another healthy account exists
         |
         +---> Select best account (not paused, not exhausted)
         |
