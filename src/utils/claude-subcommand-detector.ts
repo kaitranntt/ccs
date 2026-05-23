@@ -144,7 +144,7 @@ export function getClaudeSubcommandName(args: readonly string[]): string | null 
     const arg = args[i];
     if (arg === '--') return null;
 
-    if (arg === '--print') return null;
+    if (arg === '--print' || arg === '-p') return null;
 
     if (arg.startsWith('-')) {
       if (VALUE_TAKING_FLAGS.has(arg)) {
