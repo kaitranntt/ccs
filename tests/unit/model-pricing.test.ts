@@ -467,5 +467,22 @@ describe('model-pricing', () => {
       expect(calculateCost(usage, 'gpt-5.5', { provider: 'openai' })).toBe(35.5);
       expect(calculateCost(usage, 'gpt-5.5', { provider: 'ghcp' })).toBe(0);
     });
+
+    it('gracefully ignores malformed cached model entries', () => {
+      setCachedModelsDevRegistry(
+        {
+          openai: {
+            id: 'openai',
+            models: {
+              'null-entry': null,
+              'gpt-5.5': { id: 'gpt-5.5', cost: { input: 5, output: 30 } },
+            },
+          },
+        } as unknown as Parameters<typeof setCachedModelsDevRegistry>[0]
+      );
+
+      expect(() => getModelPricing('openai/gpt-5.5')).not.toThrow();
+      expect(getModelPricing('openai/gpt-5.5').inputPerMillion).toBe(5);
+    });
   });
 });

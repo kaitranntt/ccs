@@ -86,6 +86,35 @@ describe('models.dev registry cache', () => {
     expect(registry?.openai.models?.['gpt-5.5']?.cost?.output).toBe(30);
   });
 
+  it('filters malformed model entries before caching remote payloads', async () => {
+    const fetchImpl: typeof fetch = async () =>
+      new Response(
+        JSON.stringify({
+          openai: {
+            id: 'openai',
+            models: {
+              'null-entry': null,
+              'string-entry': 'bad',
+              'gpt-5.5': { id: 'gpt-5.5', cost: { input: 5, output: 30 } },
+            },
+          },
+        }),
+        { status: 200 }
+      );
+
+    const registry = await refreshModelsDevRegistry({
+      force: true,
+      fetchImpl,
+      now: () => 123,
+    });
+
+    expect(registry?.openai.models?.['gpt-5.5']?.cost?.input).toBe(5);
+    expect(registry?.openai.models?.['null-entry']).toBeUndefined();
+    expect(registry?.openai.models?.['string-entry']).toBeUndefined();
+    expect(getCachedModelsDevRegistry({ allowStale: true })?.openai.models?.['null-entry']).toBeUndefined();
+    expect(getCachedModelsDevRegistry({ allowStale: true })?.openai.models?.['string-entry']).toBeUndefined();
+  });
+
   it('ignores malformed cache files', () => {
     fs.mkdirSync(getCcsDir(), { recursive: true });
     fs.writeFileSync(path.join(getCcsDir(), 'models-dev-registry-cache.json'), '{not json');

@@ -36,6 +36,10 @@ function normalizeId(value: string): string {
   return value.trim().toLowerCase();
 }
 
+function isModelEntry(value: unknown): value is ModelsDevModel {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 export function normalizeModelsDevProviderId(
   provider: string | null | undefined
 ): string | undefined {
@@ -91,7 +95,7 @@ function findModel(provider: ModelsDevProvider, model: string): ModelsDevModel |
 
   const normalizedEntries = new Map<string, ModelsDevModel>();
   for (const [key, value] of Object.entries(models)) {
-    if (!value || typeof value !== 'object') continue;
+    if (!isModelEntry(value)) continue;
     normalizedEntries.set(normalizeId(key), value);
     if (typeof value.id === 'string') normalizedEntries.set(normalizeId(value.id), value);
   }

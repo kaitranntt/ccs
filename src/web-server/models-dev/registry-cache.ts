@@ -38,10 +38,20 @@ function normalizeRegistryPayload(payload: unknown): ModelsDevRegistry | null {
   for (const [key, value] of Object.entries(payload)) {
     if (!isPlainObject(value)) continue;
     const id = typeof value.id === 'string' && value.id.trim() ? value.id.trim() : key;
-    const models = isPlainObject(value.models)
-      ? (value.models as NonNullable<ModelsDevProvider['models']>)
-      : undefined;
-    if (!models || Object.keys(models).length === 0) continue;
+    const modelsPayload = isPlainObject(value.models) ? value.models : undefined;
+    if (!modelsPayload) continue;
+
+    const models: NonNullable<ModelsDevProvider['models']> = {};
+    for (const [modelKey, modelValue] of Object.entries(modelsPayload)) {
+      if (!isPlainObject(modelValue)) continue;
+      const modelId =
+        typeof modelValue.id === 'string' && modelValue.id.trim() ? modelValue.id.trim() : modelKey;
+      models[modelKey] = {
+        ...(modelValue as NonNullable<ModelsDevProvider['models']>[string]),
+        id: modelId,
+      };
+    }
+    if (Object.keys(models).length === 0) continue;
 
     providers[id] = {
       ...(value as ModelsDevProvider),
