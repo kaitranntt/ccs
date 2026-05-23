@@ -4,6 +4,11 @@ import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
 const SQLITE_JSON_MAX_BUFFER = 10 * 1024 * 1024;
+const TRUSTED_SQLITE_PATHS = [
+  '/usr/bin/sqlite3',
+  '/usr/local/bin/sqlite3',
+  '/opt/homebrew/bin/sqlite3',
+];
 
 export type SqliteJsonRow = Record<string, unknown>;
 
@@ -13,13 +18,31 @@ function isCommandMissing(error: unknown): boolean {
   return nodeError.code === 'ENOENT' || /not found/i.test(nodeError.message);
 }
 
+function resolveTrustedSqlitePath(): string {
+  const trustedPath = TRUSTED_SQLITE_PATHS.find((candidate) => {
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  if (!trustedPath) {
+    throw new Error('sqlite3 command not available');
+  }
+
+  return trustedPath;
+}
+
 export async function querySqliteJson(dbPath: string, sql: string): Promise<SqliteJsonRow[]> {
   if (!fs.existsSync(dbPath)) {
     return [];
   }
 
   try {
-    const { stdout } = await execFileAsync('sqlite3', ['-json', dbPath, sql], {
+    const sqlitePath = resolveTrustedSqlitePath();
+    const { stdout } = await execFileAsync(sqlitePath, ['-json', dbPath, sql], {
       maxBuffer: SQLITE_JSON_MAX_BUFFER,
     });
     const trimmed = stdout.trim();
