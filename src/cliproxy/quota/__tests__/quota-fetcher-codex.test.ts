@@ -342,6 +342,26 @@ describe('Codex Quota Fetcher', () => {
       expect(windows.find((w) => w.category === 'additional')).toBeUndefined();
     });
 
+    it('should coerce non-string additional limit_name values to fallback label', () => {
+      const response = {
+        additional_rate_limits: [
+          {
+            limit_name: { unexpected: true },
+            rate_limit: {
+              primary_window: { used_percent: 10, reset_after_seconds: 3600 },
+            },
+          },
+        ],
+      };
+
+      const windows = buildCodexQuotaWindows(response as never);
+
+      expect(windows).toHaveLength(1);
+      expect(windows[0].category).toBe('additional');
+      expect(windows[0].featureLabel).toBe('Additional');
+      expect(windows[0].label).toBe('Additional (Primary)');
+    });
+
     it('should accept camelCase additionalRateLimits and rateLimit fields', () => {
       const response = {
         additionalRateLimits: [

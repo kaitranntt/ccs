@@ -37,6 +37,11 @@ describe('prettifyCodexFeatureLabel', () => {
     expect(prettifyCodexFeatureLabel('   ')).toBe('');
     expect(prettifyCodexFeatureLabel('  GPT-5.3-Codex-Spark  ')).toBe('Codex Spark');
   });
+
+  it('returns empty string for non-string input', () => {
+    expect(prettifyCodexFeatureLabel({ label: 'Spark' })).toBe('');
+    expect(prettifyCodexFeatureLabel(123)).toBe('');
+  });
 });
 
 describe('getCodexWindowKind', () => {

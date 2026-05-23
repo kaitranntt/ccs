@@ -384,8 +384,8 @@ function getCodexWindowKindFromLabel(label: string): CodexWindowKind {
  *   "OmniReview"          -> "OmniReview"
  *   ""                    -> ""
  */
-export function prettifyCodexFeatureLabel(featureLabel: string): string {
-  const trimmed = (featureLabel || '').trim();
+export function prettifyCodexFeatureLabel(featureLabel: unknown): string {
+  const trimmed = typeof featureLabel === 'string' ? featureLabel.trim() : '';
   if (!trimmed) return '';
   const stripped = trimmed.replace(/^GPT-[\d.]+-Codex-/i, '');
   if (stripped !== trimmed && stripped.length > 0) {

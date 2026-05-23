@@ -380,7 +380,11 @@ function buildCodexQuotaWindows(payload: CodexUsageResponse): CodexQuotaWindow[]
       const entryRateLimit = entry.rate_limit || entry.rateLimit;
       if (!entryRateLimit) continue;
 
-      const featureLabel = entry.limit_name || entry.limitName || 'Additional';
+      const rawFeatureLabel = entry.limit_name ?? entry.limitName;
+      const featureLabel =
+        typeof rawFeatureLabel === 'string' && rawFeatureLabel.trim().length > 0
+          ? rawFeatureLabel.trim()
+          : 'Additional';
       addWindow(
         `${featureLabel} (Primary)`,
         entryRateLimit.primary_window || entryRateLimit.primaryWindow,
