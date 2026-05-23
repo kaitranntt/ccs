@@ -7,6 +7,7 @@ export const DOCKER_LEGACY_API_KEY = 'ccs-internal-managed';
 export const DEFAULT_DOCKER_LEGACY_KEY_GRACE_DAYS = 14;
 export const DOCKER_LEGACY_KEY_GRACE_ENV = 'CCS_DOCKER_LEGACY_KEY_GRACE_DAYS';
 export const DOCKER_RESTORE_LEGACY_KEY_ENV = 'CCS_DOCKER_RESTORE_LEGACY_API_KEY';
+export const DOCKER_ENABLE_LEGACY_KEY_AUTH_ENV = 'CCS_DOCKER_ENABLE_LEGACY_KEY_AUTH';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const STATE_VERSION = 1;
@@ -65,6 +66,10 @@ export function isLikelyDockerGeneratedApiKey(value: string | undefined): boolea
 
 export function shouldRestoreDockerLegacyApiKey(env = process.env): boolean {
   return env[DOCKER_RESTORE_LEGACY_KEY_ENV] === '1';
+}
+
+export function shouldEnableDockerLegacyKeyAuth(env = process.env): boolean {
+  return env[DOCKER_ENABLE_LEGACY_KEY_AUTH_ENV] === '1';
 }
 
 export function readDockerBootstrapState(): DockerBootstrapStateReadResult {
@@ -135,6 +140,10 @@ export function isDockerLegacyKeyGraceActive(
 }
 
 export function getActiveDockerLegacyApiKeys(now = new Date()): string[] {
+  if (!shouldEnableDockerLegacyKeyAuth()) {
+    return [];
+  }
+
   const { state } = readDockerBootstrapState();
   if (!isDockerLegacyKeyGraceActive(state, now)) {
     return [];
