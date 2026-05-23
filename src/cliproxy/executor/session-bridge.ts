@@ -275,12 +275,13 @@ export function setupCleanupHandlers(
     }
   };
 
-  const backgroundProbe =
-    keepAliveOptions.hasBackgroundWorkerUsingBaseUrl ?? hasClaudeBackgroundWorkerUsingBaseUrl;
+  // Security hardening: only allow keepalive when caller provides an explicit,
+  // trusted detector. Falling back to global process-list probing is spoofable.
+  const backgroundProbe = keepAliveOptions.hasBackgroundWorkerUsingBaseUrl;
 
   const startKeepAliveWatcher = (baseUrl: string) => {
     const timer = setInterval(() => {
-      if (backgroundProbe(baseUrl)) return;
+      if (backgroundProbe?.(baseUrl)) return;
       log('No Claude bg worker is using the session proxy; cleaning up');
       stopSessionResources();
       process.exit(0);
@@ -299,6 +300,7 @@ export function setupCleanupHandlers(
     const backgroundKeepAliveBaseUrl = keepAliveOptions.backgroundKeepAliveBaseUrl;
 
     if (
+      backgroundProbe &&
       shouldKeepSessionProxiesAlive({
         code,
         signal,
