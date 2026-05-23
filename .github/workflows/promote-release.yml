@@ -40,11 +40,13 @@ jobs:
 
     steps:
       - name: Validate stable semver tag format
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
-          if [[ "${{ inputs.tag }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "[OK] Tag format valid: ${{ inputs.tag }}"
+          if [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "[OK] Tag format valid: ${TAG}"
           else
-            echo "[X] Expected vX.Y.Z format, got: ${{ inputs.tag }}"
+            echo "[X] Expected vX.Y.Z format, got: ${TAG}"
             echo "    For rc tags use docker-release.yml directly with promote_to_latest=true."
             exit 1
           fi
@@ -52,26 +54,29 @@ jobs:
       - name: Verify release exists and is stable (not a prerelease)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
         run: |
-          IS_PRERELEASE=$(gh release view "${{ inputs.tag }}" \
+          IS_PRERELEASE=$(gh release view "${TAG}" \
             --repo "${{ github.repository }}" \
             --json isPrerelease --jq '.isPrerelease')
           if [[ "${IS_PRERELEASE}" == "true" ]]; then
-            echo "[X] Release ${{ inputs.tag }} is still a prerelease (isPrerelease=true)"
+            echo "[X] Release ${TAG} is still a prerelease (isPrerelease=true)"
             echo "    Semantic-release publishes stable releases to main automatically."
             echo "    Check that the tag was created from a main merge, not a dev prerelease."
             exit 1
           fi
           if [[ "${IS_PRERELEASE}" != "false" ]]; then
-            echo "[X] Could not read release state for ${{ inputs.tag }} (got: ${IS_PRERELEASE})"
-            echo "    Verify the tag exists: gh release view ${{ inputs.tag }} --repo ${{ github.repository }}"
+            echo "[X] Could not read release state for ${TAG} (got: ${IS_PRERELEASE})"
+            echo "    Verify the tag exists: gh release view ${TAG} --repo ${{ github.repository }}"
             exit 1
           fi
-          echo "[OK] Release ${{ inputs.tag }} is stable — proceeding with Docker mutable tag promotion"
+          echo "[OK] Release ${TAG} is stable — proceeding with Docker mutable tag promotion"
 
       - name: Verify immutable Docker image exists
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
-          TAG_SANS_V="${{ inputs.tag }}"
+          TAG_SANS_V="${TAG}"
           TAG_SANS_V="${TAG_SANS_V#v}"
           OWNER_LOWER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
           IMAGE_REF="ghcr.io/${OWNER_LOWER}/ccs:${TAG_SANS_V}"
@@ -86,13 +91,14 @@ jobs:
       - name: Dispatch Docker mutable tag promotion
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
         run: |
           RUN_URL=$(gh workflow run "Publish Docker Image" \
             --repo "${{ github.repository }}" \
-            --field "tag=${{ inputs.tag }}" \
+            --field "tag=${TAG}" \
             --field "promote_to_latest=true" \
             2>&1)
-          echo "[OK] Dispatched docker-release.yml with tag=${{ inputs.tag }} promote_to_latest=true"
+          echo "[OK] Dispatched docker-release.yml with tag=${TAG} promote_to_latest=true"
           echo "[i] Monitor the run at: https://github.com/${{ github.repository }}/actions/workflows/docker-release.yml"
           echo "[i] After the run completes, verify with:"
           echo "    docker buildx imagetools inspect ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/ccs:latest"
