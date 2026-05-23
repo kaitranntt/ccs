@@ -155,8 +155,9 @@ router.put('/backend', (req: Request, res: Response) => {
     // Pre-flight read: check running state before acquiring write lock
     const currentConfig = loadOrCreateUnifiedConfig();
     const currentBackend = currentConfig.cliproxy?.backend ?? DEFAULT_BACKEND;
-    const localPort =
-      currentConfig.cliproxy_server?.local?.port ?? DEFAULT_CLIPROXY_SERVER_CONFIG.local.port;
+    const localPort = validatePort(
+      currentConfig.cliproxy_server?.local?.port ?? DEFAULT_CLIPROXY_SERVER_CONFIG.local.port
+    );
     if (currentBackend !== backend && isProxyRunning() && !force) {
       res.status(409).json({
         error: 'Proxy is running. Stop proxy first or use force=true to change backend.',
