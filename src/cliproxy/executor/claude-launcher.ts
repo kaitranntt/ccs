@@ -163,9 +163,6 @@ export async function launchClaude(context: ClaudeLaunchContext): Promise<ChildP
     }
   }
 
-  const hasSessionProxy = Boolean(codexReasoningProxy || toolSanitizationProxy || httpsTunnel);
-  const backgroundKeepAliveBaseUrl = hasSessionProxy ? tracedEnv.ANTHROPIC_BASE_URL : undefined;
-
   // Wire cleanup handlers (process exit, SIGINT, SIGTERM, proxy teardown)
   setupCleanupHandlers(
     claude,
@@ -174,8 +171,7 @@ export async function launchClaude(context: ClaudeLaunchContext): Promise<ChildP
     codexReasoningProxy,
     toolSanitizationProxy,
     httpsTunnel,
-    verbose,
-    { backgroundKeepAliveBaseUrl }
+    verbose
   );
 
   return claude;

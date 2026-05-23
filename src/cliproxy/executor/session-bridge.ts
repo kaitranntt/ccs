@@ -8,7 +8,7 @@
  * - Startup lock coordination
  */
 
-import { ChildProcess, execFileSync } from 'child_process';
+import { ChildProcess } from 'child_process';
 import { info, warn } from '../../utils/ui';
 import { getInstalledCliproxyVersion } from '../binary-manager';
 import { CLIProxyBackend } from '../types';
@@ -31,70 +31,6 @@ export interface ProxySessionResult {
   sessionId?: string;
   proxy?: ChildProcess;
   shouldSpawn: boolean;
-}
-
-export interface SessionProxyKeepAliveOptions {
-  backgroundKeepAliveBaseUrl?: string;
-  keepAlivePollIntervalMs?: number;
-  hasBackgroundWorkerUsingBaseUrl?: (baseUrl: string) => boolean;
-}
-
-export interface ShouldKeepSessionProxiesAliveOptions {
-  code: number | null;
-  signal: NodeJS.Signals | null;
-  backgroundKeepAliveBaseUrl?: string;
-  hasBackgroundWorkerUsingBaseUrl: (baseUrl: string) => boolean;
-}
-
-const CLAUDE_BG_WORKER_ARGS = ['--bg-spare', '--bg-pty-host'] as const;
-
-export function hasClaudeBackgroundWorkerUsingBaseUrlInProcessList(
-  processList: string,
-  baseUrl: string
-): boolean {
-  const envNeedle = `ANTHROPIC_BASE_URL=${baseUrl}`;
-  return processList
-    .split(/\r?\n/)
-    .some(
-      (line) => line.includes(envNeedle) && CLAUDE_BG_WORKER_ARGS.some((arg) => line.includes(arg))
-    );
-}
-
-export function hasClaudeBackgroundWorkerUsingBaseUrl(baseUrl: string): boolean {
-  if (process.platform === 'win32') {
-    return false;
-  }
-
-  for (const args of [['auxEww'], ['auxeww'], ['eww', '-axo', 'pid=,command=']]) {
-    try {
-      const processList = execFileSync('ps', args, {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      });
-      if (hasClaudeBackgroundWorkerUsingBaseUrlInProcessList(processList, baseUrl)) {
-        return true;
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  return false;
-}
-
-export function shouldKeepSessionProxiesAlive(
-  options: ShouldKeepSessionProxiesAliveOptions
-): boolean {
-  if (options.code !== 0 || options.signal) {
-    return false;
-  }
-
-  const baseUrl = options.backgroundKeepAliveBaseUrl;
-  if (!baseUrl) {
-    return false;
-  }
-
-  return options.hasBackgroundWorkerUsingBaseUrl(baseUrl);
 }
 
 /**
@@ -244,8 +180,7 @@ export function setupCleanupHandlers(
   codexReasoningProxy: unknown,
   toolSanitizationProxy: unknown,
   httpsTunnel: unknown,
-  verbose: boolean,
-  keepAliveOptions: SessionProxyKeepAliveOptions = {}
+  verbose: boolean
 ): void {
   const log = (msg: string) => {
     if (verbose) {
@@ -275,20 +210,6 @@ export function setupCleanupHandlers(
     }
   };
 
-  // Security hardening: only allow keepalive when caller provides an explicit,
-  // trusted detector. Falling back to global process-list probing is spoofable.
-  const backgroundProbe = keepAliveOptions.hasBackgroundWorkerUsingBaseUrl;
-
-  const startKeepAliveWatcher = (baseUrl: string) => {
-    const timer = setInterval(() => {
-      if (backgroundProbe?.(baseUrl)) return;
-      log('No Claude bg worker is using the session proxy; cleaning up');
-      stopSessionResources();
-      process.exit(0);
-    }, keepAliveOptions.keepAlivePollIntervalMs ?? 30000);
-    timer.unref();
-  };
-
   const cleanup = () => {
     log('Parent signal received, cleaning up');
     stopSessionResources();
@@ -297,24 +218,6 @@ export function setupCleanupHandlers(
 
   claude.on('exit', (code, signal) => {
     log(`Claude exited: code=${code}, signal=${signal}`);
-    const backgroundKeepAliveBaseUrl = keepAliveOptions.backgroundKeepAliveBaseUrl;
-
-    if (
-      backgroundProbe &&
-      shouldKeepSessionProxiesAlive({
-        code,
-        signal,
-        backgroundKeepAliveBaseUrl,
-        hasBackgroundWorkerUsingBaseUrl: backgroundProbe,
-      }) &&
-      backgroundKeepAliveBaseUrl
-    ) {
-      stopQuotaMonitor();
-      log(`Keeping session proxy alive for Claude bg worker: ${backgroundKeepAliveBaseUrl}`);
-      startKeepAliveWatcher(backgroundKeepAliveBaseUrl);
-      return;
-    }
-
     stopSessionResources();
 
     if (signal) {
