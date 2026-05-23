@@ -3,8 +3,6 @@
  * Determines current shell to emit correct eval-safe export syntax.
  */
 
-import * as childProcess from 'child_process';
-
 export type Shell = 'bash' | 'zsh' | 'fish' | 'pwsh' | 'cmd';
 
 /**
@@ -20,7 +18,7 @@ export function detectShell(
   if (platform === 'win32') {
     return (
       shellFromExecutable(env.SHELL) ??
-      shellFromExecutable(parentProcessName ?? detectParentProcessName(platform)) ??
+      shellFromExecutable(parentProcessName) ??
       shellFromExecutable(env.ComSpec ?? env.COMSPEC) ??
       'cmd'
     );
@@ -29,26 +27,6 @@ export function detectShell(
   if (sh.endsWith('/fish')) return 'fish';
   if (sh.endsWith('/zsh')) return 'zsh';
   return 'bash'; // default for bash, sh, dash, ksh
-}
-
-function detectParentProcessName(platform: string): string | undefined {
-  if (platform !== 'win32' || !Number.isInteger(process.ppid) || process.ppid <= 0) {
-    return undefined;
-  }
-
-  const result = childProcess.spawnSync(
-    'powershell.exe',
-    [
-      '-NoProfile',
-      '-NonInteractive',
-      '-Command',
-      `(Get-Process -Id ${process.ppid} -ErrorAction Stop).ProcessName`,
-    ],
-    { encoding: 'utf8', timeout: 1500, windowsHide: true }
-  );
-
-  if (result.status !== 0 || !result.stdout) return undefined;
-  return result.stdout.trim().split(/\r?\n/).pop()?.trim();
 }
 
 function shellFromExecutable(value: string | undefined): Shell | null {
