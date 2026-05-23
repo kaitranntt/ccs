@@ -392,6 +392,26 @@ describe('model-pricing', () => {
       expect(pricing.outputPerMillion).toBe(0);
     });
 
+    it('ignores malformed models.dev entries during provider-aware lookups', () => {
+      setCachedModelsDevRegistry({
+        openai: {
+          id: 'openai',
+          name: 'OpenAI',
+          models: {
+            bad: null as unknown as never,
+            'gpt-4o': {
+              id: 'gpt-4o',
+              name: 'GPT-4o',
+              cost: { input: 2.5, output: 10 },
+            },
+          },
+        },
+      });
+
+      expect(() => getModelPricing('gpt-4o', { provider: 'openai' })).not.toThrow();
+      expect(getModelPricing('gpt-4o', { provider: 'openai' }).inputPerMillion).toBe(2.5);
+    });
+
     it('prefers provider-aware models.dev pricing over exact static table matches', () => {
       const pricing = getModelPricing('gpt-4o', { provider: 'github-copilot' });
       expect(pricing.inputPerMillion).toBe(0);

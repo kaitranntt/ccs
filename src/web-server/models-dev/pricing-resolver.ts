@@ -91,6 +91,7 @@ function findModel(provider: ModelsDevProvider, model: string): ModelsDevModel |
 
   const normalizedEntries = new Map<string, ModelsDevModel>();
   for (const [key, value] of Object.entries(models)) {
+    if (!value || typeof value !== 'object') continue;
     normalizedEntries.set(normalizeId(key), value);
     if (typeof value.id === 'string') normalizedEntries.set(normalizeId(value.id), value);
   }
@@ -188,6 +189,7 @@ export function getKnownModelsDevModels(): string[] {
   const ids = new Set<string>();
   for (const provider of Object.values(registry)) {
     for (const model of Object.values(provider.models ?? {})) {
+      if (!model || typeof model !== 'object') continue;
       if (typeof model.id === 'string') ids.add(`${provider.id}/${model.id}`);
     }
   }
