@@ -251,7 +251,7 @@ export function getEffectiveClaudeBrowserAttachConfig(
     overrideActive: false,
     userDataDir: configUserDataDir,
     devtoolsPort: configPort,
-    hasExplicitDevtoolsPort: true,
+    hasExplicitDevtoolsPort: false,
     evalMode: configEvalMode,
   };
 }
