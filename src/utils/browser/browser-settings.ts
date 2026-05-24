@@ -230,6 +230,7 @@ export function getEffectiveClaudeBrowserAttachConfig(
   const override = getBrowserAttachOverride(env);
   const configUserDataDir =
     resolveBrowserUserDataDir(config.claude.user_data_dir) ?? getRecommendedBrowserUserDataDir();
+  const configHasExplicitPort = config.claude.devtools_port !== undefined;
   const configPort = normalizeDevtoolsPort(config.claude.devtools_port);
   const configEvalMode = config.claude.eval_mode ?? 'readonly';
   const envEvalMode = parseBrowserEvalMode(env.CCS_BROWSER_EVAL_MODE);
@@ -253,7 +254,7 @@ export function getEffectiveClaudeBrowserAttachConfig(
     overrideActive: false,
     userDataDir: configUserDataDir,
     devtoolsPort: configPort,
-    hasExplicitDevtoolsPort: false,
+    hasExplicitDevtoolsPort: configHasExplicitPort,
     evalMode: effectiveEvalMode,
   };
 }
