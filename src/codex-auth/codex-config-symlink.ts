@@ -94,7 +94,7 @@ export function ensureSharedConfigSymlink(
       target: targetPath,
     });
   } catch (err) {
-    copySharedConfigFallback(targetPath, linkPath, err);
+    handleSymlinkFailure(targetPath, linkPath, err);
   }
 }
 
@@ -106,9 +106,30 @@ function isRegularConfigCopyUnmodified(linkPath: string, targetPath: string): bo
   }
 }
 
-function copySharedConfigFallback(targetPath: string, linkPath: string, err: unknown): void {
-  fs.copyFileSync(targetPath, linkPath);
-  fs.chmodSync(linkPath, 0o600);
+function handleSymlinkFailure(targetPath: string, linkPath: string, err: unknown): void {
+  const code = (err as NodeJS.ErrnoException | null)?.code;
+  if (code !== 'EPERM' && code !== 'EACCES' && code !== 'ENOSYS') {
+    throw err;
+  }
+
+  const tmpPath = path.join(
+    path.dirname(linkPath),
+    `.config.toml.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  );
+
+  try {
+    fs.copyFileSync(targetPath, tmpPath, fs.constants.COPYFILE_EXCL);
+    fs.chmodSync(tmpPath, 0o600);
+    fs.renameSync(tmpPath, linkPath);
+  } catch (copyErr) {
+    try {
+      fs.rmSync(tmpPath, { force: true });
+    } catch {
+      // best effort cleanup
+    }
+    throw copyErr;
+  }
+
   process.stderr.write(
     `[!] codex-auth: symlink unavailable; copied shared config.toml to ${linkPath}. ` +
       `Config edits won't propagate automatically.\n`

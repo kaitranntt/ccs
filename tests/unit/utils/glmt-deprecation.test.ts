@@ -20,6 +20,9 @@ describe('glmt deprecation helpers', () => {
     expect(isLegacyGlmtBaseUrl('https://api.z.ai/api/coding/paas/v4/chat/completions/')).toBe(
       true
     );
+    expect(isLegacyGlmtBaseUrl('https://private.example.internal/v1/chat/completions')).toBe(
+      false
+    );
     expect(isLegacyGlmtBaseUrl('https://api.z.ai/api/anthropic')).toBe(false);
   });
 

@@ -18,6 +18,7 @@ import {
 
 import cursorSettingsRoutes from './cursor-settings-routes';
 import { getCursorConfig } from '../../config/config-loader-facade';
+import { isDashboardWebSocketOriginAllowed } from '../middleware/auth-middleware';
 
 const router = Router();
 
@@ -192,7 +193,12 @@ router.get('/models', async (_req: Request, res: Response): Promise<void> => {
 /**
  * POST /api/cursor/probe - Run a live authenticated runtime probe
  */
-router.post('/probe', async (_req: Request, res: Response): Promise<void> => {
+router.post('/probe', async (req: Request, res: Response): Promise<void> => {
+  if (!isDashboardWebSocketOriginAllowed(req)) {
+    res.status(403).json({ error: 'Cross-origin probe requests are not allowed.' });
+    return;
+  }
+
   try {
     const cursorConfig = getCursorConfig();
     const result = await probeCursorRuntime(cursorConfig);

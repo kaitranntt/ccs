@@ -35,12 +35,14 @@ export class SSEParser {
   private eventCount: number;
   private maxBufferSize: number;
   private throwOnMalformedJson: boolean;
+  private pendingCR: boolean;
 
   constructor(options: SSEParserOptions = {}) {
     this.buffer = '';
     this.eventCount = 0;
     this.maxBufferSize = options.maxBufferSize || 1024 * 1024; // 1MB default
     this.throwOnMalformedJson = options.throwOnMalformedJson === true;
+    this.pendingCR = false;
   }
 
   /**
@@ -49,7 +51,19 @@ export class SSEParser {
    * @returns Array of parsed events
    */
   parse(chunk: Buffer | string): SSEEvent[] {
-    this.buffer += chunk.toString().replace(/\r\n?/g, '\n');
+    let normalizedChunk = chunk.toString();
+
+    if (this.pendingCR) {
+      if (normalizedChunk.startsWith('\n')) {
+        normalizedChunk = normalizedChunk.slice(1);
+      }
+      this.pendingCR = false;
+    }
+
+    const endsWithCR = normalizedChunk.endsWith('\r');
+    normalizedChunk = normalizedChunk.replace(/\r\n?/g, '\n');
+    this.pendingCR = endsWithCR;
+    this.buffer += normalizedChunk;
 
     // C-01 Fix: Prevent unbounded buffer growth (DoS protection)
     if (this.buffer.length > this.maxBufferSize) {
@@ -127,5 +141,6 @@ export class SSEParser {
   reset(): void {
     this.buffer = '';
     this.eventCount = 0;
+    this.pendingCR = false;
   }
 }

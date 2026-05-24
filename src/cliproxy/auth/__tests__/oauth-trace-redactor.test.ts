@@ -85,6 +85,13 @@ describe('redactString', () => {
     expect(out).not.toContain('AT_SECRET');
     expect(out).toBe(`access_token=${REDACTED_PLACEHOLDER}&keep=1`);
   });
+
+  test('redacts ampersand-delimited generic token query params', () => {
+    const out = redactString('access_token=AT_SECRET&token=TOKEN_SECRET');
+    expect(out).not.toContain('AT_SECRET');
+    expect(out).not.toContain('TOKEN_SECRET');
+    expect(out).toBe(`access_token=${REDACTED_PLACEHOLDER}&token=${REDACTED_PLACEHOLDER}`);
+  });
 });
 
 describe('redactUrl', () => {

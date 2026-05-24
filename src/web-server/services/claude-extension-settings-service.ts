@@ -231,8 +231,12 @@ function writeJsonDocument(
   const tempPath = `${filePath}.tmp.${uniqueFileNonce()}`;
 
   try {
-    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2) + '\n', 'utf8');
+    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2) + '\n', {
+      encoding: 'utf8',
+      mode: 0o600,
+    });
     fs.renameSync(tempPath, filePath);
+    fs.chmodSync(filePath, 0o600);
   } catch (error) {
     if (fs.existsSync(tempPath)) {
       fs.rmSync(tempPath, { force: true });

@@ -55,6 +55,23 @@ interface OpenAIChatRequest {
 
 const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10MB
 
+function getAnthropicRequestToken(headers: http.IncomingHttpHeaders): string {
+  const xApiKey = headers['x-api-key'];
+  if (typeof xApiKey === 'string' && xApiKey.trim().length > 0) {
+    return xApiKey.trim();
+  }
+
+  const authorization = headers.authorization;
+  if (typeof authorization === 'string') {
+    const match = authorization.match(/^Bearer\s+(.+)$/i);
+    if (match && match[1].trim().length > 0) {
+      return match[1].trim();
+    }
+  }
+
+  return '';
+}
+
 function writeJson(res: http.ServerResponse, statusCode: number, payload: unknown): void {
   res.writeHead(statusCode, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(payload));
@@ -108,6 +125,23 @@ function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
   });
 }
 
+function hasValidDaemonToken(req: http.IncomingMessage): boolean {
+  const expectedToken = process.env.CCS_CURSOR_DAEMON_TOKEN;
+  if (!expectedToken) {
+    return false;
+  }
+
+  const provided = req.headers['x-ccs-cursor-token'];
+  if (typeof provided === 'string') {
+    return provided === expectedToken;
+  }
+
+  if (Array.isArray(provided)) {
+    return provided.includes(expectedToken);
+  }
+
+  return false;
+}
 function normalizeMessages(raw: unknown): NormalizedOpenAIMessage[] {
   if (!Array.isArray(raw)) {
     throw new Error('messages must be an array');
@@ -202,6 +236,10 @@ export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Ser
 
     try {
       if (method === 'GET' && requestUrl === '/health') {
+        if (!hasValidDaemonToken(req)) {
+          writeJson(res, 401, { error: 'Unauthorized' });
+          return;
+        }
         writeJson(res, 200, { ok: true, service: 'cursor-daemon' });
         return;
       }
@@ -231,6 +269,11 @@ export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Ser
 
       if (!isOpenAiRoute && !isAnthropicRoute) {
         writeJson(res, 404, { error: 'Not found' });
+        return;
+      }
+
+      if (!hasValidDaemonToken(req)) {
+        writeJson(res, 401, { error: 'Unauthorized' });
         return;
       }
 
@@ -281,6 +324,22 @@ export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Ser
           });
         }
         return;
+      }
+
+      if (isAnthropicRoute) {
+        const expectedToken = (process.env.ANTHROPIC_AUTH_TOKEN || 'cursor-managed').trim();
+        const requestToken = getAnthropicRequestToken(req.headers);
+        if (!expectedToken || requestToken !== expectedToken) {
+          await pipeWebResponseToNode(
+            createAnthropicErrorResponse(
+              401,
+              'authentication_error',
+              'Invalid Anthropic auth token. Set ANTHROPIC_AUTH_TOKEN and send it via x-api-key or Authorization Bearer.'
+            ),
+            res
+          );
+          return;
+        }
       }
 
       const daemonCredentials = {

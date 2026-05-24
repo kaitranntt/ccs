@@ -999,8 +999,8 @@ async function handleGitLabPatLogin(
   const baseUrl = normalizeGitLabBaseUrl(options?.gitlabBaseUrl);
   const knownTokenFiles = listProviderTokenSnapshots(provider, tokenDir);
   const suppliedToken = options?.gitlabPersonalAccessToken?.trim();
-  const personalAccessToken =
-    suppliedToken || process.env['GITLAB_PERSONAL_ACCESS_TOKEN']?.trim() || undefined;
+  const envPersonalAccessToken = process.env['GITLAB_PERSONAL_ACCESS_TOKEN']?.trim() || undefined;
+  const personalAccessToken = suppliedToken || envPersonalAccessToken;
 
   let token = personalAccessToken;
   if (!token) {
@@ -1013,6 +1013,11 @@ async function handleGitLabPatLogin(
   if (!token) {
     console.log(info('Cancelled'));
     return null;
+  }
+
+  // PAT provided via process env should never be forwarded to downstream runtime.
+  if (!suppliedToken && envPersonalAccessToken) {
+    delete process.env['GITLAB_PERSONAL_ACCESS_TOKEN'];
   }
 
   const response = await fetch(buildProxyUrl(target, '/v0/management/gitlab-auth-url'), {

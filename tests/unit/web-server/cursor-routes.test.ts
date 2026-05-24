@@ -510,6 +510,17 @@ describe('Cursor Routes Logic', () => {
       expect(json.current).toBe('gpt-5.3-codex');
     });
 
+    it('POST /api/cursor/probe rejects cross-origin requests', async () => {
+      const res = await fetch(`${baseUrl}/api/cursor/probe`, {
+        method: 'POST',
+        headers: { Origin: 'https://attacker.example' },
+      });
+      expect(res.status).toBe(403);
+
+      const json = (await res.json()) as { error?: string };
+      expect(json.error).toContain('Cross-origin probe requests are not allowed.');
+    });
+
     it('POST /api/cursor/probe returns auth failure when credentials are missing', async () => {
       const res = await fetch(`${baseUrl}/api/cursor/probe`, { method: 'POST' });
       expect(res.status).toBe(401);

@@ -222,7 +222,7 @@ function prepareExplicitCodexHome(
   }
 
   try {
-    fs.mkdirSync(codexHome, { recursive: true });
+    fs.mkdirSync(codexHome, { mode: 0o700, recursive: true });
   } catch (err) {
     const error = err as NodeJS.ErrnoException;
     if (error.code !== 'EEXIST') {

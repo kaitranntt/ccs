@@ -296,6 +296,39 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
     expect((capturedBody?.reasoning as JsonRecord | undefined)?.effort).toBeUndefined();
   });
 
+  it('rejects oversized non-2xx upstream error bodies', async () => {
+    const upstream = http.createServer((_req, res) => {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      const chunk = 'x'.repeat(1024 * 1024);
+      for (let i = 0; i < 11; i += 1) {
+        res.write(chunk);
+      }
+      res.end();
+    });
+    cleanupServers.push(upstream);
+
+    const upstreamPort = await listenOnRandomPort(upstream);
+    const proxy = new CodexReasoningProxy({
+      upstreamBaseUrl: `http://127.0.0.1:${upstreamPort}`,
+      modelMap: { defaultModel: 'gpt-5.4' },
+      defaultEffort: 'medium',
+    });
+
+    const proxyPort = await proxy.start();
+    const response = await postJson(
+      `http://127.0.0.1:${proxyPort}/api/provider/codex/v1/messages`,
+      {
+        model: 'gpt-5.4',
+        messages: [],
+      }
+    );
+
+    proxy.stop();
+
+    expect(response.statusCode).toBe(502);
+    expect(response.body.error).toContain('Upstream error response exceeded 10MB limit');
+  });
+
   it('keeps fast service tier when disableEffort is enabled', async () => {
     let capturedBody: JsonRecord | null = null;
 

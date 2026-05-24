@@ -113,10 +113,11 @@ environment:
 
 Running `ccs config auth setup` on the outer host shell updates that machine's own `~/.ccs`, not the Docker volume mounted into `ccs-cliproxy`. For the integrated stack, configure auth inside the container or provide the auth env vars in Compose.
 
-Generate a bcrypt hash:
+Generate a bcrypt hash without putting the password in shell history or process arguments:
 
 ```bash
-docker exec ccs-cliproxy node -e "console.log(require('bcrypt').hashSync('your-password', 10))"
+docker exec -i ccs-cliproxy node -e "const fs=require('fs'); const bcrypt=require('bcrypt'); const password=fs.readFileSync(0,'utf8').trimEnd(); console.log(bcrypt.hashSync(password, 10));"
+# then type/paste the password followed by Enter (stdin is not exposed via argv)
 ```
 
 > **Note:** Do not commit the password hash in `docker-compose.yml`. Use Docker secrets or a `.env` file (not tracked in git) for sensitive values like `CCS_DASHBOARD_PASSWORD_HASH`.
@@ -160,15 +161,20 @@ docker exec ccs-cliproxy supervisorctl -c /etc/supervisord.conf restart cliproxy
 For remote deployments via `ccs docker up --host`:
 
 ```bash
-# Copy tokens into the running container (no root/sudo needed)
-scp /path/to/auth/*.json my-server:/tmp/ccs-auth/
-ssh my-server 'for f in /tmp/ccs-auth/*.json; do docker cp "$f" ccs-cliproxy:/root/.ccs/cliproxy/auth/; done'
+# Create a private staging directory (0700) and print its path
+STAGE_DIR=$(ssh my-server 'umask 077 && mktemp -d "${HOME}/.ccs-auth.XXXXXX"')
+
+# Copy only JSON token files into the private staging directory
+scp /path/to/auth/*.json "my-server:${STAGE_DIR}/"
+
+# Restrict file permissions and import each staged token into the container
+ssh my-server "chmod 600 \"${STAGE_DIR}\"/*.json && for f in \"${STAGE_DIR}\"/*.json; do docker cp \"\$f\" ccs-cliproxy:/root/.ccs/cliproxy/auth/; done"
 
 # Restart CLIProxy to load new tokens
 ssh my-server "docker exec ccs-cliproxy supervisorctl -c /etc/supervisord.conf restart cliproxy"
 
-# Clean up temp files
-ssh my-server "rm -rf /tmp/ccs-auth"
+# Clean up private staging files
+ssh my-server "rm -rf \"${STAGE_DIR}\""
 ```
 
 > **Tip:** `docker cp` is preferred over writing directly to Docker volume mountpoints, which require root access.
@@ -191,10 +197,12 @@ docker exec ccs-cliproxy curl -fsS http://127.0.0.1:3000/api/health \
 # 4. Verify auth tokens loaded (check client count)
 docker exec ccs-cliproxy grep "client load complete" /var/log/ccs/cliproxy.log
 
-# 5. Test dashboard API (from remote -- requires auth)
-curl -fsS -X POST http://<host>:3000/api/auth/login \
+# 5. Test dashboard API (from remote -- requires auth + HTTPS)
+read -r -s CCS_DASHBOARD_PASSWORD && echo
+curl -fsS -X POST https://<host>:3000/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"your-password"}'
+  -d "{\"username\":\"admin\",\"password\":\"${CCS_DASHBOARD_PASSWORD}\"}"
+unset CCS_DASHBOARD_PASSWORD
 ```
 
 Expected healthy output:

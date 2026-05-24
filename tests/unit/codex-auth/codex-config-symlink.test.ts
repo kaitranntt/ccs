@@ -143,6 +143,19 @@ describe('ensureSharedConfigSymlink', () => {
     expect(stderrChunks.join('')).toContain('symlink unavailable');
   });
 
+
+  it('rethrows symlink errors that are not fallback-safe', () => {
+    fs.writeFileSync(sharedConfigPath, 'model = "gpt-5.5"\n', { mode: 0o600 });
+    const symlinkSpy = spyOn(fs, 'symlinkSync').mockImplementation(() => {
+      throw Object.assign(new Error('simulated race'), { code: 'EEXIST' });
+    });
+
+    try {
+      expect(() => ensureSharedConfigSymlink(profileDir, sharedConfigPath)).toThrow(/simulated race/);
+    } finally {
+      symlinkSpy.mockRestore();
+    }
+  });
   it('preserves edited fallback copies on later repair attempts', () => {
     fs.writeFileSync(sharedConfigPath, 'model = "gpt-5.5"\n', { mode: 0o600 });
     const linkPath = path.join(profileDir, 'config.toml');

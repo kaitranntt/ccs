@@ -94,6 +94,7 @@ describe('ControlPanelEmbed', () => {
     const iframe = await screen.findByTitle('CLIProxy Management Panel');
 
     expect(iframe).toHaveAttribute('src', '/api/cliproxy-local/management.html');
+    fireEvent.load(iframe);
 
     await waitFor(() => {
       expect(window.localStorage.removeItem).toHaveBeenCalledWith('cli-proxy-auth');
@@ -107,6 +108,7 @@ describe('ControlPanelEmbed', () => {
       );
       expect(window.localStorage.setItem).toHaveBeenCalledWith('managementKey', 'custom-secret');
       expect(window.localStorage.setItem).toHaveBeenCalledWith('isLoggedIn', 'true');
+      expect(window.localStorage.removeItem).toHaveBeenCalledWith('managementKey');
     });
 
     vi.clearAllMocks();

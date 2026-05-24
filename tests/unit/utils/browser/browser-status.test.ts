@@ -22,6 +22,7 @@ describe('browser status', () => {
   let originalBrowserUserDataDir: string | undefined;
   let originalBrowserProfileDir: string | undefined;
   let originalBrowserDevtoolsPort: string | undefined;
+  let originalBrowserEvalMode: string | undefined;
 
   beforeEach(() => {
     tempHome = mkdtempSync(join(tmpdir(), 'ccs-browser-status-'));
@@ -29,11 +30,13 @@ describe('browser status', () => {
     originalBrowserUserDataDir = process.env.CCS_BROWSER_USER_DATA_DIR;
     originalBrowserProfileDir = process.env.CCS_BROWSER_PROFILE_DIR;
     originalBrowserDevtoolsPort = process.env.CCS_BROWSER_DEVTOOLS_PORT;
+    originalBrowserEvalMode = process.env.CCS_BROWSER_EVAL_MODE;
 
     process.env.CCS_HOME = tempHome;
     delete process.env.CCS_BROWSER_USER_DATA_DIR;
     delete process.env.CCS_BROWSER_PROFILE_DIR;
     delete process.env.CCS_BROWSER_DEVTOOLS_PORT;
+    delete process.env.CCS_BROWSER_EVAL_MODE;
   });
 
   afterEach(() => {
@@ -59,6 +62,11 @@ describe('browser status', () => {
       process.env.CCS_BROWSER_DEVTOOLS_PORT = originalBrowserDevtoolsPort;
     } else {
       delete process.env.CCS_BROWSER_DEVTOOLS_PORT;
+    }
+    if (originalBrowserEvalMode !== undefined) {
+      process.env.CCS_BROWSER_EVAL_MODE = originalBrowserEvalMode;
+    } else {
+      delete process.env.CCS_BROWSER_EVAL_MODE;
     }
 
     rmSync(tempHome, { recursive: true, force: true });
@@ -288,6 +296,29 @@ describe('browser status', () => {
       userDataDir: '/env-browser',
       devtoolsPort: 9444,
     });
+  });
+
+  it('honors CCS_BROWSER_EVAL_MODE over configured eval_mode', () => {
+    mutateUnifiedConfig((config) => {
+      config.browser = {
+        claude: {
+          enabled: true,
+          policy: 'manual',
+          user_data_dir: '/config-browser',
+          devtools_port: 9333,
+          eval_mode: 'readonly',
+        },
+        codex: {
+          enabled: false,
+          policy: 'manual',
+        },
+      };
+    });
+    process.env.CCS_BROWSER_EVAL_MODE = 'disabled';
+
+    const effective = getEffectiveClaudeBrowserAttachConfig(getBrowserConfig());
+
+    expect(effective.evalMode).toBe('disabled');
   });
 
   it('returns the same managed attach warning when the configured DevTools port is unreachable', async () => {

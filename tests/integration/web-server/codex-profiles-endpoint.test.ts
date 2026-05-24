@@ -206,9 +206,8 @@ describe('GET /api/codex/profiles', () => {
     // 127.0.0.1 and the test client connects to 127.0.0.1, the built-in fetch
     // will always be loopback. We test the guard directly via a separate
     // Express app that injects a non-loopback remote address.
-    const { requireLocalAccessWhenAuthDisabled } = await import(
-      '../../../src/web-server/middleware/auth-middleware'
-    );
+    const { requireLocalAccessWhenAuthDisabled } =
+      await import('../../../src/web-server/middleware/auth-middleware');
     const { isDashboardAuthEnabled } = await import('../../../src/config/config-loader-facade');
 
     if (!isDashboardAuthEnabled()) {
@@ -229,6 +228,43 @@ describe('GET /api/codex/profiles', () => {
           res.json({ ok: true });
         } else {
           responseStatus = 403;
+        }
+      });
+
+      const testServer = await new Promise<http.Server>((resolve) => {
+        const s = testApp.listen(0, '127.0.0.1', () => resolve(s));
+      });
+      const testPort = (testServer.address() as { port: number }).port;
+
+      const res = await fetch(`http://127.0.0.1:${testPort}/test`);
+      await new Promise<void>((resolve) => testServer.close(() => resolve()));
+
+      expect(res.status).toBe(403);
+      expect(guardResult).toBe(false);
+    }
+  });
+
+  it('returns 403 for loopback remote addresses when host/origin indicate non-local origin', async () => {
+    const { requireLocalAccessWhenAuthDisabled } =
+      await import('../../../src/web-server/middleware/auth-middleware');
+    const { isDashboardAuthEnabled } = await import('../../../src/config/config-loader-facade');
+
+    if (!isDashboardAuthEnabled()) {
+      let guardResult: boolean | undefined;
+
+      const testApp = express();
+      testApp.get('/test', (req, res) => {
+        Object.defineProperty(req, 'socket', {
+          value: { remoteAddress: '127.0.0.1' },
+          writable: true,
+          configurable: true,
+        });
+        req.headers.host = 'attacker.example.test';
+        req.headers.origin = 'http://attacker.example.test';
+
+        guardResult = requireLocalAccessWhenAuthDisabled(req, res, 'localhost only');
+        if (guardResult) {
+          res.json({ ok: true });
         }
       });
 

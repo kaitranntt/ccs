@@ -46,4 +46,18 @@ describe('SSEParser', () => {
         ?.delta?.content
     ).toBe('Legacy');
   });
+
+
+  it('does not split events when CRLF is split across chunks', () => {
+    const parser = new SSEParser({ throwOnMalformedJson: true });
+
+    expect(parser.parse('data: {"choices":[\r')).toEqual([]);
+    const events = parser.parse('\ndata: {"delta":{"content":"Hello"}}\r\ndata: ]}\r\n\r\n');
+
+    expect(events).toHaveLength(1);
+    expect(
+      (events[0]?.data as { choices?: Array<{ delta?: { content?: string } }> })?.choices?.[0]
+        ?.delta?.content
+    ).toBe('Hello');
+  });
 });

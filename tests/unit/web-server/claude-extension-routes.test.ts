@@ -313,6 +313,12 @@ describe('web-server claude-extension-routes', () => {
 
   it('creates a binding and applies managed settings to shared + IDE targets', async () => {
     const ideSettingsPath = path.join(tempHome, 'ide', 'vscode', 'settings.json');
+    const sharedSettingsPath = path.join(tempHome, '.claude', 'settings.json');
+    fs.mkdirSync(path.dirname(ideSettingsPath), { recursive: true });
+    fs.mkdirSync(path.dirname(sharedSettingsPath), { recursive: true });
+    fs.writeFileSync(sharedSettingsPath, JSON.stringify({ env: {} }, null, 2) + '\n', { mode: 0o600 });
+    fs.writeFileSync(ideSettingsPath, JSON.stringify({}, null, 2) + '\n', { mode: 0o600 });
+
     const createResponse = await fetch(`${baseUrl}/api/claude-extension/bindings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -352,7 +358,6 @@ describe('web-server claude-extension-routes', () => {
     expect(applied.sharedSettings.state).toBe('applied');
     expect(applied.ideSettings.state).toBe('applied');
 
-    const sharedSettingsPath = path.join(tempHome, '.claude', 'settings.json');
     const sharedSettings = JSON.parse(fs.readFileSync(sharedSettingsPath, 'utf8')) as {
       env?: Record<string, string>;
     };
@@ -370,6 +375,9 @@ describe('web-server claude-extension-routes', () => {
         )
     ).toBe(true);
     expect(ideSettings['claudeCode.disableLoginPrompt']).toBe(true);
+
+    expect(fs.statSync(sharedSettingsPath).mode & 0o777).toBe(0o600);
+    expect(fs.statSync(ideSettingsPath).mode & 0o777).toBe(0o600);
   });
 
   it('resets only managed keys and preserves unrelated shared + IDE settings', async () => {

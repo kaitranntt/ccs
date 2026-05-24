@@ -15,6 +15,7 @@ import { getImageAnalysisHookEnv, resolveImageAnalysisRuntimeStatus } from '../u
 import { stripClaudeCodeEnv } from '../utils/shell-executor';
 import { checkAuthStatus } from './cursor-auth';
 import { isDaemonRunning, startDaemon } from './cursor-daemon';
+import { getCursorDaemonToken } from './cursor-daemon-auth';
 import { getGlobalEnvConfig } from '../config/config-loader-facade';
 
 interface CursorImageAnalysisResolution {
@@ -31,6 +32,7 @@ interface CursorImageAnalysisDeps {
 
 export function generateCursorEnv(
   config: CursorConfig,
+  daemonToken: string,
   claudeConfigDir?: string
 ): Record<string, string> {
   const opusModel = config.opus_model || config.model;
@@ -39,7 +41,7 @@ export function generateCursorEnv(
 
   return {
     ANTHROPIC_BASE_URL: `http://127.0.0.1:${config.port}`,
-    ANTHROPIC_AUTH_TOKEN: 'cursor-managed',
+    ANTHROPIC_AUTH_TOKEN: daemonToken,
     ANTHROPIC_MODEL: config.model,
     ANTHROPIC_DEFAULT_OPUS_MODEL: opusModel,
     ANTHROPIC_DEFAULT_SONNET_MODEL: sonnetModel,
@@ -130,13 +132,16 @@ export async function executeCursorProfile(
     return 1;
   }
 
-  let daemonRunning = await isDaemonRunning(config.port);
+  const daemonToken = getCursorDaemonToken();
+
+  let daemonRunning = await isDaemonRunning(config.port, daemonToken);
   if (!daemonRunning) {
     if (config.auto_start) {
       console.log(info('Starting cursor daemon...'));
       const result = await startDaemon({
         port: config.port,
         ghost_mode: config.ghost_mode,
+        daemon_token: daemonToken,
       });
       if (!result.success) {
         console.error(fail(`Failed to start cursor daemon: ${result.error}`));
@@ -154,7 +159,7 @@ export async function executeCursorProfile(
     }
   }
 
-  const cursorEnv = generateCursorEnv(config, claudeConfigDir);
+  const cursorEnv = generateCursorEnv(config, daemonToken, claudeConfigDir);
   const globalEnvConfig = getGlobalEnvConfig();
   const globalEnv = globalEnvConfig.enabled ? globalEnvConfig.env : {};
   const webSearchEnv = getWebSearchHookEnv();

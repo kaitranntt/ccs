@@ -57,6 +57,10 @@ function clearLocalControlPanelSession(): void {
   window.localStorage.removeItem(CONTROL_PANEL_LOGIN_FLAG_KEY);
 }
 
+function clearPersistedLocalControlPanelSecret(): void {
+  window.localStorage.removeItem(CONTROL_PANEL_MANAGEMENT_KEY);
+}
+
 export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanelEmbedProps) {
   const { t } = useTranslation();
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -162,7 +166,13 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
       return;
     }
 
+    const handleBeforeUnload = () => {
+      clearLocalControlPanelSession();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       clearLocalControlPanelSession();
     };
   }, [isRemote]);
@@ -266,9 +276,15 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
   const handleIframeLoad = () => {
     setLoadedFrameKey(iframeKey);
     postRemoteAutoLoginCredentials();
+    if (!isRemote) {
+      clearPersistedLocalControlPanelSecret();
+    }
   };
 
   const handleRefresh = () => {
+    if (!isRemote) {
+      clearLocalControlPanelSession();
+    }
     setLoadedFrameKey(null);
     setIframeRevision((value) => value + 1);
     setError(null);

@@ -23,6 +23,7 @@ import {
 const originalCcsHome = process.env.CCS_HOME;
 const originalGraceDays = process.env.CCS_DOCKER_LEGACY_KEY_GRACE_DAYS;
 const originalRestoreLegacyKey = process.env.CCS_DOCKER_RESTORE_LEGACY_API_KEY;
+const originalEnableLegacyKeyAuth = process.env.CCS_DOCKER_ENABLE_LEGACY_KEY_AUTH;
 const tempDirs: string[] = [];
 
 function useTempCcsHome(): string {
@@ -47,6 +48,11 @@ afterEach(() => {
     delete process.env.CCS_DOCKER_RESTORE_LEGACY_API_KEY;
   } else {
     process.env.CCS_DOCKER_RESTORE_LEGACY_API_KEY = originalRestoreLegacyKey;
+  }
+  if (originalEnableLegacyKeyAuth === undefined) {
+    delete process.env.CCS_DOCKER_ENABLE_LEGACY_KEY_AUTH;
+  } else {
+    process.env.CCS_DOCKER_ENABLE_LEGACY_KEY_AUTH = originalEnableLegacyKeyAuth;
   }
 
   for (const dir of tempDirs.splice(0)) {
@@ -98,7 +104,7 @@ describe('docker bootstrap auth', () => {
     expect(readDockerBootstrapState().state?.legacyKeyGrace).toBeUndefined();
   });
 
-  it('preserves the legacy key during the default upgrade grace window', () => {
+  it('tracks legacy key grace but does not enable it in config by default', () => {
     useTempCcsHome();
     mutateConfig((config) => {
       config.cliproxy.auth = {
@@ -118,7 +124,7 @@ describe('docker bootstrap auth', () => {
     expect(state?.legacyKeyGrace?.legacyKey).toBe(CCS_INTERNAL_API_KEY);
     expect(state?.legacyKeyGrace?.replacementKey).toBe(config.cliproxy.auth?.api_key);
     expect(content).toContain(`"${config.cliproxy.auth?.api_key}"`);
-    expect(content).toContain(`"${CCS_INTERNAL_API_KEY}"`);
+    expect(content).not.toContain(`"${CCS_INTERNAL_API_KEY}"`);
   });
 
   it('honors CCS_DOCKER_LEGACY_KEY_GRACE_DAYS for upgrade expiry', () => {
@@ -188,7 +194,7 @@ describe('docker bootstrap auth', () => {
 
     expect(changed).toBe(true);
     expect(content).toContain(`"${generatedKey}"`);
-    expect(content).toContain(`"${CCS_INTERNAL_API_KEY}"`);
+    expect(content).not.toContain(`"${CCS_INTERNAL_API_KEY}"`);
   });
 
   it('restores the legacy key after an earlier run wrote a no-grace marker', () => {
@@ -212,7 +218,7 @@ describe('docker bootstrap auth', () => {
 
     expect(changed).toBe(true);
     expect(content).toContain(`"${generatedKey}"`);
-    expect(content).toContain(`"${CCS_INTERNAL_API_KEY}"`);
+    expect(content).not.toContain(`"${CCS_INTERNAL_API_KEY}"`);
   });
 
   it('recovers safely from a corrupted marker file during broken-install recovery', () => {
@@ -232,7 +238,7 @@ describe('docker bootstrap auth', () => {
 
     expect(getDockerBootstrapStatePath()).toContain(DOCKER_BOOTSTRAP_STATE_FILENAME);
     expect(readDockerBootstrapState().corrupted).toBe(false);
-    expect(content).toContain(`"${CCS_INTERNAL_API_KEY}"`);
+    expect(content).not.toContain(`"${CCS_INTERNAL_API_KEY}"`);
   });
 
   it('does not treat human custom keys as broken Docker-generated keys', () => {

@@ -79,11 +79,17 @@ describe('ccs-browser MCP server - session and interception', () => {
     expect(clickTool?.inputSchema?.properties?.clickCount).toMatchObject({
       type: 'integer',
       minimum: 1,
+      maximum: 25,
     });
 
     const keyTool = tools.find((tool) => tool.name === 'browser_press_key');
     expect(keyTool?.inputSchema?.properties?.key).toMatchObject({ type: 'string' });
     expect(keyTool?.inputSchema?.properties?.modifiers).toMatchObject({ type: 'array' });
+    expect(keyTool?.inputSchema?.properties?.repeat).toMatchObject({
+      type: 'integer',
+      minimum: 1,
+      maximum: 25,
+    });
 
     const scrollTool = tools.find((tool) => tool.name === 'browser_scroll');
     expect(scrollTool?.inputSchema?.properties?.deltaX).toMatchObject({ type: 'number' });
@@ -780,8 +786,7 @@ describe('ccs-browser MCP server - session and interception', () => {
     expect(listText).toContain('requestId: req-1');
     expect(listText).toContain('matchedRuleId: rule-1');
     expect(listText).toContain('action: fail');
-    expect(listText).toContain('requestId: req-2');
-    expect(listText).toContain('action: continue');
+    expect(listText).not.toContain('requestId: req-2');
   });
 
   it('removes rules and recent requests bound to a page after that page is closed', async () => {

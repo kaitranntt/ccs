@@ -197,7 +197,7 @@ describe('isDaemonRunning', () => {
         throw new Error('Unable to resolve test server port');
       }
 
-      const result = await isDaemonRunning(address.port);
+      const result = await isDaemonRunning(address.port, "bad-token");
       expect(result).toBe(false);
     } finally {
       await new Promise<void>((resolve) => {

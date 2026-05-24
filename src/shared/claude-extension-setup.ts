@@ -13,6 +13,7 @@ import { CLIPROXY_DEFAULT_PORT } from '../cliproxy/config/port-manager';
 import { getProxyTarget } from '../cliproxy/proxy/proxy-target-resolver';
 import { generateCopilotEnv } from '../copilot/copilot-executor';
 import { generateCursorEnv } from '../cursor';
+import { getCursorDaemonToken } from '../cursor/cursor-daemon-auth';
 import InstanceManager from '../management/instance-manager';
 import SharedManager from '../management/shared-manager';
 import { expandPath } from '../utils/helpers';
@@ -245,7 +246,11 @@ async function resolveExtensionEnv(
               if (!result.cursorConfig) {
                 throw new Error(`Profile "${requestedProfile}" is missing cursor configuration.`);
               }
-              return generateCursorEnv(result.cursorConfig, continuity.claudeConfigDir);
+              return generateCursorEnv(
+                result.cursorConfig,
+                getCursorDaemonToken(),
+                continuity.claudeConfigDir
+              );
             })()
           : (() => {
               if (!result.provider) {

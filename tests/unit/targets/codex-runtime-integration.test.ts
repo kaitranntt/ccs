@@ -596,7 +596,9 @@ process.exit(0);
 
     expect(result.status).toBe(0);
     expect(fs.existsSync(freshCodexHome)).toBe(true);
-    expect(fs.statSync(freshCodexHome).isDirectory()).toBe(true);
+    const codexHomeStat = fs.statSync(freshCodexHome);
+    expect(codexHomeStat.isDirectory()).toBe(true);
+    expect(codexHomeStat.mode & 0o777).toBe(0o700);
     expect(readLoggedCodexCalls(codexArgsLogPath)).toEqual([
       ['-c', 'model="gpt-5"', '--version'],
       ['-c', 'model_reasoning_effort="high"', 'fix failing tests'],
