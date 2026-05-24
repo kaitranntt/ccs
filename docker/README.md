@@ -160,15 +160,20 @@ docker exec ccs-cliproxy supervisorctl -c /etc/supervisord.conf restart cliproxy
 For remote deployments via `ccs docker up --host`:
 
 ```bash
-# Copy tokens into the running container (no root/sudo needed)
-scp /path/to/auth/*.json my-server:/tmp/ccs-auth/
-ssh my-server 'for f in /tmp/ccs-auth/*.json; do docker cp "$f" ccs-cliproxy:/root/.ccs/cliproxy/auth/; done'
+# Create a private staging directory (0700) and print its path
+STAGE_DIR=$(ssh my-server 'umask 077 && mktemp -d "${HOME}/.ccs-auth.XXXXXX"')
+
+# Copy only JSON token files into the private staging directory
+scp /path/to/auth/*.json "my-server:${STAGE_DIR}/"
+
+# Restrict file permissions and import each staged token into the container
+ssh my-server "chmod 600 \"${STAGE_DIR}\"/*.json && for f in \"${STAGE_DIR}\"/*.json; do docker cp \"\$f\" ccs-cliproxy:/root/.ccs/cliproxy/auth/; done"
 
 # Restart CLIProxy to load new tokens
 ssh my-server "docker exec ccs-cliproxy supervisorctl -c /etc/supervisord.conf restart cliproxy"
 
-# Clean up temp files
-ssh my-server "rm -rf /tmp/ccs-auth"
+# Clean up private staging files
+ssh my-server "rm -rf \"${STAGE_DIR}\""
 ```
 
 > **Tip:** `docker cp` is preferred over writing directly to Docker volume mountpoints, which require root access.
