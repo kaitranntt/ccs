@@ -722,6 +722,47 @@ describe('ccs-browser MCP server - navigation and query', () => {
     );
   });
 
+
+  it('rejects excessive clickCount and repeat values', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Limits Page', currentUrl: 'https://example.com/' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 713,
+          method: 'tools/call',
+          params: {
+            name: 'browser_click',
+            arguments: {
+              selector: '#submit',
+              clickCount: 26,
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 714,
+          method: 'tools/call',
+          params: {
+            name: 'browser_press_key',
+            arguments: {
+              key: 'k',
+              repeat: 26,
+            },
+          },
+        },
+      ]
+    );
+
+    const clickResponse = responses.find((message) => message.id === 713);
+    expect((clickResponse?.result as { isError?: boolean }).isError).toBe(true);
+    expect(getResponseText(clickResponse)).toContain('clickCount must be less than or equal to 25');
+
+    const keyResponse = responses.find((message) => message.id === 714);
+    expect((keyResponse?.result as { isError?: boolean }).isError).toBe(true);
+    expect(getResponseText(keyResponse)).toContain('repeat must be less than or equal to 25');
+  });
+
   it('scrolls an element into view with browser_scroll', async () => {
     const responses = await runMcpRequests(
       [
