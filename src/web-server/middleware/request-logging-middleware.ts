@@ -10,9 +10,10 @@ export function requestLoggingMiddleware(req: Request, res: Response, next: Next
   res.locals.ccsRequestId = requestId;
   res.setHeader('x-ccs-request-id', requestId);
   const shouldSkipLogging = req.originalUrl.startsWith('/api/logs');
+  const shouldLogResponse = () => res.statusCode < 400;
 
   res.on('finish', () => {
-    if (shouldSkipLogging) {
+    if (shouldSkipLogging || !shouldLogResponse()) {
       return;
     }
     logger.info('request.completed', 'Dashboard request completed', {
