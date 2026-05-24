@@ -780,8 +780,7 @@ describe('ccs-browser MCP server - session and interception', () => {
     expect(listText).toContain('requestId: req-1');
     expect(listText).toContain('matchedRuleId: rule-1');
     expect(listText).toContain('action: fail');
-    expect(listText).toContain('requestId: req-2');
-    expect(listText).toContain('action: continue');
+    expect(listText).not.toContain('requestId: req-2');
   });
 
   it('removes rules and recent requests bound to a page after that page is closed', async () => {
