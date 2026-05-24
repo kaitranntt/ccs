@@ -303,9 +303,7 @@ export function resolveProxyConfig(
     envConfig.protocol !== undefined ||
     cliFlags.authToken !== undefined ||
     envConfig.authToken !== undefined;
-  resolved.managementKey = hasRuntimeRemoteOverride
-    ? undefined
-    : yamlConfig.remote?.management_key;
+  resolved.managementKey = hasRuntimeRemoteOverride ? undefined : yamlConfig.remote?.management_key;
 
   // Merge timeout: CLI > ENV > config.yaml > default (2000ms in executor)
   resolved.timeout = cliFlags.timeout ?? envConfig.timeout ?? yamlConfig.remote?.timeout;
