@@ -19,8 +19,6 @@ import {
   isDashboardWebSocketUpgradeAllowed,
 } from './middleware/auth-middleware';
 import { requestLoggingMiddleware } from './middleware/request-logging-middleware';
-import { ensureManagedModelPrefixes } from '../cliproxy/ai-providers/managed-model-prefixes';
-import { getProxyTarget } from '../cliproxy/proxy/proxy-target-resolver';
 import { startAutoSyncWatcher, stopAutoSyncWatcher } from '../cliproxy/sync';
 import { shutdownUsageAggregator } from './usage/aggregator';
 import { createLogger } from '../services/logging';
@@ -171,14 +169,6 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
 
   // Start auto-sync watcher (if enabled in config)
   startAutoSyncWatcher();
-
-  if (!getProxyTarget().isRemote) {
-    void ensureManagedModelPrefixes().catch((error) => {
-      logger.warn('cliproxy.prefix_sync_failed', 'Managed model prefix repair failed', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
-  }
 
   // Combined cleanup function
   const cleanup = () => {
