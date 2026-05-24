@@ -72,7 +72,7 @@ jobs:
         if: steps.tag.outputs.publish == 'true'
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.target.outputs.tag }}
+          ref: ${{ format('refs/tags/{0}', steps.target.outputs.tag) }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -207,7 +207,7 @@ jobs:
         if: steps.tag.outputs.publish == 'true'
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.target.outputs.tag }}
+          ref: ${{ format('refs/tags/{0}', steps.target.outputs.tag) }}
           persist-credentials: false
 
       - name: Set up QEMU
@@ -314,7 +314,7 @@ jobs:
       - name: Checkout release tag (for test scripts)
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.publish-integrated.outputs.version != '' && format('v{0}', needs.publish-integrated.outputs.version) || github.ref }}
+          ref: ${{ needs.publish-integrated.outputs.version != '' && format('refs/tags/v{0}', needs.publish-integrated.outputs.version) || github.ref }}
           persist-credentials: false
 
       - name: Derive image reference
