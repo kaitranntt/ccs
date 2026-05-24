@@ -48,6 +48,7 @@ jobs:
         with:
           app-id: ${{ secrets.CCS_REVIEWER_APP_ID }}
           private-key: ${{ secrets.CCS_REVIEWER_PRIVATE_KEY }}
+          permission-issues: write
 
       - name: Post /review command to the PR
         uses: actions/github-script@v7
@@ -111,6 +112,9 @@ jobs:
         with:
           app-id: ${{ secrets.CCS_REVIEWER_APP_ID }}
           private-key: ${{ secrets.CCS_REVIEWER_PRIVATE_KEY }}
+          permission-issues: write
+          permission-pull-requests: write
+          permission-contents: read
 
       - name: Run PR-Agent
         uses: qodo-ai/pr-agent@v0.34

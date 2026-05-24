@@ -44,6 +44,9 @@ describe('PR-Agent review lane migration', () => {
     expect(workflow).toContain('CCS_REVIEWER_APP_ID');
     expect(workflow).toContain('CCS_REVIEWER_PRIVATE_KEY');
     expect(workflow).toContain('id: pr-agent-app-token');
+    expect(workflow).toContain('permission-issues: write');
+    expect(workflow).toContain('permission-pull-requests: write');
+    expect(workflow).toContain('permission-contents: read');
     expect(workflow).toContain('GITHUB_TOKEN: ${{ steps.pr-agent-app-token.outputs.token }}');
     expect(workflow).not.toContain('GITHUB_TOKEN: ${{ github.token }}');
     expect(workflow).not.toContain('uses: anthropics/claude-code-action@v1');
