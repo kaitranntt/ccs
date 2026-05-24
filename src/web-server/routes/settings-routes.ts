@@ -22,7 +22,10 @@ import { deduplicateCcsHooks } from '../../utils/websearch/hook-utils';
 import { removeCcsImageAnalyzerHooks } from '../../utils/hooks/image-analyzer-hook-utils';
 import { resolveCliproxyBridgeMetadata } from '../../api/services';
 
-import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
+import {
+  isLoopbackRemoteAddress,
+  requireLocalAccessWhenAuthDisabled,
+} from '../middleware/auth-middleware';
 import type { Settings } from '../../types/config';
 import type { CLIProxyProvider } from '../../cliproxy/types';
 import { mapExternalProviderName } from '../../cliproxy/provider-capabilities';
@@ -43,6 +46,7 @@ import { resolveImageAnalysisRuntimeStatus } from '../../utils/hooks';
 import {
   getCcsDir,
   getImageAnalysisConfig,
+  isDashboardAuthEnabled,
   loadConfigSafe,
   loadOrCreateUnifiedConfig,
   loadSettings,
@@ -153,6 +157,14 @@ function requireSensitiveLocalAccess(req: Request, res: Response): boolean {
     res,
     'Sensitive settings endpoints require localhost access when dashboard auth is disabled.'
   );
+}
+
+function canResolveSensitiveRuntimeStatus(req: Request): boolean {
+  if (isDashboardAuthEnabled()) {
+    return true;
+  }
+
+  return isLoopbackRemoteAddress(req.socket.remoteAddress);
 }
 
 function classifyConfigSaveFailure(error: unknown): { statusCode: number; message: string } {
@@ -498,17 +510,17 @@ router.get('/:profile', async (req: Request, res: Response): Promise<void> => {
     const stat = fs.statSync(settingsPath);
     const masked = maskApiKeys(settings);
 
+    const imageAnalysisStatus = canResolveSensitiveRuntimeStatus(req)
+      ? await resolveImageAnalysisStatusForProfile(profile, settings, settingsPath)
+      : null;
+
     res.json({
       profile,
       settings: masked,
       mtime: stat.mtime.getTime(),
       path: settingsPath,
       cliproxyBridge: resolveCliproxyBridgeMetadata(settings),
-      imageAnalysisStatus: await resolveImageAnalysisStatusForProfile(
-        profile,
-        settings,
-        settingsPath
-      ),
+      imageAnalysisStatus,
     });
   } catch (error) {
     respondInternalError(res, error, 'Internal server error.');
