@@ -10,6 +10,7 @@
 const SENSITIVE_QUERY_KEYS = [
   'code',
   'state',
+  'token',
   'access_token',
   'refresh_token',
   'id_token',
