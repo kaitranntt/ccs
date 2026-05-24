@@ -246,10 +246,36 @@ export function requireLocalAccessWhenAuthDisabled(
     return true;
   }
 
-  if (isLoopbackRemoteAddress(req.socket.remoteAddress)) {
-    return true;
+  if (!isLoopbackRemoteAddress(req.socket.remoteAddress)) {
+    res.status(403).json({ error });
+    return false;
   }
 
-  res.status(403).json({ error });
-  return false;
+  const host = parseHostHeader(getSingleHeader(req.headers.host));
+  if (!host || !isLoopbackHostname(host.hostname)) {
+    res.status(403).json({ error });
+    return false;
+  }
+
+  const originHeader = getSingleHeader(req.headers.origin);
+  if (originHeader) {
+    let origin: URL;
+    try {
+      origin = new URL(originHeader);
+    } catch {
+      res.status(403).json({ error });
+      return false;
+    }
+
+    const isSameHost = origin.host.toLowerCase() === host.host.toLowerCase();
+    const isLoopbackAlias =
+      isHttpOrigin(origin) && isLoopbackHostname(origin.hostname) && origin.port === host.port;
+
+    if (!isSameHost && !isLoopbackAlias) {
+      res.status(403).json({ error });
+      return false;
+    }
+  }
+
+  return true;
 }
