@@ -6,6 +6,7 @@
  */
 
 import { spawn, ChildProcess } from 'child_process';
+import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as http from 'http';
@@ -126,14 +127,26 @@ export async function getDaemonStatus(port: number): Promise<CursorDaemonStatus>
  */
 export async function startDaemon(
   config: CursorDaemonConfig
-): Promise<{ success: boolean; pid?: number; error?: string }> {
+): Promise<{ success: boolean; pid?: number; error?: string; daemonToken?: string }> {
+  // Auto-generate daemon token if not provided so /health and protected routes
+  // can be probed by the caller during startup polling.
+  const daemonToken =
+    config.daemon_token && config.daemon_token.trim()
+      ? config.daemon_token
+      : randomBytes(32).toString('hex');
+  const effectiveConfig: CursorDaemonConfig = { ...config, daemon_token: daemonToken };
+
   // Check if already running
-  if (await isDaemonRunning(config.port, config.daemon_token)) {
+  if (await isDaemonRunning(effectiveConfig.port, effectiveConfig.daemon_token)) {
     logger.stage('dispatch', 'cursor.daemon.already_running', 'Cursor daemon already running', {
       provider: 'cursor',
       port: config.port,
     });
-    return { success: true, pid: getPidFromFile() ?? undefined };
+    return {
+      success: true,
+      pid: getPidFromFile() ?? undefined,
+      daemonToken: effectiveConfig.daemon_token,
+    };
   }
 
   // Validate port before interpolation (prevents injection)
@@ -208,7 +221,7 @@ export async function startDaemon(
         detached: true,
         env: {
           ...process.env,
-          CCS_CURSOR_DAEMON_TOKEN: config.daemon_token || '',
+          CCS_CURSOR_DAEMON_TOKEN: effectiveConfig.daemon_token || '',
         },
       });
 
@@ -225,8 +238,8 @@ export async function startDaemon(
       const pollHealth = async () => {
         attempts++;
 
-        if (await isDaemonRunning(config.port, config.daemon_token)) {
-          safeResolve({ success: true, pid: proc.pid });
+        if (await isDaemonRunning(effectiveConfig.port, effectiveConfig.daemon_token)) {
+          safeResolve({ success: true, pid: proc.pid, daemonToken: effectiveConfig.daemon_token });
         } else if (attempts >= maxAttempts) {
           // Kill orphaned process
           if (proc.pid) {
