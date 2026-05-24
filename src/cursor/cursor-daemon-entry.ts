@@ -108,6 +108,23 @@ function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
   });
 }
 
+function hasValidDaemonToken(req: http.IncomingMessage): boolean {
+  const expectedToken = process.env.CCS_CURSOR_DAEMON_TOKEN;
+  if (!expectedToken) {
+    return false;
+  }
+
+  const provided = req.headers['x-ccs-cursor-token'];
+  if (typeof provided === 'string') {
+    return provided === expectedToken;
+  }
+
+  if (Array.isArray(provided)) {
+    return provided.includes(expectedToken);
+  }
+
+  return false;
+}
 function normalizeMessages(raw: unknown): NormalizedOpenAIMessage[] {
   if (!Array.isArray(raw)) {
     throw new Error('messages must be an array');
@@ -202,6 +219,10 @@ export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Ser
 
     try {
       if (method === 'GET' && requestUrl === '/health') {
+        if (!hasValidDaemonToken(req)) {
+          writeJson(res, 401, { error: 'Unauthorized' });
+          return;
+        }
         writeJson(res, 200, { ok: true, service: 'cursor-daemon' });
         return;
       }
@@ -231,6 +252,11 @@ export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Ser
 
       if (!isOpenAiRoute && !isAnthropicRoute) {
         writeJson(res, 404, { error: 'Not found' });
+        return;
+      }
+
+      if (!hasValidDaemonToken(req)) {
+        writeJson(res, 401, { error: 'Unauthorized' });
         return;
       }
 

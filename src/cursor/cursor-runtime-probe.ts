@@ -1,6 +1,7 @@
 import type { CursorConfig } from '../config/unified-config-types';
 import { checkAuthStatus } from './cursor-auth';
 import { isDaemonRunning, startDaemon } from './cursor-daemon';
+import { getCursorDaemonToken } from './cursor-daemon-auth';
 import { getModelsForDaemon, resolveCursorRequestModel } from './cursor-models';
 
 export interface CursorProbeResult {
@@ -136,7 +137,8 @@ export async function probeCursorRuntime(config: CursorConfig): Promise<CursorPr
     };
   }
 
-  let daemonRunning = await isDaemonRunning(config.port);
+  const daemonToken = getCursorDaemonToken();
+  let daemonRunning = await isDaemonRunning(config.port, daemonToken);
   if (!daemonRunning && config.auto_start) {
     const startResult = await startDaemon({
       port: config.port,
@@ -144,7 +146,7 @@ export async function probeCursorRuntime(config: CursorConfig): Promise<CursorPr
     });
 
     if (!startResult.success) {
-      daemonRunning = await isDaemonRunning(config.port);
+      daemonRunning = await isDaemonRunning(config.port, daemonToken);
     } else {
       daemonRunning = true;
     }

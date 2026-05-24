@@ -46,11 +46,12 @@ describe('cursor-profile-executor', () => {
         sonnet_model: 'cursor-sonnet',
         haiku_model: 'cursor-haiku',
       },
+      'test-token',
       '/tmp/claude-config'
     );
 
     expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:20129');
-    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('cursor-managed');
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('test-token');
     expect(env.ANTHROPIC_MODEL).toBe('gpt-5.3-codex');
     expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('cursor-opus');
     expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('cursor-sonnet');

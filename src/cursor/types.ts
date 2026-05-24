@@ -10,6 +10,7 @@
 export interface CursorDaemonConfig {
   port: number;
   ghost_mode?: boolean;
+  daemon_token?: string;
 }
 
 /**

@@ -56,7 +56,7 @@ async function resolveDaemonEntrypoint(): Promise<string | null> {
  * Check if cursor daemon is running on the specified port.
  * Uses 127.0.0.1 instead of localhost for more reliable local connections.
  */
-export async function isDaemonRunning(port: number): Promise<boolean> {
+export async function isDaemonRunning(port: number, daemonToken?: string): Promise<boolean> {
   return new Promise((resolve) => {
     const req = http.request(
       {
@@ -65,6 +65,7 @@ export async function isDaemonRunning(port: number): Promise<boolean> {
         path: '/health',
         method: 'GET',
         timeout: 3000,
+        headers: daemonToken ? { 'x-ccs-cursor-token': daemonToken } : undefined,
       },
       (res) => {
         let body = '';
@@ -127,7 +128,7 @@ export async function startDaemon(
   config: CursorDaemonConfig
 ): Promise<{ success: boolean; pid?: number; error?: string }> {
   // Check if already running
-  if (await isDaemonRunning(config.port)) {
+  if (await isDaemonRunning(config.port, config.daemon_token)) {
     logger.stage('dispatch', 'cursor.daemon.already_running', 'Cursor daemon already running', {
       provider: 'cursor',
       port: config.port,
@@ -205,6 +206,10 @@ export async function startDaemon(
       proc = spawn(process.execPath, args, {
         stdio: 'ignore',
         detached: true,
+        env: {
+          ...process.env,
+          CCS_CURSOR_DAEMON_TOKEN: config.daemon_token || '',
+        },
       });
 
       // Unref so parent can exit
@@ -220,7 +225,7 @@ export async function startDaemon(
       const pollHealth = async () => {
         attempts++;
 
-        if (await isDaemonRunning(config.port)) {
+        if (await isDaemonRunning(config.port, config.daemon_token)) {
           safeResolve({ success: true, pid: proc.pid });
         } else if (attempts >= maxAttempts) {
           // Kill orphaned process

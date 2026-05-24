@@ -8,6 +8,7 @@ import * as http from 'http';
 import type { CursorModel } from './types';
 import type { CursorApiCredentials } from './cursor-protobuf-schema';
 import { isDaemonRunning } from './cursor-daemon';
+import { getCursorDaemonToken } from './cursor-daemon-auth';
 import { buildCursorModelsHeaders } from './cursor-client-policy';
 import {
   DEFAULT_CURSOR_MODEL,
@@ -285,7 +286,7 @@ export async function fetchModelsFromDaemon(port: number): Promise<CursorModel[]
  * Checks daemon health first to avoid 5s timeout when daemon is not running.
  */
 export async function getAvailableModels(port: number): Promise<CursorModel[]> {
-  if (!(await isDaemonRunning(port))) {
+  if (!(await isDaemonRunning(port, getCursorDaemonToken()))) {
     return DEFAULT_CURSOR_MODELS;
   }
   return fetchModelsFromDaemon(port);
