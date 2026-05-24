@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.7
 
 # =============================================================================
 # Build stage: compile TypeScript and build UI
@@ -36,13 +36,10 @@ RUN bun run build:all
 # Validate build artifacts exist
 RUN test -d dist && test -d lib && echo "[OK] Build artifacts validated"
 
-# Generate a fresh npm lockfile from package.json immediately after build.
-# This lockfile is ephemeral — never committed; bun.lock remains the dev lockfile.
-# --ignore-scripts: only lockfile generation, no install side-effects needed here.
-# postinstall (scripts/postinstall.js) is a user-facing setup script; it must NOT
-# run during the Docker build (it writes to ~/.ccs/ which does not exist here).
-RUN --mount=type=cache,target=/root/.npm \
-    npm install --package-lock-only --ignore-scripts
+# Build runtime deps from the committed bun.lock to keep Docker installs pinned.
+# --ignore-scripts avoids user-home side effects from postinstall during image build.
+RUN --mount=type=cache,target=/root/.bun \
+    bun install --frozen-lockfile --production --ignore-scripts
 
 # =============================================================================
 # Runtime stage: Node-only, no Bun
@@ -60,13 +57,9 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Copy the ephemeral lockfile generated in the build stage (never committed).
-# --ignore-scripts: postinstall writes ~/.ccs/ config which is not needed inside
-# the Docker image; runtime deps (bcrypt v6+, express, etc.) have no native
-# compilation steps requiring postinstall.
-COPY --from=build /app/package.json /app/package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --omit=dev --ignore-scripts
+# Copy pinned production dependencies resolved from the committed bun.lock.
+COPY --from=build /app/package.json ./
+COPY --from=build /app/node_modules ./node_modules
 
 COPY docker/entrypoint.sh /usr/local/bin/ccs-entrypoint
 RUN chmod +x /usr/local/bin/ccs-entrypoint
