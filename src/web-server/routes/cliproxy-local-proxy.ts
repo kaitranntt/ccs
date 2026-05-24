@@ -134,12 +134,20 @@ export function createCliproxyLocalProxyRouter(deps: CliproxyLocalProxyDeps = {}
       }
     });
 
-    // Clean up proxy connection only when the client aborts the request.
-    // Avoid res.on('close') here because Bun may emit it during local error
-    // responses before the JSON body is flushed, which can truncate 502 payloads.
-    req.on('aborted', () => {
-      if (!res.writableEnded) {
+    const cleanupProxyRequest = () => {
+      if (!proxyReq.destroyed) {
         proxyReq.destroy();
+      }
+    };
+
+    // Request-abort cleanup covers disconnects before the response starts.
+    req.on('aborted', cleanupProxyRequest);
+
+    // Response close cleanup covers disconnects while streaming the proxied response.
+    // Guard on writableEnded/finished so successful proxy completions are untouched.
+    res.on('close', () => {
+      if (!res.writableEnded || !res.finished) {
+        cleanupProxyRequest();
       }
     });
 
