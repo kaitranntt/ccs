@@ -25,11 +25,7 @@ export function isLegacyGlmtBaseUrl(baseUrl: string | null | undefined): boolean
     return false;
   }
 
-  return (
-    normalized === LEGACY_GLMT_BASE_URL ||
-    normalized.includes('/api/coding/paas/v4') ||
-    normalized.endsWith('/chat/completions')
-  );
+  return normalized === LEGACY_GLMT_BASE_URL || normalized.includes('/api/coding/paas/v4');
 }
 
 export function normalizeDeprecatedGlmtEnv(env: Record<string, string>): GlmtNormalizationResult {
