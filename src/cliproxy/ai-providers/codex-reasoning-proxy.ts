@@ -680,9 +680,24 @@ export class CodexReasoningProxy {
             return;
           }
 
+          const maxErrorResponseSize = 10 * 1024 * 1024; // 10MB
+          let totalResponseBytes = 0;
+          let responseTooLarge = false;
           const chunks: Buffer[] = [];
-          upstreamRes.on('data', (chunk: Buffer) => chunks.push(chunk));
+          upstreamRes.on('data', (chunk: Buffer) => {
+            totalResponseBytes += chunk.length;
+            if (totalResponseBytes > maxErrorResponseSize) {
+              responseTooLarge = true;
+              upstreamRes.destroy(new Error('Upstream error response exceeded 10MB limit'));
+              return;
+            }
+            chunks.push(chunk);
+          });
           upstreamRes.on('end', async () => {
+            if (responseTooLarge) {
+              reject(new Error('Upstream error response exceeded 10MB limit'));
+              return;
+            }
             try {
               const responseBody = Buffer.concat(chunks).toString('utf8');
               const unsupportedError =
