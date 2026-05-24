@@ -12,6 +12,7 @@ import { ModelDetailsContent } from '@/components/analytics/model-details-conten
 import { useAnalyticsPage } from './hooks';
 import { AnalyticsHeader } from './components/analytics-header';
 import { ChartsGrid } from './components/charts-grid';
+import { ProfileScopedEmptyBanner } from './components/profile-scoped-empty-banner';
 
 export function AnalyticsPage() {
   const popoverAnchorRef = useRef<HTMLDivElement>(null);
@@ -37,10 +38,15 @@ export function AnalyticsPage() {
     isSessionsLoading,
     handleModelClick,
     handleProfileChange,
+    clearProfileFilter,
+    isProfileScopedEmpty,
     selectedModel,
     popoverPosition,
     handlePopoverClose,
   } = useAnalyticsPage();
+
+  const selectedProfileLabel =
+    profileOptions.find((o) => o.value === selectedProfile)?.label ?? selectedProfile;
 
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-4 overflow-y-auto px-4 py-4">
@@ -58,8 +64,16 @@ export function AnalyticsPage() {
         onProfileChange={handleProfileChange}
       />
 
-      {/* Summary Cards */}
-      <UsageSummaryCards data={summary} isLoading={isSummaryLoading} />
+      {/* Empty-state banner + Summary Cards */}
+      <div className="flex flex-col gap-4">
+        {isProfileScopedEmpty && (
+          <ProfileScopedEmptyBanner
+            selectedProfileLabel={selectedProfileLabel}
+            onShowAll={clearProfileFilter}
+          />
+        )}
+        <UsageSummaryCards data={summary} isLoading={isSummaryLoading} />
+      </div>
 
       {/* Charts Grid */}
       <ChartsGrid

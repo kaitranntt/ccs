@@ -70,4 +70,82 @@ describe('useAnalyticsPage', () => {
       })
     );
   });
+
+  describe('isProfileScopedEmpty', () => {
+    const zeroSummary = {
+      totalTokens: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalCacheTokens: 0,
+      totalCacheCreationTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCost: 0,
+      tokenBreakdown: {
+        input: { tokens: 0, cost: 0 },
+        output: { tokens: 0, cost: 0 },
+        cacheCreation: { tokens: 0, cost: 0 },
+        cacheRead: { tokens: 0, cost: 0 },
+      },
+      totalDays: 0,
+      averageTokensPerDay: 0,
+      averageCostPerDay: 0,
+    };
+
+    it('is false on All profiles even when totals are zero', () => {
+      vi.spyOn(globalThis.localStorage, 'getItem').mockReturnValue(null);
+      usageMocks.useUsageSummary.mockReturnValueOnce({ data: zeroSummary, isLoading: false });
+      const { result } = renderHook(() => useAnalyticsPage(), { wrapper: AllProviders });
+      expect(result.current.selectedProfile).toBe('all');
+      expect(result.current.isProfileScopedEmpty).toBe(false);
+    });
+
+    it('is true when a specific profile is selected and totals are zero', () => {
+      vi.spyOn(globalThis.localStorage, 'getItem').mockImplementation((key) =>
+        key === 'ccs.analytics.selectedProfile' ? 'work' : null
+      );
+      usageMocks.useUsageSummary.mockReturnValueOnce({ data: zeroSummary, isLoading: false });
+
+      const { result } = renderHook(() => useAnalyticsPage(), { wrapper: AllProviders });
+      expect(result.current.isProfileScopedEmpty).toBe(true);
+    });
+
+    it('is false while the summary is still loading', () => {
+      vi.spyOn(globalThis.localStorage, 'getItem').mockImplementation((key) =>
+        key === 'ccs.analytics.selectedProfile' ? 'work' : null
+      );
+      usageMocks.useUsageSummary.mockReturnValueOnce({ data: undefined, isLoading: true });
+
+      const { result } = renderHook(() => useAnalyticsPage(), { wrapper: AllProviders });
+      expect(result.current.isProfileScopedEmpty).toBe(false);
+    });
+
+    it('is false when totals are non-zero for a specific profile', () => {
+      vi.spyOn(globalThis.localStorage, 'getItem').mockImplementation((key) =>
+        key === 'ccs.analytics.selectedProfile' ? 'work' : null
+      );
+      usageMocks.useUsageSummary.mockReturnValueOnce({
+        data: { ...zeroSummary, totalTokens: 100, totalCost: 0.5 },
+        isLoading: false,
+      });
+
+      const { result } = renderHook(() => useAnalyticsPage(), { wrapper: AllProviders });
+      expect(result.current.isProfileScopedEmpty).toBe(false);
+    });
+
+    it('clearProfileFilter resets selection to All profiles and removes it from storage', () => {
+      vi.spyOn(globalThis.localStorage, 'getItem').mockImplementation((key) =>
+        key === 'ccs.analytics.selectedProfile' ? 'work' : null
+      );
+      const removeSpy = vi.spyOn(globalThis.localStorage, 'removeItem');
+
+      const { result, rerender } = renderHook(() => useAnalyticsPage(), { wrapper: AllProviders });
+      expect(result.current.selectedProfile).toBe('work');
+
+      result.current.clearProfileFilter();
+      rerender();
+
+      expect(result.current.selectedProfile).toBe('all');
+      expect(removeSpy).toHaveBeenCalledWith('ccs.analytics.selectedProfile');
+    });
+  });
 });

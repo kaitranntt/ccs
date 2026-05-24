@@ -151,6 +151,21 @@ export function useAnalyticsPage() {
     persistSelectedProfile(profile);
   }, []);
 
+  const clearProfileFilter = useCallback(() => {
+    setSelectedProfileState(ALL_PROFILES_VALUE);
+    persistSelectedProfile(ALL_PROFILES_VALUE);
+  }, []);
+
+  // Selected-profile views deliberately exclude CLIProxy + native runtime data.
+  // When the chosen profile yields zero totals, surface a banner instead of
+  // letting the cards read "$0" silently.
+  const isProfileScopedEmpty =
+    selectedProfile !== ALL_PROFILES_VALUE &&
+    !isSummaryLoading &&
+    !!summary &&
+    summary.totalTokens === 0 &&
+    summary.totalCost === 0;
+
   // Format "Last updated" text
   const lastUpdatedText = useMemo(() => {
     if (!status?.lastFetch) return null;
@@ -198,8 +213,11 @@ export function useAnalyticsPage() {
     handleTodayClick,
     handleDateRangeChange,
     handleProfileChange,
+    clearProfileFilter,
     handleModelClick,
     handlePopoverClose,
+    // Derived UI flags
+    isProfileScopedEmpty,
     // Text
     lastUpdatedText,
   };
