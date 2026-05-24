@@ -809,7 +809,7 @@ export function getOfficialChannelsLegacyEnableHelp(): string {
 }
 
 export function getOfficialChannelTokenHelp(): string {
-  return 'Use --set-token <channel>=<token>. If no channel is provided, Discord is assumed for backward compatibility.';
+  return 'Use --set-token <channel> and pass the token via that channel env var (for example TELEGRAM_BOT_TOKEN=... ccs config channels --set-token telegram).';
 }
 
 export function getOfficialChannelClearTokenHelp(): string {

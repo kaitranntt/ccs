@@ -54,29 +54,11 @@ interface ChannelsCommandOptions {
   setSelectionMissing: boolean;
   clearTokenAll: boolean;
   clearTokenChannel?: OfficialChannelId;
-  setToken?: { channelId: OfficialChannelId; token: string };
+  setTokenChannel?: OfficialChannelId;
   setTokenMissing: boolean;
   clearTokenInvalid?: string;
   setTokenInvalid?: string;
   help: boolean;
-}
-
-function parseTokenAssignment(value: string): {
-  channelId: OfficialChannelId;
-  token: string;
-} | null {
-  const separatorIndex = value.indexOf('=');
-  if (separatorIndex === -1) {
-    return value.trim() ? { channelId: 'discord', token: value.trim() } : null;
-  }
-
-  const channelId = value.slice(0, separatorIndex).trim().toLowerCase();
-  const token = value.slice(separatorIndex + 1).trim();
-  if (!isOfficialChannelId(channelId) || !token) {
-    return null;
-  }
-
-  return { channelId, token };
 }
 
 export function parseChannelsCommandArgs(args: string[]): ChannelsCommandOptions {
@@ -100,11 +82,13 @@ export function parseChannelsCommandArgs(args: string[]): ChannelsCommandOptions
     }
   }
 
-  let parsedSetToken: { channelId: OfficialChannelId; token: string } | undefined;
+  let parsedSetTokenChannel: OfficialChannelId | undefined;
   let setTokenInvalid: string | undefined;
   if (setToken.found && !setToken.missingValue && setToken.value) {
-    parsedSetToken = parseTokenAssignment(setToken.value) ?? undefined;
-    if (!parsedSetToken) {
+    const channelId = setToken.value.trim().toLowerCase();
+    if (isOfficialChannelId(channelId)) {
+      parsedSetTokenChannel = channelId;
+    } else {
       setTokenInvalid = setToken.value;
     }
   }
@@ -120,7 +104,7 @@ export function parseChannelsCommandArgs(args: string[]): ChannelsCommandOptions
     clearTokenAll,
     clearTokenChannel,
     clearTokenInvalid,
-    setToken: parsedSetToken,
+    setTokenChannel: parsedSetTokenChannel,
     setTokenMissing: setToken.found && setToken.missingValue,
     setTokenInvalid,
     help: hasAnyFlag(args, ['--help', '-h']),
@@ -153,7 +137,7 @@ function showHelp(): void {
     `  ${color('--unattended', 'command')}         Also add --dangerously-skip-permissions`
   );
   console.log(`  ${color('--no-unattended', 'command')}      Disable unattended runtime flag`);
-  console.log(`  ${color('--set-token <spec>', 'command')}   ${getOfficialChannelTokenHelp()}`);
+  console.log(`  ${color('--set-token <channel>', 'command')} ${getOfficialChannelTokenHelp()}`);
   console.log(
     `  ${color('--clear-token [channel]', 'command')} ${getOfficialChannelClearTokenHelp()}`
   );
@@ -173,7 +157,7 @@ function showHelp(): void {
     `  $ ${color('ccs config channels --set all', 'command')}               ${dim('# Enable all official channels')}`
   );
   console.log(
-    `  $ ${color('ccs config channels --set-token telegram=123:abc', 'command')} ${dim('# Save TELEGRAM_BOT_TOKEN')}`
+    `  $ ${color('TELEGRAM_BOT_TOKEN=123:abc ccs config channels --set-token telegram', 'command')} ${dim('# Save TELEGRAM_BOT_TOKEN')}`
   );
   console.log(
     `  $ ${color('ccs config channels --clear-token discord', 'command')}   ${dim('# Clear one token')}`
@@ -395,7 +379,9 @@ export async function handleConfigChannelsCommand(args: string[]): Promise<void>
   }
   if (options.setTokenInvalid) {
     console.error(
-      fail(`Invalid --set-token value: ${options.setTokenInvalid} (use <channel>=<token>)`)
+      fail(
+        `Invalid --set-token value: ${options.setTokenInvalid} (use ${getOfficialChannelChoices()})`
+      )
     );
     process.exitCode = 1;
     return;
@@ -444,12 +430,19 @@ export async function handleConfigChannelsCommand(args: string[]): Promise<void>
       updateConfig({ channels: nextConfig });
     }
 
-    if (options.setToken) {
-      if (!getOfficialChannelTokenIds().includes(options.setToken.channelId)) {
-        throw new Error(`${options.setToken.channelId} does not use a bot token.`);
+    if (options.setTokenChannel) {
+      if (!getOfficialChannelTokenIds().includes(options.setTokenChannel)) {
+        throw new Error(`${options.setTokenChannel} does not use a bot token.`);
       }
-      setConfiguredOfficialChannelToken(options.setToken.channelId, options.setToken.token);
-      console.log(ok(`${getOfficialChannelDisplayName(options.setToken.channelId)} token saved`));
+      const envKey = getOfficialChannelEnvKey(options.setTokenChannel);
+      const token = envKey ? process.env[envKey]?.trim() : '';
+      if (!token) {
+        throw new Error(
+          `${getOfficialChannelDisplayName(options.setTokenChannel)} token missing. Set ${envKey} in your environment and rerun.`
+        );
+      }
+      setConfiguredOfficialChannelToken(options.setTokenChannel, token);
+      console.log(ok(`${getOfficialChannelDisplayName(options.setTokenChannel)} token saved`));
       console.log('');
     }
 
