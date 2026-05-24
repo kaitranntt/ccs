@@ -291,7 +291,21 @@ export function resolveProxyConfig(
 
   // Merge auth token: CLI > ENV > config.yaml
   resolved.authToken = cliFlags.authToken ?? envConfig.authToken ?? yamlConfig.remote?.auth_token;
-  resolved.managementKey = yamlConfig.remote?.management_key;
+
+  // Keep YAML management key only when remote target/auth are not overridden via CLI/ENV.
+  // Prevents leaking a saved management key to a different runtime target.
+  const hasRuntimeRemoteOverride =
+    cliFlags.host !== undefined ||
+    envConfig.host !== undefined ||
+    cliFlags.port !== undefined ||
+    envConfig.port !== undefined ||
+    cliFlags.protocol !== undefined ||
+    envConfig.protocol !== undefined ||
+    cliFlags.authToken !== undefined ||
+    envConfig.authToken !== undefined;
+  resolved.managementKey = hasRuntimeRemoteOverride
+    ? undefined
+    : yamlConfig.remote?.management_key;
 
   // Merge timeout: CLI > ENV > config.yaml > default (2000ms in executor)
   resolved.timeout = cliFlags.timeout ?? envConfig.timeout ?? yamlConfig.remote?.timeout;

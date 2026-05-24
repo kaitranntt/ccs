@@ -294,6 +294,33 @@ describe('proxy-config-resolver', () => {
         expect(config.managementKey).toBe('remote-management-key');
       });
 
+      it('should clear YAML management key when CLI overrides remote host', () => {
+        const { config } = resolveProxyConfig(['--proxy-host', 'cli-host.example.com'], {
+          remote: {
+            host: 'yaml-host.example.com',
+            auth_token: 'remote-auth-token',
+            management_key: 'remote-management-key',
+          },
+        });
+        expect(config.mode).toBe('remote');
+        expect(config.host).toBe('cli-host.example.com');
+        expect(config.managementKey).toBeUndefined();
+      });
+
+      it('should clear YAML management key when ENV overrides auth token', () => {
+        process.env.CCS_PROXY_AUTH_TOKEN = 'env-auth-token';
+        const { config } = resolveProxyConfig([], {
+          remote: {
+            host: 'yaml-host.example.com',
+            auth_token: 'remote-auth-token',
+            management_key: 'remote-management-key',
+          },
+        });
+        expect(config.mode).toBe('remote');
+        expect(config.authToken).toBe('env-auth-token');
+        expect(config.managementKey).toBeUndefined();
+      });
+
       it('should allow CLI --proxy-host to override YAML enabled:false', () => {
         const { config } = resolveProxyConfig(['--proxy-host', 'cli-host'], {
           remote: { enabled: false, host: 'yaml-host' },
