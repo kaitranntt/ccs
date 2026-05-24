@@ -113,10 +113,11 @@ environment:
 
 Running `ccs config auth setup` on the outer host shell updates that machine's own `~/.ccs`, not the Docker volume mounted into `ccs-cliproxy`. For the integrated stack, configure auth inside the container or provide the auth env vars in Compose.
 
-Generate a bcrypt hash:
+Generate a bcrypt hash without putting the password in shell history or process arguments:
 
 ```bash
-docker exec ccs-cliproxy node -e "console.log(require('bcrypt').hashSync('your-password', 10))"
+docker exec -i ccs-cliproxy node -e "const fs=require('fs'); const bcrypt=require('bcrypt'); const password=fs.readFileSync(0,'utf8').trimEnd(); console.log(bcrypt.hashSync(password, 10));"
+# then type/paste the password followed by Enter (stdin is not exposed via argv)
 ```
 
 > **Note:** Do not commit the password hash in `docker-compose.yml`. Use Docker secrets or a `.env` file (not tracked in git) for sensitive values like `CCS_DASHBOARD_PASSWORD_HASH`.
@@ -191,10 +192,12 @@ docker exec ccs-cliproxy curl -fsS http://127.0.0.1:3000/api/health \
 # 4. Verify auth tokens loaded (check client count)
 docker exec ccs-cliproxy grep "client load complete" /var/log/ccs/cliproxy.log
 
-# 5. Test dashboard API (from remote -- requires auth)
-curl -fsS -X POST http://<host>:3000/api/auth/login \
+# 5. Test dashboard API (from remote -- requires auth + HTTPS)
+read -r -s CCS_DASHBOARD_PASSWORD && echo
+curl -fsS -X POST https://<host>:3000/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"your-password"}'
+  -d "{\"username\":\"admin\",\"password\":\"${CCS_DASHBOARD_PASSWORD}\"}"
+unset CCS_DASHBOARD_PASSWORD
 ```
 
 Expected healthy output:
