@@ -56,7 +56,10 @@ function isValidCodexCliproxyBaseUrl(value: unknown): value is string {
   if (!trimmed) return false;
   try {
     const url = new URL(trimmed);
-    return url.protocol === 'http:' || url.protocol === 'https:';
+    const hostname = url.hostname.toLowerCase();
+    const isLoopbackHost =
+      hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+    return isLoopbackHost && url.protocol === 'http:' && url.pathname === '/api/provider/codex';
   } catch {
     return false;
   }

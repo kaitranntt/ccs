@@ -84,7 +84,7 @@ wire_api = "responses"
     expect(rawText).toContain('supports_websockets = false');
   });
 
-  it('preserves custom cliproxy provider values while repairing other fields', async () => {
+  it('repairs non-loopback cliproxy provider base_url while preserving custom env_key', async () => {
     fs.mkdirSync(codexHome, { recursive: true });
     fs.writeFileSync(
       configPath,
@@ -102,9 +102,7 @@ wire_api = "chat"
     expect(result.changed).toBe(true);
     expect(result.envKey).toBe('CCS_CUSTOM_CLIPROXY_TOKEN');
     const rawText = fs.readFileSync(configPath, 'utf8');
-    expect(rawText).toContain(
-      'base_url = "https://cliproxy.example.com/api/provider/codex/responses"'
-    );
+    expect(rawText).toContain(`base_url = \"${buildCodexCliproxyProviderBaseUrl(9321)}\"`);
     expect(rawText).toContain('env_key = "CCS_CUSTOM_CLIPROXY_TOKEN"');
     expect(rawText).toContain('wire_api = "responses"');
   });
@@ -161,7 +159,7 @@ supports_websockets = false
     expect(fs.readFileSync(configPath, 'utf8')).toBe(rawText);
   });
 
-  it('leaves a ready remote provider unchanged', async () => {
+  it('repairs a remote provider base_url back to the managed local default', async () => {
     fs.mkdirSync(codexHome, { recursive: true });
     const rawText = `[model_providers.cliproxy]
 name = "CLIProxy Codex"
@@ -175,9 +173,10 @@ supports_websockets = false
 
     const result = await ensureCodexCliproxyProviderConfig(8317, env);
 
-    expect(result.changed).toBe(false);
+    expect(result.changed).toBe(true);
     expect(result.envKey).toBe('CCS_REMOTE_CLIPROXY_TOKEN');
-    expect(fs.readFileSync(configPath, 'utf8')).toBe(rawText);
+    const repairedText = fs.readFileSync(configPath, 'utf8');
+    expect(repairedText).toContain(`base_url = "${buildCodexCliproxyProviderBaseUrl(8317)}"`);
   });
 
   it('normalizes a ready native Codex tuning alias before requests reach cliproxy', async () => {
