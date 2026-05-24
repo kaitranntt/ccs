@@ -173,7 +173,12 @@ export async function startDaemon(
     let proc: ChildProcess;
     let resolved = false;
 
-    const safeResolve = (result: { success: boolean; pid?: number; error?: string }) => {
+    const safeResolve = (result: {
+      success: boolean;
+      pid?: number;
+      error?: string;
+      daemonToken?: string;
+    }) => {
       if (resolved) return;
       resolved = true;
       if (checkTimeout) clearTimeout(checkTimeout);
