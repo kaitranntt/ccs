@@ -116,9 +116,22 @@ export function createCliproxyLocalProxyRouter(deps: CliproxyLocalProxyDeps = {}
         }
 
         res.writeHead(proxyStatus, proxyRes.headers);
-        // Manual streaming instead of pipe() for Bun runtime compatibility
-        proxyRes.on('data', (chunk: Buffer) => res.write(chunk));
-        proxyRes.on('end', () => res.end());
+        // Manual streaming instead of pipe() for Bun runtime compatibility.
+        // Explicitly honor downstream backpressure to avoid unbounded buffering.
+        const onDrain = () => proxyRes.resume();
+
+        proxyRes.on('data', (chunk: Buffer) => {
+          const canContinue = res.write(chunk);
+          if (!canContinue) {
+            proxyRes.pause();
+            res.once('drain', onDrain);
+          }
+        });
+
+        proxyRes.on('end', () => {
+          res.off('drain', onDrain);
+          res.end();
+        });
       }
     );
 
