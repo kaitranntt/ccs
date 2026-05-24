@@ -340,4 +340,31 @@ describe('image-analysis routes', () => {
       error: 'Profile mapping for "codexProfile" references an unknown backend.',
     });
   });
+
+  it('rejects unsupported provider backends and preserves existing configuration', async () => {
+    const putResponse = await fetch(`${baseUrl}/api/image-analysis`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        providerModels: {
+          gemini: 'gemini-3-flash-preview',
+          evil: 'vision-model',
+        },
+        fallbackBackend: 'gemini',
+      }),
+    });
+
+    expect(putResponse.status).toBe(400);
+    expect(await putResponse.json()).toEqual({
+      error: 'Unsupported provider backend "evil".',
+    });
+
+    const getResponse = await fetch(`${baseUrl}/api/image-analysis`);
+    expect(getResponse.status).toBe(200);
+    const payload = await getResponse.json();
+    expect(payload.config.providerModels).toMatchObject({
+      gemini: 'gemini-3-flash-preview',
+      ghcp: 'claude-haiku-4.5',
+    });
+  });
 });

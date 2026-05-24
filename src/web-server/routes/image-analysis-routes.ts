@@ -404,6 +404,9 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
         if (!normalizedBackend || normalizedModel.length === 0) {
           return acc;
         }
+        if (!knownBackends.has(normalizedBackend)) {
+          throw new Error(`Unsupported provider backend "${backendId}".`);
+        }
         acc[normalizedBackend] = normalizedModel;
         return acc;
       },
@@ -470,6 +473,10 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
 
     res.json(await buildDashboardPayload());
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Unsupported provider backend')) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
     res.status(500).json({ error: (error as Error).message });
   }
 });
