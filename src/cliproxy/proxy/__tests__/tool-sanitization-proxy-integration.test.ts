@@ -825,6 +825,49 @@ describe('ToolSanitizationProxy Integration', () => {
         proxy.stop();
       }
     });
+
+    it('returns 504 when raw upstream passthrough stalls after headers', async () => {
+      const upstream = http.createServer((req, res) => {
+        req.resume();
+        req.on('end', () => {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.flushHeaders();
+        });
+      });
+      const upstreamPort = await new Promise<number>((resolve, reject) => {
+        upstream.once('error', reject);
+        upstream.listen(0, '127.0.0.1', () => {
+          const address = upstream.address();
+          if (typeof address !== 'object' || !address) {
+            reject(new Error('Failed to resolve upstream port'));
+            return;
+          }
+          resolve(address.port);
+        });
+      });
+
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${upstreamPort}`,
+        timeoutMs: 100,
+      });
+      const port = await proxy.start();
+
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/health`);
+        const text = await Promise.race([
+          response.text(),
+          new Promise<string>((_, reject) =>
+            setTimeout(() => reject(new Error('Timed out waiting for proxy response')), 2_000)
+          ),
+        ]);
+
+        expect(response.status).toBe(504);
+        expect(text).toContain('Upstream response timed out');
+      } finally {
+        proxy.stop();
+        await new Promise<void>((resolve) => upstream.close(() => resolve()));
+      }
+    });
   });
 
   describe('Multiple Tools Sanitization', () => {
@@ -1084,6 +1127,66 @@ describe('ToolSanitizationProxy Integration', () => {
         expect(messageStopCount).toBe(1);
       } finally {
         proxy.stop();
+      }
+    });
+
+    it('ends stalled streaming responses after upstream headers', async () => {
+      const upstream = http.createServer((req, res) => {
+        req.resume();
+        req.on('end', () => {
+          res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            Connection: 'keep-alive',
+          });
+          res.write(
+            'event: message_start\n' +
+              'data: {"type":"message_start","message":{"id":"msg_stall","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null}}\n\n'
+          );
+        });
+      });
+      const upstreamPort = await new Promise<number>((resolve, reject) => {
+        upstream.once('error', reject);
+        upstream.listen(0, '127.0.0.1', () => {
+          const address = upstream.address();
+          if (typeof address !== 'object' || !address) {
+            reject(new Error('Failed to resolve upstream port'));
+            return;
+          }
+          resolve(address.port);
+        });
+      });
+
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${upstreamPort}`,
+        timeoutMs: 100,
+      });
+      const port = await proxy.start();
+
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stream: true,
+            tools: [{ name: 'valid_tool' }],
+          }),
+        });
+
+        const text = await Promise.race([
+          response.text(),
+          new Promise<string>((_, reject) =>
+            setTimeout(() => reject(new Error('Timed out waiting for proxy response')), 2_000)
+          ),
+        ]);
+
+        expect(response.status).toBe(200);
+        expect(text).toContain('message_start');
+        expect(text).toContain('timeout_error');
+        expect(text).toContain('Upstream response timed out');
+      } finally {
+        proxy.stop();
+        await new Promise<void>((resolve) => upstream.close(() => resolve()));
       }
     });
   });

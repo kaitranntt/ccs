@@ -28,6 +28,10 @@ import { getModelMaxLevel } from '../model-catalog';
 
 import { createLogger } from '../../services/logging';
 import { getCcsDir } from '../../config/config-loader-facade';
+import {
+  attachUpstreamResponseTimeout,
+  writeForwardResponseHead,
+} from './upstream-response-timeout';
 
 export interface ToolSanitizationProxyConfig {
   /** Upstream CLIProxy URL */
@@ -521,10 +525,38 @@ export class ToolSanitizationProxy {
         ),
         (upstreamRes) => {
           clearResponseTimeout();
-          clientRes.writeHead(upstreamRes.statusCode || 200, upstreamRes.headers);
-          upstreamRes.pipe(clientRes);
-          upstreamRes.on('end', () => resolve());
-          upstreamRes.on('error', reject);
+          const statusCode = upstreamRes.statusCode || 200;
+          let responseStarted = false;
+          const writeResponseHead = () => {
+            if (responseStarted) return;
+            responseStarted = true;
+            writeForwardResponseHead(clientRes, statusCode, upstreamRes.headers);
+          };
+          const clearUpstreamResponseTimeout = attachUpstreamResponseTimeout({
+            upstreamReq,
+            upstreamRes,
+            clientRes,
+            timeoutMs: this.config.timeoutMs,
+            onTimeout: () => resolve(),
+          });
+          upstreamRes.on('data', (chunk: Buffer) => {
+            writeResponseHead();
+            const canContinue = clientRes.write(chunk);
+            if (!canContinue) {
+              upstreamRes.pause();
+              clientRes.once('drain', () => upstreamRes.resume());
+            }
+          });
+          upstreamRes.on('end', () => {
+            clearUpstreamResponseTimeout();
+            writeResponseHead();
+            clientRes.end();
+            resolve();
+          });
+          upstreamRes.on('error', (error) => {
+            clearUpstreamResponseTimeout();
+            reject(error);
+          });
         }
       );
 
@@ -560,10 +592,18 @@ export class ToolSanitizationProxy {
         ),
         (upstreamRes) => {
           clearResponseTimeout();
+          const clearUpstreamResponseTimeout = attachUpstreamResponseTimeout({
+            upstreamReq,
+            upstreamRes,
+            clientRes,
+            timeoutMs: this.config.timeoutMs,
+            onTimeout: () => resolve(),
+          });
           const chunks: Buffer[] = [];
 
           upstreamRes.on('data', (chunk: Buffer) => chunks.push(chunk));
           upstreamRes.on('end', () => {
+            clearUpstreamResponseTimeout();
             try {
               const responseBody = Buffer.concat(chunks).toString('utf8');
               const contentType = upstreamRes.headers['content-type'] || '';
@@ -598,7 +638,10 @@ export class ToolSanitizationProxy {
               reject(err);
             }
           });
-          upstreamRes.on('error', reject);
+          upstreamRes.on('error', (error) => {
+            clearUpstreamResponseTimeout();
+            reject(error);
+          });
         }
       );
 
@@ -636,7 +679,14 @@ export class ToolSanitizationProxy {
         ),
         (upstreamRes) => {
           clearResponseTimeout();
-          clientRes.writeHead(upstreamRes.statusCode || 200, upstreamRes.headers);
+          const clearUpstreamResponseTimeout = attachUpstreamResponseTimeout({
+            upstreamReq,
+            upstreamRes,
+            clientRes,
+            timeoutMs: this.config.timeoutMs,
+            onTimeout: () => resolve(),
+          });
+          writeForwardResponseHead(clientRes, upstreamRes.statusCode || 200, upstreamRes.headers);
 
           // Track upstream SSE lifecycle events (guards against empty proxy responses)
           const lifecycle = {
@@ -673,6 +723,7 @@ export class ToolSanitizationProxy {
               }
             });
             upstreamRes.on('end', () => {
+              clearUpstreamResponseTimeout();
               try {
                 if (!lifecycle.hasContent && isSuccessResponse && lifecycle.hasData) {
                   this.writeLog(
@@ -693,7 +744,10 @@ export class ToolSanitizationProxy {
               }
               resolve();
             });
-            upstreamRes.on('error', reject);
+            upstreamRes.on('error', (error) => {
+              clearUpstreamResponseTimeout();
+              reject(error);
+            });
             return;
           }
 
@@ -719,6 +773,7 @@ export class ToolSanitizationProxy {
           });
 
           upstreamRes.on('end', () => {
+            clearUpstreamResponseTimeout();
             try {
               // Process any remaining buffer
               if (buffer.trim()) {
@@ -749,7 +804,10 @@ export class ToolSanitizationProxy {
             resolve();
           });
 
-          upstreamRes.on('error', reject);
+          upstreamRes.on('error', (error) => {
+            clearUpstreamResponseTimeout();
+            reject(error);
+          });
         }
       );
 

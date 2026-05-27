@@ -76,6 +76,53 @@ function postJson(
   });
 }
 
+function postJsonText(
+  url: string,
+  body: JsonRecord,
+  timeoutMs = 2_000
+): Promise<{ statusCode: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const payload = JSON.stringify(body);
+    let timeout: ReturnType<typeof setTimeout>;
+
+    const req = http.request(
+      {
+        hostname: parsed.hostname,
+        port: parsed.port,
+        path: parsed.pathname + parsed.search,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+        },
+      },
+      (res) => {
+        let responseBody = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          responseBody += chunk;
+        });
+        res.on('end', () => {
+          clearTimeout(timeout);
+          resolve({ statusCode: res.statusCode ?? 0, body: responseBody });
+        });
+      }
+    );
+
+    timeout = setTimeout(() => {
+      req.destroy(new Error(`Timed out waiting for proxy response after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    req.on('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    req.write(payload);
+    req.end();
+  });
+}
+
 describe('CodexReasoningProxy extended-context compatibility', () => {
   const cleanupServers: http.Server[] = [];
 
@@ -145,6 +192,84 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
     expect(capturedPath).toBe('/api/provider/codex/v1/messages');
     expect(capturedBody?.model).toBe('gpt-5.3-codex');
     expect((capturedBody?.reasoning as JsonRecord | undefined)?.effort).toBe('high');
+  });
+
+  it('ends streaming responses when upstream stalls after headers', async () => {
+    const upstream = http.createServer((req, res) => {
+      req.resume();
+      req.on('end', () => {
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        });
+        res.write(
+          'event: message_start\n' +
+            'data: {"type":"message_start","message":{"id":"msg_stall","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null}}\n\n'
+        );
+      });
+    });
+    cleanupServers.push(upstream);
+
+    const upstreamPort = await listenOnRandomPort(upstream);
+    const proxy = new CodexReasoningProxy({
+      upstreamBaseUrl: `http://127.0.0.1:${upstreamPort}`,
+      modelMap: { defaultModel: 'gpt-5.3-codex' },
+      timeoutMs: 100,
+    });
+
+    const proxyPort = await proxy.start();
+    try {
+      const response = await postJsonText(
+        `http://127.0.0.1:${proxyPort}/api/provider/codex/v1/messages`,
+        {
+          model: 'gpt-5.3-codex',
+          messages: [],
+          stream: true,
+        }
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toContain('message_start');
+      expect(response.body).toContain('timeout_error');
+      expect(response.body).toContain('Upstream response timed out');
+    } finally {
+      proxy.stop();
+    }
+  });
+
+  it('returns 504 when non-stream upstream stalls after headers', async () => {
+    const upstream = http.createServer((req, res) => {
+      req.resume();
+      req.on('end', () => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.flushHeaders();
+      });
+    });
+    cleanupServers.push(upstream);
+
+    const upstreamPort = await listenOnRandomPort(upstream);
+    const proxy = new CodexReasoningProxy({
+      upstreamBaseUrl: `http://127.0.0.1:${upstreamPort}`,
+      modelMap: { defaultModel: 'gpt-5.3-codex' },
+      timeoutMs: 100,
+    });
+
+    const proxyPort = await proxy.start();
+    try {
+      const response = await postJsonText(
+        `http://127.0.0.1:${proxyPort}/api/provider/codex/v1/messages`,
+        {
+          model: 'gpt-5.3-codex',
+          messages: [],
+        }
+      );
+
+      expect(response.statusCode).toBe(504);
+      expect(response.body).toContain('Upstream response timed out');
+    } finally {
+      proxy.stop();
+    }
   });
 
   it('translates codex fast model suffixes into service_tier', async () => {

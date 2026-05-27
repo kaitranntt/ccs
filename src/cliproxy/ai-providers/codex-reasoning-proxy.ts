@@ -7,6 +7,10 @@ import {
   resolveRuntimeCodexFallbackModel,
 } from './codex-plan-compatibility';
 import { getModelMaxLevel } from '../model-catalog';
+import {
+  attachUpstreamResponseTimeout,
+  writeForwardResponseHead,
+} from '../proxy/upstream-response-timeout';
 
 export type CodexReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 export type CodexServiceTier = 'fast';
@@ -301,7 +305,7 @@ export class CodexReasoningProxy {
     headers: http.IncomingHttpHeaders,
     responseBody: string
   ): void {
-    clientRes.writeHead(statusCode, headers);
+    writeForwardResponseHead(clientRes, statusCode, headers);
     clientRes.end(responseBody);
   }
 
@@ -635,10 +639,38 @@ export class CodexReasoningProxy {
         ),
         (upstreamRes) => {
           clearResponseTimeout();
-          clientRes.writeHead(upstreamRes.statusCode || 200, upstreamRes.headers);
-          upstreamRes.pipe(clientRes);
-          upstreamRes.on('end', () => resolve());
-          upstreamRes.on('error', reject);
+          const statusCode = upstreamRes.statusCode || 200;
+          let responseStarted = false;
+          const writeResponseHead = () => {
+            if (responseStarted) return;
+            responseStarted = true;
+            writeForwardResponseHead(clientRes, statusCode, upstreamRes.headers);
+          };
+          const clearUpstreamResponseTimeout = attachUpstreamResponseTimeout({
+            upstreamReq,
+            upstreamRes,
+            clientRes,
+            timeoutMs: this.config.timeoutMs,
+            onTimeout: () => resolve(),
+          });
+          upstreamRes.on('data', (chunk: Buffer) => {
+            writeResponseHead();
+            const canContinue = clientRes.write(chunk);
+            if (!canContinue) {
+              upstreamRes.pause();
+              clientRes.once('drain', () => upstreamRes.resume());
+            }
+          });
+          upstreamRes.on('end', () => {
+            clearUpstreamResponseTimeout();
+            writeResponseHead();
+            clientRes.end();
+            resolve();
+          });
+          upstreamRes.on('error', (error) => {
+            clearUpstreamResponseTimeout();
+            reject(error);
+          });
         }
       );
 
@@ -672,11 +704,38 @@ export class CodexReasoningProxy {
         (upstreamRes) => {
           clearResponseTimeout();
           const statusCode = upstreamRes.statusCode || 200;
+          const clearUpstreamResponseTimeout = attachUpstreamResponseTimeout({
+            upstreamReq,
+            upstreamRes,
+            clientRes,
+            timeoutMs: this.config.timeoutMs,
+            onTimeout: () => resolve(504),
+          });
           if (statusCode >= 200 && statusCode < 300) {
-            clientRes.writeHead(statusCode, upstreamRes.headers);
-            upstreamRes.pipe(clientRes);
-            upstreamRes.on('end', () => resolve(statusCode));
-            upstreamRes.on('error', reject);
+            let responseStarted = false;
+            const writeResponseHead = () => {
+              if (responseStarted) return;
+              responseStarted = true;
+              writeForwardResponseHead(clientRes, statusCode, upstreamRes.headers);
+            };
+            upstreamRes.on('data', (chunk: Buffer) => {
+              writeResponseHead();
+              const canContinue = clientRes.write(chunk);
+              if (!canContinue) {
+                upstreamRes.pause();
+                clientRes.once('drain', () => upstreamRes.resume());
+              }
+            });
+            upstreamRes.on('end', () => {
+              clearUpstreamResponseTimeout();
+              writeResponseHead();
+              clientRes.end();
+              resolve(statusCode);
+            });
+            upstreamRes.on('error', (error) => {
+              clearUpstreamResponseTimeout();
+              reject(error);
+            });
             return;
           }
 
@@ -694,6 +753,7 @@ export class CodexReasoningProxy {
             chunks.push(chunk);
           });
           upstreamRes.on('end', async () => {
+            clearUpstreamResponseTimeout();
             if (responseTooLarge) {
               reject(new Error('Upstream error response exceeded 10MB limit'));
               return;
@@ -756,7 +816,10 @@ export class CodexReasoningProxy {
               reject(error);
             }
           });
-          upstreamRes.on('error', reject);
+          upstreamRes.on('error', (error) => {
+            clearUpstreamResponseTimeout();
+            reject(error);
+          });
         }
       );
 
