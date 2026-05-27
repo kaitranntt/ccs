@@ -6,6 +6,7 @@ import * as path from 'path';
 import * as http from 'http';
 import type { Server } from 'http';
 import cliproxyAuthRoutes from '../../../src/web-server/routes/cliproxy-auth-routes';
+import { registerAccountFromToken } from '../../../src/cliproxy/auth/token-manager';
 import {
   clearQuotaCache,
   getCachedQuota,
@@ -591,6 +592,61 @@ describe('cliproxy-auth-routes manual callback nickname persistence', () => {
     } finally {
       Date.now = realDateNow;
     }
+  });
+
+  it('reauthenticates a targeted existing Codex account when its token file is rewritten', async () => {
+    const tokenDir = path.join(tempHome, '.ccs', 'cliproxy', 'auth');
+    fs.mkdirSync(tokenDir, { recursive: true });
+    const tokenPath = path.join(tokenDir, 'codex-existing@example.com.json');
+    fs.writeFileSync(
+      tokenPath,
+      JSON.stringify({ type: 'codex', email: 'existing@example.com', version: 1 }),
+      'utf8'
+    );
+
+    const initialAccount = registerAccountFromToken('codex', tokenDir, 'work');
+    expect(initialAccount?.id).toBe('existing@example.com');
+
+    mockFetch([
+      {
+        url: /\/v0\/management\/codex-auth-url\?is_webui=true$/,
+        response: {
+          auth_url: 'https://auth.example.com/authorize?state=state-targeted-rewrite',
+          state: 'state-targeted-rewrite',
+        },
+      },
+      {
+        url: /\/v0\/management\/get-auth-status\?state=state-targeted-rewrite$/,
+        response: { status: 'ok' },
+      },
+    ]);
+
+    const startResponse = await postJson('/api/cliproxy/auth/codex/start-url', {
+      accountId: 'existing@example.com',
+    });
+    expect(startResponse.status).toBe(200);
+
+    fs.writeFileSync(
+      tokenPath,
+      JSON.stringify({ type: 'codex', email: 'existing@example.com', version: 2 }),
+      'utf8'
+    );
+
+    const statusResponse = await getJson(
+      '/api/cliproxy/auth/codex/status?state=state-targeted-rewrite'
+    );
+
+    expect(statusResponse.status).toBe(200);
+    expect(statusResponse.body).toEqual({
+      status: 'ok',
+      account: {
+        id: 'existing@example.com',
+        email: 'existing@example.com',
+        nickname: 'work',
+        provider: 'codex',
+        isDefault: true,
+      },
+    });
   });
 
   it('registers the new account before reporting polled auth success', async () => {

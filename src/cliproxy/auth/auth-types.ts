@@ -389,6 +389,8 @@ export interface OAuthOptions {
   account?: string;
   add?: boolean;
   nickname?: string;
+  /** Existing account id to update during reauthentication. */
+  expectedAccountId?: string;
   /** If true, caller explicitly accepts Antigravity OAuth risk for this command/session. */
   acceptAgyRisk?: boolean;
   /** Kiro auth method override (CLI + Dashboard parity). */

@@ -39,6 +39,7 @@ export interface ProviderEditorProps {
   /** Optional contextual notice shown directly under the editor header */
   topNotice?: ReactNode;
   onAddAccount: () => void;
+  onReauthAccount?: (account: OAuthAccount) => void;
   onSetDefault: (accountId: string) => void;
   onRemoveAccount: (accountId: string) => void;
   onPauseToggle?: (accountId: string, paused: boolean) => void;
@@ -63,6 +64,7 @@ export interface AccountItemProps {
   account: OAuthAccount;
   onSetDefault: () => void;
   onRemove: () => void;
+  onReauth?: () => void;
   onPauseToggle?: (paused: boolean) => void;
   /** Solo mode: activate this account, pause all others */
   onSoloMode?: () => void;

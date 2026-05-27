@@ -1131,8 +1131,9 @@ export async function triggerOAuth(
   // Check for existing accounts
   const existingAccounts = getProviderAccounts(provider);
   const existingNameMatch = nickname ? findAccountNameMatch(existingAccounts, nickname) : null;
+  const targetAccountId = options.expectedAccountId || existingNameMatch?.id;
   const nicknameError = !fromUI
-    ? getCliAuthNicknameError(provider, nickname, existingAccounts, existingNameMatch?.id)
+    ? getCliAuthNicknameError(provider, nickname, existingAccounts, targetAccountId)
     : null;
   if (nicknameError) {
     console.log(fail(nicknameError));
@@ -1144,7 +1145,7 @@ export async function triggerOAuth(
     const tokenDir = getProviderTokenDir(provider);
     const success = await importKiroToken(verbose);
     if (success) {
-      return registerAccountFromToken(provider, tokenDir, nickname, verbose, existingNameMatch?.id);
+      return registerAccountFromToken(provider, tokenDir, nickname, verbose, targetAccountId);
     }
     return null;
   }
@@ -1235,7 +1236,7 @@ export async function triggerOAuth(
       verbose,
       tokenDir,
       nickname,
-      existingNameMatch?.id,
+      targetAccountId,
       {
         gitlabBaseUrl: resolvedGitLabBaseUrl,
         gitlabPersonalAccessToken: options.gitlabPersonalAccessToken,
@@ -1251,7 +1252,7 @@ export async function triggerOAuth(
       verbose,
       tokenDir,
       nickname,
-      existingNameMatch?.id,
+      targetAccountId,
       {
         kiroMethod: provider === 'kiro' ? resolvedKiroMethod : undefined,
         gitlabBaseUrl: provider === 'gitlab' ? resolvedGitLabBaseUrl : undefined,
@@ -1336,7 +1337,7 @@ export async function triggerOAuth(
     verbose,
     isCLI,
     nickname,
-    expectedAccountId: existingNameMatch?.id,
+    expectedAccountId: targetAccountId,
     authFlowType: isDeviceCodeFlow ? 'device_code' : 'authorization_code',
     kiroMethod: provider === 'kiro' ? resolvedKiroMethod : undefined,
     manualCallback: useSelectedKiroLocalPasteCallback,

@@ -25,6 +25,7 @@ interface AuthFlowState {
 }
 
 interface StartAuthOptions {
+  accountId?: string;
   nickname?: string;
   kiroMethod?: string;
   kiroIDCStartUrl?: string;
@@ -286,6 +287,7 @@ export function useCliproxyAuthFlow() {
       const deviceCodeFlow = flowType === 'device_code';
       const startEndpoint = options?.startEndpoint || (deviceCodeFlow ? 'start' : 'start-url');
       const payload = {
+        accountId: options?.accountId,
         nickname: options?.nickname,
         kiroMethod: options?.kiroMethod,
         kiroIDCStartUrl: options?.kiroIDCStartUrl,

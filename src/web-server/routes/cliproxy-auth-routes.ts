@@ -348,6 +348,24 @@ export function getStartAuthNicknameError(
   return null;
 }
 
+export function getReauthAccountTarget(
+  accountId: string | undefined,
+  existingAccounts: Array<{ id: string; nickname?: string }>
+): { account?: { id: string; nickname?: string }; error?: string } {
+  if (!accountId) {
+    return {};
+  }
+
+  const account = existingAccounts.find((candidate) => candidate.id === accountId);
+  if (!account) {
+    return {
+      error: `Account '${accountId}' not found for this provider`,
+    };
+  }
+
+  return { account };
+}
+
 /**
  * GET /api/cliproxy/auth - Get auth status for built-in CLIProxy profiles
  * Also fetches CLIProxyAPI stats to update lastUsedAt for active providers
@@ -623,6 +641,8 @@ router.post('/:provider/start', async (req: Request, res: Response): Promise<voi
   const requestBody =
     req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
   const nicknameRaw = typeof requestBody.nickname === 'string' ? requestBody.nickname : undefined;
+  const accountId =
+    typeof requestBody.accountId === 'string' ? requestBody.accountId.trim() : undefined;
   const noIncognitoBody =
     typeof requestBody.noIncognito === 'boolean' ? requestBody.noIncognito : undefined;
   const kiroMethodRaw = requestBody.kiroMethod;
@@ -658,6 +678,16 @@ router.post('/:provider/start', async (req: Request, res: Response): Promise<voi
     res.status(400).json({ error: `Invalid provider: ${provider}` });
     return;
   }
+
+  const localProvider = provider as CLIProxyProvider;
+  const existingAccounts = getProviderAccounts(localProvider);
+  const reauthTarget = getReauthAccountTarget(accountId, existingAccounts);
+  if (reauthTarget.error) {
+    res.status(404).json({ error: reauthTarget.error });
+    return;
+  }
+  const targetAccountId = reauthTarget.account?.id;
+  const effectiveNickname = nickname || reauthTarget.account?.nickname;
 
   if (provider === 'kiro' && invalidKiroMethod) {
     res.status(400).json({
@@ -708,7 +738,6 @@ router.post('/:provider/start', async (req: Request, res: Response): Promise<voi
     }
 
     try {
-      const localProvider = provider as CLIProxyProvider;
       const knownTokenFiles = listProviderTokenSnapshots(localProvider);
       const response = await fetch(buildProxyUrl(target, '/v0/management/gitlab-auth-url'), {
         method: 'POST',
@@ -738,7 +767,8 @@ router.post('/:provider/start', async (req: Request, res: Response): Promise<voi
 
       const tokenSnapshot = findNewTokenSnapshot(
         listProviderTokenSnapshots(localProvider),
-        knownTokenFiles
+        knownTokenFiles,
+        targetAccountId
       );
       if (!tokenSnapshot) {
         res.status(409).json({
@@ -750,9 +780,9 @@ router.post('/:provider/start', async (req: Request, res: Response): Promise<voi
       const account = registerAccountFromToken(
         localProvider,
         getProviderTokenDir(localProvider),
-        nickname,
+        effectiveNickname,
         false,
-        tokenSnapshot.file
+        targetAccountId || tokenSnapshot.file
       );
       if (!account) {
         res.status(409).json({
@@ -784,11 +814,11 @@ router.post('/:provider/start', async (req: Request, res: Response): Promise<voi
     }
   }
 
-  const existingAccounts = getProviderAccounts(provider as CLIProxyProvider);
   const nicknameError = getStartAuthNicknameError(
-    provider as CLIProxyProvider,
-    nickname,
-    existingAccounts
+    localProvider,
+    effectiveNickname,
+    existingAccounts,
+    targetAccountId
   );
   if (nicknameError) {
     res.status(400).json(nicknameError);
@@ -808,7 +838,8 @@ router.post('/:provider/start', async (req: Request, res: Response): Promise<voi
     const account = await triggerOAuth(provider as CLIProxyProvider, {
       add: true, // Always add mode from UI
       headless: false, // Force interactive mode
-      nickname: nickname || undefined,
+      nickname: effectiveNickname || undefined,
+      expectedAccountId: targetAccountId,
       acceptAgyRisk: provider === 'agy',
       kiroMethod: provider === 'kiro' ? kiroMethod : undefined,
       kiroIDCStartUrl: provider === 'kiro' ? kiroIDCStartUrl : undefined,
@@ -971,6 +1002,8 @@ router.post('/:provider/start-url', async (req: Request, res: Response): Promise
   const requestBody =
     req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
   const nicknameRaw = typeof requestBody.nickname === 'string' ? requestBody.nickname : undefined;
+  const accountId =
+    typeof requestBody.accountId === 'string' ? requestBody.accountId.trim() : undefined;
   const kiroMethodRaw = requestBody.kiroMethod;
   const gitlabAuthModeRaw = requestBody.gitlabAuthMode;
   const gitlabBaseUrl =
@@ -1037,11 +1070,20 @@ router.post('/:provider/start-url', async (req: Request, res: Response): Promise
     return;
   }
 
-  const existingAccounts = getProviderAccounts(provider as CLIProxyProvider);
+  const localProvider = provider as CLIProxyProvider;
+  const existingAccounts = getProviderAccounts(localProvider);
+  const reauthTarget = getReauthAccountTarget(accountId, existingAccounts);
+  if (reauthTarget.error) {
+    res.status(404).json({ error: reauthTarget.error });
+    return;
+  }
+  const targetAccountId = reauthTarget.account?.id;
+  const effectiveNickname = nickname || reauthTarget.account?.nickname;
   const nicknameError = getStartAuthNicknameError(
-    provider as CLIProxyProvider,
-    nickname,
-    existingAccounts
+    localProvider,
+    effectiveNickname,
+    existingAccounts,
+    targetAccountId
   );
   if (nicknameError) {
     res.status(400).json(nicknameError);
@@ -1136,8 +1178,9 @@ router.post('/:provider/start-url', async (req: Request, res: Response): Promise
 
     if (oauthState) {
       rememberManualAuthState(oauthState, {
-        nickname: nickname || undefined,
-        knownTokenFiles: listProviderTokenSnapshots(provider as CLIProxyProvider),
+        nickname: effectiveNickname || undefined,
+        expectedAccountId: targetAccountId,
+        knownTokenFiles: listProviderTokenSnapshots(localProvider),
       });
     }
 
@@ -1237,7 +1280,7 @@ router.get('/:provider/status', async (req: Request, res: Response): Promise<voi
         getProviderTokenDir(localProvider),
         pendingAuth.nickname,
         false,
-        tokenSnapshot.file
+        pendingAuth.expectedAccountId || tokenSnapshot.file
       );
 
       if (!account) {
@@ -1386,7 +1429,7 @@ router.post('/:provider/submit-callback', async (req: Request, res: Response): P
         getProviderTokenDir(localProvider),
         pendingAuth.nickname,
         false,
-        tokenSnapshot.file
+        pendingAuth.expectedAccountId || tokenSnapshot.file
       );
 
       if (!account) {

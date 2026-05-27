@@ -16,7 +16,7 @@ import {
   usePauseAccount,
   useResumeAccount,
 } from '@/hooks/use-cliproxy';
-import { Activity, CheckCircle2, XCircle, Radio } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, XCircle, Radio } from 'lucide-react';
 
 import { useAuthMonitorData } from './hooks';
 import { LivePulse } from './components/live-pulse';
@@ -86,6 +86,8 @@ export function AuthMonitor() {
   const displayedSuccessRate = selectedProviderData
     ? getSuccessRate(selectedProviderData.successCount, selectedProviderData.failureCount)
     : overallSuccessRate;
+  const showHighFailureGuidance =
+    displayedAccountCount >= 5 && displayedFailure >= 20 && displayedSuccessRate < 50;
 
   const handlePauseToggle = (accountIds: string[], paused: boolean) => {
     if (
@@ -203,6 +205,21 @@ export function AuthMonitor() {
           }
         />
       </div>
+
+      {showHighFailureGuidance && (
+        <div className="flex items-start gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="space-y-1">
+            <p className="font-semibold text-foreground">High CLIProxy failure rate detected</p>
+            <p className="text-muted-foreground">
+              Select the affected provider, pause failing accounts, then check{' '}
+              <code className="rounded bg-muted px-1 py-0.5 font-mono">ccs cliproxy routing</code>.
+              For large Codex pools, prefer a smaller healthy active set and attach CLIProxy logs if
+              failures continue.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Flow Visualization */}
       <div className="relative overflow-hidden">

@@ -24,6 +24,7 @@ import {
   MoreHorizontal,
   Pause,
   Play,
+  RefreshCw,
   Star,
   Trash2,
 } from 'lucide-react';
@@ -87,6 +88,7 @@ export function AccountItem({
   account,
   onSetDefault,
   onRemove,
+  onReauth,
   onPauseToggle,
   isRemoving,
   isPausingAccount,
@@ -165,6 +167,12 @@ export function AccountItem({
           <DropdownMenuItem onClick={onSetDefault}>
             <Star className="w-4 h-4 mr-2" />
             Set as default
+          </DropdownMenuItem>
+        )}
+        {onReauth && (
+          <DropdownMenuItem onClick={onReauth}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Reauthenticate
           </DropdownMenuItem>
         )}
         <DropdownMenuItem

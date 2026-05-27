@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
   getKiroStartIDCValidationError,
+  getReauthAccountTarget,
   getStartAuthFailureMessage,
   getStartAuthNicknameError,
   getStartUrlUnsupportedReason,
@@ -140,5 +141,29 @@ describe('cliproxy-auth-routes nickname validation', () => {
     expect(
       getStartAuthNicknameError('kiro', 'github-ABC123', existingAccounts, 'github-ABC123')
     ).toBeNull();
+  });
+});
+
+describe('cliproxy-auth-routes reauth account targeting', () => {
+  const existingAccounts = [
+    { id: 'codex-user@example.com', nickname: 'work' },
+    { id: 'codex-personal@example.com', nickname: 'personal' },
+  ];
+
+  it('does not require a target for normal add-account auth', () => {
+    expect(getReauthAccountTarget(undefined, existingAccounts)).toEqual({});
+    expect(getReauthAccountTarget('', existingAccounts)).toEqual({});
+  });
+
+  it('resolves an existing account target for reauth', () => {
+    expect(getReauthAccountTarget('codex-user@example.com', existingAccounts)).toEqual({
+      account: { id: 'codex-user@example.com', nickname: 'work' },
+    });
+  });
+
+  it('rejects unknown account targets instead of falling back to ambiguous registration', () => {
+    expect(getReauthAccountTarget('missing', existingAccounts)).toEqual({
+      error: "Account 'missing' not found for this provider",
+    });
   });
 });

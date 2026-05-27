@@ -31,7 +31,7 @@ import {
   useBulkResumeAccounts,
   useDeleteVariant,
 } from '@/hooks/use-cliproxy';
-import type { AuthStatus, Variant } from '@/lib/api-client';
+import type { AuthStatus, OAuthAccount, Variant } from '@/lib/api-client';
 import { buildUiCatalogs } from '@/lib/model-catalogs';
 import {
   getProviderDisplayName,
@@ -256,6 +256,7 @@ export function CliproxyPage() {
     provider: string;
     displayName: string;
     isFirstAccount: boolean;
+    account?: OAuthAccount;
   } | null>(() => {
     if (typeof window === 'undefined') {
       return null;
@@ -401,6 +402,23 @@ export function CliproxyPage() {
       provider: accountSetupTarget.provider,
       displayName: accountSetupTarget.displayName,
       isFirstAccount: accountSetupTarget.accountCount === 0,
+    });
+  };
+
+  const handleReauthAccount = (
+    provider: string,
+    displayName: string,
+    accounts: OAuthAccount[] | undefined,
+    accountId: string
+  ) => {
+    const account = accounts?.find((candidate) => candidate.id === accountId);
+    if (!account) return;
+
+    setAddAccountProvider({
+      provider,
+      displayName,
+      isFirstAccount: false,
+      account,
     });
   };
 
@@ -567,6 +585,14 @@ export function CliproxyPage() {
                   isFirstAccount: (parentAuthForVariant.accounts?.length || 0) === 0,
                 })
               }
+              onReauthAccount={(account) =>
+                handleReauthAccount(
+                  selectedVariantData.provider,
+                  parentAuthForVariant.displayName,
+                  parentAuthForVariant.accounts,
+                  account.id
+                )
+              }
               onSetDefault={(accountId) =>
                 setDefaultMutation.mutate({
                   provider: selectedVariantData.provider,
@@ -617,6 +643,14 @@ export function CliproxyPage() {
                   isFirstAccount: (selectedStatus.accounts?.length || 0) === 0,
                 })
               }
+              onReauthAccount={(account) =>
+                handleReauthAccount(
+                  selectedStatus.provider,
+                  selectedStatus.displayName,
+                  selectedStatus.accounts,
+                  account.id
+                )
+              }
               onSetDefault={(accountId) =>
                 setDefaultMutation.mutate({
                   provider: selectedStatus.provider,
@@ -663,6 +697,7 @@ export function CliproxyPage() {
             : undefined
         }
         isFirstAccount={addAccountProvider?.isFirstAccount || false}
+        account={addAccountProvider?.account}
       />
     </div>
   );

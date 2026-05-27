@@ -191,4 +191,41 @@ describe('AuthMonitor', () => {
     expect(within(getSummaryCard('Failed')).getByText('3')).toBeInTheDocument();
     expect(within(getSummaryCard('Success Rate')).getByText('80%')).toBeInTheDocument();
   });
+
+  it('shows CLIProxy guidance when a large account pool has a high failure rate', () => {
+    useAuthMonitorDataMock.mockReturnValue({
+      ...authMonitorData,
+      accounts: Array.from({ length: 5 }, (_, index) => ({
+        id: `codex-${index}`,
+        email: `codex-${index}@example.com`,
+        tokenFile: `/tmp/codex-${index}.json`,
+        provider: 'codex',
+        displayName: 'OpenAI Codex',
+        isDefault: index === 0,
+        successCount: index === 0 ? 1 : 0,
+        failureCount: 5,
+        color: '#10a37f',
+      })),
+      totalSuccess: 1,
+      totalFailure: 25,
+      totalRequests: 26,
+      providerStats: [
+        {
+          provider: 'codex',
+          displayName: 'OpenAI Codex',
+          totalRequests: 26,
+          successCount: 1,
+          failureCount: 25,
+          accountCount: 5,
+          accounts: [],
+        },
+      ],
+      overallSuccessRate: 4,
+    });
+
+    render(<AuthMonitor />);
+
+    expect(screen.getByText('High CLIProxy failure rate detected')).toBeInTheDocument();
+    expect(screen.getByText(/ccs cliproxy routing/)).toBeInTheDocument();
+  });
 });

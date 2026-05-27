@@ -86,6 +86,47 @@ describe('useCliproxyAuthFlow', () => {
     );
   });
 
+  it('includes the selected account id when reauth starts from the dashboard', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/codex/start-url')) {
+        return Promise.resolve(
+          createJsonResponse({
+            success: true,
+            authUrl: 'https://auth.example.com/codex?state=codex-reauth',
+            state: 'codex-reauth',
+          })
+        );
+      }
+
+      if (url.includes('/status?state=codex-reauth')) {
+        return Promise.resolve(createJsonResponse({ status: 'wait' }));
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useCliproxyAuthFlow(), { wrapper });
+
+    await act(async () => {
+      await result.current.startAuth('codex', {
+        accountId: 'existing@example.com',
+        startEndpoint: 'start-url',
+      });
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/cliproxy/auth/codex/start-url',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"accountId":"existing@example.com"'),
+      })
+    );
+  });
+
   it('surfaces manual OAuth start guidance from the dashboard API', async () => {
     const guidance = [
       'Start local CLIProxy first: ccs cliproxy start',

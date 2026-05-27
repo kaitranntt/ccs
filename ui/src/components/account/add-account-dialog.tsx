@@ -29,7 +29,7 @@ import { Loader2, ExternalLink, User, Download, Copy, Check, ShieldAlert } from 
 import { useKiroImport } from '@/hooks/use-cliproxy';
 import { useCliproxyAuthFlow } from '@/hooks/use-cliproxy-auth-flow';
 import { applyDefaultPreset } from '@/lib/preset-utils';
-import type { CliproxyProviderCatalog } from '@/lib/api-client';
+import type { CliproxyProviderCatalog, OAuthAccount } from '@/lib/api-client';
 import { AccountSafetyWarningCard } from '@/components/account/account-safety-warning-card';
 import { AntigravityResponsibilityChecklist } from '@/components/account/antigravity-responsibility-checklist';
 import {
@@ -58,6 +58,8 @@ interface AddAccountDialogProps {
   provider: string;
   displayName: string;
   catalog?: CliproxyProviderCatalog;
+  /** Existing account to reauthenticate instead of adding a new account. */
+  account?: OAuthAccount;
   /** Whether this is the first account being added (shows different toast message) */
   isFirstAccount?: boolean;
 }
@@ -77,6 +79,7 @@ export function AddAccountDialog({
   provider,
   displayName,
   catalog,
+  account,
   isFirstAccount = false,
 }: AddAccountDialogProps) {
   const [nickname, setNickname] = useState('');
@@ -127,6 +130,8 @@ export function AddAccountDialog({
   const gitlabBaseUrlTrimmed = gitlabBaseUrl.trim();
   const gitlabPersonalAccessTokenTrimmed = gitlabPersonalAccessToken.trim();
   const errorMessage = localError || authFlow.error;
+  const isReauth = Boolean(account);
+  const accountLabel = account?.email || account?.nickname || account?.id || displayName;
 
   const fetchPowerUserModeState = useCallback(async (): Promise<boolean> => {
     const response = await fetch('/api/settings/auth/antigravity-risk');
@@ -325,7 +330,8 @@ export function AddAccountDialog({
     }
     wasAuthenticatingRef.current = true;
     authFlow.startAuth(provider, {
-      nickname: nicknameTrimmed || undefined,
+      accountId: account?.id,
+      nickname: account ? account.nickname : nicknameTrimmed || undefined,
       kiroMethod: isKiro ? kiroAuthMethod : undefined,
       kiroIDCStartUrl: isKiroIdc ? kiroIDCStartUrlTrimmed : undefined,
       kiroIDCRegion: isKiroIdc && kiroIDCRegionTrimmed ? kiroIDCRegionTrimmed : undefined,
@@ -385,13 +391,19 @@ export function AddAccountDialog({
         }}
       >
         <DialogHeader className="min-w-0 px-6 pt-6 pr-12">
-          <DialogTitle>{t('addAccountDialog.title', { displayName })}</DialogTitle>
+          <DialogTitle>
+            {isReauth
+              ? `Reauthenticate ${displayName}`
+              : t('addAccountDialog.title', { displayName })}
+          </DialogTitle>
           <DialogDescription>
-            {isKiro
-              ? t('addAccountDialog.descKiro')
-              : isDeviceCode
-                ? t('addAccountDialog.descDeviceCode')
-                : t('addAccountDialog.descOauth')}
+            {isReauth
+              ? `Refresh credentials for ${accountLabel}.`
+              : isKiro
+                ? t('addAccountDialog.descKiro')
+                : isDeviceCode
+                  ? t('addAccountDialog.descDeviceCode')
+                  : t('addAccountDialog.descOauth')}
           </DialogDescription>
         </DialogHeader>
 
@@ -600,7 +612,16 @@ export function AddAccountDialog({
           )}
 
           {/* Nickname input - only show before auth starts */}
-          {!showAuthUI && (
+          {!showAuthUI && isReauth && (
+            <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+              <div className="font-medium">{accountLabel}</div>
+              <div className="text-xs text-muted-foreground">
+                This sign-in updates the selected account instead of creating another account.
+              </div>
+            </div>
+          )}
+
+          {!showAuthUI && !isReauth && (
             <div className="space-y-2">
               <Label htmlFor="nickname">{t('addAccountDialog.nicknameOptional')}</Label>
               <div className="flex items-center gap-2">
@@ -784,7 +805,7 @@ export function AddAccountDialog({
                 }
               >
                 <ExternalLink className="w-4 h-4 mr-2" />
-                {t('addAccountDialog.authenticate')}
+                {isReauth ? 'Reauthenticate' : t('addAccountDialog.authenticate')}
               </Button>
             )}
           </div>

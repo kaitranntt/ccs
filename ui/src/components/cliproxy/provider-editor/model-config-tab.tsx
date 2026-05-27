@@ -40,6 +40,7 @@ interface ModelConfigTabProps {
   isDeletePending?: boolean;
   accounts: OAuthAccount[];
   onAddAccount: () => void;
+  onReauthAccount?: (account: OAuthAccount) => void;
   onSetDefault: (accountId: string) => void;
   onRemoveAccount: (accountId: string) => void;
   onPauseToggle?: (accountId: string, paused: boolean) => void;
@@ -82,6 +83,7 @@ export function ModelConfigTab({
   isDeletePending,
   accounts,
   onAddAccount,
+  onReauthAccount,
   onSetDefault,
   onRemoveAccount,
   onPauseToggle,
@@ -176,6 +178,7 @@ export function ModelConfigTab({
         <AccountsSection
           accounts={accounts}
           onAddAccount={onAddAccount}
+          onReauthAccount={onReauthAccount}
           onSetDefault={onSetDefault}
           onRemoveAccount={onRemoveAccount}
           onPauseToggle={onPauseToggle}

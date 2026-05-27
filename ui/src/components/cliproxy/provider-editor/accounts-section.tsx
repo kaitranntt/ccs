@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 interface AccountsSectionProps {
   accounts: OAuthAccount[];
   onAddAccount: () => void;
+  onReauthAccount?: (account: OAuthAccount) => void;
   onSetDefault: (accountId: string) => void;
   onRemoveAccount: (accountId: string) => void;
   onPauseToggle?: (accountId: string, paused: boolean) => void;
@@ -48,6 +49,7 @@ interface AccountsSectionProps {
 export function AccountsSection({
   accounts,
   onAddAccount,
+  onReauthAccount,
   onSetDefault,
   onRemoveAccount,
   onPauseToggle,
@@ -175,6 +177,7 @@ export function AccountsSection({
               account={account}
               onSetDefault={() => onSetDefault(account.id)}
               onRemove={() => onRemoveAccount(account.id)}
+              onReauth={onReauthAccount ? () => onReauthAccount(account) : undefined}
               onPauseToggle={
                 onPauseToggle ? (paused) => onPauseToggle(account.id, paused) : undefined
               }
