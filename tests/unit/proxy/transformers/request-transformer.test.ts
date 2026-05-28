@@ -43,6 +43,23 @@ describe('ProxyRequestTransformer', () => {
     });
   });
 
+  it('accepts Claude Code system messages in the messages array', () => {
+    const transformer = new ProxyRequestTransformer();
+    const result = transformer.transform({
+      messages: [
+        { role: 'user', content: 'hello' },
+        { role: 'system', content: [{ type: 'text', text: 'answer tersely' }] },
+        { role: 'user', content: 'which model is this?' },
+      ],
+    });
+
+    expect(result.messages).toEqual([
+      { role: 'user', content: 'hello' },
+      { role: 'system', content: 'answer tersely' },
+      { role: 'user', content: 'which model is this?' },
+    ]);
+  });
+
   it('translates base64 image blocks into OpenAI image_url parts', () => {
     const transformer = new ProxyRequestTransformer();
     const result = transformer.transform({

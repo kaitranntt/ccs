@@ -40,7 +40,7 @@ type AnthropicContentBlock =
   | { type: string; [key: string]: unknown };
 
 interface AnthropicMessage {
-  role?: 'user' | 'assistant' | string;
+  role?: 'system' | 'user' | 'assistant' | string;
   content?: string | AnthropicContentBlock[];
 }
 
@@ -435,8 +435,8 @@ function transformMessages(messagesValue: unknown): OpenAIMessage[] {
   messagesValue.forEach((message, messageIndex) => {
     const parsedMessage = assertObject(message, `messages[${messageIndex}]`) as AnthropicMessage;
     const role = parsedMessage.role;
-    if (role !== 'user' && role !== 'assistant') {
-      throw new Error(`messages[${messageIndex}].role must be "user" or "assistant"`);
+    if (role !== 'system' && role !== 'user' && role !== 'assistant') {
+      throw new Error(`messages[${messageIndex}].role must be "system", "user", or "assistant"`);
     }
 
     if (pendingToolUseIds && pendingToolUseIds.size > 0 && role !== 'user') {
@@ -446,6 +446,14 @@ function transformMessages(messagesValue: unknown): OpenAIMessage[] {
     }
 
     const content = parsedMessage.content;
+    if (role === 'system') {
+      translatedMessages.push({
+        role: 'system',
+        content: flattenTextContent(content, `messages[${messageIndex}].content`),
+      });
+      return;
+    }
+
     if (typeof content === 'string') {
       if (pendingToolUseIds && pendingToolUseIds.size > 0) {
         throw new Error(

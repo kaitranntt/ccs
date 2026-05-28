@@ -97,6 +97,12 @@ beforeEach(() => {
       ANTHROPIC_MODEL: 'sonar-pro',
       CCS_DROID_PROVIDER: 'generic-chat-completion-api',
     }),
+    mm: writeSettings('mm', {
+      ANTHROPIC_BASE_URL: 'https://api.minimax.io/v1',
+      ANTHROPIC_AUTH_TOKEN: 'minimax_token',
+      ANTHROPIC_MODEL: 'MiniMax-M2.7',
+      CCS_DROID_PROVIDER: 'openai',
+    }),
   };
 
   fs.writeFileSync(
@@ -241,5 +247,103 @@ describe('handleProxyMessagesRequest', () => {
     expect(capturedDispatcher).toBe(sharedDispatcher);
     expect(closeCalls).toBe(0);
     expect(res.statusCode).toBe(502);
+  });
+
+  it('moves system messages into the first user message for MiniMax OpenAI-compatible upstreams', async () => {
+    const activeProfile = buildProfile('mm');
+    let capturedBody: unknown;
+
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body));
+      return new Response(
+        JSON.stringify({
+          id: 'chatcmpl_1',
+          object: 'chat.completion',
+          created: 1,
+          model: 'MiniMax-M2.7',
+          choices: [{ index: 0, message: { role: 'assistant', content: 'ok' } }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    }) as typeof globalThis.fetch;
+
+    const req = new FakeRequest({
+      'x-api-key': 'local-token',
+    });
+    const res = new FakeResponse();
+    const pending = handleProxyMessagesRequest(
+      req as never,
+      res as never,
+      activeProfile,
+      'local-token'
+    );
+    req.end(
+      JSON.stringify({
+        model: 'MiniMax-M2.7',
+        stream: false,
+        messages: [
+          { role: 'system', content: 'Use Turkish.' },
+          { role: 'user', content: 'bu hangi model' },
+        ],
+      })
+    );
+    await pending;
+
+    expect(capturedBody).toMatchObject({
+      model: 'MiniMax-M2.7',
+      messages: [{ role: 'user', content: 'Use Turkish.\n\nbu hangi model' }],
+    });
+    expect((capturedBody as { messages: Array<{ role: string }> }).messages).not.toContainEqual(
+      expect.objectContaining({ role: 'system' })
+    );
+  });
+
+  it('strips blank system messages for MiniMax OpenAI-compatible upstreams', async () => {
+    const activeProfile = buildProfile('mm');
+    let capturedBody: unknown;
+
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body));
+      return new Response(
+        JSON.stringify({
+          id: 'chatcmpl_1',
+          object: 'chat.completion',
+          created: 1,
+          model: 'MiniMax-M2.7',
+          choices: [{ index: 0, message: { role: 'assistant', content: 'ok' } }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    }) as typeof globalThis.fetch;
+
+    const req = new FakeRequest({
+      'x-api-key': 'local-token',
+    });
+    const res = new FakeResponse();
+    const pending = handleProxyMessagesRequest(
+      req as never,
+      res as never,
+      activeProfile,
+      'local-token'
+    );
+    req.end(
+      JSON.stringify({
+        model: 'MiniMax-M2.7',
+        stream: false,
+        messages: [
+          { role: 'system', content: [{ type: 'text', text: '' }] },
+          { role: 'user', content: 'bu hangi model' },
+        ],
+      })
+    );
+    await pending;
+
+    expect(capturedBody).toMatchObject({
+      model: 'MiniMax-M2.7',
+      messages: [{ role: 'user', content: 'bu hangi model' }],
+    });
+    expect((capturedBody as { messages: Array<{ role: string }> }).messages).not.toContainEqual(
+      expect.objectContaining({ role: 'system' })
+    );
   });
 });
