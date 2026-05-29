@@ -45,4 +45,7 @@ RUN chmod +x /entrypoint-integrated.sh \
 
 EXPOSE 3000 8085 8317
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "const http=require('http');const probe=(url)=>new Promise((resolve)=>{const req=http.get(url,(res)=>{res.resume();resolve(res.statusCode<400);});req.on('error',()=>resolve(false));req.setTimeout(4500,()=>{req.destroy();resolve(false);});});Promise.all([probe('http://127.0.0.1:3000/'),probe('http://127.0.0.1:8317/')]).then((results)=>process.exit(results.every(Boolean)?0:1));"
+
 ENTRYPOINT ["/entrypoint-integrated.sh"]

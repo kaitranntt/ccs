@@ -35,4 +35,12 @@ describe('docker release workflow context', () => {
       /Verify promoted tags are anonymously pullable[\s\S]*DOCKER_CONFIG="\$\{CLEAN_DOCKER_CONFIG\}" docker pull/
     );
   });
+
+  test('gives the raw integrated image a Docker healthcheck for release smoke tests', () => {
+    const dockerfile = readFileSync(join(repoRoot, 'docker/Dockerfile.integrated'), 'utf8');
+
+    expect(dockerfile).toContain('HEALTHCHECK');
+    expect(dockerfile).toContain('127.0.0.1:3000');
+    expect(dockerfile).toContain('127.0.0.1:8317');
+  });
 });
