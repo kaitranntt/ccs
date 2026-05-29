@@ -25,8 +25,8 @@ services:
       CCS_DOCKER_LEGACY_KEY_GRACE_DAYS: "${CCS_DOCKER_LEGACY_KEY_GRACE_DAYS:-}"
       CCS_DOCKER_RESTORE_LEGACY_API_KEY: "${CCS_DOCKER_RESTORE_LEGACY_API_KEY:-}"
     ports:
-      - "3000:3000"
-      - "8317:8317"
+      - "${CCS_DASHBOARD_PORT:-3000}:3000"
+      - "${CCS_CLIPROXY_PORT:-8317}:8317"
     volumes:
       # /root/.ccs matches the HOME used inside the integrated image.
       # entrypoint-integrated.sh runs as root (supervisord user=root) and

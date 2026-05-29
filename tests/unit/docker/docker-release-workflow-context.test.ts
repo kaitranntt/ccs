@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -42,5 +43,25 @@ describe('docker release workflow context', () => {
     expect(dockerfile).toContain('HEALTHCHECK');
     expect(dockerfile).toContain('127.0.0.1:3000');
     expect(dockerfile).toContain('127.0.0.1:8317');
+  });
+
+  test('lets network-contract smoke tests avoid fixed host port collisions', () => {
+    const compose = readFileSync(join(repoRoot, 'docker/compose.yaml'), 'utf8');
+    const contractScript = readFileSync(join(repoRoot, 'tests/docker/network-contract.sh'), 'utf8');
+
+    expect(compose).toContain('${CCS_DASHBOARD_PORT:-3000}:3000');
+    expect(compose).toContain('${CCS_CLIPROXY_PORT:-8317}:8317');
+    expect(contractScript).toContain('CCS_NETWORK_CONTRACT_DASHBOARD_PORT:-${CCS_DASHBOARD_PORT:-13001}');
+    expect(contractScript).toContain('CCS_NETWORK_CONTRACT_CLIPROXY_PORT:-${CCS_CLIPROXY_PORT:-18318}');
+    expect(contractScript).toContain('up -d --remove-orphans');
+  });
+
+  test('passes collision-safe compose env through network-contract calls', () => {
+    const result = spawnSync('bash', ['tests/docker/network-contract-env.test.sh'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    });
+
+    expect(result.status, result.stdout + result.stderr).toBe(0);
   });
 });
