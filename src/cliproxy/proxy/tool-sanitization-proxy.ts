@@ -22,6 +22,7 @@ import {
   extractProviderFromPathname,
   getDeniedModelIdReasonForProvider,
   normalizeModelIdForRouting,
+  parseCodexModelTuningAlias,
   stripCodexEffortSuffix,
 } from '../ai-providers/model-id-normalizer';
 import { getModelMaxLevel } from '../model-catalog';
@@ -63,6 +64,7 @@ const GEMINI_UNSUPPORTED_TOOL_FIELDS = new Set([
 ]);
 
 const CODEX_UNSUPPORTED_TOOL_FIELDS = new Set(['cache_control']);
+const CODEX_FAST_SERVICE_TIER = 'priority';
 const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
 const LEGACY_CODEX_MODEL_ID_REGEX = /^gpt-5(?:\.\d+)?-codex(?:-(?:mini|max))?$/i;
 
@@ -88,6 +90,118 @@ function isKnownCodexModelId(model: string | undefined): boolean {
     LEGACY_CODEX_MODEL_ID_REGEX.test(normalizedModel) ||
     getModelMaxLevel('codex', normalizedModel) !== undefined
   );
+}
+
+function isCodexRequest(providerFromPath: string | null, model: unknown): boolean {
+  return (
+    providerFromPath === 'codex' ||
+    (providerFromPath === null && typeof model === 'string' && isKnownCodexModelId(model))
+  );
+}
+
+function applyCodexModelTuningAlias(body: Record<string, unknown>): Record<string, unknown> {
+  if (typeof body.model !== 'string') {
+    return body;
+  }
+
+  const parsed = parseCodexModelTuningAlias(body.model);
+  if (!parsed || !isKnownCodexModelId(parsed.baseModel)) {
+    return body;
+  }
+
+  const tunedBody: Record<string, unknown> = { ...body, model: parsed.baseModel };
+
+  if (parsed.effort) {
+    const existingReasoning = isRecord(body.reasoning) ? body.reasoning : {};
+    tunedBody.reasoning = {
+      ...existingReasoning,
+      effort: parsed.effort,
+    };
+  }
+
+  if (parsed.serviceTier) {
+    tunedBody.service_tier = CODEX_FAST_SERVICE_TIER;
+  }
+
+  return tunedBody;
+}
+
+function extractSystemText(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  return content
+    .filter((block): block is { type: unknown; text?: unknown } => isRecord(block))
+    .filter((block) => block.type === 'text' && typeof block.text === 'string')
+    .map((block) => block.text as string)
+    .join('\n\n');
+}
+
+function prependSystemTextToContent(content: unknown, systemText: string): unknown {
+  if (Array.isArray(content)) {
+    return [{ type: 'text', text: systemText }, ...content];
+  }
+  if (typeof content === 'string') {
+    return `${systemText}\n\n${content}`;
+  }
+  return systemText;
+}
+
+function foldCodexSystemMessages(body: Record<string, unknown>): Record<string, unknown> {
+  const systemTexts: string[] = [];
+  let removedSystem = false;
+  const nextBody = { ...body };
+
+  if (body.system !== undefined) {
+    removedSystem = true;
+    delete nextBody.system;
+    const systemText = extractSystemText(body.system).trim();
+    if (systemText) {
+      systemTexts.push(systemText);
+    }
+  }
+
+  const rawMessages = Array.isArray(body.messages) ? body.messages : [];
+  const messages = rawMessages.filter((message) => {
+    if (!isRecord(message) || message.role !== 'system') {
+      return true;
+    }
+    removedSystem = true;
+    const systemText = extractSystemText(message.content).trim();
+    if (systemText) {
+      systemTexts.push(systemText);
+    }
+    return false;
+  });
+
+  if (!removedSystem) {
+    return body;
+  }
+
+  if (systemTexts.length > 0) {
+    const systemPrefix = systemTexts.join('\n\n');
+    const firstUserIndex = messages.findIndex(
+      (message) => isRecord(message) && message.role === 'user'
+    );
+
+    if (firstUserIndex >= 0 && isRecord(messages[firstUserIndex])) {
+      const firstUserMessage = messages[firstUserIndex];
+      messages[firstUserIndex] = {
+        ...firstUserMessage,
+        content: prependSystemTextToContent(firstUserMessage.content, systemPrefix),
+      };
+    } else {
+      messages.unshift({ role: 'user', content: systemPrefix });
+    }
+  }
+
+  nextBody.messages = messages;
+  return nextBody;
 }
 
 function getUnsupportedToolFields(
@@ -350,6 +464,11 @@ export class ToolSanitizationProxy {
           );
           modifiedBody = { ...modifiedBody, model: normalizedModel };
         }
+      }
+
+      if (isRecord(modifiedBody) && isCodexRequest(providerFromPath, modifiedBody.model)) {
+        const tunedBody = applyCodexModelTuningAlias(modifiedBody);
+        modifiedBody = foldCodexSystemMessages(tunedBody);
       }
 
       // Sanitize tools if present
