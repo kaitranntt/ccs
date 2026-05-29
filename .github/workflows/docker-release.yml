@@ -260,7 +260,7 @@ jobs:
         id: build
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: docker
           file: docker/Dockerfile.integrated
           platforms: linux/amd64,linux/arm64
           push: true
@@ -331,6 +331,17 @@ jobs:
 
       - name: Pull image
         run: docker pull "${{ steps.image.outputs.ref }}"
+
+      - name: Verify anonymous pull access
+        run: |
+          CLEAN_DOCKER_CONFIG="$(mktemp -d)"
+          trap 'rm -rf "${CLEAN_DOCKER_CONFIG}"' EXIT
+          if ! DOCKER_CONFIG="${CLEAN_DOCKER_CONFIG}" docker pull "${{ steps.image.outputs.ref }}"; then
+            echo "[X] ghcr.io/kaitranntt/ccs is not anonymously pullable." >&2
+            echo "[i] Make the GHCR package public, then rerun the Docker publish workflow." >&2
+            exit 1
+          fi
+          echo "[OK] Anonymous pull succeeded for ${{ steps.image.outputs.ref }}"
 
       - name: Assert image size budget (amd64)
         run: |
@@ -471,3 +482,24 @@ jobs:
             "${IMAGE_REF}"
 
           echo "[OK] Promoted: :latest :${MINOR} :${MAJOR} → ${IMAGE_REF}"
+
+      - name: Verify promoted tags are anonymously pullable
+        env:
+          VERSION: ${{ needs.publish-integrated.outputs.version }}
+        run: |
+          OWNER_LOWER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          IMAGE="ghcr.io/${OWNER_LOWER}/ccs"
+          MINOR="${VERSION%.*}"
+          MAJOR="${VERSION%%.*}"
+          CLEAN_DOCKER_CONFIG="$(mktemp -d)"
+          trap 'rm -rf "${CLEAN_DOCKER_CONFIG}"' EXIT
+
+          for TAG in latest "${MINOR}" "${MAJOR}"; do
+            REF="${IMAGE}:${TAG}"
+            if ! DOCKER_CONFIG="${CLEAN_DOCKER_CONFIG}" docker pull "${REF}"; then
+              echo "[X] ${REF} is not anonymously pullable." >&2
+              echo "[i] Confirm the GHCR package is public, then rerun promotion." >&2
+              exit 1
+            fi
+            echo "[OK] Anonymous pull succeeded for ${REF}"
+          done

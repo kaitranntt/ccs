@@ -97,9 +97,11 @@ function evaluateDashboardSunset({ targetTag, baselineVersion, releaseWindow, st
   const versions = parseStableTags(stableTags);
   const hasBaseline = versions.some((version) => compareVersions(version, baseline) === 0);
   if (compareVersions(target, baseline) > 0 && !hasBaseline) {
-    throw new Error(
-      `Cannot count dashboard sunset releases: baseline tag ${baseline.raw} is missing from git tags`,
-    );
+    return {
+      publish: false,
+      elapsed: releaseWindow,
+      reason: `legacy dashboard sunset baseline ${baseline.raw} is missing from git tags; skipping deprecated image publish`,
+    };
   }
 
   if (!versions.some((version) => compareVersions(version, target) === 0)) {

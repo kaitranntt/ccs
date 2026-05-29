@@ -106,8 +106,9 @@ assert_case "skips at the larger configured window boundary" 0 false 3 \
 assert_failure "rejects prerelease target tags" \
   --target "v7.80.0-rc.1" --baseline "7.80.0" --window "2"
 
-assert_failure "fails loudly when baseline tag is unavailable after baseline" \
-  --target "v7.81.2" --baseline "7.81.0" --window "2"
+assert_case "skips deprecated publish when baseline tag is unavailable after baseline" 0 false 2 \
+  "v7.81.2" "7.81.0" "2" \
+  $'v7.80.0'
 
 echo ""
 echo "Dashboard sunset guard tests complete: ${PASS} passed, ${FAIL} failed."

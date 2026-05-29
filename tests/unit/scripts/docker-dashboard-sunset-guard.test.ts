@@ -45,14 +45,18 @@ describe('docker dashboard sunset guard', () => {
     });
   });
 
-  test('fails loudly if the baseline tag is missing after the baseline', () => {
-    expect(() =>
-      evaluateDashboardSunset({
-        targetTag: 'v7.81.2',
-        baselineVersion: '7.81.0',
-        releaseWindow: 2,
-        stableTags: ['v7.80.0'],
-      }),
-    ).toThrow('baseline tag v7.81.0 is missing');
+  test('skips deprecated publish if the baseline tag is missing after the baseline', () => {
+    const result = evaluateDashboardSunset({
+      targetTag: 'v7.81.2',
+      baselineVersion: '7.81.0',
+      releaseWindow: 2,
+      stableTags: ['v7.80.0'],
+    });
+
+    expect(result).toMatchObject({
+      elapsed: 2,
+      publish: false,
+    });
+    expect(result.reason).toContain('baseline v7.81.0 is missing');
   });
 });
