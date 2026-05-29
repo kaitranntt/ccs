@@ -50,27 +50,87 @@ fi
 
 MAX_MB=$(( MAX_BYTES / 1048576 ))
 
+sum_manifest_layer_sizes() {
+  local sum
+  sum="$(jq -sr '
+    .[0] as $manifest
+    | if ($manifest | type) == "object" and ($manifest.layers | type) == "array" then
+      ([$manifest.layers[]?.size | numbers] | add) // 0
+    else
+      0
+    end
+  ' 2>/dev/null)" || {
+    echo "0"
+    return
+  }
+  echo "${sum:-0}"
+}
+
+select_platform_digest() {
+  local os="$1"
+  local arch="$2"
+  local variant="$3"
+
+  jq -r \
+    --arg os "$os" \
+    --arg arch "$arch" \
+    --arg variant "$variant" \
+    '
+      .manifests[]?
+      | select((.platform.os // "") == $os)
+      | select((.platform.architecture // "") == $arch)
+      | select($variant == "" or (.platform.variant // "") == $variant)
+      | .digest
+    ' 2>/dev/null | head -1 || true
+}
+
 if [[ -n "$PLATFORM" ]]; then
   # Multi-arch path: sum compressed layer sizes from the registry manifest.
-  # `docker buildx imagetools inspect --format` returns the manifest JSON for
-  # the given platform. We sum the `size` field of each layer entry.
+  # Read raw OCI/Docker manifests directly. Multi-arch tags first resolve the
+  # requested platform digest from the index, then sum that manifest's layer
+  # sizes. A single-platform tag can be summed immediately from its raw manifest.
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "[X] jq is required for platform-scoped image size inspection" >&2
+    exit 1
+  fi
+
+  if [[ "$PLATFORM" != */* ]]; then
+    echo "[X] --platform must use os/arch format, got: ${PLATFORM}" >&2
+    exit 1
+  fi
+
+  PLATFORM_OS="${PLATFORM%%/*}"
+  PLATFORM_REST="${PLATFORM#*/}"
+  PLATFORM_ARCH="${PLATFORM_REST%%/*}"
+  PLATFORM_VARIANT=""
+  if [[ "$PLATFORM_REST" == */* ]]; then
+    PLATFORM_VARIANT="${PLATFORM_REST#*/}"
+  fi
+
   echo "[i] Inspecting ${IMAGE} for platform ${PLATFORM} via registry manifest..." >&2
-  ACTUAL_BYTES=$(
-    docker buildx imagetools inspect "${IMAGE}" \
-      --format "{{ range .Manifest.Layers }}{{ .Size }} {{ end }}" \
-      --raw 2>/dev/null \
-    | tr ' ' '\n' \
-    | awk 'NF && /^[0-9]+$/ { sum += $1 } END { print sum+0 }' \
-    2>/dev/null || echo ""
-  )
+  RAW_MANIFEST="$(docker buildx imagetools inspect "${IMAGE}" --raw 2>/dev/null || true)"
+  ACTUAL_BYTES="$(printf '%s' "$RAW_MANIFEST" | sum_manifest_layer_sizes)"
 
   if [[ -z "$ACTUAL_BYTES" || "$ACTUAL_BYTES" == "0" ]]; then
-    # Fallback: try the platform-specific sub-manifest
+    PLATFORM_DIGEST="$(printf '%s' "$RAW_MANIFEST" | select_platform_digest "$PLATFORM_OS" "$PLATFORM_ARCH" "$PLATFORM_VARIANT")"
+    if [[ -n "$PLATFORM_DIGEST" && "$PLATFORM_DIGEST" != "null" ]]; then
+      # Fallback: inspect the selected platform sub-manifest.
+      echo "[i] Falling back to platform-scoped manifest ${PLATFORM_DIGEST}..." >&2
+      RAW_PLATFORM_MANIFEST="$(docker buildx imagetools inspect "${IMAGE}@${PLATFORM_DIGEST}" --raw 2>/dev/null || true)"
+      ACTUAL_BYTES="$(printf '%s' "$RAW_PLATFORM_MANIFEST" | sum_manifest_layer_sizes)"
+    else
+      ACTUAL_BYTES="0"
+    fi
+  fi
+
+  if [[ -z "$ACTUAL_BYTES" || "$ACTUAL_BYTES" == "0" ]]; then
+    # Last resort: support older buildx versions that expose layer sizes only
+    # through the templated manifest object.
     echo "[i] Falling back to platform-scoped imagetools inspect..." >&2
     ACTUAL_BYTES=$(
       docker buildx imagetools inspect "${IMAGE}@$(
         docker buildx imagetools inspect "${IMAGE}" \
-          --format "{{ range .Manifest.Manifests }}{{ if eq .Platform.OS \"$(echo "${PLATFORM}" | cut -d/ -f1)\" }}{{ if eq .Platform.Architecture \"$(echo "${PLATFORM}" | cut -d/ -f2)\" }}{{ .Digest }}{{ end }}{{ end }}{{ end }}" \
+          --format "{{ range .Manifest.Manifests }}{{ if eq .Platform.OS \"${PLATFORM_OS}\" }}{{ if eq .Platform.Architecture \"${PLATFORM_ARCH}\" }}{{ .Digest }}{{ end }}{{ end }}{{ end }}" \
           2>/dev/null | head -1
       )" --format "{{ range .Manifest.Layers }}{{ .Size }} {{ end }}" 2>/dev/null \
       | tr ' ' '\n' \

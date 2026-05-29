@@ -159,6 +159,54 @@ MOCK_EOF
   chmod +x "${MOCK_DIR}/docker"
 }
 
+make_mock_docker_platform_raw_index() {
+  # First inspect returns a multi-arch index; digest inspect returns the
+  # platform manifest with real layer sizes. This mirrors GHCR OCI output.
+  cat > "${MOCK_DIR}/docker" <<'MOCK_EOF'
+#!/usr/bin/env bash
+if [[ "$1" == "buildx" && "$2" == "imagetools" && "$3" == "inspect" ]]; then
+  ref="$4"
+  if [[ "$ref" == "mock-image:tag" ]]; then
+    cat <<'JSON'
+{
+  "schemaVersion": 2,
+  "mediaType": "application/vnd.oci.image.index.v1+json",
+  "manifests": [
+    {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:amd64digest",
+      "platform": { "os": "linux", "architecture": "amd64" }
+    },
+    {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:arm64digest",
+      "platform": { "os": "linux", "architecture": "arm64" }
+    }
+  ]
+}
+JSON
+    exit 0
+  fi
+  if [[ "$ref" == "mock-image:tag@sha256:amd64digest" ]]; then
+    cat <<'JSON'
+{
+  "schemaVersion": 2,
+  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+  "layers": [
+    { "size": 100000000 },
+    { "size": 57671680 }
+  ]
+}
+JSON
+    exit 0
+  fi
+  exit 1
+fi
+exit 0
+MOCK_EOF
+  chmod +x "${MOCK_DIR}/docker"
+}
+
 run_platform_test() {
   local name="$1"
   local expected_exit="$2"
@@ -189,6 +237,10 @@ run_platform_test "--platform: pass when platform-scoped size < budget" 0 "20971
 # --platform fail: two layers summing to 250 MB, budget 200 MB
 make_mock_docker_platform "150000000 112000000"
 run_platform_test "--platform: fail when platform-scoped size > budget" 1 "209715200"
+
+# --platform raw OCI index: resolve the platform digest then sum manifest layers
+make_mock_docker_platform_raw_index
+run_platform_test "--platform: resolves raw OCI index before summing layers" 0 "209715200"
 
 # --platform inspect failure → must exit 1 (REV5 regression guard)
 make_mock_docker_platform_fail
