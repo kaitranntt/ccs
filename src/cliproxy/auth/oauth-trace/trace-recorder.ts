@@ -1,7 +1,7 @@
 import { OAuthTraceEvent, OAuthTracePhase, OAuthTraceSink } from './trace-events';
 import { createMemorySink } from './sink-memory';
 import { createVerboseStdoutSink } from './sink-verbose-stdout';
-import { redactJsonShallow } from './redactor';
+import { redactJsonShallow, redactString } from './redactor';
 
 export interface OAuthTraceRecorder {
   record(
@@ -53,9 +53,9 @@ export function createOAuthTraceRecorder(options: OAuthTraceRecorderOptions): OA
   ): { code?: string; message: string } | undefined {
     if (!err) return undefined;
     if (err instanceof Error) {
-      return { message: err.message };
+      return { message: redactString(err.message) };
     }
-    return { code: err.code, message: err.message };
+    return { code: err.code, message: redactString(err.message) };
   }
 
   return {

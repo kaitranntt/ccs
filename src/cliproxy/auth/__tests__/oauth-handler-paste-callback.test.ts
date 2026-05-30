@@ -306,7 +306,11 @@ describe('handlePasteCallbackMode traceability', () => {
       },
       {
         url: /\/v0\/management\/oauth-callback$/,
-        response: { status: 'error', error: 'invalid_grant: expired code' },
+        response: {
+          status: 'error',
+          error:
+            'invalid_grant: bad redirect http://localhost:1455/callback?code=oauth-code-secret&state=upstream-state-secret',
+        },
         status: 400,
       },
     ]);

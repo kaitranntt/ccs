@@ -82,6 +82,7 @@ import { generateSessionId } from './project-selection-handler';
 import { createFileSink } from './oauth-trace/sink-file';
 import { createOAuthTraceRecorder, OAuthTracePhase, type OAuthTraceRecorder } from './oauth-trace';
 import { diagnoseFailure, formatErrorMessage } from './oauth-trace/diagnose-failure';
+import { redactString } from './oauth-trace/redactor';
 
 interface PasteCallbackStartData {
   url?: string;
@@ -889,8 +890,9 @@ export async function handlePasteCallbackMode(
     if (!callbackResponse.ok || callbackData.status === 'error') {
       const callbackError =
         callbackData.error || `OAuth callback failed with status ${callbackResponse.status}`;
-      console.log(fail(callbackError));
-      warnPossible403Ban(provider, callbackError);
+      const redactedCallbackError = redactString(callbackError);
+      console.log(fail(redactedCallbackError));
+      warnPossible403Ban(provider, redactedCallbackError);
       trace.record(
         OAuthTracePhase.Error,
         { status: callbackResponse.status },
@@ -915,8 +917,9 @@ export async function handlePasteCallbackMode(
     );
 
     if (tokenWaitError) {
-      console.log(fail(tokenWaitError));
-      warnPossible403Ban(provider, tokenWaitError);
+      const redactedTokenWaitError = redactString(tokenWaitError);
+      console.log(fail(redactedTokenWaitError));
+      warnPossible403Ban(provider, redactedTokenWaitError);
       trace.record(
         OAuthTracePhase.Error,
         {},

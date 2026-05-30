@@ -120,9 +120,29 @@ describe('createOAuthTraceRecorder', () => {
     expect(snap[0].error).toEqual({ code: 'E1', message: 'boom' });
   });
 
-  test('Error instance accepted', () => {
+  test('redacts OAuth secrets from error messages before they reach sinks', () => {
+    const lines: string[] = [];
+    const { rec } = makeRecorder(true, lines);
+    rec.record(OAuthTracePhase.Error, undefined, {
+      code: 'CALLBACK_REJECTED',
+      message:
+        'bad redirect http://localhost:1455/callback?code=AUTHCODE_SECRET&state=STATE_SECRET',
+    });
+
+    const blob = JSON.stringify(rec.snapshot()) + '\n' + lines.join('\n');
+    expect(blob).not.toContain('AUTHCODE_SECRET');
+    expect(blob).not.toContain('STATE_SECRET');
+    expect(blob).toContain(REDACTED_PLACEHOLDER);
+  });
+
+  test('Error instance accepted and redacted', () => {
     const { rec } = makeRecorder();
-    rec.record(OAuthTracePhase.Error, undefined, new Error('plain'));
-    expect(rec.snapshot()[0].error?.message).toBe('plain');
+    rec.record(
+      OAuthTracePhase.Error,
+      undefined,
+      new Error('bad redirect http://localhost:1455/callback?code=AUTHCODE_SECRET')
+    );
+    expect(rec.snapshot()[0].error?.message).toContain(REDACTED_PLACEHOLDER);
+    expect(rec.snapshot()[0].error?.message).not.toContain('AUTHCODE_SECRET');
   });
 });
