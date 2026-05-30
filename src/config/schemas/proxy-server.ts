@@ -183,7 +183,7 @@ export const DEFAULT_IMAGE_ANALYSIS_CONFIG: ImageAnalysisConfig = {
     codex: 'gpt-5.1-codex-mini',
     kiro: 'kiro-claude-haiku-4-5',
     ghcp: 'claude-haiku-4.5',
-    claude: 'claude-haiku-4.5-20251001',
+    claude: 'claude-haiku-4-5-20251001',
     qwen: 'vision-model',
     iflow: 'qwen3-vl-plus',
     kimi: 'vision-model',

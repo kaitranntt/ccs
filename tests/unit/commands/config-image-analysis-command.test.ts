@@ -8,6 +8,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { DEFAULT_IMAGE_ANALYSIS_CONFIG } from '../../../src/config/schemas/proxy-server';
 
 // Create temp directory for test isolation
 let testDir: string;
@@ -213,26 +214,12 @@ image_analysis:
 
   describe('default configuration', () => {
     it('should have correct default values', () => {
-      // These are the expected defaults from unified-config-types.ts
-      const defaultConfig = {
-        enabled: true,
-        timeout: 60,
-        provider_models: {
-          agy: 'gemini-3-1-flash-preview',
-          gemini: 'gemini-3-flash-preview',
-          codex: 'gpt-5.1-codex-mini',
-          kiro: 'kiro-claude-haiku-4-5',
-          ghcp: 'claude-haiku-4.5',
-          claude: 'claude-haiku-4-5-20251001',
-          qwen: 'vision-model',
-          iflow: 'qwen3-vl-plus',
-          kimi: 'vision-model',
-        },
-      };
-
-      expect(defaultConfig.enabled).toBe(true);
-      expect(defaultConfig.timeout).toBe(60);
-      expect(Object.keys(defaultConfig.provider_models).length).toBe(9);
+      expect(DEFAULT_IMAGE_ANALYSIS_CONFIG.enabled).toBe(true);
+      expect(DEFAULT_IMAGE_ANALYSIS_CONFIG.timeout).toBe(60);
+      expect(DEFAULT_IMAGE_ANALYSIS_CONFIG.provider_models.claude).toBe(
+        'claude-haiku-4-5-20251001'
+      );
+      expect(Object.keys(DEFAULT_IMAGE_ANALYSIS_CONFIG.provider_models).length).toBe(9);
     });
   });
 
