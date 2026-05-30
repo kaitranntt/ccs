@@ -6,9 +6,11 @@ import {
 } from '../../../ui/src/lib/cliproxy-version-risk';
 
 describe('cliproxy-version-risk helpers', () => {
-  it('compares versions while ignoring release suffixes', () => {
+  it('compares fork release suffixes after core versions', () => {
     expect(compareCliproxyVersions('6.6.88', '6.6.81-0')).toBe(1);
     expect(compareCliproxyVersions('6.6.81-0', '6.6.81')).toBe(0);
+    expect(compareCliproxyVersions('7.1.31-1', '7.1.31-0')).toBe(1);
+    expect(compareCliproxyVersions('7.1.31-0', '7.1.31-1')).toBe(-1);
     expect(compareCliproxyVersions('6.6.80', '6.6.81')).toBe(-1);
   });
 

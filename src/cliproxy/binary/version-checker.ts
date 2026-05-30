@@ -33,28 +33,49 @@ interface FetchAllVersionsDeps {
   fetchJsonFn?: typeof fetchJson;
 }
 
+interface ParsedCliproxyVersion {
+  major: number;
+  minor: number;
+  patch: number;
+  forkRelease: number;
+}
+
+function parseCliproxyVersion(version: string): ParsedCliproxyVersion {
+  const normalized = version.trim().replace(/^v/, '');
+  const [coreVersion, forkReleaseValue = '0'] = normalized.split('-', 2);
+  const [major = 0, minor = 0, patch = 0] = coreVersion
+    .split('.')
+    .map((part) => parseInt(part, 10) || 0);
+  const forkRelease = /^\d+$/.test(forkReleaseValue) ? parseInt(forkReleaseValue, 10) || 0 : 0;
+
+  return { major, minor, patch, forkRelease };
+}
+
+function compareVersionPart(a: number, b: number): number {
+  if (a > b) return 1;
+  if (a < b) return -1;
+  return 0;
+}
+
+export function compareCliproxyVersions(a: string, b: string): number {
+  const left = parseCliproxyVersion(a);
+  const right = parseCliproxyVersion(b);
+
+  return (
+    compareVersionPart(left.major, right.major) ||
+    compareVersionPart(left.minor, right.minor) ||
+    compareVersionPart(left.patch, right.patch) ||
+    compareVersionPart(left.forkRelease, right.forkRelease)
+  );
+}
+
 /**
- * Compare semver versions (true if latest > current)
- * Handles CLIProxyAPIPlus versioning: strips -0 suffix before comparison
+ * Compare CLIProxy release versions (true if latest > current).
+ * Missing fork suffixes are treated as -0, while patched fork suffixes such as
+ * 7.1.31-1 still sort newer than 7.1.31-0.
  */
 export function isNewerVersion(latest: string, current: string): boolean {
-  // Strip -0 suffix from CLIProxyAPIPlus versions (e.g., "6.6.40-0" -> "6.6.40")
-  const cleanLatest = latest.replace(/-\d+$/, '');
-  const cleanCurrent = current.replace(/-\d+$/, '');
-
-  const latestParts = cleanLatest.split('.').map((p) => parseInt(p, 10) || 0);
-  const currentParts = cleanCurrent.split('.').map((p) => parseInt(p, 10) || 0);
-
-  // Pad arrays to same length
-  while (latestParts.length < 3) latestParts.push(0);
-  while (currentParts.length < 3) currentParts.push(0);
-
-  for (let i = 0; i < 3; i++) {
-    if (latestParts[i] > currentParts[i]) return true;
-    if (latestParts[i] < currentParts[i]) return false;
-  }
-
-  return false; // Equal versions
+  return compareCliproxyVersions(latest, current) > 0;
 }
 
 /**
