@@ -141,6 +141,19 @@ describe('deriveTraceGroups', () => {
     expect(result.every((r) => r.kind === 'leaf' && r.repeatCount === undefined)).toBe(true);
   });
 
+  it('keeps adjacent leaves with tuple fields that differ only by spaces as separate rows', () => {
+    const result = deriveTraceGroups(
+      leafEntries(
+        { id: '1', timestamp: 't1', event: 'auth', message: 'failed login' },
+        { id: '2', timestamp: 't2', event: 'auth failed', message: 'login' }
+      )
+    );
+
+    expect(result).toHaveLength(2);
+    expect(result.every((r) => r.kind === 'leaf' && r.repeatCount === undefined)).toBe(true);
+    expect(result.map((r) => (r.kind === 'leaf' ? r.entry.id : 'trace'))).toEqual(['2', '1']);
+  });
+
   it('display-sorts items reverse-chronologically', () => {
     // Use distinct events so leaves don't coalesce — testing display sort,
     // not coalesce.

@@ -30,7 +30,7 @@ export type DerivedItem = LeafItem | TraceGroup;
  * stay individually inspectable.
  */
 function coalesceKey(entry: LogsEntry): string {
-  return [
+  return JSON.stringify([
     entry.event ?? '',
     entry.message ?? '',
     entry.stage ?? '',
@@ -38,7 +38,7 @@ function coalesceKey(entry: LogsEntry): string {
     entry.level,
     entry.requestId ?? '',
     entry.source ?? '',
-  ].join(' ');
+  ]);
 }
 
 /**
