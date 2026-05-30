@@ -4,7 +4,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useCliproxyAuth } from '@/hooks/use-cliproxy';
-import { useCliproxyStats } from '@/hooks/use-cliproxy-stats';
+import { useCliproxyStats, useCliproxyStatus } from '@/hooks/use-cliproxy-stats';
 import { buildAccountVisualGroups } from '@/lib/account-visual-groups';
 import { getProviderDisplayName } from '@/lib/provider-config';
 import type { AuthStatus, OAuthAccount } from '@/lib/api-client';
@@ -26,14 +26,25 @@ export interface AuthMonitorData {
 /** Hook for computing auth monitor data from CLIProxy auth and stats */
 export function useAuthMonitorData(): AuthMonitorData {
   const { data, isLoading, error } = useCliproxyAuth();
-  const { data: statsData, isLoading: statsLoading, dataUpdatedAt } = useCliproxyStats();
+  const { data: proxyStatus } = useCliproxyStatus();
+  const statsEnabled = proxyStatus?.running === true;
+  const {
+    data: statsData,
+    isLoading: statsLoading,
+    dataUpdatedAt,
+  } = useCliproxyStats(statsEnabled);
+  const activeStatsData = statsEnabled ? statsData : undefined;
+  const activeStatsUpdatedAt = statsEnabled ? dataUpdatedAt : 0;
   const [timeSinceUpdate, setTimeSinceUpdate] = useState('');
 
   // Live countdown showing time since last data update
   useEffect(() => {
-    if (!dataUpdatedAt) return;
+    if (!activeStatsUpdatedAt) {
+      setTimeSinceUpdate('');
+      return;
+    }
     const updateTime = () => {
-      const diff = Math.floor((Date.now() - dataUpdatedAt) / 1000);
+      const diff = Math.floor((Date.now() - activeStatsUpdatedAt) / 1000);
       if (diff < 60) {
         setTimeSinceUpdate(`${diff}s ago`);
       } else {
@@ -43,7 +54,7 @@ export function useAuthMonitorData(): AuthMonitorData {
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
-  }, [dataUpdatedAt]);
+  }, [activeStatsUpdatedAt]);
 
   // Transform auth status data into account rows
   const { accounts, totalSuccess, totalFailure, totalRequests, providerStats } = useMemo(() => {
@@ -79,7 +90,7 @@ export function useAuthMonitorData(): AuthMonitorData {
         provider: account.provider || status.provider,
       }));
 
-      buildAccountVisualGroups(normalizedAccounts, statsData).forEach((groupedAccount) => {
+      buildAccountVisualGroups(normalizedAccounts, activeStatsData).forEach((groupedAccount) => {
         tSuccess += groupedAccount.successCount;
         tFailure += groupedAccount.failureCount;
         providerData.success += groupedAccount.successCount;
@@ -131,7 +142,7 @@ export function useAuthMonitorData(): AuthMonitorData {
       totalRequests: tSuccess + tFailure,
       providerStats: providerStatsArr,
     };
-  }, [data?.authStatus, statsData]);
+  }, [data?.authStatus, activeStatsData]);
 
   const overallSuccessRate =
     totalRequests > 0 ? Math.round((totalSuccess / totalRequests) * 100) : 100;
@@ -143,7 +154,7 @@ export function useAuthMonitorData(): AuthMonitorData {
     totalRequests,
     providerStats,
     overallSuccessRate,
-    isLoading: isLoading || statsLoading,
+    isLoading: isLoading || (statsEnabled && statsLoading),
     error: error ?? null,
     timeSinceUpdate,
   };
