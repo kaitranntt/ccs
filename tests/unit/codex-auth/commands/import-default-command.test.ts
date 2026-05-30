@@ -8,7 +8,7 @@
  *  - cliproxy-format source → rejects with clear message
  *  - torn-write retry: truncated JSON twice then full → succeeds on 3rd read
  *  - persistent torn state → clean error, not silent corruption
- *  - pgrep mock returning PID → warns + refuses without --force-while-running
+ *  - process-table Codex PID → warns + refuses without --force-while-running
  *  - --force-while-running bypasses pgrep check
  *  - --with-history copies history.jsonl + sessions/
  *  - --with-history default false → not copied
@@ -54,9 +54,9 @@ beforeEach(() => {
   process.env.CCS_HOME = ccsHome;
   process.env.LEGACY_CODEX_HOME = legacyCodexHome;
 
-  // Default: pgrep finds nothing (no Codex running). Tests that need a positive
-  // result override this per-test. Without this default, `pgrep -f codex` on a
-  // dev machine matches the Claude Code process itself and exits early with code 7.
+  // Default: process-table lookup finds nothing (no Codex running). Tests that
+  // need a positive result override this per-test. This keeps local developer
+  // processes from affecting import-default tests.
   spyOn(childProcess, 'spawnSync').mockReturnValue({
     status: 1,
     stdout: '',
@@ -78,9 +78,8 @@ afterEach(() => {
 });
 
 async function makeCtx() {
-  const { CodexProfileRegistry } = await import(
-    '../../../../src/codex-auth/codex-profile-registry'
-  );
+  const { CodexProfileRegistry } =
+    await import('../../../../src/codex-auth/codex-profile-registry');
   return {
     registry: new CodexProfileRegistry(),
     version: '0.0.0-test',
@@ -128,21 +127,10 @@ function captureOutput(): { stderr: string[]; restore: () => void } {
   };
 }
 
-function mockProcessTable(pgrepStdout: string, psStdout: string) {
+function mockProcessTable(psStdout: string) {
   spyOn(childProcess, 'spawnSync').mockImplementation(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (cmd: string, _args: string[]): any => {
-      if (cmd === 'pgrep') {
-        return {
-          status: pgrepStdout.trim().length > 0 ? 0 : 1,
-          stdout: pgrepStdout,
-          stderr: '',
-          pid: 0,
-          output: [],
-          signal: null,
-          error: undefined,
-        };
-      }
       if (cmd === 'ps') {
         return {
           status: psStdout.trim().length > 0 ? 0 : 1,
@@ -171,9 +159,8 @@ function mockProcessTable(pgrepStdout: string, psStdout: string) {
 
 describe('import-default — missing legacy auth.json', () => {
   it('exits with clear error when ~/.codex/auth.json does not exist', async () => {
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
 
     let exitCalled = false;
@@ -201,9 +188,8 @@ describe('import-default — option validation', () => {
   it('rejects unsupported flags before importing legacy auth', async () => {
     fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
 
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
 
     let exitCount = 0;
@@ -252,9 +238,8 @@ describe('import-default — profile collision without --force', () => {
     // Write valid legacy auth
     fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
 
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
     // Pre-create the profile
     ctx.registry.createProfile('myprofile');
@@ -284,9 +269,8 @@ describe('import-default — --force overwrites and creates backup', () => {
     // Write valid legacy auth
     fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
 
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
 
     // First import (no --force needed since profile doesn't exist)
@@ -338,9 +322,8 @@ describe('import-default — cliproxy-format rejection', () => {
     });
     fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), cliproxyAuth);
 
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
 
     let exitCalled = false;
@@ -370,9 +353,8 @@ describe('import-default — torn-write retry', () => {
     // Write truncated JSON initially — simulates torn write mid-file
     fs.writeFileSync(authPath, '{truncated');
 
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
 
     // After 50ms (before 2nd retry at 100ms) replace with valid JSON
@@ -397,9 +379,8 @@ describe('import-default — torn-write retry', () => {
     // Write persistently invalid JSON — all retries will fail
     fs.writeFileSync(authPath, '{always-truncated');
 
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
 
     let exitCalled = false;
@@ -426,9 +407,8 @@ describe('import-default — torn-write retry', () => {
     const authPath = path.join(legacyCodexHome, 'auth.json');
     fs.writeFileSync(authPath, JSON.stringify({ tokens: { id_token: 'header.not-json.sig' } }));
 
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
 
     let exitCalled = false;
@@ -455,9 +435,8 @@ describe('import-default — torn-write retry', () => {
     const authPath = path.join(legacyCodexHome, 'auth.json');
     fs.writeFileSync(authPath, JSON.stringify({ tokens: { id_token: 'h.e30$.s' } }));
 
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
 
     let exitCalled = false;
@@ -485,9 +464,8 @@ describe('import-default — torn-write retry', () => {
     const [header, payload] = VALID_JWT.split('.');
     fs.writeFileSync(authPath, JSON.stringify({ tokens: { id_token: `${header}.${payload}.a` } }));
 
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
 
     let exitCalled = false;
@@ -512,14 +490,13 @@ describe('import-default — torn-write retry', () => {
 });
 
 describe('import-default — Codex running detection', () => {
-  it('warns and refuses when pgrep finds a codex PID', async () => {
+  it('warns and refuses when process table finds a same-user Codex PID', async () => {
     fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
 
-    mockProcessTable('12345\n', '12345 /usr/local/bin/codex login\n');
+    mockProcessTable(`12345 ${process.getuid()} /usr/local/bin/codex login\n`);
 
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
 
     let exitCalled = false;
@@ -546,11 +523,10 @@ describe('import-default — Codex running detection', () => {
   it('proceeds with --force-while-running even when Codex is running', async () => {
     fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
 
-    mockProcessTable('12345\n', '12345 /usr/local/bin/codex login\n');
+    mockProcessTable(`12345 ${process.getuid()} /usr/local/bin/codex login\n`);
 
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
 
     const restore = silenceConsole();
@@ -567,11 +543,10 @@ describe('import-default — Codex running detection', () => {
   it('warns and refuses when Codex is running through a node shim', async () => {
     fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
 
-    mockProcessTable('12345\n', '12345 /usr/bin/node /usr/local/bin/codex login\n');
+    mockProcessTable(`12345 ${process.getuid()} /usr/bin/node /usr/local/bin/codex login\n`);
 
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
 
     let exitCalled = false;
@@ -595,14 +570,13 @@ describe('import-default — Codex running detection', () => {
     expect(ctx.registry.hasProfile('nodeshim')).toBe(false);
   });
 
-  it('ignores pgrep false positives that are not Codex executables', async () => {
+  it('ignores process-table false positives that are not Codex executables', async () => {
     fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
 
-    mockProcessTable('11111\n', '11111 /usr/bin/node /tmp/codex-auth-helper.js\n');
+    mockProcessTable(`11111 ${process.getuid()} /usr/bin/node /tmp/codex-auth-helper.js\n`);
 
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
 
     const restore = silenceConsole();
@@ -614,6 +588,47 @@ describe('import-default — Codex running detection', () => {
 
     expect(ctx.registry.hasProfile('falsepositive')).toBe(true);
   });
+
+  it('ignores same-process codex-runtime invocation paths', async () => {
+    fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
+
+    mockProcessTable(
+      `${process.pid} ${process.getuid()} node /workspace/ccs/dist/bin/codex-runtime.js auth import-default self\n`
+    );
+
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
+    const ctx = await makeCtx();
+
+    const restore = silenceConsole();
+    try {
+      await handleImportDefaultCodex(ctx, ['selfmatch']);
+    } finally {
+      restore();
+    }
+
+    expect(ctx.registry.hasProfile('selfmatch')).toBe(true);
+  });
+
+  it('ignores Codex processes owned by another uid', async () => {
+    fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
+
+    const otherUid = process.getuid() + 1;
+    mockProcessTable(`22222 ${otherUid} /usr/local/bin/codex login\n`);
+
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
+    const ctx = await makeCtx();
+
+    const restore = silenceConsole();
+    try {
+      await handleImportDefaultCodex(ctx, ['otheruid']);
+    } finally {
+      restore();
+    }
+
+    expect(ctx.registry.hasProfile('otheruid')).toBe(true);
+  });
 });
 
 describe('import-default — --with-history', () => {
@@ -624,9 +639,8 @@ describe('import-default — --with-history', () => {
     fs.mkdirSync(sessionsDir, { recursive: true });
     fs.writeFileSync(path.join(sessionsDir, 'sess1.json'), '{}');
 
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
 
     const restore = silenceConsole();
@@ -645,9 +659,8 @@ describe('import-default — --with-history', () => {
     fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
     fs.writeFileSync(path.join(legacyCodexHome, 'history.jsonl'), '{"prompt":"hello"}\n');
 
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
 
     const restore = silenceConsole();
@@ -666,9 +679,8 @@ describe('import-default — atomic write', () => {
   it('leaves no tmp file after successful import', async () => {
     fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
 
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
 
     const restore = silenceConsole();
@@ -689,9 +701,8 @@ describe('import-default — happy path end-to-end', () => {
   it('registers profile with decoded email in registry', async () => {
     fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
 
-    const { handleImportDefaultCodex } = await import(
-      '../../../../src/codex-auth/commands/import-default-command'
-    );
+    const { handleImportDefaultCodex } =
+      await import('../../../../src/codex-auth/commands/import-default-command');
     const ctx = await makeCtx();
 
     const restore = silenceConsole();

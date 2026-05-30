@@ -3,7 +3,7 @@
  *
  * Migrates legacy ~/.codex/auth.json into a named profile (non-destructive).
  * Implements C3 torn-write protection: read-with-retry + JWT-shape validation
- * + pgrep Codex-running detection + atomic write.
+ * + current-user Codex-running detection + atomic write.
  *
  * Usage: ccsx auth import-default <name> [--with-history] [--force] [--force-while-running]
  */
@@ -40,51 +40,37 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Detect a running `codex` process via pgrep + ps validation (best-effort, never throws).
- * Returns the PID string if found, null otherwise.
+ * Detect a running Codex CLI process from the current user's process table
+ * (best-effort, never throws). Returns the PID string if found, null otherwise.
  */
 function detectCodexRunning(): string | null {
   try {
-    const result = childProcess.spawnSync('pgrep', ['-f', 'codex'], {
-      encoding: 'utf8',
-      timeout: 2000,
-    });
-    if (result.status !== 0 || !result.stdout || result.stdout.trim().length === 0) {
-      return null;
-    }
-
-    const pids = parsePgrepPids(result.stdout);
-    if (pids.length === 0) return null;
-
-    const psResult = childProcess.spawnSync(
+    const result = childProcess.spawnSync(
       'ps',
-      ['-p', pids.join(','), '-o', 'pid=', '-o', 'command='],
+      ['-A', '-o', 'pid=', '-o', 'uid=', '-o', 'command='],
       {
         encoding: 'utf8',
         timeout: 2000,
       }
     );
-    if (psResult.status !== 0 || !psResult.stdout) return null;
-    return selectCodexPidFromPsOutput(psResult.stdout, pids);
+    if (result.status !== 0 || !result.stdout || result.stdout.trim().length === 0) {
+      return null;
+    }
+
+    return selectCodexPidFromPsOutput(result.stdout);
   } catch {
     return null;
   }
 }
 
-function parsePgrepPids(stdout: string): string[] {
-  return stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((pid) => /^\d+$/.test(pid) && pid !== String(process.pid));
-}
-
-function selectCodexPidFromPsOutput(stdout: string, candidatePids: string[]): string | null {
-  const candidates = new Set(candidatePids);
+function selectCodexPidFromPsOutput(stdout: string): string | null {
+  const currentUid = typeof process.getuid === 'function' ? process.getuid() : null;
   for (const line of stdout.split(/\r?\n/)) {
-    const match = line.match(/^\s*(\d+)\s+(.+?)\s*$/);
+    const match = line.match(/^\s*(\d+)\s+(\d+)\s+(.+?)\s*$/);
     if (!match) continue;
-    const [, pid, command] = match;
-    if (!pid || !command || !candidates.has(pid)) continue;
+    const [, pid, uid, command] = match;
+    if (!pid || !uid || !command || pid === String(process.pid)) continue;
+    if (currentUid !== null && uid !== String(currentUid)) continue;
     if (isLikelyCodexProcessCommand(command)) return pid;
   }
   return null;
