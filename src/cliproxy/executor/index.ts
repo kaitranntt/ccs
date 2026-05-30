@@ -62,7 +62,12 @@ import {
   resolveRuntimeThinkingOverride,
 } from './thinking-override-resolver';
 import { shouldStartHttpsTunnel } from './https-tunnel-policy';
-import { filterCcsFlags, parseExecutorFlags, validateFlagCombinations } from './arg-parser';
+import {
+  filterCcsFlags,
+  parseExecutorFlags,
+  validateFlagCombinations,
+  withIsolatedFailureExitCode,
+} from './arg-parser';
 import { resolveExecutorProxy } from './proxy-resolver';
 import { buildProxyChain } from './proxy-chain-builder';
 import { warnBrokenModels } from './model-warnings';
@@ -153,16 +158,20 @@ export async function execClaudeWithCLIProxy(
   let sessionId: string | undefined;
 
   // 2. Parse all CCS executor flags (extracted to arg-parser.ts)
-  const parsedFlags = parseExecutorFlags(argsWithoutProxy, {
-    provider,
-    compositeProviders,
-    unifiedConfig,
-  });
-  if (process.exitCode === 1) return;
+  const { result: parsedFlags, failed: parseFailed } = withIsolatedFailureExitCode(() =>
+    parseExecutorFlags(argsWithoutProxy, {
+      provider,
+      compositeProviders,
+      unifiedConfig,
+    })
+  );
+  if (parseFailed) return;
 
   // Validate cross-flag combinations (exits with code 1 on violation)
-  validateFlagCombinations(parsedFlags, { provider, compositeProviders }, argsWithoutProxy);
-  if (process.exitCode === 1) return;
+  const { failed: validationFailed } = withIsolatedFailureExitCode(() =>
+    validateFlagCombinations(parsedFlags, { provider, compositeProviders }, argsWithoutProxy)
+  );
+  if (validationFailed) return;
 
   const {
     forceConfig,

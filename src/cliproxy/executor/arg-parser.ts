@@ -179,6 +179,36 @@ export interface ParsedExecutorFlags {
 }
 
 /**
+ * Run a parser/validator step with a fresh exitCode sentinel.
+ *
+ * The parser and validator preserve legacy behavior by setting
+ * process.exitCode=1 for recoverable flag errors. Because process.exitCode is
+ * process-global state, callers must not treat an ambient stale value as a new
+ * parser failure. This helper temporarily clears the sentinel, reports whether
+ * this operation set it to 1, and restores the previous value when no new
+ * failure occurred.
+ */
+export function withIsolatedFailureExitCode<T>(operation: () => T): {
+  result: T;
+  failed: boolean;
+} {
+  const previousExitCode = process.exitCode;
+  process.exitCode = 0;
+
+  let failed = false;
+  let result!: T;
+  try {
+    result = operation();
+    failed = process.exitCode === 1;
+    return { result, failed };
+  } finally {
+    if (!failed) {
+      process.exitCode = previousExitCode ?? 0;
+    }
+  }
+}
+
+/**
  * Parse all CCS executor flags from args.
  *
  * Exits with code 1 (process.exitCode = 1 + return) on invalid flag values.

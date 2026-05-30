@@ -17,6 +17,7 @@ import {
   filterCcsFlags,
   parseExecutorFlags,
   validateFlagCombinations,
+  withIsolatedFailureExitCode,
   type ParsedExecutorFlags,
 } from '../arg-parser';
 import type { UnifiedConfig } from '../../../config/unified-config-types';
@@ -154,6 +155,58 @@ describe('CCS_FLAGS and filterCcsFlags', () => {
   it('filterCcsFlags strips --1m= and --no-1m= inline forms', () => {
     expect(filterCcsFlags(['--1m=true'])).toEqual([]);
     expect(filterCcsFlags(['--no-1m=true'])).toEqual([]);
+  });
+});
+
+// ── withIsolatedFailureExitCode ─────────────────────────────────────────────────
+
+describe('withIsolatedFailureExitCode', () => {
+  let originalExitCode: number | undefined;
+  let errorSpy: ReturnType<typeof jest.spyOn>;
+
+  beforeEach(() => {
+    originalExitCode = process.exitCode as number | undefined;
+    errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    process.exitCode = originalExitCode ?? 0;
+    errorSpy.mockRestore();
+  });
+
+  function makeCtx(provider = 'gemini', compositeProviders: string[] = []) {
+    return { provider, compositeProviders, unifiedConfig: makeEmptyUnifiedConfig() };
+  }
+
+  it('does not report ambient exitCode=1 as a fresh parser failure', () => {
+    process.exitCode = 1;
+
+    const { result, failed } = withIsolatedFailureExitCode(() =>
+      parseExecutorFlags(['--accounts'], makeCtx())
+    );
+
+    expect(failed).toBe(false);
+    expect(result.showAccounts).toBe(true);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('reports a fresh validation failure even when exitCode was already 1', () => {
+    const parsedFlags = parseExecutorFlags(
+      ['--gitlab-url', 'https://gitlab.example.com'],
+      makeCtx()
+    );
+    process.exitCode = 1;
+
+    const { failed } = withIsolatedFailureExitCode(() =>
+      validateFlagCombinations(parsedFlags, { provider: 'gemini', compositeProviders: [] }, [
+        '--gitlab-url',
+        'https://gitlab.example.com',
+      ])
+    );
+
+    expect(failed).toBe(true);
+    expect(process.exitCode).toBe(1);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('--gitlab-url'));
   });
 });
 
