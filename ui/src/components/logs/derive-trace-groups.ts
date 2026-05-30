@@ -17,20 +17,30 @@ export interface LeafItem {
 
 export type DerivedItem = LeafItem | TraceGroup;
 
+function stableStringify(value: unknown): string {
+  if (value === undefined) return '';
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+
+  return `{${Object.entries(value as Record<string, unknown>)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`)
+    .join(',')}}`;
+}
+
 /**
- * Tuple key for coalescing standalone leaves. Includes `message` and
- * `source` so two adjacent logs that share event/module/level but report
- * different content (or come from a different service) stay distinct
- * (e.g. `User logged in: alice` and `User logged in: bob`). Excludes
- * `latencyMs` and `metadata` because those drift per request even on
- * truly redundant polls — including them would prevent any coalescing.
+ * Tuple key for coalescing standalone leaves. The row/detail UI exposes more
+ * than event/module/level, so every inspectable payload field must participate
+ * in equality; otherwise two adjacent logs with different metadata, context,
+ * error, or latency could collapse into one selectable row. `timestamp` stays
+ * out of the key because collapsed rows surface their time span separately.
  *
  * NB: this only applies to *leaves* (entries without `requestId`). Trace
  * children render uncoalesced so retries and duplicated-stage emissions
  * stay individually inspectable.
  */
 function coalesceKey(entry: LogsEntry): string {
-  return [
+  return JSON.stringify([
     entry.event ?? '',
     entry.message ?? '',
     entry.stage ?? '',
@@ -38,7 +48,13 @@ function coalesceKey(entry: LogsEntry): string {
     entry.level,
     entry.requestId ?? '',
     entry.source ?? '',
-  ].join(' ');
+    entry.runId ?? '',
+    String(entry.processId ?? ''),
+    String(entry.latencyMs ?? ''),
+    stableStringify(entry.context),
+    stableStringify(entry.metadata),
+    stableStringify(entry.error),
+  ]);
 }
 
 /**

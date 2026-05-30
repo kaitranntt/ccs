@@ -141,6 +141,65 @@ describe('deriveTraceGroups', () => {
     expect(result.every((r) => r.kind === 'leaf' && r.repeatCount === undefined)).toBe(true);
   });
 
+  it('keeps adjacent leaves with different detail payloads as separate rows', () => {
+    const result = deriveTraceGroups(
+      leafEntries(
+        {
+          id: '1',
+          timestamp: 't1',
+          event: 'poll',
+          message: 'same',
+          latencyMs: 25,
+          metadata: { attempt: 1, nested: { status: 'warm' } },
+          context: { account: 'alpha' },
+          error: { code: 'E_ONE', message: 'first' },
+        },
+        {
+          id: '2',
+          timestamp: 't2',
+          event: 'poll',
+          message: 'same',
+          latencyMs: 50,
+          metadata: { attempt: 2, nested: { status: 'cold' } },
+          context: { account: 'beta' },
+          error: { code: 'E_TWO', message: 'second' },
+        }
+      )
+    );
+
+    expect(result).toHaveLength(2);
+    expect(result.every((r) => r.kind === 'leaf' && r.repeatCount === undefined)).toBe(true);
+    expect(result.map((r) => (r.kind === 'leaf' ? r.entry.id : 'trace'))).toEqual(['2', '1']);
+  });
+
+  it('coalesces leaves with semantically identical structured payloads', () => {
+    const result = deriveTraceGroups(
+      leafEntries(
+        {
+          id: '1',
+          timestamp: 't1',
+          event: 'poll',
+          message: 'tick',
+          latencyMs: 25,
+          metadata: { b: 2, a: 1 },
+          context: { nested: { b: false, a: true } },
+        },
+        {
+          id: '2',
+          timestamp: 't2',
+          event: 'poll',
+          message: 'tick',
+          latencyMs: 25,
+          metadata: { a: 1, b: 2 },
+          context: { nested: { a: true, b: false } },
+        }
+      )
+    );
+
+    expect(result).toHaveLength(1);
+    expect((result[0] as LeafItem).repeatCount).toBe(2);
+  });
+
   it('display-sorts items reverse-chronologically', () => {
     // Use distinct events so leaves don't coalesce — testing display sort,
     // not coalesce.
