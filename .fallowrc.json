@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": [
+    "src/ccs.ts",
+    "src/bin/*.ts",
+    "src/**/*-daemon-entry.ts",
+    "lib/**/*.cjs"
+  ],
+  "ignorePatterns": [
+    "ui/**",
+    "dist/**",
+    "**/*.generated.ts"
+  ]
+}
