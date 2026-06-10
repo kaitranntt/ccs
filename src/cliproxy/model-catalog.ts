@@ -374,8 +374,8 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
         name: 'Claude Fable 5',
         description: 'Most powerful model',
         nativeImageInput: true,
-        // Новый тир выше Opus. Тот же adaptive-thinking surface, что и Opus 4.8:
-        // Anthropic принимает только уровни effort; budget_tokens отклоняется 400.
+        // New tier above Opus. Same adaptive-thinking surface as Opus 4.8:
+        // Anthropic accepts only effort levels; manual budget_tokens is rejected with 400.
         thinking: {
           type: 'levels',
           levels: ['low', 'medium', 'high', 'xhigh', 'max'],
