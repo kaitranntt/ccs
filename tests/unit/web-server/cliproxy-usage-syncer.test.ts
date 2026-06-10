@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import type { CliproxyUsageApiResponse } from '../../../src/cliproxy/services/stats-fetcher';
+import type {
+  CliproxyUsageApiResponse,
+  CliproxyManagementAuthFile,
+} from '../../../src/cliproxy/services/stats-fetcher';
 import { runWithScopedConfigDir } from '../../../src/utils/config-manager';
 import {
   loadCachedCliproxyData,
@@ -392,5 +395,110 @@ describe('cliproxy usage syncer', () => {
       expect(cached.daily[0].inputTokens).toBe(250);
       expect(cached.hourly[0].requestCount).toBe(1);
     });
+  });
+});
+
+// ============================================================================
+// Finding #3/#5: account attribution wired into syncer (accountMap passed to extractor)
+// ============================================================================
+
+describe('syncCliproxyUsage — account attribution (finding #3/#5)', () => {
+  let ccsDir2 = '';
+
+  beforeEach(() => {
+    ccsDir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-cliproxy-attr-'));
+    stopCliproxySync();
+  });
+
+  afterEach(() => {
+    stopCliproxySync();
+    fs.rmSync(ccsDir2, { recursive: true, force: true });
+  });
+
+  const TODAY = new Date().toISOString().slice(0, 10);
+
+  function buildResponseWithAuthIndex(authIndex: number): CliproxyUsageApiResponse {
+    return {
+      usage: {
+        apis: {
+          anthropic: {
+            models: {
+              'claude-sonnet-4-5': {
+                details: [
+                  {
+                    timestamp: `${TODAY}T10:00:00.000Z`,
+                    source: 'raw-source',
+                    auth_index: authIndex,
+                    tokens: {
+                      input_tokens: 1000,
+                      output_tokens: 500,
+                      reasoning_tokens: 0,
+                      cached_tokens: 0,
+                      total_tokens: 1500,
+                    },
+                    failed: false,
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+    };
+  }
+
+  it('persists accountId into snapshot when auth files are provided', async () => {
+    const authFiles: CliproxyManagementAuthFile[] = [
+      { auth_index: 0, provider: 'anthropic', email: 'alice@example.com' },
+    ];
+
+    await runWithScopedConfigDir(ccsDir2, async () => {
+      await syncCliproxyUsage(
+        () => Promise.resolve(buildResponseWithAuthIndex(0)),
+        () => Promise.resolve(authFiles)
+      );
+    });
+
+    const snapshotPath = path.join(ccsDir2, 'cache', 'cliproxy-usage', 'latest.json');
+    const snapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf-8')) as {
+      details: Array<{ accountId?: string }>;
+    };
+
+    expect(snapshot.details[0].accountId).toBe('alice@example.com');
+  });
+
+  it('falls back gracefully when auth-files fetch returns null (no throw, no accountId)', async () => {
+    await runWithScopedConfigDir(ccsDir2, async () => {
+      await syncCliproxyUsage(
+        () => Promise.resolve(buildResponseWithAuthIndex(0)),
+        () => Promise.resolve(null)
+      );
+    });
+
+    const snapshotPath = path.join(ccsDir2, 'cache', 'cliproxy-usage', 'latest.json');
+    expect(fs.existsSync(snapshotPath)).toBe(true);
+
+    const snapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf-8')) as {
+      details: Array<{ accountId?: string }>;
+    };
+    // accountId must be absent (not populated) when auth files unavailable
+    expect(snapshot.details[0].accountId).toBeUndefined();
+  });
+
+  it('falls back gracefully when auth-files fetch throws (no throw, no accountId)', async () => {
+    await runWithScopedConfigDir(ccsDir2, async () => {
+      await syncCliproxyUsage(
+        () => Promise.resolve(buildResponseWithAuthIndex(0)),
+        () => Promise.reject(new Error('network error'))
+      );
+    });
+
+    const snapshotPath = path.join(ccsDir2, 'cache', 'cliproxy-usage', 'latest.json');
+    expect(fs.existsSync(snapshotPath)).toBe(true);
+
+    const snapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf-8')) as {
+      details: Array<{ accountId?: string }>;
+    };
+    expect(snapshot.details[0].accountId).toBeUndefined();
   });
 });

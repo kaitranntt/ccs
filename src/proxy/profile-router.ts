@@ -11,6 +11,7 @@ export interface OpenAICompatProfileConfig {
   apiKey: string;
   provider: DroidProvider;
   insecure?: boolean;
+  forceOpenAIReasoningModel?: boolean;
   model?: string;
   opusModel?: string;
   sonnetModel?: string;
@@ -28,10 +29,16 @@ export interface OpenAICompatProfileEnv {
   ANTHROPIC_SMALL_FAST_MODEL?: string;
   CCS_DROID_PROVIDER?: string;
   CCS_OPENAI_PROXY_INSECURE?: string;
+  CCS_OPENAI_REASONING_MODEL?: string;
 }
 
 export function isOpenAICompatProvider(provider: DroidProvider | null): provider is DroidProvider {
   return provider === 'openai' || provider === 'generic-chat-completion-api';
+}
+
+function isTruthyEnv(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
 }
 
 export function resolveOpenAICompatProfileConfig(
@@ -63,9 +70,8 @@ export function resolveOpenAICompatProfileConfig(
     baseUrl,
     apiKey,
     provider,
-    insecure:
-      env.CCS_OPENAI_PROXY_INSECURE === '1' ||
-      env.CCS_OPENAI_PROXY_INSECURE?.toLowerCase() === 'true',
+    insecure: isTruthyEnv(env.CCS_OPENAI_PROXY_INSECURE),
+    forceOpenAIReasoningModel: isTruthyEnv(env.CCS_OPENAI_REASONING_MODEL),
     model: env.ANTHROPIC_MODEL?.trim() || undefined,
     opusModel: env.ANTHROPIC_DEFAULT_OPUS_MODEL?.trim() || undefined,
     sonnetModel: env.ANTHROPIC_DEFAULT_SONNET_MODEL?.trim() || undefined,

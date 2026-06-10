@@ -10,7 +10,11 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { fetchCliproxyUsageRaw } from '../../cliproxy/services/stats-fetcher';
+import {
+  fetchCliproxyUsageRaw,
+  fetchCliproxyAuthFiles,
+  buildAuthIndexToAccountMap,
+} from '../../cliproxy/services/stats-fetcher';
 import {
   buildCliproxyUsageHistoryAggregates,
   extractCliproxyUsageHistoryDetails,
@@ -42,6 +46,7 @@ type LegacyCliproxyUsageSnapshot = {
 };
 
 type FetchCliproxyUsageRaw = typeof fetchCliproxyUsageRaw;
+type FetchCliproxyAuthFiles = typeof fetchCliproxyAuthFiles;
 
 const SNAPSHOT_VERSION = 3;
 const SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -318,7 +323,8 @@ export async function loadCachedCliproxyData(): Promise<{
 }
 
 export async function syncCliproxyUsage(
-  fetchRaw: FetchCliproxyUsageRaw = fetchCliproxyUsageRaw
+  fetchRaw: FetchCliproxyUsageRaw = fetchCliproxyUsageRaw,
+  fetchAuthFiles: FetchCliproxyAuthFiles = fetchCliproxyAuthFiles
 ): Promise<void> {
   const raw = await fetchRaw();
 
@@ -327,8 +333,20 @@ export async function syncCliproxyUsage(
     return;
   }
 
+  // Build auth_index → account email map for attribution.
+  // Auth file fetch failure is non-fatal: fall back to undefined map (cost = 0).
+  let accountMap: Map<string, string> | undefined;
   try {
-    await writeSnapshotWithMerge(extractCliproxyUsageHistoryDetails(raw));
+    const authFiles = await fetchAuthFiles();
+    if (authFiles !== null) {
+      accountMap = buildAuthIndexToAccountMap(authFiles);
+    }
+  } catch {
+    // Auth files unavailable — proceed without account attribution
+  }
+
+  try {
+    await writeSnapshotWithMerge(extractCliproxyUsageHistoryDetails(raw, accountMap));
   } catch (err) {
     console.log(warn('Failed to write CLIProxy snapshot:') + ` ${(err as Error).message}`);
   }

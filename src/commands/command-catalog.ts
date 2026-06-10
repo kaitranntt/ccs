@@ -140,6 +140,12 @@ export const ROOT_COMMAND_CATALOG: readonly RootCommandEntry[] = [
     visibility: 'public',
   },
   {
+    name: 'bar',
+    summary: 'Install and launch the CCS macOS menu bar app',
+    group: 'operations',
+    visibility: 'public',
+  },
+  {
     name: 'sync',
     summary: 'Sync delegation commands and skills',
     group: 'operations',
@@ -336,6 +342,7 @@ export const COMMAND_FLAG_SUGGESTIONS: Readonly<Record<string, readonly string[]
   '--shell-completion': ['--bash', '--zsh', '--fish', '--powershell', '--force', '-f'],
   auth: ['--help', '-h'],
   api: ['--help', '-h'],
+  bar: ['launch', 'install', 'uninstall', 'version', '--version', '--help', '-h'],
   cleanup: CLEANUP_FLAGS,
   config: ['--help', '-h', '--port', '-p', '--host', '-H', '--dev'],
   cursor: ['--help', '-h'],

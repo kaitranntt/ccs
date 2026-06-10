@@ -28,6 +28,20 @@ describe('resolveOpenAICompatProfileConfig', () => {
     expect(result?.insecure).toBe(true);
   });
 
+  it('supports opt-in reasoning payload shaping for opaque OpenAI-compatible model IDs', () => {
+    const result = resolveOpenAICompatProfileConfig('gateway', '/tmp/gateway.settings.json', {
+      ANTHROPIC_BASE_URL: 'https://gateway.example.com/v1',
+      ANTHROPIC_AUTH_TOKEN: 'gateway-token',
+      ANTHROPIC_MODEL: 'b3f9a2c7e8d14f60',
+      CCS_DROID_PROVIDER: 'generic-chat-completion-api',
+      CCS_OPENAI_REASONING_MODEL: 'yes',
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.provider).toBe('generic-chat-completion-api');
+    expect(result?.forceOpenAIReasoningModel).toBe(true);
+  });
+
   it('ignores Anthropic-compatible profiles', () => {
     const result = resolveOpenAICompatProfileConfig('glm', '/tmp/glm.settings.json', {
       ANTHROPIC_BASE_URL: 'https://api.z.ai/api/anthropic',

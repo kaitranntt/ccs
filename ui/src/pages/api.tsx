@@ -22,6 +22,8 @@ import { OpenRouterBanner } from '@/components/profiles/openrouter-banner';
 import { OpenRouterQuickStart } from '@/components/profiles/openrouter-quick-start';
 import { OpenRouterPromoCard } from '@/components/profiles/openrouter-promo-card';
 import { AlibabaCodingPlanPromoCard } from '@/components/profiles/alibaba-coding-plan-promo-card';
+import { CcsBarBanner } from '@/components/profiles/ccs-bar-banner';
+import { CcsBarPromoCard } from '@/components/profiles/ccs-bar-promo-card';
 import {
   useProfiles,
   useDeleteProfile,
@@ -40,6 +42,15 @@ import { CopyButton } from '@/components/ui/copy-button';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+
+// CCS Bar is installed via the `ccs bar install` CLI command, not from the
+// dashboard. The promo CTA therefore opens the user-facing docs page where the
+// install/launch steps live, rather than triggering an in-app action.
+const CCS_BAR_DOCS_URL = 'https://github.com/kaitranntt/ccs/blob/main/docs/ccs-bar.md';
+
+function openCcsBarDocs() {
+  window.open(CCS_BAR_DOCS_URL, '_blank', 'noopener,noreferrer');
+}
 
 export function ApiPage() {
   const { t } = useTranslation();
@@ -213,6 +224,7 @@ export function ApiPage() {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <OpenRouterBanner onCreateClick={() => setCreateDialogOpen(true)} />
+      <CcsBarBanner onInstallClick={() => openCcsBarDocs()} />
       <div className="flex-1 flex min-h-0 overflow-hidden">
         <div className="w-80 border-r flex flex-col bg-muted/30">
           <div className="p-4 border-b bg-background">
@@ -363,6 +375,7 @@ export function ApiPage() {
               setCreateDialogOpen(true);
             }}
           />
+          <CcsBarPromoCard onInstallClick={() => openCcsBarDocs()} />
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col min-w-0 overflow-hidden">

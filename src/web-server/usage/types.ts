@@ -29,6 +29,8 @@ export interface DailyUsage {
   date: string;
   /** Stable CCS profile name when the source can be attributed to one. */
   profile?: string;
+  /** Account email/id when the source can be attributed to a specific CLIProxy account. */
+  accountId?: string;
   source: string;
   inputTokens: number;
   outputTokens: number;

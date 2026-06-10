@@ -31,15 +31,21 @@ function buildUpstreamHeaders(profile: OpenAICompatProfileConfig): Record<string
   };
 }
 
-function isDirectOpenAIReasoningChatModel(
+function isKnownOpenAIReasoningChatModel(model: string | undefined): boolean {
+  if (typeof model !== 'string') {
+    return false;
+  }
+
+  const normalized = model.trim().toLowerCase();
+  const modelName = normalized.split('/').pop() || normalized;
+  return DIRECT_OPENAI_REASONING_CHAT_MODEL.test(modelName);
+}
+
+function shouldShapeOpenAIReasoningChatPayload(
   profile: OpenAICompatProfileConfig,
   model: string | undefined
 ): boolean {
-  return (
-    profile.provider === 'openai' &&
-    typeof model === 'string' &&
-    DIRECT_OPENAI_REASONING_CHAT_MODEL.test(model.trim().toLowerCase())
-  );
+  return profile.forceOpenAIReasoningModel === true || isKnownOpenAIReasoningChatModel(model);
 }
 
 function isMiniMaxOpenAICompatProfile(profile: OpenAICompatProfileConfig): boolean {
@@ -124,7 +130,7 @@ function shapeUpstreamChatPayload(
     shaped = shapeMiniMaxChatPayload(shaped);
   }
 
-  if (!isDirectOpenAIReasoningChatModel(profile, shaped.model)) {
+  if (!shouldShapeOpenAIReasoningChatPayload(profile, shaped.model)) {
     return shaped;
   }
 

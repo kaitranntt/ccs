@@ -52,8 +52,20 @@ export interface ManualQuotaConfig {
   paused_accounts: string[];
   /** Force use of specific account (overrides auto-selection) */
   forced_default: string | null;
-  /** Lock to specific tier only */
-  tier_lock: string | null;
+  /**
+   * Per-provider tier lock map.
+   *
+   * Keys are provider IDs (e.g. "agy", "claude"). Values are the tier name to
+   * lock that provider to (e.g. "ultra", "pro"), or null to clear the lock for
+   * that provider.
+   *
+   * Only providers present in the map are affected; other providers retain
+   * normal tier-priority failover.  A null/absent map means no locks are active.
+   *
+   * Legacy shape (bare string | null): treated as no lock.  The old global
+   * string value predates per-provider locking and is ignored on read.
+   */
+  tier_lock: Record<string, string | null> | null;
 }
 
 /**
@@ -97,6 +109,27 @@ export const DEFAULT_MANUAL_QUOTA_CONFIG: ManualQuotaConfig = {
   forced_default: null,
   tier_lock: null,
 };
+
+/**
+ * Read the tier lock for a specific provider from a ManualQuotaConfig.
+ *
+ * Handles three cases:
+ *  1. tier_lock is null/undefined → no lock active for any provider
+ *  2. tier_lock is a Record (new shape) → return the value for this provider
+ *  3. tier_lock is a bare string (legacy shape, pre-per-provider) → treated as
+ *     no lock to avoid silently applying an old global lock to every provider
+ *
+ * @returns The tier string to lock to, or null (no lock).
+ */
+export function getTierLockForProvider(
+  manual: ManualQuotaConfig | undefined | null,
+  provider: string
+): string | null {
+  const tierLock = manual?.tier_lock;
+  if (!tierLock || typeof tierLock !== 'object') return null;
+  const value = (tierLock as Record<string, string | null>)[provider];
+  return value ?? null;
+}
 
 /**
  * Default runtime monitor configuration.

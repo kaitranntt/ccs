@@ -20,5 +20,10 @@ export { OpenRouterModelPicker } from './openrouter-model-picker';
 export { OpenRouterPromoCard } from './openrouter-promo-card';
 export { OpenRouterQuickStart } from './openrouter-quick-start';
 export { AlibabaCodingPlanPromoCard } from './alibaba-coding-plan-promo-card';
+
+// CCS Bar (native macOS menu-bar app) promo components
+export { CcsBarBanner } from './ccs-bar-banner';
+export { CcsBarPromoCard } from './ccs-bar-promo-card';
+
 export { ModelTierMapping } from './model-tier-mapping';
 export type { TierMapping } from './model-tier-mapping';

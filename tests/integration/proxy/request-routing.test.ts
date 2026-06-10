@@ -419,4 +419,126 @@ describe('openai proxy request routing', () => {
     expect(body.reasoning_effort).toBeUndefined();
     expect(body.tools?.length).toBe(1);
   });
+
+  it('keeps generic opaque model payloads unchanged unless reasoning shaping is opted in', async () => {
+    const hits: string[] = [];
+    const bodies: Array<{ label: string; body: unknown }> = [];
+    const upstreamPort = await startMockUpstream('gateway', hits, bodies);
+
+    const settingsPath = writeSettings('gateway', {
+      ANTHROPIC_BASE_URL: `http://127.0.0.1:${upstreamPort}`,
+      ANTHROPIC_AUTH_TOKEN: 'gateway_token',
+      ANTHROPIC_MODEL: 'b3f9a2c7e8d14f60',
+      CCS_DROID_PROVIDER: 'generic-chat-completion-api',
+    });
+
+    fs.writeFileSync(
+      path.join(tempDir, '.ccs', 'config.json'),
+      JSON.stringify({ profiles: { gateway: settingsPath } }, null, 2),
+      'utf8'
+    );
+
+    const profile: OpenAICompatProfileConfig = {
+      profileName: 'gateway',
+      settingsPath,
+      baseUrl: `http://127.0.0.1:${upstreamPort}`,
+      apiKey: 'gateway_token',
+      provider: 'generic-chat-completion-api',
+      model: 'b3f9a2c7e8d14f60',
+    };
+    proxyServer = startOpenAICompatProxyServer({
+      profile,
+      port: 0,
+      authToken: 'test-proxy-token',
+    });
+    proxyPort = await waitForServerListening(proxyServer);
+
+    const response = await requestProxy({
+      model: 'b3f9a2c7e8d14f60',
+      max_tokens: 1024,
+      metadata: { trace: 'abc' },
+      messages: [{ role: 'user', content: 'stay compatible' }],
+    });
+
+    expect(response.status).toBe(200);
+    expect(hits).toEqual(['gateway']);
+
+    const body = bodies[0]?.body as {
+      max_tokens?: number;
+      max_completion_tokens?: number;
+      metadata?: unknown;
+    };
+    expect(body.max_tokens).toBe(1024);
+    expect(body.max_completion_tokens).toBeUndefined();
+    expect(body.metadata).toEqual({ trace: 'abc' });
+  });
+
+  it('shapes generic opaque model payloads when reasoning shaping is opted in', async () => {
+    const hits: string[] = [];
+    const bodies: Array<{ label: string; body: unknown }> = [];
+    const upstreamPort = await startMockUpstream('gateway', hits, bodies);
+
+    const settingsPath = writeSettings('gateway', {
+      ANTHROPIC_BASE_URL: `http://127.0.0.1:${upstreamPort}`,
+      ANTHROPIC_AUTH_TOKEN: 'gateway_token',
+      ANTHROPIC_MODEL: 'b3f9a2c7e8d14f60',
+      CCS_DROID_PROVIDER: 'generic-chat-completion-api',
+      CCS_OPENAI_REASONING_MODEL: '1',
+    });
+
+    fs.writeFileSync(
+      path.join(tempDir, '.ccs', 'config.json'),
+      JSON.stringify({ profiles: { gateway: settingsPath } }, null, 2),
+      'utf8'
+    );
+
+    const profile: OpenAICompatProfileConfig = {
+      profileName: 'gateway',
+      settingsPath,
+      baseUrl: `http://127.0.0.1:${upstreamPort}`,
+      apiKey: 'gateway_token',
+      provider: 'generic-chat-completion-api',
+      forceOpenAIReasoningModel: true,
+      model: 'b3f9a2c7e8d14f60',
+    };
+    proxyServer = startOpenAICompatProxyServer({
+      profile,
+      port: 0,
+      authToken: 'test-proxy-token',
+    });
+    proxyPort = await waitForServerListening(proxyServer);
+
+    const response = await requestProxy({
+      model: 'b3f9a2c7e8d14f60',
+      thinking: { type: 'adaptive' },
+      output_config: { effort: 'max' },
+      max_tokens: 1024,
+      metadata: { trace: 'abc' },
+      tools: [{ name: 'search', description: 'Search docs', input_schema: { type: 'object' } }],
+      messages: [{ role: 'user', content: 'think with tools' }],
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      content: [{ type: 'text', text: 'Reply from gateway' }],
+    });
+    expect(hits).toEqual(['gateway']);
+
+    const body = bodies[0]?.body as {
+      max_tokens?: number;
+      max_completion_tokens?: number;
+      metadata?: unknown;
+      reasoning_effort?: string;
+      tools?: unknown[];
+    };
+    expect(body).toMatchObject({
+      model: 'b3f9a2c7e8d14f60',
+      max_completion_tokens: 1024,
+      tool_choice: 'auto',
+    });
+    expect(body.max_tokens).toBeUndefined();
+    expect(body.metadata).toBeUndefined();
+    expect(body.reasoning_effort).toBeUndefined();
+    expect(body.tools?.length).toBe(1);
+  });
 });

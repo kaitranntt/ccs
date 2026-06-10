@@ -2475,6 +2475,17 @@ const resources = {
         title: 'OpenRouter',
         description: 'Access hundreds of models from one API endpoint.',
       },
+      ccsBarBanner: {
+        new: 'NEW',
+        title: 'CCS Bar for macOS',
+        description: 'See live subscription quota and usage from your menu bar. Install with',
+        install: 'Install',
+      },
+      ccsBarPromo: {
+        title: 'CCS Bar (macOS)',
+        description: 'Live quota and usage in your menu bar.',
+        install: 'Install',
+      },
       profileCard: {
         profile: 'Profile',
         openRouter: 'OpenRouter profile',

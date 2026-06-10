@@ -835,11 +835,15 @@ export async function fetchAccountQuota(
   if (provider !== 'agy') {
     const error = `Quota not supported for provider: ${provider}`;
     if (verbose) console.error(`[!] Error: ${error}`);
+    // Stable machine code so callers branch on a code, not the human string.
+    // This is "no quota API for this provider", which is healthy — distinct
+    // from a transient fetch failure or an expired token.
     return {
       success: false,
       models: [],
       lastUpdated: Date.now(),
       error,
+      errorCode: 'quota_not_supported',
     };
   }
 

@@ -36,12 +36,20 @@ import persistRoutes from './persist-routes';
 import catalogRoutes from './catalog-routes';
 import claudeExtensionRoutes from './claude-extension-routes';
 import logsRoutes from './logs-routes';
+import barRoutes from './bar-routes';
 
 // Create the main API router
 export const apiRoutes = Router();
 
 const REMOTE_WRITE_ACCESS_ERROR =
   'Remote dashboard writes require localhost access when dashboard auth is disabled.';
+
+// CCS Bar endpoints (/api/bar/*) expose the user's native quota, tier, and cost
+// snapshot. Unlike the rest of the read API these are sensitive even on GET, so
+// they are gated for ALL methods (not just mutations) by the same
+// localhost-when-auth-disabled choke point.
+const BAR_LOCAL_ACCESS_ERROR =
+  'CCS Bar endpoints require localhost access when dashboard auth is disabled.';
 
 function isMutationMethod(method: string): boolean {
   const normalized = method.toUpperCase();
@@ -54,6 +62,17 @@ function isMutationMethod(method: string): boolean {
 }
 
 apiRoutes.use((req, res, next) => {
+  // /api/bar/* leaks native quota/tier/cost data; gate it for every method.
+  // This middleware runs before the '/bar' mount below, so req.path still
+  // carries the '/bar' prefix here.
+  // Exact segment match so a future sibling like '/barbaz' isn't accidentally gated.
+  if (req.path === '/bar' || req.path.startsWith('/bar/')) {
+    if (requireLocalAccessWhenAuthDisabled(req, res, BAR_LOCAL_ACCESS_ERROR)) {
+      next();
+    }
+    return;
+  }
+
   if (!isMutationMethod(req.method)) {
     next();
     return;
@@ -116,6 +135,9 @@ apiRoutes.use('/codex', codexRoutes);
 
 // ==================== CLIProxy Server Settings ====================
 apiRoutes.use('/cliproxy-server', cliproxyServerRoutes);
+
+// ==================== Bar (Menu Bar Glance) ====================
+apiRoutes.use('/bar', barRoutes);
 
 // ==================== Misc (File API, Global Env) ====================
 apiRoutes.use('/', miscRoutes);
