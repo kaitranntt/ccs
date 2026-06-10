@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as lockfile from 'proper-lockfile';
 import { getHookPath } from '../../../../src/utils/websearch/hook-config';
 import {
   ensureWebSearchMcp,
@@ -33,7 +34,15 @@ describe('ensureWebSearchMcp', () => {
     fs.mkdirSync(ccsDir, { recursive: true });
     fs.writeFileSync(
       path.join(ccsDir, 'config.yaml'),
-      ['version: 12', 'websearch:', '  enabled: true', '  providers:', '    duckduckgo:', '      enabled: true', ''].join('\n'),
+      [
+        'version: 12',
+        'websearch:',
+        '  enabled: true',
+        '  providers:',
+        '    duckduckgo:',
+        '      enabled: true',
+        '',
+      ].join('\n'),
       'utf8'
     );
   }
@@ -93,6 +102,19 @@ describe('ensureWebSearchMcp', () => {
 
     expect(config.mcpServers.existing).toEqual({ command: 'uvx', args: ['some-server'] });
     expect(config.mcpServers[getWebSearchMcpServerName()]).toEqual(getManagedConfig());
+  });
+
+  it('serializes ~/.claude.json updates with a file lock', () => {
+    setupTempHome();
+    writeEnabledConfig();
+    const claudeUserConfigPath = path.join(tempHome as string, '.claude.json');
+    fs.writeFileSync(claudeUserConfigPath, '{}\n', 'utf8');
+
+    const lockSpy = spyOn(lockfile, 'lockSync');
+
+    expect(ensureWebSearchMcp()).toBe(true);
+    expect(lockSpy).toHaveBeenCalled();
+    expect(lockSpy.mock.calls[0]?.[0]).toBe(path.join(tempHome as string, '.claude.json.ccs-lock'));
   });
 
   it('preserves the existing ~/.claude.json permissions when provisioning WebSearch MCP', () => {
@@ -170,7 +192,11 @@ describe('ensureWebSearchMcp', () => {
       'utf8'
     );
 
+    const lockSpy = spyOn(lockfile, 'lockSync');
+
     expect(uninstallWebSearchMcp()).toBe(true);
+    expect(lockSpy).toHaveBeenCalled();
+    expect(lockSpy.mock.calls[0]?.[0]).toBe(path.join(tempHome as string, '.claude.json.ccs-lock'));
     expect(fs.existsSync(getWebSearchMcpServerPath())).toBe(false);
 
     const globalConfig = JSON.parse(fs.readFileSync(claudeUserConfigPath, 'utf8')) as {

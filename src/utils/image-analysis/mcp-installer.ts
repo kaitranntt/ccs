@@ -4,7 +4,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as lockfile from 'proper-lockfile';
 
 import { getCcsDir } from '../config-manager';
 import { getClaudeUserConfigPath } from '../claude-config-path';
@@ -12,6 +11,10 @@ import { info, warn } from '../ui';
 import { InstanceManager } from '../../management/instance-manager';
 import { installImageAnalysisPrompts } from './hook-installer';
 import { getImageAnalysisConfig } from '../../config/config-loader-facade';
+import {
+  isClaudeUserConfigLockUnavailableError as isLockUnavailableError,
+  withClaudeUserConfigLock,
+} from '../claude-user-config-lock';
 
 const IMAGE_ANALYSIS_MCP_SERVER = 'ccs-image-analysis-server.cjs';
 const IMAGE_ANALYSIS_MCP_RUNTIME = 'image-analysis-runtime.cjs';
@@ -119,38 +122,6 @@ function writeClaudeUserConfig(configPath: string, config: ClaudeUserConfig): bo
       fs.unlinkSync(tempPath);
     }
   }
-}
-
-function withClaudeUserConfigLock<T>(configPath: string, callback: () => T): T {
-  const configDir = path.dirname(configPath);
-  const lockTarget = path.join(configDir, `${path.basename(configPath)}.ccs-lock`);
-  let release: (() => void) | undefined;
-
-  if (!fs.existsSync(configDir)) {
-    fs.mkdirSync(configDir, { recursive: true, mode: 0o700 });
-  }
-
-  if (!fs.existsSync(lockTarget)) {
-    fs.writeFileSync(lockTarget, '', { encoding: 'utf8', mode: 0o600 });
-  }
-
-  try {
-    release = lockfile.lockSync(lockTarget, { stale: 10000 }) as () => void;
-    return callback();
-  } finally {
-    if (release) {
-      try {
-        release();
-      } catch {
-        // Best-effort release.
-      }
-    }
-  }
-}
-
-function isLockUnavailableError(error: unknown): boolean {
-  const code = (error as NodeJS.ErrnoException | undefined)?.code;
-  return code === 'ELOCKED' || code === 'ENOTACQUIRED';
 }
 
 export function hasImageAnalysisMcpServerInstalled(): boolean {

@@ -194,26 +194,54 @@ describe('ensureImageAnalysisMcp', () => {
     expect(lockSpy.mock.calls[0]?.[0]).toBe(path.join(tempHome as string, '.claude.json.ccs-lock'));
   });
 
-  it('returns false instead of throwing when ~/.claude.json is already locked', () => {
+  it('retries ~/.claude.json lock acquisition before provisioning', () => {
+    setupTempHome();
+    writeEnabledConfig();
+    const claudeUserConfigPath = path.join(tempHome as string, '.claude.json');
+    fs.writeFileSync(claudeUserConfigPath, '{}\n', 'utf8');
+
+    let calls = 0;
+    spyOn(lockfile, 'lockSync').mockImplementation(() => {
+      calls++;
+      if (calls === 1) {
+        const error = new Error('Lock file is already being held') as NodeJS.ErrnoException;
+        error.code = 'ELOCKED';
+        throw error;
+      }
+      return (() => undefined) as ReturnType<typeof lockfile.lockSync>;
+    });
+
+    expect(ensureImageAnalysisMcp()).toBe(true);
+    expect(calls).toBe(2);
+
+    const config = JSON.parse(fs.readFileSync(claudeUserConfigPath, 'utf8')) as {
+      mcpServers: Record<string, unknown>;
+    };
+    expect(config.mcpServers[getImageAnalysisMcpServerName()]).toEqual(getManagedConfig());
+  });
+
+  it('returns false instead of throwing when ~/.claude.json stays locked', () => {
     setupTempHome();
     writeEnabledConfig();
 
     const claudeUserConfigPath = path.join(tempHome as string, '.claude.json');
     fs.writeFileSync(claudeUserConfigPath, '{}\n', 'utf8');
-    fs.writeFileSync(path.join(tempHome as string, '.claude.json.ccs-lock'), '', 'utf8');
 
-    const release = lockfile.lockSync(path.join(tempHome as string, '.claude.json.ccs-lock'), {
-      stale: 10000,
-    }) as () => void;
+    let now = 0;
+    spyOn(Date, 'now').mockImplementation(() => {
+      now += 10001;
+      return now;
+    });
+    spyOn(lockfile, 'lockSync').mockImplementation(() => {
+      const error = new Error('Lock file is already being held') as NodeJS.ErrnoException;
+      error.code = 'ELOCKED';
+      throw error;
+    });
 
-    try {
-      let result: boolean | undefined;
-      expect(() => {
-        result = ensureImageAnalysisMcp();
-      }).not.toThrow();
-      expect(result).toBe(false);
-    } finally {
-      release();
-    }
+    let result: boolean | undefined;
+    expect(() => {
+      result = ensureImageAnalysisMcp();
+    }).not.toThrow();
+    expect(result).toBe(false);
   });
 });
