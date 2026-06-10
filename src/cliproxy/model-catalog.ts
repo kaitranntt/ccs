@@ -370,6 +370,21 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
     defaultModel: 'claude-sonnet-4-6',
     models: [
       {
+        id: 'claude-fable-5',
+        name: 'Claude Fable 5',
+        description: 'Most powerful model',
+        nativeImageInput: true,
+        // Новый тир выше Opus. Тот же adaptive-thinking surface, что и Opus 4.8:
+        // Anthropic принимает только уровни effort; budget_tokens отклоняется 400.
+        thinking: {
+          type: 'levels',
+          levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          maxLevel: 'max',
+          dynamicAllowed: true,
+        },
+        extendedContext: true,
+      },
+      {
         id: 'claude-opus-4-8',
         name: 'Claude Opus 4.8',
         description: 'Latest flagship model',

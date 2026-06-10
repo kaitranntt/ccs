@@ -65,6 +65,13 @@ describe('detectTierFromModel', () => {
     expect(result).toBe('sonnet');
   });
 
+  it('should map Claude Fable 5 to the opus tier', () => {
+    // Fable is the top tier above Opus; auto-mode thinking defaults should
+    // match the opus tier (effort high), not the sonnet fallback.
+    const result = detectTierFromModel('claude-fable-5');
+    expect(result).toBe('opus');
+  });
+
   it('should detect haiku from model name containing "haiku"', () => {
     const result = detectTierFromModel('claude-haiku-4-5-20251001');
     expect(result).toBe('haiku');

@@ -16,11 +16,12 @@ describe('claude preset utils', () => {
     vi.restoreAllMocks();
   });
 
-  it('keeps the claude catalog default on Sonnet 4.6 while exposing Opus 4.7 and 4.8', () => {
+  it('keeps the claude catalog default on Sonnet 4.6 while exposing Opus 4.7/4.8 and Fable 5', () => {
     const claudeCatalog = MODEL_CATALOGS.claude;
     const ids = claudeCatalog.models.map((model) => model.id);
 
     expect(claudeCatalog.defaultModel).toBe('claude-sonnet-4-6');
+    expect(ids).toContain('claude-fable-5');
     expect(ids).toContain('claude-opus-4-8');
     expect(ids).toContain('claude-opus-4-7');
     expect(ids).toContain('claude-sonnet-4-6');

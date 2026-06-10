@@ -245,6 +245,14 @@ describe('model-pricing', () => {
       expect(opus48.outputPerMillion).toBe(25.0);
     });
 
+    it('should return correct pricing for Claude Fable 5', () => {
+      const fable5 = getModelPricing('claude-fable-5');
+      expect(fable5.inputPerMillion).toBe(10.0);
+      expect(fable5.outputPerMillion).toBe(50.0);
+      expect(fable5.cacheCreationPerMillion).toBe(12.5);
+      expect(fable5.cacheReadPerMillion).toBe(1.0);
+    });
+
     it('should not map unknown future model families onto known family pricing', () => {
       const fallback = getModelPricing('unknown-model-xyz');
 
@@ -353,6 +361,17 @@ describe('model-pricing', () => {
       };
       const cost = calculateCost(usage, 'claude-opus-4-8');
       expect(cost).toBe(36.75); // 5 + 25 + 6.25 + 0.5
+    });
+
+    it('should calculate Claude Fable 5 cost including cache token rates', () => {
+      const usage: TokenUsage = {
+        inputTokens: 1_000_000,
+        outputTokens: 1_000_000,
+        cacheCreationTokens: 1_000_000,
+        cacheReadTokens: 1_000_000,
+      };
+      const cost = calculateCost(usage, 'claude-fable-5');
+      expect(cost).toBe(73.5); // 10 + 50 + 12.5 + 1.0
     });
 
     it('should calculate fast-tier Claude Opus 4.8 cost (2x premium)', () => {

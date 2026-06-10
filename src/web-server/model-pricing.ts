@@ -316,6 +316,13 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
       fast: OPUS_48_FAST_RATES,
     },
   },
+  // Claude Fable 5 ($10/$50) — most powerful tier, above Opus
+  'claude-fable-5': {
+    inputPerMillion: 10.0,
+    outputPerMillion: 50.0,
+    cacheCreationPerMillion: 12.5,
+    cacheReadPerMillion: 1.0,
+  },
 
   // ---------------------------------------------------------------------------
   // OpenAI Models - Source: better-ccusage

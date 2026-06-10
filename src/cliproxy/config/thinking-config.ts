@@ -63,6 +63,7 @@ function shouldShowWarnings(thinkingConfig: ThinkingConfig): boolean {
  */
 export function detectTierFromModel(modelName: string): ModelTier {
   const lower = modelName.toLowerCase();
+  if (lower.includes('fable')) return 'opus'; // Fable — топ-тир, thinking-дефолты как у Opus
   if (lower.includes('opus')) return 'opus';
   if (lower.includes('haiku')) return 'haiku';
   return 'sonnet'; // Default to sonnet (most common)
