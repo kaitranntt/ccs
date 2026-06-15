@@ -83,9 +83,53 @@ const RELEASE_ARCH_MAP: Record<SupportedArch, SupportedArch> = {
   aarch64: 'aarch64',
 };
 
+const PLUS_NO_PLUGIN_ASSET_MIN_VERSION = '7.1.68-0';
+const PLUS_AARCH64_ASSET_MIN_VERSION = '7.1.45-1';
+
 export function mapNodeArchToReleaseArch(nodeArch: string): SupportedArch | undefined {
   const arch = ARCH_MAP[nodeArch];
   return arch ? RELEASE_ARCH_MAP[arch] : undefined;
+}
+
+function parseVersionParts(version: string): [number, number, number, number] {
+  const [coreVersion, forkRelease = '0'] = version.replace(/^v/, '').split('-', 2);
+  const [major = 0, minor = 0, patch = 0] = coreVersion
+    .split('.')
+    .map((part) => parseInt(part, 10) || 0);
+  return [major, minor, patch, parseInt(forkRelease, 10) || 0];
+}
+
+function isAtLeastVersion(version: string, minimum: string): boolean {
+  const left = parseVersionParts(version);
+  const right = parseVersionParts(minimum);
+
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] > right[index]) return true;
+    if (left[index] < right[index]) return false;
+  }
+
+  return true;
+}
+
+function usesPlusNoPluginAsset(version: string, os: SupportedOS): boolean {
+  return os !== 'windows' && isAtLeastVersion(version, PLUS_NO_PLUGIN_ASSET_MIN_VERSION);
+}
+
+function getReleaseArchForBackend(
+  backend: CLIProxyBackend,
+  version: string,
+  publicArch: SupportedArch,
+  releaseArch: SupportedArch
+): SupportedArch {
+  if (
+    backend === 'plus' &&
+    publicArch === 'arm64' &&
+    !isAtLeastVersion(version, PLUS_AARCH64_ASSET_MIN_VERSION)
+  ) {
+    return 'arm64';
+  }
+
+  return releaseArch;
 }
 
 /**
@@ -121,7 +165,9 @@ export function detectPlatform(
   const config = BACKEND_CONFIG[backend];
   const ver = version || config.fallbackVersion;
   const extension: ArchiveExtension = os === 'windows' ? 'zip' : 'tar.gz';
-  const binaryName = `${config.binaryPrefix}_${ver}_${os}_${releaseArch}.${extension}`;
+  const assetArch = getReleaseArchForBackend(backend, ver, arch, releaseArch);
+  const assetVariant = backend === 'plus' && usesPlusNoPluginAsset(ver, os) ? '_no-plugin' : '';
+  const binaryName = `${config.binaryPrefix}_${ver}_${os}_${assetArch}${assetVariant}.${extension}`;
 
   return {
     os,

@@ -73,9 +73,50 @@ describe('Backend Selection', () => {
       assert(!info.binaryName.includes('CLIProxyAPIPlus'));
     });
 
-    it('generates correct binary name for plus backend', () => {
-      const info = platformDetector.detectPlatform('6.6.51-0', 'plus');
-      assert(info.binaryName.startsWith('CLIProxyAPIPlus_6.6.51-0_'));
+    it('keeps old plus non-Windows archive names unsuffixed', () => {
+      withMockedProcessPlatform('darwin', 'arm64', () => {
+        assert.strictEqual(
+          platformDetector.detectPlatform('6.9.45-0', 'plus').binaryName,
+          'CLIProxyAPIPlus_6.9.45-0_darwin_arm64.tar.gz'
+        );
+        assert.strictEqual(
+          platformDetector.detectPlatform('7.1.45-1', 'plus').binaryName,
+          'CLIProxyAPIPlus_7.1.45-1_darwin_aarch64.tar.gz'
+        );
+      });
+    });
+
+    it('generates no-plugin archive names for current plus backend on macOS and Linux', () => {
+      withMockedProcessPlatform('darwin', 'arm64', () => {
+        assert.strictEqual(
+          platformDetector.detectPlatform('7.1.68-0', 'plus').binaryName,
+          'CLIProxyAPIPlus_7.1.68-0_darwin_aarch64_no-plugin.tar.gz'
+        );
+        const info = platformDetector.detectPlatform('7.1.68-2', 'plus');
+        assert.strictEqual(
+          info.binaryName,
+          'CLIProxyAPIPlus_7.1.68-2_darwin_aarch64_no-plugin.tar.gz'
+        );
+        assert.strictEqual(
+          platformDetector.getDownloadUrl('7.1.68-2', 'plus'),
+          'https://github.com/kaitranntt/CLIProxyAPIPlus/releases/download/v7.1.68-2/CLIProxyAPIPlus_7.1.68-2_darwin_aarch64_no-plugin.tar.gz'
+        );
+      });
+
+      withMockedProcessPlatform('linux', 'x64', () => {
+        const info = platformDetector.detectPlatform('7.1.68-2', 'plus');
+        assert.strictEqual(
+          info.binaryName,
+          'CLIProxyAPIPlus_7.1.68-2_linux_amd64_no-plugin.tar.gz'
+        );
+      });
+    });
+
+    it('does not add no-plugin suffix to plus Windows archives', () => {
+      withMockedProcessPlatform('win32', 'x64', () => {
+        const info = platformDetector.detectPlatform('7.1.68-2', 'plus');
+        assert.strictEqual(info.binaryName, 'CLIProxyAPIPlus_7.1.68-2_windows_amd64.zip');
+      });
     });
 
     it('uses original backend by default', () => {
