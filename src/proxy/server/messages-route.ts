@@ -10,9 +10,16 @@ import {
 import { ProxySseStreamTransformer } from '../transformers/sse-stream-transformer';
 import { isAnthropicPassthroughProfile, resolveOpenAIChatCompletionsUrl } from '../upstream-url';
 import { createLogger } from '../../services/logging';
+import {
+  createGlobalFetchProxyDispatcher,
+  type UpstreamAgentTimeoutOptions,
+} from '../../utils/fetch-proxy-setup';
 import { pipeWebResponseToNode, readRawBody, writeJson } from './http-helpers';
 
 const REQUEST_TIMEOUT_MS = 600_000;
+// Keep undici's per-phase timeouts above the explicit request timeout so the
+// AbortController is the single authority on when an upstream request dies.
+const UPSTREAM_TIMEOUT_GRACE_MS = 30_000;
 const DIRECT_OPENAI_REASONING_CHAT_MODEL = /^(?:gpt-5|o[134])(?:[-.]|$)/;
 const logger = createLogger('proxy:openai-compat:messages');
 
@@ -375,7 +382,7 @@ function buildFetchInit(
   signal: AbortSignal,
   incomingHeaders: http.IncomingHttpHeaders,
   preserveUserAgent: boolean,
-  insecureDispatcher?: Dispatcher
+  dispatcher?: Dispatcher
 ): RequestInit {
   const init: RequestInit = {
     method: 'POST',
@@ -384,8 +391,8 @@ function buildFetchInit(
     signal,
   };
 
-  if (insecureDispatcher) {
-    (init as Record<string, unknown>).dispatcher = insecureDispatcher;
+  if (dispatcher) {
+    (init as Record<string, unknown>).dispatcher = dispatcher;
   }
 
   return init;
@@ -399,6 +406,30 @@ function getRequestTimeoutMs(): number {
 
   const parsed = Number.parseInt(rawValue, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : REQUEST_TIMEOUT_MS;
+}
+
+/**
+ * undici defaults `headersTimeout`/`bodyTimeout` to 300s, which silently
+ * undercuts {@link REQUEST_TIMEOUT_MS} (600s) and the
+ * `CCS_OPENAI_PROXY_REQUEST_TIMEOUT_MS` override: slow upstreams (self-hosted
+ * LLMs with long queue + prefill phases) get their socket closed at 300s with
+ * a generic connection error instead of the proxy's timeout response. Every
+ * dispatcher used for upstream fetches must carry these options.
+ */
+export function buildUpstreamAgentTimeouts(): UpstreamAgentTimeoutOptions {
+  const ceiling = getRequestTimeoutMs() + UPSTREAM_TIMEOUT_GRACE_MS;
+  return { headersTimeout: ceiling, bodyTimeout: ceiling };
+}
+
+let defaultUpstreamDispatcher: Dispatcher | null = null;
+
+function getDefaultUpstreamDispatcher(): Dispatcher {
+  if (!defaultUpstreamDispatcher) {
+    const timeouts = buildUpstreamAgentTimeouts();
+    // Honor HTTP(S)_PROXY routing when configured; otherwise a plain Agent.
+    defaultUpstreamDispatcher = createGlobalFetchProxyDispatcher(timeouts) ?? new Agent(timeouts);
+  }
+  return defaultUpstreamDispatcher;
 }
 
 function formatTimeoutDuration(timeoutMs: number): string {
@@ -538,19 +569,20 @@ export async function handleProxyMessagesRequest(
     const useProfileInsecureTls = upstream.route.profile.insecure === true;
     const ephemeralInsecureDispatcher =
       useProfileInsecureTls && !useSharedInsecureDispatcher
-        ? new Agent({ connect: { rejectUnauthorized: false } })
+        ? new Agent({ connect: { rejectUnauthorized: false }, ...buildUpstreamAgentTimeouts() })
         : undefined;
+    const insecureTls = useSharedInsecureDispatcher || useProfileInsecureTls;
     const dispatcher = useSharedInsecureDispatcher
       ? insecureDispatcher
       : useProfileInsecureTls
         ? ephemeralInsecureDispatcher
-        : undefined;
+        : getDefaultUpstreamDispatcher();
 
     try {
       logger.stage('dispatch', 'upstream.dispatch', 'Dispatching upstream fetch', {
         profileName: profile.profileName,
         routedProfileName: upstream.route.profile.profileName,
-        insecureTls: dispatcher !== undefined,
+        insecureTls,
         passthrough,
       });
       const upstreamUrl = resolveOpenAIChatCompletionsUrl(upstream.route.profile.baseUrl, {

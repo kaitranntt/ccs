@@ -8,6 +8,7 @@ import { Agent } from 'undici';
 import { resolveOpenAICompatProfileConfig } from '../../../src/proxy/profile-router';
 import {
   attachDisconnectAbortHandlers,
+  buildUpstreamAgentTimeouts,
   handleProxyMessagesRequest,
 } from '../../../src/proxy/server/messages-route';
 import { loadSettings } from '../../../src/utils/config-manager';
@@ -171,7 +172,55 @@ describe('attachDisconnectAbortHandlers', () => {
   });
 });
 
+describe('buildUpstreamAgentTimeouts', () => {
+  afterEach(() => {
+    delete process.env.CCS_OPENAI_PROXY_REQUEST_TIMEOUT_MS;
+  });
+
+  it('keeps undici per-phase timeouts above the default request timeout', () => {
+    const timeouts = buildUpstreamAgentTimeouts();
+    expect(timeouts.headersTimeout).toBeGreaterThan(600_000);
+    expect(timeouts.bodyTimeout).toBeGreaterThan(600_000);
+  });
+
+  it('tracks CCS_OPENAI_PROXY_REQUEST_TIMEOUT_MS overrides', () => {
+    process.env.CCS_OPENAI_PROXY_REQUEST_TIMEOUT_MS = '120000';
+    const timeouts = buildUpstreamAgentTimeouts();
+    expect(timeouts.headersTimeout).toBeGreaterThan(120_000);
+    expect(timeouts.bodyTimeout).toBeGreaterThan(120_000);
+  });
+});
+
 describe('handleProxyMessagesRequest', () => {
+  it('dispatches secure upstream fetches with an explicit dispatcher (not undici defaults)', async () => {
+    const activeProfile = buildProfile('hf');
+    let capturedDispatcher: unknown;
+
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedDispatcher = (init as RequestInit & { dispatcher?: unknown })?.dispatcher;
+      throw new Error('upstream exploded');
+    }) as typeof globalThis.fetch;
+
+    const req = new FakeRequest({
+      'x-api-key': 'local-token',
+    });
+    const res = new FakeResponse();
+    const pending = handleProxyMessagesRequest(req as never, res as never, activeProfile, 'local-token');
+    req.end(
+      JSON.stringify({
+        model: 'hf-default',
+        stream: true,
+        messages: [{ role: 'user', content: 'stay secure' }],
+      })
+    );
+    await pending;
+
+    // A bare global-dispatcher fallback would reapply undici's 300s
+    // headersTimeout/bodyTimeout and undercut the proxy's request timeout.
+    expect(capturedDispatcher).toBeDefined();
+    expect(res.statusCode).toBe(502);
+  });
+
   it('auto-passes through Kimi requests and preserves the coding-agent User-Agent', async () => {
     const activeProfile = buildProfile('kimic');
     let capturedInput: RequestInfo | URL | undefined;

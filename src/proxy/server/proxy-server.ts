@@ -5,6 +5,7 @@ import type { OpenAICompatProfileConfig } from '../profile-router';
 import { OPENAI_COMPAT_PROXY_SERVICE_NAME } from '../proxy-daemon-paths';
 import { createLogger, withRequestContext } from '../../services/logging';
 import {
+  buildUpstreamAgentTimeouts,
   handleProxyMessagesRequest,
   handleProxyModelsRequest,
   validateIncomingProxyAuth,
@@ -39,7 +40,7 @@ export function startOpenAICompatProxyServer(options: OpenAICompatProxyServerOpt
     port: options.port,
   });
   const insecureDispatcher = options.insecure
-    ? new Agent({ connect: { rejectUnauthorized: false } })
+    ? new Agent({ connect: { rejectUnauthorized: false }, ...buildUpstreamAgentTimeouts() })
     : undefined;
   const server = http.createServer((req, res) => {
     const requestId = resolveInboundRequestId(req.headers);
