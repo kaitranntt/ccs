@@ -52,19 +52,44 @@ xattr -dr com.apple.quarantine "$HOME/Applications/CCS Bar.app"
 
 Or right-click the app and choose Open.
 
-## Launch
+## Run
+
+There are two ways to run CCS Bar, and both share one background server.
+
+**Open the app.** Launch `CCS Bar` from Spotlight, Finder, or the Dock. The first time you open the menu, the app looks for a running CCS server and, if it does not find one, starts it in the background using the launch details recorded at install (`~/.ccs/bar/launch.json`). No terminal needed.
+
+**Or use the CLI.**
 
 ```bash
 ccs bar          # alias: ccs bar launch
 ```
 
-This checks whether a CCS web-server is already running (probing port 3000, 3001, 3002, 8000, and 8080, with the port from the previous `bar.json` checked first). If a live server is found it is reused; otherwise a new one is started. Either way the discovery file `~/.ccs/bar.json` is written and the app is opened. The discovery file looks like this:
+`ccs bar` probes for a running server (ports 3000, 3001, 3002, 8000, 8080, with the previous `bar.json` port first). If one is live it is reused; otherwise `ccs bar` starts the server as a detached background process and returns your prompt right away, then opens the app. The server keeps running after the command exits, so closing the terminal does not take the bar offline.
+
+### Server lifecycle
+
+```bash
+ccs bar serve    # run the server in the current terminal (advanced; ccs bar runs this detached for you)
+ccs bar stop     # stop the background server
+ccs bar status   # report whether the server is running
+```
+
+### Files under ~/.ccs
+
+| File | Purpose |
+| --- | --- |
+| `~/.ccs/bar.json` | Discovery file the app reads to find the live server |
+| `~/.ccs/bar/launch.json` | How to start the server (recorded at install) so the app can start it without a shell PATH |
+| `~/.ccs/bar/server.pid` | PID of the background server, used by `ccs bar stop` and `ccs bar status` |
+| `~/.ccs/bar/serve.log` | stdout and stderr of the background server |
+
+`~/.ccs/bar.json` looks like this:
 
 ```json
 { "baseUrl": "http://127.0.0.1:3000", "port": 3000, "authMode": "loopback" }
 ```
 
-The Swift app reads `~/.ccs/bar.json` to find the server.
+The Swift app reads `~/.ccs/bar.json` to find the server, and falls back to probing the candidate ports if it is missing or stale.
 
 ## Loopback / Localhost Requirement
 
@@ -83,9 +108,9 @@ This removes `~/Applications/CCS Bar.app` and the installed version pin. It is a
 ## Troubleshooting
 
 - Install fails with "server predates CCS Bar" or bar API returns 404: the CCS server running does not yet include CCS Bar. Update CCS (`npm i -g ccs@latest` or equivalent), then restart `ccs bar`.
-- Server failed to start: `ccs bar` first checks whether a CCS server is already running on the candidate ports (3000, 3001, 3002, 8000, 8080) and reuses it if found. A true failure here means a non-CCS process is occupying all candidate ports. Free one of those ports and re-run `ccs bar`.
+- Server failed to start: `ccs bar` first checks whether a CCS server is already running on the candidate ports (3000, 3001, 3002, 8000, 8080) and reuses it if found. A true failure here means a non-CCS process is occupying all candidate ports. Free one of those ports and re-run `ccs bar`. Check `~/.ccs/bar/serve.log` for the background server's output.
 - App won't open (Gatekeeper): right-click and Open, or clear quarantine with the `xattr` command above.
-- Blank app: the web-server is not running. Re-run `ccs bar` and confirm `~/.ccs/bar.json` exists.
+- Menu shows "CCS is not running": open the menu again to let the app start the server, or run `ccs bar status` to check and `ccs bar` to start it.
 - Quota not updating: re-open the menu to force a refresh, or confirm the server is still reachable on loopback.
 
 ## Development
