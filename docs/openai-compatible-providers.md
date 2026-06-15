@@ -327,6 +327,14 @@ That flag is respected by both:
 - CCS now preserves upstream rate-limit errors and retry headers
 - Empty or malformed provider JSON is returned as Anthropic-style `api_error`
 
+### Slow upstreams: `socket connection was closed unexpectedly`
+
+- Long-running upstreams (self-hosted LLMs with queue/prefill phases) can stay
+  silent for minutes before the first or next token. The proxy already allows up
+  to 10 minutes per request; set `CCS_OPENAI_PROXY_REQUEST_TIMEOUT_MS` in the
+  profile settings to raise or lower that ceiling.
+- Restart the proxy after changing the setting.
+
 ### Requests route to the wrong model/profile
 
 - Use an explicit selector such as `profile:model`
