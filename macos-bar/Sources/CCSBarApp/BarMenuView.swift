@@ -51,8 +51,12 @@ struct BarMenuView: View {
   /// Content shorter than the cap renders FULLY with no scroll bar.
   /// Content taller than the cap scrolls.
   private var scrollAreaHeight: CGFloat {
-    guard contentHeight > 0 else { return screenCap }
-    return min(contentHeight, screenCap)
+    let cap = screenCap
+    // Before the first measurement, use a modest default so the popover is never
+    // sized to the full screen (which macOS then centers). Once the content is
+    // measured, use its height, capped.
+    guard contentHeight > 0 else { return min(cap, 560) }
+    return min(contentHeight, cap)
   }
 
   var body: some View {
@@ -132,7 +136,7 @@ struct BarMenuView: View {
         // Content shorter than the cap renders FULLY (no empty space, no clip).
         // Content taller scrolls. contentHeight starts at 0 so we show screenCap
         // until the first preference fires.
-        .frame(height: scrollAreaHeight)
+        .frame(height: scrollAreaHeight, alignment: .top)
         .onPreferenceChange(ContentHeightKey.self) { measured in
           // Only grow, never shrink — prevents a feedback loop where a smaller
           // frame triggers a re-layout that reports an even smaller height.
