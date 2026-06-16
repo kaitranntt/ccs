@@ -401,7 +401,7 @@ struct BarRowView: View {
   /// A native first-party subscription (Claude Code / Codex) — drives the
   /// distinct "subscription" badge + indigo provider chip.
   private var isNativeSubscription: Bool {
-    BarFormatting.isNativeSubscription(provider: row.provider)
+    BarFormatting.isNativeSubscription(row)
   }
 
   var body: some View {

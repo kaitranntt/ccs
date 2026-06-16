@@ -165,8 +165,9 @@ public enum BarFormatting {
   /// Code or Codex plan) rather than a CLIProxy-managed OAuth pool account. Drives
   /// the "Subscriptions" grouping + badge so a user reads "this is MY plan quota",
   /// not one of the rotating pool credentials.
-  public static func isNativeSubscription(provider: String) -> Bool {
-    provider == "claude-code" || provider == "codex"
+  public static func isNativeSubscription(_ row: BarSummaryRow) -> Bool {
+    (row.provider == "claude-code" && row.accountId == "claude-code")
+      || (row.provider == "codex" && row.accountId == "codex")
   }
 
   /// Friendly product label for a provider key. Native subscription keys read as
@@ -189,7 +190,7 @@ public enum BarFormatting {
     var subs: [BarSummaryRow] = []
     var pool: [BarSummaryRow] = []
     for row in rows {
-      if isNativeSubscription(provider: row.provider) {
+      if isNativeSubscription(row) {
         subs.append(row)
       } else {
         pool.append(row)
