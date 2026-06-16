@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { BAR_AUTH_TOKEN_HEADER, getOrCreateBarAuthToken } from '../../../src/utils/bar-auth-token';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1745,9 +1746,18 @@ describe('defaultFindRunningServer (GH-1500)', () => {
   it('detects a real HTTP server responding 200 on /api/bar/summary', async () => {
     const http = await import('http');
 
-    // Start an ephemeral server that responds 200 to /api/bar/summary.
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    // Start an ephemeral server that responds 200 to /api/bar/summary with the shared token.
+    // The server echoes the token unconditionally (reading it from the file), mirroring
+    // production behavior: only a process that owns the 0600 file can produce the value.
     const server = http.createServer((_req, res) => {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
+      const token = getOrCreateBarAuthToken(ccsDir);
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        [BAR_AUTH_TOKEN_HEADER]: token,
+      });
       res.end('{}');
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -1755,8 +1765,6 @@ describe('defaultFindRunningServer (GH-1500)', () => {
     const livePort = addr.port;
 
     // Seed bar.json with the live port so it is checked first.
-    const ccsDir = path.join(tempHome, '.ccs');
-    fs.mkdirSync(ccsDir, { recursive: true });
     fs.writeFileSync(
       path.join(ccsDir, 'bar.json'),
       JSON.stringify({
@@ -1786,6 +1794,51 @@ describe('defaultFindRunningServer (GH-1500)', () => {
     expect(result).not.toBeNull();
     expect(result?.port).toBe(livePort);
     expect(result?.baseUrl).toBe(`http://127.0.0.1:${livePort}`);
+  });
+
+  it('rejects a spoofed 200 response without the CCS Bar auth token', async () => {
+    const http = await import('http');
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    const server = http.createServer((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end('{"not":"ccs"}');
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const livePort = (server.address() as { port: number }).port;
+
+    fs.writeFileSync(
+      path.join(ccsDir, 'bar.json'),
+      JSON.stringify({
+        port: livePort,
+        baseUrl: `http://127.0.0.1:${livePort}`,
+        authMode: 'loopback',
+      })
+    );
+
+    moduleSeq++;
+    const mod = await import(
+      `../../../src/commands/bar/launch-subcommand?test=${Date.now()}-${moduleSeq}`
+    );
+    const { defaultFindRunningServer } = mod as {
+      defaultFindRunningServer: (
+        ccsDir: string
+      ) => Promise<{ port: number; baseUrl: string } | null>;
+    };
+
+    let result: { port: number; baseUrl: string } | null = null;
+    try {
+      result = await defaultFindRunningServer(ccsDir);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+
+    if (result !== null) {
+      expect(result.port).not.toBe(livePort);
+    } else {
+      expect(result).toBeNull();
+    }
   });
 
   it('returns null when no server is listening on the seeded port (port outside default candidates)', async () => {
@@ -1883,11 +1936,43 @@ describe('defaultFindRunningServer (GH-1500)', () => {
       return;
     }
 
+    // Some runners route bracketed IPv6 HTTP through an environment proxy even
+    // though raw ::1 sockets work. Skip in that environment; the production
+    // probe still supports ::1 where direct loopback HTTP is available.
+    const { request } = await import('undici');
+    const httpProbe = http.createServer((_req, res) => {
+      res.writeHead(204);
+      res.end();
+    });
+    await new Promise<void>((resolve) => httpProbe.listen(0, '::1', resolve));
+    const httpProbePort = (httpProbe.address() as { port: number }).port;
+    try {
+      const { statusCode, body } = await request(`http://[::1]:${httpProbePort}/`, {
+        headersTimeout: 1500,
+        bodyTimeout: 1500,
+      });
+      await body.text();
+      if (statusCode !== 204) {
+        console.log('[i] Skipping IPv6 loopback test: ::1 HTTP is not direct on this runner');
+        return;
+      }
+    } finally {
+      await new Promise<void>((resolve) => httpProbe.close(() => resolve()));
+    }
+
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
     // Start an ephemeral HTTP server bound exclusively to ::1.
     // This simulates `ccs config` starting the web-server with host 'localhost'
     // on macOS, where 'localhost' resolves to ::1.
+    // The server echoes the token unconditionally (from the file), mirroring production.
     const server = http.createServer((_req, res) => {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
+      const token = getOrCreateBarAuthToken(ccsDir);
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        [BAR_AUTH_TOKEN_HEADER]: token,
+      });
       res.end('{}');
     });
     await new Promise<void>((resolve) => server.listen(0, '::1', resolve));
@@ -1895,8 +1980,6 @@ describe('defaultFindRunningServer (GH-1500)', () => {
     const livePort = addr.port;
 
     // Seed bar.json with the live port so it is checked first.
-    const ccsDir = path.join(tempHome, '.ccs');
-    fs.mkdirSync(ccsDir, { recursive: true });
     fs.writeFileSync(
       path.join(ccsDir, 'bar.json'),
       JSON.stringify({ port: livePort, baseUrl: `http://[::1]:${livePort}`, authMode: 'loopback' })
@@ -1935,9 +2018,17 @@ describe('defaultFindRunningServer: priority over response speed (GH-1500)', () 
   it('returns bar.json port even when a lower-priority port responds faster', async () => {
     const http = await import('http');
 
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
     // Lower-priority server (default port candidate): responds immediately with 200.
+    // Echoes token unconditionally (from file), mirroring production behavior.
     const fastServer = http.createServer((_req, res) => {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
+      const token = getOrCreateBarAuthToken(ccsDir);
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        [BAR_AUTH_TOKEN_HEADER]: token,
+      });
       res.end('{}');
     });
     await new Promise<void>((resolve) => fastServer.listen(0, '127.0.0.1', resolve));
@@ -1946,8 +2037,12 @@ describe('defaultFindRunningServer: priority over response speed (GH-1500)', () 
     // Higher-priority server (bar.json port): adds ~300 ms artificial delay,
     // but still responds 200 within the 1500 ms timeout.
     const slowServer = http.createServer((_req, res) => {
+      const token = getOrCreateBarAuthToken(ccsDir);
       setTimeout(() => {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          [BAR_AUTH_TOKEN_HEADER]: token,
+        });
         res.end('{}');
       }, 300);
     });
@@ -1955,8 +2050,6 @@ describe('defaultFindRunningServer: priority over response speed (GH-1500)', () 
     const slowPort = (slowServer.address() as { port: number }).port;
 
     // Seed bar.json with the slower/higher-priority port.
-    const ccsDir = path.join(tempHome, '.ccs');
-    fs.mkdirSync(ccsDir, { recursive: true });
     fs.writeFileSync(
       path.join(ccsDir, 'bar.json'),
       JSON.stringify({
@@ -2942,9 +3035,19 @@ describe('defaultFindRunningServer: streaming lower-priority probes', () => {
 
     // The probe speaks raw HTTP/1.1 over a `net` socket and resolves on the
     // status line, so mock `net.connect` rather than a higher-level client.
-    // The high-priority port (41235) answers HTTP 200 immediately; the
+    // The high-priority port (41235) answers HTTP 200 with the auth token in the
+    // response headers (mirroring the real server, which reads from the 0600 file
+    // and includes it unconditionally — NOT echoed from the request); the
     // lower-priority port (3000) connects but never sends a status line,
     // emulating a non-CCS service that streams forever.
+    //
+    // The token file is written by getOrCreateBarAuthToken when ccsDir is set up
+    // in beforeEach, so we read it here the same way the mock server would.
+    const { getOrCreateBarAuthToken: getToken } = await import(
+      `../../../src/utils/bar-auth-token?test=${Date.now()}-mock`
+    );
+    const expectedToken = getToken(ccsDir);
+
     mock.module('net', () => ({
       connect: (opts: { host: string; port: number }, onConnect: () => void): unknown => {
         // net.connect is called synchronously for every probe target, so the
@@ -2974,8 +3077,12 @@ describe('defaultFindRunningServer: streaming lower-priority probes', () => {
           onConnect();
           if (opts.port === 41235) {
             const data = listeners.data ?? [];
+            // The mock server includes the token unconditionally in the response
+            // (read from the 0600 file, not echoed from the request) — this is
+            // exactly what the production CCS Bar server does, and is the property
+            // that prevents a rogue reflector from passing the check.
             for (const cb of data) {
-              cb(Buffer.from('HTTP/1.1 200 OK\r\n\r\n', 'utf8'));
+              cb(Buffer.from(`HTTP/1.1 200 OK\r\nx-ccs-bar-token: ${expectedToken}\r\n\r\n`, 'utf8'));
             }
           }
           // Port 3000 never emits a status line: simulate an endlessly

@@ -21,6 +21,7 @@ import * as os from 'os';
 import * as path from 'path';
 import type { ChildProcess } from 'child_process';
 import { getCcsDir } from '../../config/config-loader-facade';
+import { BAR_AUTH_TOKEN_HEADER, getOrCreateBarAuthToken } from '../../utils/bar-auth-token';
 import {
   getBarDir,
   getBarJsonPath,
@@ -139,24 +140,35 @@ function isAuthRequiredStatus(statusCode: number): boolean {
 
 async function defaultWaitForServerLive(baseUrl: string): Promise<void> {
   const net = await import('net');
+  const token = getOrCreateBarAuthToken();
   const INTERVAL_MS = 250;
   const TIMEOUT_MS = 10_000;
   const deadline = Date.now() + TIMEOUT_MS;
 
-  async function probe(): Promise<number | null> {
+  async function probe(): Promise<{ statusCode: number | null; tokenMatched: boolean }> {
     const url = new URL(`${baseUrl}/api/bar/summary`);
     return new Promise((resolve) => {
-      let buffer = '';
+      let rawResponse = '';
       let settled = false;
-      const finish = (statusCode: number | null = null) => {
+      const finish = (statusCode: number | null = null, headerSection = '') => {
         if (settled) return;
         settled = true;
         socket.destroy();
-        resolve(statusCode);
+        if (statusCode === 200) {
+          const echoMatch = headerSection.match(
+            new RegExp(`${BAR_AUTH_TOKEN_HEADER}:\\s*([^\\r\\n]+)`, 'i')
+          );
+          const echoedToken = echoMatch ? echoMatch[1].trim() : '';
+          resolve({ statusCode, tokenMatched: echoedToken === token });
+          return;
+        }
+        resolve({ statusCode, tokenMatched: false });
       };
       const socket = net.connect(
         { host: url.hostname.replace(/^\[|\]$/g, ''), port: Number(url.port) },
         () => {
+          // Do NOT include the token in the request — sending the secret to the
+          // party being authenticated lets any reflector trivially pass the check.
           socket.write(
             `GET ${url.pathname}${url.search} HTTP/1.1\r\nHost: ${url.host}\r\nConnection: close\r\n\r\n`
           );
@@ -164,19 +176,32 @@ async function defaultWaitForServerLive(baseUrl: string): Promise<void> {
       );
       socket.setTimeout(1500, () => finish());
       socket.on('data', (chunk) => {
-        buffer += chunk.toString('utf8');
-        const match = buffer.match(/^HTTP\/\d(?:\.\d)?\s+(\d{3})/);
-        if (match) finish(Number(match[1]));
+        rawResponse += chunk.toString('utf8');
+        const statusMatch = rawResponse.match(/^HTTP\/\d(?:\.\d)?\s+(\d{3})/);
+        if (statusMatch) {
+          const code = Number(statusMatch[1]);
+          if (code !== 200) {
+            finish(code, rawResponse);
+            return;
+          }
+          if (rawResponse.includes('\r\n\r\n')) {
+            finish(code, rawResponse.split('\r\n\r\n')[0]);
+          }
+        }
       });
       socket.on('error', () => finish());
-      socket.on('end', () => finish());
+      socket.on('end', () => {
+        const statusMatch = rawResponse.match(/^HTTP\/\d(?:\.\d)?\s+(\d{3})/);
+        if (statusMatch) finish(Number(statusMatch[1]), rawResponse);
+        else finish();
+      });
     });
   }
 
   while (Date.now() < deadline) {
-    const statusCode = await probe();
+    const { statusCode, tokenMatched } = await probe();
 
-    if (statusCode === 200) return;
+    if (statusCode === 200 && tokenMatched) return;
     if (statusCode !== null && isAuthRequiredStatus(statusCode)) {
       throw new BarServerAuthRequiredError(baseUrl, statusCode);
     }
