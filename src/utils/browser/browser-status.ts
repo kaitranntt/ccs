@@ -19,7 +19,11 @@ import {
   getEffectiveClaudeBrowserAttachConfig,
   getRecommendedBrowserUserDataDir,
 } from './browser-settings';
-import { getBrowserConfig, loadUnifiedConfig } from '../../config/config-loader-facade';
+import {
+  getBrowserConfig,
+  hasExplicitClaudeBrowserDevtoolsPort,
+  loadUnifiedConfig,
+} from '../../config/config-loader-facade';
 
 export interface ClaudeBrowserStatus {
   enabled: boolean;
@@ -124,9 +128,12 @@ export function getUserFacingBrowserConfig(): BrowserConfig {
 }
 
 async function buildClaudeBrowserStatus(
-  browserConfig = getUserFacingBrowserConfig()
+  browserConfig = getUserFacingBrowserConfig(),
+  hasExplicitDevtoolsPort = hasExplicitClaudeBrowserDevtoolsPort()
 ): Promise<ClaudeBrowserStatus> {
-  const effective = getEffectiveClaudeBrowserAttachConfig(browserConfig);
+  const effective = getEffectiveClaudeBrowserAttachConfig(browserConfig, process.env, {
+    hasExplicitDevtoolsPort,
+  });
   const launchCommands = buildBrowserLaunchCommands(effective.userDataDir, effective.devtoolsPort);
   const base: Omit<ClaudeBrowserStatus, 'state' | 'title' | 'detail' | 'nextStep'> = {
     enabled: effective.enabled,

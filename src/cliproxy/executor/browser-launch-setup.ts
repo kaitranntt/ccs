@@ -20,7 +20,10 @@ import {
   resolveOptionalBrowserAttachRuntime,
   syncBrowserMcpToConfigDir,
 } from '../../utils/browser';
-import { getBrowserConfig } from '../../config/config-loader-facade';
+import {
+  getBrowserConfig,
+  hasExplicitClaudeBrowserDevtoolsPort,
+} from '../../config/config-loader-facade';
 
 export interface BrowserLaunchSetupResult {
   /** CLI override flag if --browser-launch / --no-browser-launch was passed */
@@ -57,7 +60,9 @@ export function resolveBrowserLaunchFlags(argsWithoutProxy: string[]): {
   }
 
   const browserConfig = getBrowserConfig();
-  const browserAttachConfig = getEffectiveClaudeBrowserAttachConfig(browserConfig);
+  const browserAttachConfig = getEffectiveClaudeBrowserAttachConfig(browserConfig, process.env, {
+    hasExplicitDevtoolsPort: hasExplicitClaudeBrowserDevtoolsPort(),
+  });
   const claudeBrowserExposure = resolveBrowserExposure(
     {
       enabled: browserAttachConfig.enabled,
@@ -85,7 +90,9 @@ export async function resolveBrowserRuntime(
   inheritedClaudeConfigDir: string | undefined
 ): Promise<Pick<BrowserLaunchSetupResult, 'browserRuntimeEnv'>> {
   const browserConfig = getBrowserConfig();
-  const browserAttachConfig = getEffectiveClaudeBrowserAttachConfig(browserConfig);
+  const browserAttachConfig = getEffectiveClaudeBrowserAttachConfig(browserConfig, process.env, {
+    hasExplicitDevtoolsPort: hasExplicitClaudeBrowserDevtoolsPort(),
+  });
   const claudeBrowserExposure = resolveBrowserExposure(
     {
       enabled: browserAttachConfig.enabled,

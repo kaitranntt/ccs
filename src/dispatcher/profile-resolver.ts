@@ -18,7 +18,10 @@ import { loadSettings } from '../config/config-loader-facade';
 import { expandPath } from '../utils/helpers';
 import { fail, info, warn } from '../utils/ui';
 import { ErrorManager } from '../utils/error-manager';
-import { getBrowserConfig } from '../config/config-loader-facade';
+import {
+  getBrowserConfig,
+  hasExplicitClaudeBrowserDevtoolsPort,
+} from '../config/config-loader-facade';
 import {
   getEffectiveClaudeBrowserAttachConfig,
   resolveBrowserExposure,
@@ -278,7 +281,11 @@ export async function resolveProfileAndTarget(
   const targetBinaryInfo: TargetBinaryInfo | null = targetAdapter?.detectBinary() ?? null;
   const browserConfig = getBrowserConfig();
   const claudeAttachConfig =
-    resolvedTarget === 'claude' ? getEffectiveClaudeBrowserAttachConfig(browserConfig) : undefined;
+    resolvedTarget === 'claude'
+      ? getEffectiveClaudeBrowserAttachConfig(browserConfig, process.env, {
+          hasExplicitDevtoolsPort: hasExplicitClaudeBrowserDevtoolsPort(),
+        })
+      : undefined;
   const codexRuntimeConfigOverrides = resolveCodexRuntimeConfigOverrides(
     resolvedTarget,
     browserLaunchOverride

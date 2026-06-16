@@ -42,6 +42,7 @@ describe('resolveBrowserLaunchFlags — no browser flags', () => {
     }));
     mock.module('../../../config/config-loader-facade', () => ({
       getBrowserConfig: () => makeBrowserConfig(false),
+      hasExplicitClaudeBrowserDevtoolsPort: () => false,
       loadOrCreateUnifiedConfig: () => ({}),
       getThinkingConfig: () => ({}),
     }));
@@ -73,6 +74,7 @@ describe('resolveBrowserLaunchFlags — with browser-launch override', () => {
     }));
     mock.module('../../../config/config-loader-facade', () => ({
       getBrowserConfig: () => makeBrowserConfig(true, 'auto'),
+      hasExplicitClaudeBrowserDevtoolsPort: () => false,
       loadOrCreateUnifiedConfig: () => ({}),
       getThinkingConfig: () => ({}),
     }));
@@ -113,6 +115,7 @@ describe('resolveBrowserLaunchFlags — blocked override warning', () => {
     }));
     mock.module('../../../config/config-loader-facade', () => ({
       getBrowserConfig: () => makeBrowserConfig(false, 'never'),
+      hasExplicitClaudeBrowserDevtoolsPort: () => false,
       loadOrCreateUnifiedConfig: () => ({}),
       getThinkingConfig: () => ({}),
     }));
@@ -143,6 +146,7 @@ describe('resolveBrowserRuntime — attach disabled', () => {
     }));
     mock.module('../../../config/config-loader-facade', () => ({
       getBrowserConfig: () => makeBrowserConfig(false),
+      hasExplicitClaudeBrowserDevtoolsPort: () => false,
       loadOrCreateUnifiedConfig: () => ({}),
       getThinkingConfig: () => ({}),
     }));
@@ -173,6 +177,7 @@ describe('resolveBrowserRuntime — active runtime env', () => {
     }));
     mock.module('../../../config/config-loader-facade', () => ({
       getBrowserConfig: () => makeBrowserConfig(true, 'always'),
+      hasExplicitClaudeBrowserDevtoolsPort: () => false,
       loadOrCreateUnifiedConfig: () => ({}),
       getThinkingConfig: () => ({}),
     }));

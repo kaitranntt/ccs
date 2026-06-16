@@ -41,6 +41,7 @@ export {
   isDashboardAuthEnabled,
   getDashboardAuthConfig,
   getBrowserConfig,
+  hasExplicitClaudeBrowserDevtoolsPort,
   getImageAnalysisConfig,
   getLoggingConfig,
   getCursorConfig,
