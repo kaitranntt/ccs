@@ -36,11 +36,8 @@ const BAR_GITHUB_REPO = 'kaitranntt/ccs';
 /**
  * Allowlist of hostnames from which we will accept asset downloads.
  * GitHub releases redirect from github.com to objects.githubusercontent.com.
- *
- * TODO(checksum-v2): once release assets ship a checksums.txt/.sha256 file,
- * wire SHA-256 verification here. The download URL is already validated for
- * host+HTTPS as a v1 minimum guard. The verifier hook below is the intended
- * extension point.
+ * Artifact authenticity is enforced separately with the GitHub release asset
+ * SHA-256 digest before extraction.
  */
 const DOWNLOAD_HOST_ALLOWLIST: ReadonlyArray<string> = [
   'github.com',
@@ -53,6 +50,7 @@ const DOWNLOAD_HOST_ALLOWLIST: ReadonlyArray<string> = [
 
 export interface ReleaseAssetResult {
   downloadUrl: string;
+  sha256: string;
 }
 
 export interface CompatResult {
@@ -68,10 +66,10 @@ export interface InstallDeps {
    */
   fetchReleaseAsset: (tag: string, asset: string) => Promise<ReleaseAssetResult>;
   /**
-   * Download the zip archive and extract the .app bundle into dest/.
-   * Production: uses undici to stream + extract (with redirect + status check).
+   * Download the zip archive, verify its SHA-256 digest, and extract the .app bundle into dest/.
+   * Production: uses undici to stream + verify + extract (with redirect + status check).
    */
-  downloadAndExtract: (url: string, dest: string) => Promise<void>;
+  downloadAndExtract: (url: string, dest: string, expectedSha256: string) => Promise<void>;
   /**
    * GET {baseUrl}/api/bar/summary — capability handshake.
    * 200 → compatible; 404 → no-bar-api; else/unreachable → unreachable.
@@ -190,7 +188,16 @@ async function defaultFetchReleaseAsset(tag: string, asset: string): Promise<Rel
     throw new Error(`Asset "${asset}" not found in release ${tag}`);
   }
 
-  return { downloadUrl: found.browser_download_url as string };
+  const digest = typeof found.digest === 'string' ? found.digest : '';
+  const match = /^sha256:([a-fA-F0-9]{64})$/.exec(digest.trim());
+  if (!match || !match[1]) {
+    throw new Error(
+      `Asset "${asset}" in release ${tag} does not include a valid sha256 digest. ` +
+        'Refusing to install an unverifiable CCS Bar archive.'
+    );
+  }
+
+  return { downloadUrl: found.browser_download_url as string, sha256: match[1].toLowerCase() };
 }
 
 /**
@@ -203,20 +210,30 @@ async function defaultFetchReleaseAsset(tag: string, asset: string): Promise<Rel
  *   The previous maxRedirections:5 let undici follow redirects to ANY host unchecked.
  * - Fix #14: list zip entries with `unzip -l` before extracting; reject the archive
  *   if any entry path contains ".." or starts with "/" (zip-slip guard).
+ * - Security: verify the downloaded archive against the release asset SHA-256
+ *   digest before any extraction or installation.
  * - Finding #11: check `statusCode` and throw a descriptive error before streaming.
  * - Finding #9: validate host+HTTPS before making the first request.
  */
-async function defaultDownloadAndExtract(url: string, dest: string): Promise<void> {
+async function defaultDownloadAndExtract(
+  url: string,
+  dest: string,
+  expectedSha256: string
+): Promise<void> {
   const { request } = await import('undici');
-  const { createWriteStream, mkdirSync } = fs;
+  const { createHash } = await import('crypto');
+  const { createReadStream, createWriteStream, mkdirSync } = fs;
   const { promisify } = await import('util');
   const { pipeline } = await import('stream');
   const streamPipeline = promisify(pipeline);
   const { execFile } = await import('child_process');
   const execFileAsync = promisify(execFile);
 
-  // Validate initial URL (Finding #9)
+  // Validate initial URL (Finding #9) and require an integrity pin.
   validateDownloadUrl(url);
+  if (!/^[a-fA-F0-9]{64}$/.test(expectedSha256)) {
+    throw new Error('Missing or invalid SHA-256 digest for CCS Bar archive. Refusing to install.');
+  }
 
   mkdirSync(dest, { recursive: true });
 
@@ -263,9 +280,24 @@ async function defaultDownloadAndExtract(url: string, dest: string): Promise<voi
 
     const tmpZip = path.join(os.tmpdir(), `ccs-bar-${Date.now()}.zip`);
 
-    // Stream body to tmpZip
+    // Stream body to tmpZip, then verify the archive before inspecting/extracting it.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await streamPipeline(body as any, createWriteStream(tmpZip));
+
+    const hash = createHash('sha256');
+    await streamPipeline(createReadStream(tmpZip), hash);
+    const actualSha256 = hash.digest('hex');
+    if (actualSha256.toLowerCase() !== expectedSha256.toLowerCase()) {
+      try {
+        fs.unlinkSync(tmpZip);
+      } catch {
+        /* ignore */
+      }
+      throw new Error(
+        'Downloaded CCS Bar archive failed SHA-256 verification. ' +
+          `Expected ${expectedSha256.toLowerCase()}, got ${actualSha256.toLowerCase()}.`
+      );
+    }
 
     // Fix #14: zip-slip guard — inspect entries before extraction.
     // `unzip -l` lists entries in a machine-readable format; we scan for ".." or
@@ -525,7 +557,7 @@ export async function handleBarInstall(
     return;
   }
 
-  const { downloadUrl } = releaseInfo;
+  const { downloadUrl, sha256 } = releaseInfo;
   console.log(`[i] Installing CCS Bar from ${BAR_RELEASE_TAG}...`);
 
   // 1b. Stage-then-swap: extract into a hidden staging dir on the same filesystem
@@ -553,7 +585,7 @@ export async function handleBarInstall(
 
   // 2. Download and extract into staging, NOT appsDir.
   try {
-    await downloadAndExtract(downloadUrl, stagingDir);
+    await downloadAndExtract(downloadUrl, stagingDir, sha256);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[X] Download or extraction failed: ${msg}`);

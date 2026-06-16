@@ -24,6 +24,7 @@ let tempHome: string;
 let originalCcsHome: string | undefined;
 let originalConsoleLog: typeof console.log;
 let originalConsoleError: typeof console.error;
+const FAKE_SHA256 = 'a'.repeat(64);
 
 function captureConsole(): void {
   originalConsoleLog = console.log;
@@ -405,7 +406,7 @@ describe('bar install subcommand', () => {
     await handleBarInstall([], {
       fetchReleaseAsset: async (tag: string, _asset: string) => {
         fetchedUrls.push(tag);
-        return { downloadUrl: FAKE_DOWNLOAD_URL };
+        return { downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 };
       },
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async (_baseUrl: string) => ({ compatible: true, reason: 'ok' }),
@@ -422,6 +423,30 @@ describe('bar install subcommand', () => {
     expect(fetchedUrls).not.toContain(expect.stringMatching(/^\d+\.\d+\.\d+$/));
   });
 
+  it('passes the release asset sha256 digest to the downloader before install', async () => {
+    const appsDir = path.join(tempHome, 'Applications');
+    const seenDigests: string[] = [];
+
+    const { handleBarInstall } = await loadInstallSubcommand();
+
+    await handleBarInstall([], {
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
+      downloadAndExtract: async (_url: string, dest: string, expectedSha256: string) => {
+        seenDigests.push(expectedSha256);
+        fs.mkdirSync(path.join(dest, 'CCS Bar.app'), { recursive: true });
+      },
+      verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
+      readAppBundleVersion: (_appPath: string) => FAKE_VERSION,
+      clearQuarantine: async () => true,
+      isBarRunning: async () => false,
+      promptLaunch: async () => false,
+      getCcsDir: () => path.join(tempHome, '.ccs'),
+      getAppsDir: () => appsDir,
+    });
+
+    expect(seenDigests).toEqual([FAKE_SHA256]);
+  });
+
   it('pins the Info.plist version (not tag name) to ~/.ccs/bar/.version', async () => {
     const ccsDir = path.join(tempHome, '.ccs');
     const appsDir = path.join(tempHome, 'Applications');
@@ -430,7 +455,7 @@ describe('bar install subcommand', () => {
     const { handleBarInstall } = await loadInstallSubcommand();
 
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: (_appPath: string) => FAKE_VERSION,
@@ -453,7 +478,7 @@ describe('bar install subcommand', () => {
     const { handleBarInstall } = await loadInstallSubcommand();
 
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async (baseUrl: string) => {
         compatCalls.push(baseUrl);
@@ -476,7 +501,7 @@ describe('bar install subcommand', () => {
 
     await expect(
       handleBarInstall([], {
-        fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+        fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
         downloadAndExtract: fakeExtract(appsDir),
         verifyCompat: async () => ({ compatible: false, reason: 'no-bar-api' }),
         readAppBundleVersion: (_appPath: string) => FAKE_VERSION,
@@ -499,7 +524,7 @@ describe('bar install subcommand', () => {
     // Inject clearQuarantine returning false so the fallback xattr guidance is
     // always printed regardless of host platform (/usr/bin/xattr availability).
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: (_appPath: string) => FAKE_VERSION,
@@ -737,7 +762,7 @@ describe('bar install: compat capability handshake', () => {
     const { handleBarInstall } = await loadInstallSubcommand();
 
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async (baseUrl: string) => {
         capturedArgs.push({ baseUrl });
@@ -761,7 +786,7 @@ describe('bar install: compat capability handshake', () => {
     const { handleBarInstall } = await loadInstallSubcommand();
 
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: (_appPath: string) => '1.4.0',
@@ -783,7 +808,7 @@ describe('bar install: compat capability handshake', () => {
     const { handleBarInstall } = await loadInstallSubcommand();
 
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: false, reason: 'no-bar-api' }),
       readAppBundleVersion: (_appPath: string) => '1.4.0',
@@ -806,7 +831,7 @@ describe('bar install: compat capability handshake', () => {
     const { handleBarInstall } = await loadInstallSubcommand();
 
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: false, reason: 'unreachable' }),
       readAppBundleVersion: (_appPath: string) => '1.4.0',
@@ -829,7 +854,7 @@ describe('bar install: compat capability handshake', () => {
 
     await expect(
       handleBarInstall([], {
-        fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+        fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
         downloadAndExtract: fakeExtract(appsDir),
         verifyCompat: async () => {
           throw new Error('network explosion');
@@ -948,7 +973,7 @@ describe('bar install: Info.plist version extraction regression tests', () => {
     const { handleBarInstall } = await loadInstallSubcommand();
 
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       // readAppBundleVersion returns the real version from Info.plist
@@ -974,7 +999,7 @@ describe('bar install: Info.plist version extraction regression tests', () => {
     const { handleBarInstall } = await loadInstallSubcommand();
 
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: (_appPath: string) => '1.4.0',
@@ -1000,7 +1025,7 @@ describe('bar install: Info.plist version extraction regression tests', () => {
     const { handleBarInstall } = await loadInstallSubcommand();
 
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       // Unreadable Info.plist — returns null
@@ -1501,7 +1526,7 @@ describe('bar install: stale version-pin removal on null plist read (Fix 1)', ()
     const { handleBarInstall } = await loadInstallSubcommand();
 
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       // Simulate unreadable Info.plist
@@ -1603,9 +1628,10 @@ describe('launch: findRunningServer reuse-first (GH-1500)', () => {
 
     expect(spawnCalled).toBe(false);
 
-    const barJson = JSON.parse(
-      fs.readFileSync(path.join(ccsDir, 'bar.json'), 'utf8')
-    ) as { port: number; baseUrl: string };
+    const barJson = JSON.parse(fs.readFileSync(path.join(ccsDir, 'bar.json'), 'utf8')) as {
+      port: number;
+      baseUrl: string;
+    };
     expect(barJson.port).toBe(3000);
     expect(barJson.baseUrl).toBe('http://127.0.0.1:3000');
 
@@ -1685,9 +1711,7 @@ describe('launch: bar.json contract (deterministic — GH-1500 null probe)', () 
       appInstallPath: path.join(tempHome, 'Applications', 'CCS Bar.app'),
     });
 
-    const barJson = JSON.parse(
-      fs.readFileSync(path.join(ccsDir, 'bar.json'), 'utf8')
-    ) as unknown;
+    const barJson = JSON.parse(fs.readFileSync(path.join(ccsDir, 'bar.json'), 'utf8')) as unknown;
     expect(barJson).toMatchObject({
       baseUrl: 'http://127.0.0.1:4242',
       port: 4242,
@@ -1718,7 +1742,11 @@ describe('defaultFindRunningServer (GH-1500)', () => {
     fs.mkdirSync(ccsDir, { recursive: true });
     fs.writeFileSync(
       path.join(ccsDir, 'bar.json'),
-      JSON.stringify({ port: livePort, baseUrl: `http://127.0.0.1:${livePort}`, authMode: 'loopback' })
+      JSON.stringify({
+        port: livePort,
+        baseUrl: `http://127.0.0.1:${livePort}`,
+        authMode: 'loopback',
+      })
     );
 
     moduleSeq++;
@@ -1726,7 +1754,9 @@ describe('defaultFindRunningServer (GH-1500)', () => {
       `../../../src/commands/bar/launch-subcommand?test=${Date.now()}-${moduleSeq}`
     );
     const { defaultFindRunningServer } = mod as {
-      defaultFindRunningServer: (ccsDir: string) => Promise<{ port: number; baseUrl: string } | null>;
+      defaultFindRunningServer: (
+        ccsDir: string
+      ) => Promise<{ port: number; baseUrl: string } | null>;
     };
 
     let result: { port: number; baseUrl: string } | null = null;
@@ -1796,7 +1826,9 @@ describe('defaultFindRunningServer (GH-1500)', () => {
       `../../../src/commands/bar/launch-subcommand?test=${Date.now()}-${moduleSeq}`
     );
     const { defaultFindRunningServer } = mod as {
-      defaultFindRunningServer: (ccsDir: string) => Promise<{ port: number; baseUrl: string } | null>;
+      defaultFindRunningServer: (
+        ccsDir: string
+      ) => Promise<{ port: number; baseUrl: string } | null>;
     };
 
     const result = await defaultFindRunningServer(ccsDir);
@@ -1858,7 +1890,9 @@ describe('defaultFindRunningServer (GH-1500)', () => {
       `../../../src/commands/bar/launch-subcommand?test=${Date.now()}-${moduleSeq}`
     );
     const { defaultFindRunningServer } = mod as {
-      defaultFindRunningServer: (ccsDir: string) => Promise<{ port: number; baseUrl: string } | null>;
+      defaultFindRunningServer: (
+        ccsDir: string
+      ) => Promise<{ port: number; baseUrl: string } | null>;
     };
 
     let result: { port: number; baseUrl: string } | null = null;
@@ -1947,7 +1981,9 @@ describe('defaultFindRunningServer: priority over response speed (GH-1500)', () 
       `../../../src/commands/bar/launch-subcommand?test=${Date.now()}-${moduleSeq}`
     );
     const { defaultFindRunningServer } = mod as {
-      defaultFindRunningServer: (ccsDir: string) => Promise<{ port: number; baseUrl: string } | null>;
+      defaultFindRunningServer: (
+        ccsDir: string
+      ) => Promise<{ port: number; baseUrl: string } | null>;
     };
 
     let result: { port: number; baseUrl: string } | null = null;
@@ -1982,7 +2018,7 @@ describe('bar install: already-installed detection (GH-1504)', () => {
     const { handleBarInstall } = await loadInstallSubcommand();
 
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: async (_url: string, dest: string) => {
         fs.mkdirSync(path.join(dest, 'CCS Bar.app'), { recursive: true });
       },
@@ -2014,7 +2050,7 @@ describe('bar install: already-installed detection (GH-1504)', () => {
     const { handleBarInstall } = await loadInstallSubcommand();
 
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: async (_url: string, dest: string) => {
         fs.mkdirSync(path.join(dest, 'CCS Bar.app'), { recursive: true });
       },
@@ -2040,7 +2076,7 @@ describe('bar install: already-installed detection (GH-1504)', () => {
     const { handleBarInstall } = await loadInstallSubcommand();
 
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: async (_url: string, dest: string) => {
         fs.mkdirSync(path.join(dest, 'CCS Bar.app'), { recursive: true });
       },
@@ -2081,7 +2117,7 @@ describe('bar install: quarantine handling (GH-1504)', () => {
     const { handleBarInstall } = await loadInstallSubcommand();
 
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: () => '1.0.0',
@@ -2115,7 +2151,7 @@ describe('bar install: quarantine handling (GH-1504)', () => {
     const { handleBarInstall } = await loadInstallSubcommand();
 
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: () => '1.0.0',
@@ -2154,7 +2190,7 @@ describe('bar install: quarantine handling (GH-1504)', () => {
     const { handleBarInstall } = await loadInstallSubcommand();
 
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       // Extraction does NOT place CCS Bar.app
       downloadAndExtract: async (_url: string, dest: string) => {
         fs.mkdirSync(dest, { recursive: true });
@@ -2196,7 +2232,7 @@ describe('bar install: launch retry finding — quarantine failure skips launch 
 
   function baseDeps(appsDir: string, extra?: Partial<Record<string, unknown>>) {
     return {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' as const }),
       readAppBundleVersion: () => '1.0.0',
@@ -2216,7 +2252,9 @@ describe('bar install: launch retry finding — quarantine failure skips launch 
     await handleBarInstall([], {
       ...baseDeps(appsDir),
       clearQuarantine: async () => false,
-      launchBar: async () => { /* noop */ },
+      launchBar: async () => {
+        /* noop */
+      },
       promptLaunch: async () => {
         promptCalled = true;
         return true;
@@ -2253,7 +2291,9 @@ describe('bar install: launch retry finding — quarantine failure skips launch 
     await handleBarInstall([], {
       ...baseDeps(appsDir),
       clearQuarantine: async () => false,
-      launchBar: async () => { /* noop */ },
+      launchBar: async () => {
+        /* noop */
+      },
       promptLaunch: async () => false,
     });
 
@@ -2271,7 +2311,9 @@ describe('bar install: launch retry finding — quarantine failure skips launch 
     await handleBarInstall([], {
       ...baseDeps(appsDir),
       clearQuarantine: async () => true,
-      launchBar: async () => { /* noop */ },
+      launchBar: async () => {
+        /* noop */
+      },
       promptLaunch: async () => {
         promptCalled = true;
         return false;
@@ -2316,7 +2358,7 @@ describe('bar install: launch flags and prompt (GH-1504)', () => {
 
   function baseDeps(appsDir: string, extra?: Partial<Record<string, unknown>>) {
     return {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' as const }),
       readAppBundleVersion: () => '1.0.0',
@@ -2453,7 +2495,7 @@ describe('bar install: xattr absolute path contract (Finding 1)', () => {
     const { handleBarInstall } = await loadInstallSubcommand();
 
     await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: () => '1.0.0',
@@ -2461,7 +2503,9 @@ describe('bar install: xattr absolute path contract (Finding 1)', () => {
         quarantineArgs.push(appPath);
         return true;
       },
-      launchBar: async () => { /* noop */ },
+      launchBar: async () => {
+        /* noop */
+      },
       promptLaunch: async () => false,
       isBarRunning: async () => false,
       getCcsDir: () => path.join(tempHome, '.ccs'),
@@ -2490,7 +2534,7 @@ describe('bar install: stdin-TTY gate for launch prompt (Finding 2)', () => {
 
   function baseDeps(appsDir: string, extra?: Partial<Record<string, unknown>>) {
     return {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' as const }),
       readAppBundleVersion: () => '1.0.0',
@@ -2512,7 +2556,9 @@ describe('bar install: stdin-TTY gate for launch prompt (Finding 2)', () => {
 
     await handleBarInstall([], {
       ...baseDeps(appsDir),
-      launchBar: async () => { /* noop */ },
+      launchBar: async () => {
+        /* noop */
+      },
       // promptLaunch returning true simulates stdin-TTY + user answered yes.
       // The production defaultPromptLaunch now checks stdin.isTTY; by injecting
       // a mock that returns true we confirm this code path (prompt called, launch invoked).
@@ -2577,7 +2623,7 @@ describe('bar install: already-running detection (Finding 3)', () => {
 
   function baseDeps(appsDir: string, extra?: Partial<Record<string, unknown>>) {
     return {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' as const }),
       readAppBundleVersion: () => '1.0.0',
@@ -2628,7 +2674,9 @@ describe('bar install: already-running detection (Finding 3)', () => {
     await handleBarInstall([], {
       ...baseDeps(appsDir),
       isBarRunning: async () => false,
-      launchBar: async () => { /* noop */ },
+      launchBar: async () => {
+        /* noop */
+      },
       promptLaunch: async () => {
         promptCalled = true;
         return false;
@@ -2653,7 +2701,9 @@ describe('bar install: already-running detection (Finding 3)', () => {
       ...baseDeps(appsDir),
       // Simulate pgrep error — isBarRunning returns false per spec
       isBarRunning: async () => false,
-      launchBar: async () => { /* noop */ },
+      launchBar: async () => {
+        /* noop */
+      },
       promptLaunch: async () => {
         promptCalled = true;
         return false;
@@ -2772,12 +2822,14 @@ describe('bar install: stage-then-swap safety (Data Loss finding)', () => {
     extra?: Partial<Record<string, unknown>>
   ): Record<string, unknown> {
     return {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' as const }),
       readAppBundleVersion: () => '2.0.0',
       clearQuarantine: async () => true,
       isBarRunning: async () => false,
-      launchBar: async () => { /* noop */ },
+      launchBar: async () => {
+        /* noop */
+      },
       promptLaunch: async () => false,
       getCcsDir: () => path.join(tempHome, '.ccs'),
       getAppsDir: () => appsDir,
@@ -2966,7 +3018,7 @@ describe('bar install: silent-decline fix — hint on user decline (review findi
     extra?: Partial<Record<string, unknown>>
   ): Record<string, unknown> {
     return {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL }),
+      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: async (_url: string, dest: string) => {
         fs.mkdirSync(path.join(dest, 'CCS Bar.app'), { recursive: true });
       },
@@ -2974,7 +3026,9 @@ describe('bar install: silent-decline fix — hint on user decline (review findi
       readAppBundleVersion: () => '1.0.0',
       clearQuarantine: async () => true,
       isBarRunning: async () => false,
-      launchBar: async () => { /* noop */ },
+      launchBar: async () => {
+        /* noop */
+      },
       getCcsDir: () => path.join(tempHome, '.ccs'),
       getAppsDir: () => appsDir,
       ...extra,
