@@ -259,9 +259,20 @@ function surfaceLabel(source: string): string {
 }
 
 /** Local-midnight Date from a YYYY-MM-DD day key (calendar-day anchored). */
-function dateFromDayKey(key: string): Date {
-  const [y, m, d] = key.split('-').map((n) => parseInt(n, 10));
-  return new Date(y, (m || 1) - 1, d || 1);
+function dateFromDayKey(key: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+  if (!match) return null;
+
+  const y = Number(match[1]);
+  const m = Number(match[2]);
+  const d = Number(match[3]);
+  const date = new Date(y, m - 1, d);
+
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) {
+    return null;
+  }
+
+  return date;
 }
 
 /**
@@ -329,7 +340,9 @@ export function computeBarAnalyticsFromDaily(
   // Pass 1 — daily: cost, per-model spend, per-surface spend, sparkline cost.
   for (const d of daily) {
     if (!d || !d.date) continue;
-    const delta = dayDelta(now, dateFromDayKey(d.date));
+    const activityDate = dateFromDayKey(d.date);
+    if (!activityDate) continue;
+    const delta = dayDelta(now, activityDate);
     if (delta < 0) continue; // ignore future-dated noise
     const cost = Number.isFinite(d.totalCost) ? d.totalCost : Number.isFinite(d.cost) ? d.cost : 0;
     const source = d.source || '';
@@ -362,7 +375,9 @@ export function computeBarAnalyticsFromDaily(
   for (const h of hourly) {
     if (!h || !h.hour) continue;
     const dayKey = h.hour.slice(0, 10);
-    const delta = dayDelta(now, dateFromDayKey(dayKey));
+    const activityDate = dateFromDayKey(dayKey);
+    if (!activityDate) continue;
+    const delta = dayDelta(now, activityDate);
     if (delta < 0) continue;
     const requests = Number.isFinite(h.requestCount) ? (h.requestCount as number) : 0;
     if (requests <= 0) continue;
@@ -396,10 +411,9 @@ export function computeBarAnalyticsFromDaily(
     .filter((s) => s.cost > 0 || s.requests > 0)
     .sort((a, b) => b.cost - a.cost);
 
-  const lastActivityAt = lastActivityKey ? dateFromDayKey(lastActivityKey).toISOString() : null;
-  const daysSinceLastActivity = lastActivityKey
-    ? dayDelta(now, dateFromDayKey(lastActivityKey))
-    : null;
+  const lastActivityDate = lastActivityKey ? dateFromDayKey(lastActivityKey) : null;
+  const lastActivityAt = lastActivityDate ? lastActivityDate.toISOString() : null;
+  const daysSinceLastActivity = lastActivityDate ? dayDelta(now, lastActivityDate) : null;
 
   return {
     today,

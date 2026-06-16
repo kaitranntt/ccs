@@ -228,6 +228,24 @@ describe('computeBarAnalyticsFromDaily — monthToDate', () => {
     expect(a.last30d.cost).toBe(20); // rolling 30d still populated
   });
 
+  it('ignores malformed aggregate date keys instead of throwing', () => {
+    const a = computeBarAnalyticsFromDaily(
+      [daily({ date: 'May 1 2026', totalCost: 10 }), daily({ date: '2026-06-08', totalCost: 4 })],
+      [
+        hourly({ hour: 'May 1 2026 00:00', requestCount: 5 }),
+        hourly({ hour: '2026-06-08 09:00', requestCount: 3 }),
+      ],
+      NOW
+    );
+
+    expect(a.today.cost).toBe(4);
+    expect(a.today.requests).toBe(3);
+    expect(a.allTime.cost).toBe(4);
+    expect(a.allTime.requests).toBe(3);
+    expect(a.lastActivityAt).toBe(new Date(2026, 5, 8).toISOString());
+    expect(a.daysSinceLastActivity).toBe(0);
+  });
+
   it('returns zeroed monthToDate for empty daily and hourly input', () => {
     const a = computeBarAnalyticsFromDaily([], [], NOW);
     expect(a.monthToDate).toEqual({ cost: 0, requests: 0 });
