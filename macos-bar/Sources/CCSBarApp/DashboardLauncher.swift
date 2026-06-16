@@ -48,12 +48,16 @@ enum DashboardLauncher {
       return
     }
 
-    // Server isn't up. Start it via `ccs config`, fully detached (nohup) so it
-    // survives this app quitting; it opens the dashboard on its own.
+    // Server isn't up. Start it via `ccs config`; it opens the dashboard on its
+    // own. Avoid a shell here: candidate paths can include user-controlled
+    // components, and Process can pass the executable and arguments directly.
     if let bin = ccsBinary() {
       let proc = Process()
-      proc.executableURL = URL(fileURLWithPath: "/bin/sh")
-      proc.arguments = ["-c", "nohup \"\(bin)\" config >/dev/null 2>&1 &"]
+      proc.executableURL = URL(fileURLWithPath: bin)
+      proc.arguments = ["config"]
+      let null = FileHandle(forWritingAtPath: "/dev/null")
+      proc.standardOutput = null
+      proc.standardError = null
       try? proc.run()
       return
     }
