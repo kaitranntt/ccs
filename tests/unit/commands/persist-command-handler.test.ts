@@ -654,6 +654,31 @@ describe('persist command Claude extension parity', () => {
     expect(renderedLogs).not.toContain('Native Codex target:');
   });
 
+  it('persists claude CLIProxy profile with root CLIProxy base URL', async () => {
+    await writeUnifiedConfig();
+
+    const settingsPath = path.join(tempRoot, '.claude', 'settings.json');
+    await fs.promises.mkdir(path.dirname(settingsPath), { recursive: true });
+
+    const originalConsoleLog = console.log;
+    console.log = () => {};
+
+    try {
+      await withScopedHome(() => handlePersistCommand(['claude', '--yes']));
+    } finally {
+      console.log = originalConsoleLog;
+    }
+
+    const persisted = JSON.parse(await fs.promises.readFile(settingsPath, 'utf8')) as {
+      env: Record<string, string | undefined>;
+    };
+
+    expect(persisted.env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317');
+    expect(persisted.env.ANTHROPIC_BASE_URL).not.toContain('/api/provider/claude');
+    expect(persisted.env.ANTHROPIC_AUTH_TOKEN).toBeDefined();
+    expect(persisted.env.ANTHROPIC_MODEL).toBeUndefined();
+  });
+
   it('blocks Codex CLIProxy profiles from Claude settings persistence', async () => {
     await writeUnifiedConfig();
 

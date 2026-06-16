@@ -205,8 +205,9 @@ export function getModelMapping(provider: CLIProxyProvider): ProviderModelMappin
 
 /**
  * Get environment variables for Claude CLI (bundled defaults)
- * Uses provider-specific endpoint (e.g., /api/provider/gemini) for explicit routing.
- * This enables concurrent gemini/codex usage - each session routes to its provider via URL path.
+ * Uses provider-specific endpoints (e.g., /api/provider/gemini) for explicit routing
+ * except for the built-in claude provider. CLIProxyAPI's Claude Code contract uses
+ * the root endpoint and lets Claude Code append /v1/messages.
  *
  * For the claude built-in provider the model env vars are intentionally omitted so that
  * the user's own Claude Code /model selection is honored end-to-end (model-neutral passthrough).
@@ -231,7 +232,7 @@ export function getClaudeEnvVars(
 
   // Core transport env vars set dynamically for all providers
   const coreEnvVars: NodeJS.ProcessEnv = {
-    ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}/api/provider/${provider}`,
+    ANTHROPIC_BASE_URL: buildLocalProviderBaseUrl(provider, port),
     ANTHROPIC_AUTH_TOKEN: getEffectiveApiKey(),
   };
 
@@ -369,6 +370,11 @@ function ensureRequiredEnvVars(
 /** Localhost hostnames used for local CLIProxy endpoints */
 const LOCALHOST_NAMES = new Set(['127.0.0.1', 'localhost', '0.0.0.0']);
 
+function buildLocalProviderBaseUrl(provider: CLIProxyProvider, port: number): string {
+  const rootUrl = `http://127.0.0.1:${port}`;
+  return provider === 'claude' ? rootUrl : `${rootUrl}/api/provider/${provider}`;
+}
+
 /**
  * Normalize local CLIProxy endpoint to the expected provider route.
  * Only rewrites localhost URLs that target the active local port.
@@ -389,6 +395,10 @@ function normalizeLocalProviderBaseUrl(
         ? 443
         : 80;
     if (!Number.isFinite(effectivePort) || effectivePort !== port) return baseUrl;
+
+    if (provider === 'claude') {
+      return parsed.origin;
+    }
 
     const expectedPath = `/api/provider/${provider}`;
     if (parsed.pathname === expectedPath && !parsed.search && !parsed.hash) return baseUrl;
@@ -428,7 +438,9 @@ function rewriteLocalhostUrls(
   // Omit port suffix for standard web ports (80/443) for cleaner URLs
   const standardWebPort = normalizedProtocol === 'https' ? 443 : 80;
   const portSuffix = effectivePort === standardWebPort ? '' : `:${effectivePort}`;
-  const remoteBaseUrl = `${normalizedProtocol}://${remoteConfig.host}${portSuffix}/api/provider/${provider}`;
+  const remoteRootUrl = `${normalizedProtocol}://${remoteConfig.host}${portSuffix}`;
+  const remoteBaseUrl =
+    provider === 'claude' ? remoteRootUrl : `${remoteRootUrl}/api/provider/${provider}`;
 
   result.ANTHROPIC_BASE_URL = remoteBaseUrl;
 
@@ -710,6 +722,18 @@ export function ensureProviderSettings(provider: CLIProxyProvider): void {
         mergedEnv[key] = fallback;
         mutated = true;
       }
+    }
+  }
+
+  if (provider === 'claude' && typeof mergedEnv.ANTHROPIC_BASE_URL === 'string') {
+    const normalizedBaseUrl = normalizeLocalProviderBaseUrl(
+      mergedEnv.ANTHROPIC_BASE_URL,
+      provider,
+      CLIPROXY_DEFAULT_PORT
+    );
+    if (normalizedBaseUrl !== mergedEnv.ANTHROPIC_BASE_URL) {
+      mergedEnv.ANTHROPIC_BASE_URL = normalizedBaseUrl;
+      mutated = true;
     }
   }
 

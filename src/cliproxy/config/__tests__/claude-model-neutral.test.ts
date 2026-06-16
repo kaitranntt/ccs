@@ -10,7 +10,12 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { getClaudeEnvVars, ensureProviderSettings, getRemoteEnvVars } from '../env-builder';
+import {
+  getClaudeEnvVars,
+  ensureProviderSettings,
+  getEffectiveEnvVars,
+  getRemoteEnvVars,
+} from '../env-builder';
 import { clearConfigCache } from '../base-config-loader';
 
 const MODEL_KEYS = [
@@ -45,10 +50,10 @@ describe('claude provider model-neutral passthrough (Gap 1)', () => {
     }
   });
 
-  it('still sets ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN for claude', () => {
+  it('sets root ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN for claude', () => {
     const env = getClaudeEnvVars('claude');
 
-    expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317/api/provider/claude');
+    expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317');
     expect(env.ANTHROPIC_AUTH_TOKEN).toBeDefined();
   });
 
@@ -83,8 +88,55 @@ describe('claude provider model-neutral passthrough (Gap 1)', () => {
     }
 
     // Transport keys must be present
-    expect(written.env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317/api/provider/claude');
+    expect(written.env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317');
     expect(written.env.ANTHROPIC_AUTH_TOKEN).toBeDefined();
+  });
+
+  it('normalizes stale claude provider-scoped base URL to CLIProxy root at read level', () => {
+    process.env.CCS_HOME = tempHome;
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    const settingsPath = path.join(ccsDir, 'claude.settings.json');
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        env: {
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/claude',
+          ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
+        },
+      }),
+      'utf-8'
+    );
+
+    const env = getEffectiveEnvVars('claude', 8317, settingsPath);
+
+    expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317');
+  });
+
+  it('repairs stale claude provider-scoped base URL in stored default settings', () => {
+    process.env.CCS_HOME = tempHome;
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    const settingsPath = path.join(ccsDir, 'claude.settings.json');
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        env: {
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/claude',
+          ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
+        },
+      }),
+      'utf-8'
+    );
+
+    ensureProviderSettings('claude');
+
+    const repaired = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
+      env: Record<string, string | undefined>;
+    };
+    expect(repaired.env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317');
   });
 
   // ── Upgrade-path: existing claude.settings.json with stale default model pins ──
@@ -107,7 +159,7 @@ describe('claude provider model-neutral passthrough (Gap 1)', () => {
       settingsPath,
       JSON.stringify({
         env: {
-          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/claude',
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317',
           ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
           ...stalePins,
         },
@@ -128,7 +180,7 @@ describe('claude provider model-neutral passthrough (Gap 1)', () => {
     }
 
     // Transport keys must still be present
-    expect(repaired.env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317/api/provider/claude');
+    expect(repaired.env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317');
     expect(repaired.env.ANTHROPIC_AUTH_TOKEN).toBeDefined();
   });
 
@@ -143,7 +195,7 @@ describe('claude provider model-neutral passthrough (Gap 1)', () => {
       settingsPath,
       JSON.stringify({
         env: {
-          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/claude',
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317',
           ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
           ANTHROPIC_MODEL: 'claude-opus-4-7', // customised — not the stale sonnet default
         },
@@ -183,7 +235,7 @@ describe('claude provider model-neutral passthrough (Gap 1)', () => {
       settingsPath,
       JSON.stringify({
         env: {
-          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/claude',
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317',
           ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
           ...stalePins,
         },
@@ -217,7 +269,7 @@ describe('claude provider model-neutral passthrough (Gap 1)', () => {
     const originalContent = JSON.stringify(
       {
         env: {
-          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/claude',
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317',
           ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
         },
       },
@@ -252,7 +304,7 @@ describe('claude provider model-neutral passthrough (Gap 1)', () => {
       settingsPath,
       JSON.stringify({
         env: {
-          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/claude',
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317',
           ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
           ANTHROPIC_MODEL: 'claude-sonnet-4-5-20250929',
           ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-5-20251101',
@@ -285,7 +337,7 @@ describe('claude provider model-neutral passthrough (Gap 1)', () => {
       settingsPath,
       JSON.stringify({
         env: {
-          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/claude',
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317',
           ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
           ANTHROPIC_MODEL: 'claude-sonnet-4-6',
           ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-6',
@@ -318,7 +370,7 @@ describe('claude provider model-neutral passthrough (Gap 1)', () => {
       settingsPath,
       JSON.stringify({
         env: {
-          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/claude',
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317',
           ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
           ANTHROPIC_MODEL: 'claude-opus-4-8',
         },
@@ -400,7 +452,7 @@ describe('claude provider model-neutral passthrough (Gap 1)', () => {
       settingsPath,
       JSON.stringify({
         env: {
-          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/claude',
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317',
           ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
           ANTHROPIC_MODEL: 'claude-sonnet-4-5-20250929',
           ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-5-20251101',
@@ -464,7 +516,7 @@ describe('claude provider model-neutral passthrough (Gap 1)', () => {
     const originalContent =
       JSON.stringify({
         env: {
-          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/claude',
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317',
           ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
           ANTHROPIC_MODEL: 'claude-sonnet-4-6',
           ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-7',
@@ -502,7 +554,7 @@ describe('claude provider model-neutral passthrough (Gap 1)', () => {
       settingsPath,
       JSON.stringify({
         env: {
-          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/claude',
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317',
           ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
           ANTHROPIC_MODEL: 'claude-opus-4-8', // custom — not a historical default
         },
@@ -533,7 +585,7 @@ describe('claude provider model-neutral passthrough (Gap 1)', () => {
       customPath,
       JSON.stringify({
         env: {
-          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/claude',
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317',
           ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
           ANTHROPIC_MODEL: 'claude-sonnet-4-6', // equals a stale default, but explicit
         },
@@ -568,7 +620,7 @@ describe('claude provider model-neutral passthrough (Gap 1)', () => {
       settingsPath,
       JSON.stringify({
         env: {
-          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/claude',
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317',
           ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
           ANTHROPIC_MODEL: 'claude-sonnet-4-6', // equals a stale default, but post-migration = explicit
         },
