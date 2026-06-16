@@ -274,10 +274,18 @@ function makeDetachedDeps(ccsDir: string, port = 4242) {
   return {
     findRunningServer: async () => null,
     getPort: async () => port,
-    spawnDetachedServer: (_p: number, _log: string) => { /* noop */ },
-    waitForServerLive: async (_url: string) => { /* live immediately */ },
-    writeLaunchDescriptor: () => { /* noop */ },
-    openApp: async (_appPath: string) => { /* noop */ },
+    spawnDetachedServer: (_p: number, _log: string) => {
+      /* noop */
+    },
+    waitForServerLive: async (_url: string) => {
+      /* live immediately */
+    },
+    writeLaunchDescriptor: () => {
+      /* noop */
+    },
+    openApp: async (_appPath: string) => {
+      /* noop */
+    },
     getCcsDir: () => ccsDir,
     appInstallPath: path.join(tempHome, 'Applications', 'CCS Bar.app'),
   };
@@ -501,7 +509,7 @@ describe('bar install subcommand', () => {
         downloadAndExtract: fakeExtract(appsDir),
         verifyCompat: async () => ({ compatible: false, reason: 'no-bar-api' }),
         readAppBundleVersion: (_appPath: string) => FAKE_VERSION,
-          isBarRunning: async () => false,
+        isBarRunning: async () => false,
         promptLaunch: async () => false,
         getCcsDir: () => path.join(tempHome, '.ccs'),
         getAppsDir: () => appsDir,
@@ -848,7 +856,7 @@ describe('bar install: compat capability handshake', () => {
           throw new Error('network explosion');
         },
         readAppBundleVersion: (_appPath: string) => '1.4.0',
-          isBarRunning: async () => false,
+        isBarRunning: async () => false,
         promptLaunch: async () => false,
         getCcsDir: () => path.join(tempHome, '.ccs'),
         getAppsDir: () => appsDir,
@@ -1597,10 +1605,18 @@ describe('launch: findRunningServer reuse-first (GH-1500)', () => {
     await handleBarLaunch([], {
       findRunningServer: async () => ({ port: 3000, baseUrl: 'http://127.0.0.1:3000' }),
       getPort: async () => 9999,
-      spawnDetachedServer: () => { spawnCalled = true; },
-      waitForServerLive: async () => { /* noop */ },
-      writeLaunchDescriptor: () => { /* noop */ },
-      openApp: async () => { /* noop */ },
+      spawnDetachedServer: () => {
+        spawnCalled = true;
+      },
+      waitForServerLive: async () => {
+        /* noop */
+      },
+      writeLaunchDescriptor: () => {
+        /* noop */
+      },
+      openApp: async () => {
+        /* noop */
+      },
       getCcsDir: () => ccsDir,
       appInstallPath: path.join(tempHome, 'Applications', 'CCS Bar.app'),
     });
@@ -1628,10 +1644,18 @@ describe('launch: findRunningServer reuse-first (GH-1500)', () => {
     await handleBarLaunch([], {
       findRunningServer: async () => null,
       getPort: async () => 4242,
-      spawnDetachedServer: () => { spawnCalled = true; },
-      waitForServerLive: async () => { /* live */ },
-      writeLaunchDescriptor: () => { /* noop */ },
-      openApp: async () => { /* noop */ },
+      spawnDetachedServer: () => {
+        spawnCalled = true;
+      },
+      waitForServerLive: async () => {
+        /* live */
+      },
+      writeLaunchDescriptor: () => {
+        /* noop */
+      },
+      openApp: async () => {
+        /* noop */
+      },
       getCcsDir: () => ccsDir,
       appInstallPath: path.join(tempHome, 'Applications', 'CCS Bar.app'),
     });
@@ -1651,10 +1675,18 @@ describe('launch: findRunningServer reuse-first (GH-1500)', () => {
         throw new Error('probe exploded');
       },
       getPort: async () => 4242,
-      spawnDetachedServer: () => { spawnCalled = true; },
-      waitForServerLive: async () => { /* live */ },
-      writeLaunchDescriptor: () => { /* noop */ },
-      openApp: async () => { /* noop */ },
+      spawnDetachedServer: () => {
+        spawnCalled = true;
+      },
+      waitForServerLive: async () => {
+        /* live */
+      },
+      writeLaunchDescriptor: () => {
+        /* noop */
+      },
+      openApp: async () => {
+        /* noop */
+      },
       getCcsDir: () => ccsDir,
       appInstallPath: path.join(tempHome, 'Applications', 'CCS Bar.app'),
     });
@@ -1680,9 +1712,15 @@ describe('launch: bar.json contract (deterministic — GH-1500 null probe)', () 
     await handleBarLaunch([], {
       findRunningServer: async () => null,
       getPort: async () => 4242,
-      spawnDetachedServer: () => { /* noop */ },
-      waitForServerLive: async () => { /* live */ },
-      writeLaunchDescriptor: () => { /* noop */ },
+      spawnDetachedServer: () => {
+        /* noop */
+      },
+      waitForServerLive: async () => {
+        /* live */
+      },
+      writeLaunchDescriptor: () => {
+        /* noop */
+      },
       openApp: async (_appPath: string) => {
         calls.push(`open:${_appPath}`);
       },
@@ -2899,33 +2937,54 @@ describe('defaultFindRunningServer: streaming lower-priority probes', () => {
       JSON.stringify({ port: 41235, baseUrl: 'http://127.0.0.1:41235', authMode: 'loopback' })
     );
 
-    let highPriorityBodyDestroyed = false;
+    let highPrioritySocketDestroyed = false;
     let lowerPriorityProbeStarted = false;
 
-    mock.module('undici', () => ({
-      request: (url: string) => {
-        if (url === 'http://127.0.0.1:41235/api/bar/summary') {
-          return Promise.resolve({
-            statusCode: 200,
-            body: {
-              destroy: () => {
-                highPriorityBodyDestroyed = true;
-              },
-            },
-          });
-        }
+    // The probe speaks raw HTTP/1.1 over a `net` socket and resolves on the
+    // status line, so mock `net.connect` rather than a higher-level client.
+    // The high-priority port (41235) answers HTTP 200 immediately; the
+    // lower-priority port (3000) connects but never sends a status line,
+    // emulating a non-CCS service that streams forever.
+    mock.module('net', () => ({
+      connect: (opts: { host: string; port: number }, onConnect: () => void): unknown => {
+        // net.connect is called synchronously for every probe target, so the
+        // lower-priority probe is observably "started" the moment discovery
+        // fires it — even though it never receives a status line.
+        if (opts.port === 3000) lowerPriorityProbeStarted = true;
+        const listeners: Record<string, Array<(arg?: unknown) => void>> = {};
+        const socket = {
+          on(event: string, cb: (arg?: unknown) => void) {
+            (listeners[event] ??= []).push(cb);
+            return socket;
+          },
+          setTimeout() {
+            return socket;
+          },
+          write() {
+            return true;
+          },
+          destroy() {
+            if (opts.port === 41235) highPrioritySocketDestroyed = true;
+            return socket;
+          },
+        };
 
-        if (url === 'http://127.0.0.1:3000/api/bar/summary') {
-          lowerPriorityProbeStarted = true;
-          return new Promise(() => {
-            // Simulate a lower-priority service that never finishes responding.
-          });
-        }
-
-        return Promise.resolve({
-          statusCode: 404,
-          body: { destroy: () => {} },
+        // Fire the connect callback asynchronously, mirroring net.connect.
+        setImmediate(() => {
+          onConnect();
+          if (opts.port === 41235) {
+            const data = listeners.data ?? [];
+            for (const cb of data) {
+              cb(Buffer.from('HTTP/1.1 200 OK\r\n\r\n', 'utf8'));
+            }
+          }
+          // Port 3000 never emits a status line: simulate an endlessly
+          // streaming service that must not block the higher-priority hit.
+          // Any other port stays silent and is settled by the 1.5s timeout,
+          // which the Promise.race below short-circuits.
         });
+
+        return socket;
       },
     }));
 
@@ -2933,7 +2992,9 @@ describe('defaultFindRunningServer: streaming lower-priority probes', () => {
     const { defaultFindRunningServer } = (await import(
       `../../../src/commands/bar/bar-server-probe?test=${Date.now()}-${moduleSeq}`
     )) as {
-      defaultFindRunningServer: (ccsDir: string) => Promise<{ port: number; baseUrl: string } | null>;
+      defaultFindRunningServer: (
+        ccsDir: string
+      ) => Promise<{ port: number; baseUrl: string; authRequired?: boolean } | null>;
     };
 
     const result = await Promise.race([
@@ -2941,8 +3002,12 @@ describe('defaultFindRunningServer: streaming lower-priority probes', () => {
       new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 250)),
     ]);
 
-    expect(result).toEqual({ port: 41235, baseUrl: 'http://127.0.0.1:41235' });
-    expect(highPriorityBodyDestroyed).toBe(true);
+    expect(result).toEqual({
+      port: 41235,
+      baseUrl: 'http://127.0.0.1:41235',
+      authRequired: false,
+    });
+    expect(highPrioritySocketDestroyed).toBe(true);
     expect(lowerPriorityProbeStarted).toBe(true);
   });
 });

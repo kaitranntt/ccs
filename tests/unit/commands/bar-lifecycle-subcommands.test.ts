@@ -84,6 +84,7 @@ async function loadLaunchSubcommand() {
   );
   return mod as {
     handleBarLaunch: (args: string[], deps?: Record<string, unknown>) => Promise<void>;
+    BarServerAuthRequiredError: new (baseUrl: string, statusCode: number) => Error;
   };
 }
 
@@ -609,6 +610,75 @@ describe('launch: detached-spawn model', () => {
 
     expect(allOutput()).toMatch(/\[X\]/);
     expect(allOutput()).toMatch(/timeout|connect|server/i);
+  });
+
+  it('stops the spawned child when the bar API is protected by dashboard auth', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    let killCalled = false;
+    const { handleBarLaunch, BarServerAuthRequiredError } = await loadLaunchSubcommand();
+
+    await handleBarLaunch([], {
+      getCcsDir: () => ccsDir,
+      findRunningServer: async () => null,
+      getPort: async () => 3000,
+      spawnDetachedServer: () => ({
+        kill: () => {
+          killCalled = true;
+          return true;
+        },
+      }),
+      waitForServerLive: async () => {
+        throw new BarServerAuthRequiredError('http://127.0.0.1:3000', 401);
+      },
+      writeLaunchDescriptor: () => {
+        /* noop */
+      },
+      openApp: async () => {
+        /* noop */
+      },
+      appInstallPath: path.join(tempHome, 'Applications', 'CCS Bar.app'),
+    });
+
+    expect(killCalled).toBe(true);
+    expect(fs.existsSync(path.join(ccsDir, 'bar.json'))).toBe(false);
+    expect(allOutput()).toMatch(/authentication/i);
+  });
+
+  it('does not spawn a new server when an existing server is protected by dashboard auth', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    let spawnCalled = false;
+    const { handleBarLaunch } = await loadLaunchSubcommand();
+
+    await handleBarLaunch([], {
+      getCcsDir: () => ccsDir,
+      findRunningServer: async () => ({
+        port: 3000,
+        baseUrl: 'http://127.0.0.1:3000',
+        authRequired: true,
+      }),
+      getPort: async () => 3001,
+      spawnDetachedServer: () => {
+        spawnCalled = true;
+      },
+      waitForServerLive: async () => {
+        /* noop */
+      },
+      writeLaunchDescriptor: () => {
+        /* noop */
+      },
+      openApp: async () => {
+        /* noop */
+      },
+      appInstallPath: path.join(tempHome, 'Applications', 'CCS Bar.app'),
+    });
+
+    expect(spawnCalled).toBe(false);
+    expect(fs.existsSync(path.join(ccsDir, 'bar.json'))).toBe(false);
+    expect(allOutput()).toMatch(/authentication/i);
   });
 
   it('writes launch.json via writeLaunchDescriptor on the start path', async () => {

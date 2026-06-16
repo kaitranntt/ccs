@@ -19,6 +19,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import type { ChildProcess } from 'child_process';
 import { getCcsDir } from '../../config/config-loader-facade';
 import {
   getBarDir,
@@ -71,7 +72,7 @@ export interface LaunchDeps {
    * Spawn the `ccs bar serve --port N` process detached and return immediately.
    * The spawned process must be unref()ed so the launcher can exit.
    */
-  spawnDetachedServer: (port: number, logPath: string) => void;
+  spawnDetachedServer: (port: number, logPath: string) => ChildProcess | void;
   /**
    * Poll GET {baseUrl}/api/bar/summary until HTTP 200 or timeout.
    * Returns the live baseUrl on success, throws on timeout.
@@ -104,7 +105,7 @@ async function defaultGetPort(opts: { port: number[]; host: string }): Promise<n
  * stdio is redirected to serve.log so server output is preserved for
  * debugging without a terminal.  unref() lets the launcher exit immediately.
  */
-function defaultSpawnDetachedServer(port: number, logPath: string): void {
+function defaultSpawnDetachedServer(port: number, logPath: string): ChildProcess {
   const { spawn } = require('child_process') as typeof import('child_process');
 
   // Open (or create) the log file for appending.
@@ -118,30 +119,68 @@ function defaultSpawnDetachedServer(port: number, logPath: string): void {
   child.unref();
   // Close our copy of the fd — the child has its own reference.
   fs.closeSync(logFd);
+  return child;
 }
 
 /**
  * Poll GET {baseUrl}/api/bar/summary every 250 ms until HTTP 200 or ~10 s.
  * Resolves when the server is live. Rejects on timeout.
  */
+export class BarServerAuthRequiredError extends Error {
+  constructor(baseUrl: string, statusCode: number) {
+    super(`CCS Bar server at ${baseUrl} requires dashboard authentication (HTTP ${statusCode})`);
+    this.name = 'BarServerAuthRequiredError';
+  }
+}
+
+function isAuthRequiredStatus(statusCode: number): boolean {
+  return statusCode === 401 || statusCode === 403;
+}
+
 async function defaultWaitForServerLive(baseUrl: string): Promise<void> {
-  const { request } = await import('undici');
+  const net = await import('net');
   const INTERVAL_MS = 250;
   const TIMEOUT_MS = 10_000;
   const deadline = Date.now() + TIMEOUT_MS;
 
-  while (Date.now() < deadline) {
-    try {
-      const { statusCode, body } = await request(`${baseUrl}/api/bar/summary`, {
-        method: 'GET',
-        headersTimeout: 1500,
-        bodyTimeout: 1500,
+  async function probe(): Promise<number | null> {
+    const url = new URL(`${baseUrl}/api/bar/summary`);
+    return new Promise((resolve) => {
+      let buffer = '';
+      let settled = false;
+      const finish = (statusCode: number | null = null) => {
+        if (settled) return;
+        settled = true;
+        socket.destroy();
+        resolve(statusCode);
+      };
+      const socket = net.connect(
+        { host: url.hostname.replace(/^\[|\]$/g, ''), port: Number(url.port) },
+        () => {
+          socket.write(
+            `GET ${url.pathname}${url.search} HTTP/1.1\r\nHost: ${url.host}\r\nConnection: close\r\n\r\n`
+          );
+        }
+      );
+      socket.setTimeout(1500, () => finish());
+      socket.on('data', (chunk) => {
+        buffer += chunk.toString('utf8');
+        const match = buffer.match(/^HTTP\/\d(?:\.\d)?\s+(\d{3})/);
+        if (match) finish(Number(match[1]));
       });
-      await body.text();
-      if (statusCode === 200) return;
-    } catch {
-      /* not yet live — keep polling */
+      socket.on('error', () => finish());
+      socket.on('end', () => finish());
+    });
+  }
+
+  while (Date.now() < deadline) {
+    const statusCode = await probe();
+
+    if (statusCode === 200) return;
+    if (statusCode !== null && isAuthRequiredStatus(statusCode)) {
+      throw new BarServerAuthRequiredError(baseUrl, statusCode);
     }
+
     await new Promise<void>((resolve) => setTimeout(resolve, INTERVAL_MS));
   }
 
@@ -198,6 +237,16 @@ export async function handleBarLaunch(
   }
 
   if (running !== null) {
+    if (running.authRequired) {
+      console.error(
+        `[X] CCS Bar cannot launch while dashboard authentication protects ${running.baseUrl}.`
+      );
+      console.error(
+        '[i] Disable dashboard authentication for CCS Bar or start the dashboard manually.'
+      );
+      return;
+    }
+
     // Reuse the live server — write bar.json and open the app.
     const barJson: BarDiscoveryJson = {
       baseUrl: running.baseUrl,
@@ -249,9 +298,10 @@ export async function handleBarLaunch(
   // 2c. Spawn the detached server.
   const serveLogPath = getServeLogPath(ccsDir);
   const baseUrl = `http://127.0.0.1:${port}`;
+  let spawnedChild: ChildProcess | void;
   try {
     fs.mkdirSync(getBarDir(ccsDir), { recursive: true });
-    spawnDetachedServer(port, serveLogPath);
+    spawnedChild = spawnDetachedServer(port, serveLogPath);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[X] Could not start CCS web-server: ${msg}`);
@@ -265,6 +315,16 @@ export async function handleBarLaunch(
   try {
     await waitForServerLive(baseUrl);
   } catch (err) {
+    if (err instanceof BarServerAuthRequiredError) {
+      spawnedChild?.kill();
+      console.error(
+        `[X] CCS Bar cannot launch while dashboard authentication protects ${baseUrl}.`
+      );
+      console.error(
+        '[i] Disable dashboard authentication for CCS Bar or start the dashboard manually.'
+      );
+      return;
+    }
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[X] Could not connect to CCS web-server: ${msg}`);
     console.error(`[i] Check logs at ${serveLogPath}`);
