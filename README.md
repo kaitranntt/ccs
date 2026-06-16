@@ -64,7 +64,7 @@ CCS gives you one stable command surface while letting you switch between:
 - OAuth providers like Codex, Kiro, Claude, Qwen, Kimi, and more, with legacy
   Copilot compatibility for existing setups
 - API and local-model profiles like GLM, Kimi, OpenRouter, Ollama, llama.cpp,
-  Novita, and Alibaba Coding Plan
+  Novita, Fireworks AI, and Alibaba Coding Plan
 
 The goal is simple: stop rewriting config files, stop breaking active sessions,
 and move between providers in seconds.

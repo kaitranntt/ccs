@@ -23,6 +23,7 @@ export const PROVIDER_PRESET_IDS = [
   'qwen',
   'ollama-cloud',
   'novita',
+  'fireworks',
 ] as const;
 
 export type ProviderPresetId = (typeof PROVIDER_PRESET_IDS)[number];
@@ -265,6 +266,19 @@ const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
     requiresApiKey: true,
     badge: 'Anthropic-compatible',
     icon: '/icons/novita.svg',
+  },
+  {
+    id: 'fireworks',
+    name: 'Fireworks AI',
+    description: 'Anthropic-compatible inference (Kimi, Qwen, Llama) via api.fireworks.ai',
+    baseUrl: 'https://api.fireworks.ai/inference',
+    defaultProfileName: 'fireworks',
+    defaultModel: 'accounts/fireworks/models/kimi-k2p5',
+    apiKeyPlaceholder: 'fw_...',
+    apiKeyHint: 'Get your API key at fireworks.ai/api-keys',
+    category: 'alternative',
+    requiresApiKey: true,
+    badge: 'Anthropic-compatible',
   },
 ];
 
