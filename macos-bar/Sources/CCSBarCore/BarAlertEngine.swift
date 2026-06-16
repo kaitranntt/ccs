@@ -251,8 +251,9 @@ public enum BarAlertEngine {
     // PRUNE — keep the fired set bounded so it can't grow without limit across
     // day/month/reset rollovers or account churn.
     let presentIds = Set(rows.map { $0.id })
-    let presentResetBuckets: [String: String] = Dictionary(
-      uniqueKeysWithValues: rows.map { ($0.id, $0.nextReset ?? "noreset") })
+    let presentResetBuckets: [String: Set<String>] = rows.reduce(into: [:]) { buckets, row in
+      buckets[row.id, default: []].insert(row.nextReset ?? "noreset")
+    }
     fired = fired.filter { key in
       let parts = key.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
       guard let kind = parts.first else { return false }
@@ -266,7 +267,7 @@ public enum BarAlertEngine {
         // parts: [kind, accountId, bucket, "L<level>"]; bucket must equal the
         // account's CURRENT nextReset and the account must still be present.
         guard parts.count >= 3, presentIds.contains(parts[1]) else { return false }
-        return presentResetBuckets[parts[1]] == parts[2]
+        return presentResetBuckets[parts[1]]?.contains(parts[2]) == true
       case BarAlertKind.reauthNeeded.rawValue, BarAlertKind.accountCooldownOrPaused.rawValue:
         // parts: [kind, accountId, "on"]; keep only for still-present accounts.
         return parts.count >= 2 && presentIds.contains(parts[1])

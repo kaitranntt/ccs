@@ -758,6 +758,35 @@ do {
   check(t1.firedKeys.isEmpty, "prune collapses stale-bucket + absent-account keys (bounded)")
 }
 
+// (H) Duplicate account ids from a malformed summary must not crash pruning.
+do {
+  let rows = [
+    BarSummaryRow(
+      accountId: "dup@example.com", provider: "agy", quotaPercentage: 5, quotaStatus: "ok",
+      nextReset: "2026-07-01T00:00:00Z"),
+    BarSummaryRow(
+      accountId: "dup@example.com", provider: "agy", quotaPercentage: 4, quotaStatus: "ok",
+      nextReset: "2026-08-01T00:00:00Z"),
+  ]
+  let prior: Set<String> = [
+    "quotaRemainingBelow|agy:dup@example.com|2026-07-01T00:00:00Z|L10",
+    "quotaRemainingBelow|agy:dup@example.com|2026-08-01T00:00:00Z|L10",
+    "quotaRemainingBelow|agy:dup@example.com|2026-09-01T00:00:00Z|L10",
+  ]
+  let ev = BarAlertEngine.evaluate(
+    rows: rows, analytics: nil, prefs: BarAlertPrefs(quotaLevels: [10]), priorFiredKeys: prior,
+    now: engineNow, calendar: utc)
+  check(
+    ev.firedKeys.contains("quotaRemainingBelow|agy:dup@example.com|2026-07-01T00:00:00Z|L10"),
+    "duplicate ids: prune keeps first present reset bucket")
+  check(
+    ev.firedKeys.contains("quotaRemainingBelow|agy:dup@example.com|2026-08-01T00:00:00Z|L10"),
+    "duplicate ids: prune keeps second present reset bucket")
+  check(
+    !ev.firedKeys.contains("quotaRemainingBelow|agy:dup@example.com|2026-09-01T00:00:00Z|L10"),
+    "duplicate ids: prune drops absent reset bucket")
+}
+
 // (H) Deterministic order: shuffled rows produce notifs in stable id order.
 do {
   let rows = [
