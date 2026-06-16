@@ -56,14 +56,14 @@ export interface CodexLocalQuota {
   windows: CodexLocalQuotaWindow[];
 }
 
-/** Injectable seams for deterministic tests (no real fs / no tail subprocess). */
+/** Injectable seams for deterministic tests (no real fs). */
 export interface CodexLocalQuotaDeps {
   env?: NodeJS.ProcessEnv;
   homeDir?: string;
   existsSyncImpl?: (p: string) => boolean;
   readdirImpl?: (dir: string) => fs.Dirent[];
   statMtimeMsImpl?: (p: string) => number;
-  /** Returns the last N lines of a file (default: Bun tail). */
+  /** Returns the last N lines of a file (default: bounded fs tail). */
   tailLinesImpl?: (file: string, lines: number) => Promise<string[]>;
   now?: number;
 }
@@ -80,6 +80,12 @@ const STALE_AFTER_MS = 5 * 60 * 1000;
  * history) while still reaching past several exec-mode sessions to a real one.
  */
 const MAX_SESSIONS_SCANNED = 20;
+
+/** Maximum bytes read while tailing one rollout; prevents large-log DoS. */
+const TAIL_MAX_BYTES = 1024 * 1024;
+
+/** Chunk size for backwards tail reads. */
+const TAIL_READ_CHUNK_BYTES = 64 * 1024;
 
 interface CodexRateWindow {
   usedPercent: number;
@@ -167,19 +173,50 @@ function collectRolloutFiles(
 }
 
 /**
- * Default tail via a pure fs read. Must work under BOTH node and bun: the `ccs`
- * CLI (and `ccs bar launch`) runs under node, where `Bun.spawn` is undefined —
- * the previous Bun-only implementation threw there, so Codex quota silently
- * never surfaced in real deployments (only under the bun-run dev harness).
- * Reading the JSONL and slicing the tail is cheap (session rollouts are small)
- * and carries no runtime/OS/subprocess dependency.
+ * Default tail via bounded pure fs reads. Must work under BOTH node and bun: the
+ * `ccs` CLI (and `ccs bar launch`) runs under node, where `Bun.spawn` is
+ * undefined. Read from the end in chunks until enough lines are available, but
+ * cap bytes per file so oversized rollout logs cannot exhaust server memory.
  */
 async function defaultTailLines(file: string, lines: number): Promise<string[]> {
-  const text = await fs.promises.readFile(file, 'utf8');
-  return text
-    .split('\n')
-    .filter((l) => l.trim().length > 0)
-    .slice(-lines);
+  if (lines <= 0) return [];
+
+  const handle = await fs.promises.open(file, 'r');
+  try {
+    const stat = await handle.stat();
+    let position = stat.size;
+    let bytesReadTotal = 0;
+    const chunks: Buffer[] = [];
+    let newlineCount = 0;
+
+    while (position > 0 && bytesReadTotal < TAIL_MAX_BYTES && newlineCount <= lines) {
+      const bytesToRead = Math.min(
+        TAIL_READ_CHUNK_BYTES,
+        position,
+        TAIL_MAX_BYTES - bytesReadTotal
+      );
+      position -= bytesToRead;
+
+      const buffer = Buffer.allocUnsafe(bytesToRead);
+      const result = await handle.read(buffer, 0, bytesToRead, position);
+      const chunk =
+        result.bytesRead === bytesToRead ? buffer : buffer.subarray(0, result.bytesRead);
+      chunks.unshift(chunk);
+      bytesReadTotal += result.bytesRead;
+
+      for (let i = 0; i < chunk.length; i++) {
+        if (chunk[i] === 0x0a) newlineCount++;
+      }
+    }
+
+    return Buffer.concat(chunks)
+      .toString('utf8')
+      .split('\n')
+      .filter((l) => l.trim().length > 0)
+      .slice(-lines);
+  } finally {
+    await handle.close();
+  }
 }
 
 function computeQuotaPercentage(rate: CodexRateLimits): number {

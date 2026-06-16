@@ -173,6 +173,33 @@ describe('getCodexLocalQuota', () => {
     expect(quota?.staleAsOf).toBeNull();
   });
 
+  it('tails large rollout files without losing quota near the end', async () => {
+    const { env, sessions } = freshHome('large-tail');
+    const day = path.join(sessions, '2026', '06', '09');
+    fs.mkdirSync(day, { recursive: true });
+    const file = path.join(day, 'rollout-2026-06-09T10-00-00-aaaa.jsonl');
+
+    const fd = fs.openSync(file, 'w');
+    try {
+      fs.writeSync(fd, `${'x'.repeat(2 * 1024 * 1024)}\n`);
+      fs.writeSync(
+        fd,
+        `${tokenCountLine({
+          primary: { used_percent: 20, window_minutes: 300, resets_at: 1781033803 },
+          secondary: { used_percent: 35, window_minutes: 10080, resets_at: 1781192122 },
+          plan_type: 'pro',
+        })}\n`
+      );
+    } finally {
+      fs.closeSync(fd);
+    }
+
+    const quota = await getCodexLocalQuota({ env, now: Date.now() });
+    expect(quota).not.toBeNull();
+    expect(quota?.quotaPercentage).toBe(65);
+    expect(quota?.tier).toBe('pro');
+  });
+
   it('returns null when there are no rollout files at all', async () => {
     const { env } = freshHome('empty');
     const quota = await getCodexLocalQuota({ env, now: Date.now() });
