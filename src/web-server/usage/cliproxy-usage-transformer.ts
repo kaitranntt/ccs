@@ -243,15 +243,19 @@ function hydrateProviderlessHistoryDetails(
   existing: CliproxyUsageHistoryDetail[],
   incoming: CliproxyUsageHistoryDetail[]
 ): CliproxyUsageHistoryDetail[] {
+  if (!existing.some((detail) => !detail.provider)) return existing;
+
   const incomingByProviderlessSignature = new Map<string, CliproxyUsageHistoryDetail[]>();
   for (const detail of incoming) {
     if (!detail.provider) continue;
 
     const signature = createProviderlessHistorySignature(detail);
-    incomingByProviderlessSignature.set(signature, [
-      ...(incomingByProviderlessSignature.get(signature) ?? []),
-      detail,
-    ]);
+    const matches = incomingByProviderlessSignature.get(signature);
+    if (matches) {
+      matches.push(detail);
+    } else {
+      incomingByProviderlessSignature.set(signature, [detail]);
+    }
   }
 
   return existing.map((detail) => {
