@@ -21,25 +21,6 @@ export interface DashboardInfo {
  * Returns null when the file is absent or malformed.
  */
 
-function ensureLoopbackNoProxy(): void {
-  const loopbackHosts = ['localhost', '127.0.0.1', '::1'];
-  const existing = process.env.NO_PROXY ?? process.env.no_proxy ?? '';
-  const parts = new Set(
-    existing
-      .split(',')
-      .map((part) => part.trim())
-      .filter(Boolean)
-  );
-
-  for (const host of loopbackHosts) {
-    parts.add(host);
-  }
-
-  const next = Array.from(parts).join(',');
-  process.env.NO_PROXY = next;
-  process.env.no_proxy = next;
-}
-
 export function resolveBarPort(ccsDir: string): number | null {
   const barJsonPath = path.join(ccsDir, 'bar.json');
   try {
@@ -73,8 +54,6 @@ export function resolveBarPort(ccsDir: string): number | null {
  * would defeat this — any process could echo what it received.
  */
 export async function defaultFindRunningServer(ccsDir: string): Promise<DashboardInfo | null> {
-  ensureLoopbackNoProxy();
-
   const token = getOrCreateBarAuthToken(ccsDir);
 
   async function probe(url: string): Promise<{ ok: boolean; authRequired: boolean }> {
