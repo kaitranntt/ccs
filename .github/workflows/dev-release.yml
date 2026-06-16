@@ -139,7 +139,7 @@ jobs:
 
           COMMIT_TEXT=$(git log $RANGE --pretty=format:"%s%n%b" 2>/dev/null || true)
           ISSUES_FROM_COMMITS=$(printf '%s\n' "$COMMIT_TEXT" | \
-            perl -ne 'while (/\b(?:fixes|closes|resolves|refs?)\s+((?:#[0-9]+\b(?:\s*(?:,|and)?\s*#[0-9]+\b)*))/ig) { print "$1\n"; }' | \
+            perl -ne 'while (/\b(?:fixes|closes|resolves|refs?)\s+((?:#[0-9]+\b(?:\s*+(?:,|and)?\s*+#[0-9]+\b)*))/ig) { print "$1\n"; }' | \
             grep -oE '#[0-9]+' || true)
 
           PR_CANDIDATES=$(printf '%s\n' "$COMMIT_TEXT" | \
@@ -155,7 +155,7 @@ jobs:
           done
 
           ISSUES_FROM_PRS=$(printf '%s\n' "$PR_TEXT" | \
-            perl -ne 'while (/\b(?:fixes|closes|resolves|refs?)\s+((?:#[0-9]+\b(?:\s*(?:,|and)?\s*#[0-9]+\b)*))/ig) { print "$1\n"; }' | \
+            perl -ne 'while (/\b(?:fixes|closes|resolves|refs?)\s+((?:#[0-9]+\b(?:\s*+(?:,|and)?\s*+#[0-9]+\b)*))/ig) { print "$1\n"; }' | \
             grep -oE '#[0-9]+' || true)
 
           ISSUES=$(printf '%s\n%s\n' "$ISSUES_FROM_COMMITS" "$ISSUES_FROM_PRS" | \

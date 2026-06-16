@@ -1,30 +1,70 @@
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
-const ISSUE_REF_PATTERN = /#([0-9]+)/g;
-const ACTION_VERB_PATTERN =
-  /\b(?:fixes|closes|resolves|refs?)\b\s+(#\d+\b(?:\s*(?:,|and)?\s*#\d+\b)*)/gi;
-const RESOLVE_VERB_PATTERN =
-  /\b(?:fixes|closes|resolves)\b\s+(#\d+\b(?:\s*(?:,|and)?\s*#\d+\b)*)/gi;
+const ACTION_VERB_PATTERN = /\b(?:fixes|closes|resolves|refs?)\b\s+/gi;
+const RESOLVE_VERB_PATTERN = /\b(?:fixes|closes|resolves)\b\s+/gi;
 const PR_REF_PATTERN = /(?:Merge pull request #|\(#)([0-9]+)/g;
 const STABLE_TAG_PATTERN = /^v[0-9]+\.[0-9]+\.[0-9]+$/;
 
 export function extractIssueNumbers(text, { includeRefs = true } = {}) {
   const pattern = includeRefs ? ACTION_VERB_PATTERN : RESOLVE_VERB_PATTERN;
+  const source = text || '';
   const issues = new Set();
   let actionMatch;
 
   pattern.lastIndex = 0;
-  while ((actionMatch = pattern.exec(text || '')) !== null) {
-    const tail = actionMatch[1] || '';
-    let issueMatch;
-    ISSUE_REF_PATTERN.lastIndex = 0;
-    while ((issueMatch = ISSUE_REF_PATTERN.exec(tail)) !== null) {
-      issues.add(Number(issueMatch[1]));
+  while ((actionMatch = pattern.exec(source)) !== null) {
+    let cursor = actionMatch.index + actionMatch[0].length;
+
+    while (source[cursor] === '#') {
+      const numberStart = cursor + 1;
+      let numberEnd = numberStart;
+      while (numberEnd < source.length && isAsciiDigit(source[numberEnd])) {
+        numberEnd += 1;
+      }
+
+      if (numberEnd === numberStart || isAsciiWord(source[numberEnd] || '')) break;
+      issues.add(Number(source.slice(numberStart, numberEnd)));
+      cursor = numberEnd;
+
+      cursor = skipWhitespace(source, cursor);
+      if (source[cursor] === ',') {
+        cursor = skipWhitespace(source, cursor + 1);
+      } else if (isAndSeparator(source, cursor)) {
+        cursor = skipWhitespace(source, cursor + 3);
+      }
     }
   }
 
   return [...issues].sort((a, b) => a - b);
+}
+
+function skipWhitespace(text, cursor) {
+  while (cursor < text.length && /\s/.test(text[cursor])) {
+    cursor += 1;
+  }
+  return cursor;
+}
+
+function isAndSeparator(text, cursor) {
+  return (
+    text.slice(cursor, cursor + 3).toLowerCase() === 'and' &&
+    !isAsciiWord(text[cursor - 1] || '') &&
+    !isAsciiWord(text[cursor + 3] || '')
+  );
+}
+
+function isAsciiDigit(value) {
+  return value >= '0' && value <= '9';
+}
+
+function isAsciiWord(value) {
+  return (
+    (value >= '0' && value <= '9') ||
+    (value >= 'A' && value <= 'Z') ||
+    (value >= 'a' && value <= 'z') ||
+    value === '_'
+  );
 }
 
 export function extractPrNumbers(text) {
