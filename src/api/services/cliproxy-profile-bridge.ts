@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { buildProxyUrl, getProxyTarget } from '../../cliproxy/proxy/proxy-target-resolver';
+import { buildCliproxyProviderPath } from '../../cliproxy/config/env-builder';
 import { getEffectiveApiKey } from '../../cliproxy/auth/auth-token-manager';
 import { getModelMappingFromConfig } from '../../cliproxy/config/base-config-loader';
 import {
@@ -107,13 +108,18 @@ function resolveBridgeModelMapping(provider: CLIProxyProvider): ModelMapping {
 }
 
 export function listCliproxyBridgeProviders(): CliproxyBridgeProviderInfo[] {
-  return CLIPROXY_PROVIDER_IDS.map((provider) => ({
-    provider,
-    displayName: getProviderDisplayName(provider),
-    description: getProviderDescription(provider),
-    defaultProfileName: getDefaultCliproxyBridgeName(provider),
-    routePath: `/api/provider/${provider}`,
-  }));
+  return CLIPROXY_PROVIDER_IDS.map((provider) => {
+    const providerPath = buildCliproxyProviderPath(provider);
+    return {
+      provider,
+      displayName: getProviderDisplayName(provider),
+      description: getProviderDescription(provider),
+      defaultProfileName: getDefaultCliproxyBridgeName(provider),
+      // claude uses root path (CLIProxyAPI registers /v1/messages at root);
+      // all other providers use their scoped /api/provider/<x> route.
+      routePath: providerPath === '' ? '/' : providerPath,
+    };
+  });
 }
 
 export function resolveCliproxyBridgeProfile(
@@ -125,8 +131,13 @@ export function resolveCliproxyBridgeProfile(
 ): ResolvedCliproxyBridgeProfile {
   const target = getProxyTarget();
   const profileName = options.name?.trim() || suggestCliproxyBridgeName(provider);
-  const baseUrl = buildProxyUrl(target, `/api/provider/${provider}`);
+  // Use the shared path helper so the claude provider always resolves to the
+  // CLIProxy root URL (same rule as buildLocalProviderBaseUrl in env-builder).
+  const providerPath = buildCliproxyProviderPath(provider);
+  const baseUrl = buildProxyUrl(target, providerPath);
   const apiKey = target.authToken ?? getEffectiveApiKey();
+  // Expose the canonical route path: root for claude, scoped path for others.
+  const routePath = providerPath === '' ? '/' : providerPath;
 
   return {
     name: profileName,
@@ -136,7 +147,7 @@ export function resolveCliproxyBridgeProfile(
     apiKey,
     models: resolveBridgeModelMapping(provider),
     target: options.target || 'claude',
-    routePath: `/api/provider/${provider}`,
+    routePath,
     source: target.isRemote ? 'remote' : 'local',
   };
 }

@@ -206,8 +206,13 @@ export function getModelMapping(provider: CLIProxyProvider): ProviderModelMappin
 /**
  * Get environment variables for Claude CLI (bundled defaults)
  * Uses provider-specific endpoints (e.g., /api/provider/gemini) for explicit routing
- * except for the built-in claude provider. CLIProxyAPI's Claude Code contract uses
- * the root endpoint and lets Claude Code append /v1/messages.
+ * except for the built-in claude provider.
+ *
+ * Root-URL exception: the claude provider always uses the CLIProxy ROOT endpoint
+ * (http://127.0.0.1:<port>) instead of /api/provider/claude.  CLIProxyAPI's Claude Code
+ * contract registers /v1/messages at the root; the /api/provider/ prefix is a Plus-only
+ * feature for non-Claude providers.  buildCliproxyProviderPath() encodes this rule and is
+ * used here and by the api-create bridge path so both remain consistent.
  *
  * For the claude built-in provider the model env vars are intentionally omitted so that
  * the user's own Claude Code /model selection is honored end-to-end (model-neutral passthrough).
@@ -369,6 +374,20 @@ function ensureRequiredEnvVars(
 
 /** Localhost hostnames used for local CLIProxy endpoints */
 const LOCALHOST_NAMES = new Set(['127.0.0.1', 'localhost', '0.0.0.0']);
+
+/**
+ * Return the CLIProxy route path for a provider.
+ *
+ * - claude uses the root path (empty string → "/" after buildProxyUrl normalises it)
+ *   because CLIProxyAPI's Claude Code contract registers /v1/messages at the root; the
+ *   /api/provider/ prefix is Plus-only and only for non-Claude providers.
+ * - all other providers use the scoped /api/provider/<x> path.
+ *
+ * Exported so the profile-bridge can reuse the same rule (DRY).
+ */
+export function buildCliproxyProviderPath(provider: CLIProxyProvider): string {
+  return provider === 'claude' ? '' : `/api/provider/${provider}`;
+}
 
 function buildLocalProviderBaseUrl(provider: CLIProxyProvider, port: number): string {
   const rootUrl = `http://127.0.0.1:${port}`;
