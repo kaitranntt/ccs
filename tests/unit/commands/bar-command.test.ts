@@ -411,7 +411,6 @@ describe('bar install subcommand', () => {
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async (_baseUrl: string) => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: (_appPath: string) => FAKE_VERSION,
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => path.join(tempHome, '.ccs'),
@@ -437,7 +436,6 @@ describe('bar install subcommand', () => {
       },
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: (_appPath: string) => FAKE_VERSION,
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => path.join(tempHome, '.ccs'),
@@ -459,7 +457,6 @@ describe('bar install subcommand', () => {
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: (_appPath: string) => FAKE_VERSION,
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => ccsDir,
@@ -485,7 +482,6 @@ describe('bar install subcommand', () => {
         return { compatible: true, reason: 'ok' };
       },
       readAppBundleVersion: (_appPath: string) => FAKE_VERSION,
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => path.join(tempHome, '.ccs'),
@@ -505,8 +501,7 @@ describe('bar install subcommand', () => {
         downloadAndExtract: fakeExtract(appsDir),
         verifyCompat: async () => ({ compatible: false, reason: 'no-bar-api' }),
         readAppBundleVersion: (_appPath: string) => FAKE_VERSION,
-        clearQuarantine: async () => true,
-        isBarRunning: async () => false,
+          isBarRunning: async () => false,
         promptLaunch: async () => false,
         getCcsDir: () => path.join(tempHome, '.ccs'),
         getAppsDir: () => appsDir,
@@ -521,14 +516,12 @@ describe('bar install subcommand', () => {
     const appsDir = path.join(tempHome, 'Applications');
     const { handleBarInstall } = await loadInstallSubcommand();
 
-    // Inject clearQuarantine returning false so the fallback xattr guidance is
-    // always printed regardless of host platform (/usr/bin/xattr availability).
+    // Gatekeeper quarantine is preserved (not cleared) — the note is always printed.
     await handleBarInstall([], {
       fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: (_appPath: string) => FAKE_VERSION,
-      clearQuarantine: async () => false,
       getCcsDir: () => path.join(tempHome, '.ccs'),
       getAppsDir: () => appsDir,
     });
@@ -597,7 +590,6 @@ describe('bar install: redirect-following download (#8)', () => {
       downloadAndExtract: redirectFollowingExtract,
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: (_appPath: string) => FAKE_VERSION,
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => path.join(tempHome, '.ccs'),
@@ -769,7 +761,6 @@ describe('bar install: compat capability handshake', () => {
         return { compatible: true, reason: 'ok' };
       },
       readAppBundleVersion: (_appPath: string) => '1.4.0',
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => path.join(tempHome, '.ccs'),
@@ -790,7 +781,6 @@ describe('bar install: compat capability handshake', () => {
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: (_appPath: string) => '1.4.0',
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => path.join(tempHome, '.ccs'),
@@ -812,7 +802,6 @@ describe('bar install: compat capability handshake', () => {
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: false, reason: 'no-bar-api' }),
       readAppBundleVersion: (_appPath: string) => '1.4.0',
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => path.join(tempHome, '.ccs'),
@@ -835,7 +824,6 @@ describe('bar install: compat capability handshake', () => {
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: false, reason: 'unreachable' }),
       readAppBundleVersion: (_appPath: string) => '1.4.0',
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => path.join(tempHome, '.ccs'),
@@ -860,8 +848,7 @@ describe('bar install: compat capability handshake', () => {
           throw new Error('network explosion');
         },
         readAppBundleVersion: (_appPath: string) => '1.4.0',
-        clearQuarantine: async () => true,
-        isBarRunning: async () => false,
+          isBarRunning: async () => false,
         promptLaunch: async () => false,
         getCcsDir: () => path.join(tempHome, '.ccs'),
         getAppsDir: () => appsDir,
@@ -892,7 +879,6 @@ describe('bar install: post-extract app-exists assertion (#12)', () => {
       },
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: (_appPath: string) => '1.0.0',
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => path.join(tempHome, '.ccs'),
@@ -978,7 +964,6 @@ describe('bar install: Info.plist version extraction regression tests', () => {
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       // readAppBundleVersion returns the real version from Info.plist
       readAppBundleVersion: (_appPath: string) => '1.4.0',
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => path.join(tempHome, '.ccs'),
@@ -1003,7 +988,6 @@ describe('bar install: Info.plist version extraction regression tests', () => {
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: (_appPath: string) => '1.4.0',
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => ccsDir,
@@ -1030,7 +1014,6 @@ describe('bar install: Info.plist version extraction regression tests', () => {
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       // Unreadable Info.plist — returns null
       readAppBundleVersion: (_appPath: string) => null,
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => ccsDir,
@@ -1109,7 +1092,6 @@ describe('bar install: Info.plist version extraction regression tests', () => {
       },
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       // readAppBundleVersion intentionally omitted → uses production default
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => ccsDir,
@@ -1147,7 +1129,6 @@ describe('bar install: Info.plist version extraction regression tests', () => {
       },
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       // readAppBundleVersion omitted → uses production default
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => ccsDir,
@@ -1487,7 +1468,6 @@ describe('bar install: zip-slip guard (fix #14)', () => {
       downloadAndExtract: safeExtract,
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: (_appPath: string) => FAKE_VERSION,
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => path.join(tempHome, '.ccs'),
@@ -1531,7 +1511,6 @@ describe('bar install: stale version-pin removal on null plist read (Fix 1)', ()
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       // Simulate unreadable Info.plist
       readAppBundleVersion: (_appPath: string) => null,
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => ccsDir,
@@ -2028,7 +2007,6 @@ describe('bar install: already-installed detection (GH-1504)', () => {
         if (fs.existsSync(appPath)) return '1.0.0';
         return null;
       },
-      clearQuarantine: async () => true,
       launchBar: async () => {
         calls.push('launch');
       },
@@ -2056,7 +2034,6 @@ describe('bar install: already-installed detection (GH-1504)', () => {
       },
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: () => null,
-      clearQuarantine: async () => true,
       launchBar: async () => {
         calls.push('launch');
       },
@@ -2082,7 +2059,6 @@ describe('bar install: already-installed detection (GH-1504)', () => {
       },
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: () => '2.0.0',
-      clearQuarantine: async () => true,
       launchBar: async () => {
         calls.push('launch');
       },
@@ -2110,9 +2086,8 @@ describe('bar install: quarantine handling (GH-1504)', () => {
     };
   }
 
-  it('calls clearQuarantine with the correct app path after successful extraction', async () => {
+  it('does not clear quarantine automatically after successful extraction', async () => {
     const appsDir = path.join(tempHome, 'Applications');
-    const quarantineCalls: string[] = [];
 
     const { handleBarInstall } = await loadInstallSubcommand();
 
@@ -2121,10 +2096,6 @@ describe('bar install: quarantine handling (GH-1504)', () => {
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: () => '1.0.0',
-      clearQuarantine: async (appPath: string) => {
-        quarantineCalls.push(appPath);
-        return true;
-      },
       launchBar: async () => {
         /* noop */
       },
@@ -2133,59 +2104,15 @@ describe('bar install: quarantine handling (GH-1504)', () => {
       getAppsDir: () => appsDir,
     });
 
-    expect(quarantineCalls).toHaveLength(1);
-    expect(quarantineCalls[0]).toMatch(/CCS Bar\.app/);
-    expect(quarantineCalls[0]).toBe(path.join(appsDir, 'CCS Bar.app'));
-
     const allOutput = consoleOutput.join('\n');
-    expect(allOutput).toMatch(/\[OK\].*[Cc]leared.*[Qq]uarantine/);
+    expect(allOutput).toMatch(/Gatekeeper note/i);
+    expect(allOutput).toMatch(/right-click.*Open/i);
+    expect(allOutput).not.toMatch(/Cleared Gatekeeper quarantine/i);
+    expect(allOutput).not.toMatch(/xattr.*quarantine/i);
   });
 
-  it('quarantine failure is non-fatal: falls back to printed xattr hint; launch handoff skipped', async () => {
-    // Launch Retry finding: when clearQuarantine fails, the entire launch handoff must be
-    // skipped (prompt and launchBar must NOT be called) and the follow-up hint must be printed.
+  it('install exits early when extraction does not produce the expected app bundle', async () => {
     const appsDir = path.join(tempHome, 'Applications');
-    let launchCalled = false;
-    let promptCalled = false;
-
-    const { handleBarInstall } = await loadInstallSubcommand();
-
-    await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
-      downloadAndExtract: fakeExtract(appsDir),
-      verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
-      readAppBundleVersion: () => '1.0.0',
-      clearQuarantine: async () => false,
-      launchBar: async () => {
-        launchCalled = true;
-      },
-      promptLaunch: async () => {
-        promptCalled = true;
-        return false;
-      },
-      getCcsDir: () => path.join(tempHome, '.ccs'),
-      getAppsDir: () => appsDir,
-    });
-
-    // Install still reports success
-    const allOutput = consoleOutput.join('\n');
-    expect(allOutput).toMatch(/\[OK\].*CCS Bar/);
-    expect(allOutput).not.toMatch(/\[X\]/);
-
-    // Fallback xattr hint printed
-    expect(allOutput).toMatch(/xattr.*quarantine/i);
-
-    // Launch Retry finding: prompt and launch must both be skipped
-    expect(promptCalled).toBe(false);
-    expect(launchCalled).toBe(false);
-
-    // Follow-up hint must guide the user to run `ccs bar` after manual clear
-    expect(allOutput).toMatch(/After clearing quarantine.*ccs bar/i);
-  });
-
-  it('clearQuarantine is NOT called when extraction fails (app path absent)', async () => {
-    const appsDir = path.join(tempHome, 'Applications');
-    const quarantineCalls: string[] = [];
 
     const { handleBarInstall } = await loadInstallSubcommand();
 
@@ -2197,10 +2124,6 @@ describe('bar install: quarantine handling (GH-1504)', () => {
       },
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       readAppBundleVersion: () => '1.0.0',
-      clearQuarantine: async (appPath: string) => {
-        quarantineCalls.push(appPath);
-        return true;
-      },
       launchBar: async () => {
         /* noop */
       },
@@ -2210,17 +2133,16 @@ describe('bar install: quarantine handling (GH-1504)', () => {
     });
 
     // Should have returned early due to missing app
-    expect(quarantineCalls).toHaveLength(0);
     const allOutput = consoleOutput.join('\n');
     expect(allOutput).toMatch(/\[X\]/);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Launch Retry finding — quarantine failure blocks entire launch handoff
+// Gatekeeper preservation — quarantine is not cleared before launch handoff
 // ---------------------------------------------------------------------------
 
-describe('bar install: launch retry finding — quarantine failure skips launch handoff', () => {
+describe('bar install: Gatekeeper quarantine preservation', () => {
   const FAKE_DOWNLOAD_URL =
     'https://github.com/kaitranntt/ccs/releases/download/ccs-bar-latest/CCS-Bar.app.zip';
 
@@ -2243,7 +2165,7 @@ describe('bar install: launch retry finding — quarantine failure skips launch 
     };
   }
 
-  it('clearQuarantine false: promptLaunch is NOT called', async () => {
+  it('promptLaunch is still called after install (quarantine preserved, not cleared)', async () => {
     const appsDir = path.join(tempHome, 'Applications');
     let promptCalled = false;
 
@@ -2251,66 +2173,6 @@ describe('bar install: launch retry finding — quarantine failure skips launch 
 
     await handleBarInstall([], {
       ...baseDeps(appsDir),
-      clearQuarantine: async () => false,
-      launchBar: async () => {
-        /* noop */
-      },
-      promptLaunch: async () => {
-        promptCalled = true;
-        return true;
-      },
-    });
-
-    expect(promptCalled).toBe(false);
-  });
-
-  it('clearQuarantine false + --launch: launchBar is NOT called (explicit flag cannot override failed clear)', async () => {
-    // --launch does not bypass a failed quarantine clear — Gatekeeper would still block.
-    const appsDir = path.join(tempHome, 'Applications');
-    let launchCalled = false;
-
-    const { handleBarInstall } = await loadInstallSubcommand();
-
-    await handleBarInstall(['--launch'], {
-      ...baseDeps(appsDir),
-      clearQuarantine: async () => false,
-      launchBar: async () => {
-        launchCalled = true;
-      },
-      promptLaunch: async () => false,
-    });
-
-    expect(launchCalled).toBe(false);
-  });
-
-  it('clearQuarantine false: follow-up hint printed directing user to run `ccs bar` after manual clear', async () => {
-    const appsDir = path.join(tempHome, 'Applications');
-
-    const { handleBarInstall } = await loadInstallSubcommand();
-
-    await handleBarInstall([], {
-      ...baseDeps(appsDir),
-      clearQuarantine: async () => false,
-      launchBar: async () => {
-        /* noop */
-      },
-      promptLaunch: async () => false,
-    });
-
-    const allOutput = consoleOutput.join('\n');
-    expect(allOutput).toMatch(/After clearing quarantine.*ccs bar/i);
-  });
-
-  it('clearQuarantine true: launch handoff proceeds normally (prompt called)', async () => {
-    // Successful clear must not change existing behavior — prompt is still called.
-    const appsDir = path.join(tempHome, 'Applications');
-    let promptCalled = false;
-
-    const { handleBarInstall } = await loadInstallSubcommand();
-
-    await handleBarInstall([], {
-      ...baseDeps(appsDir),
-      clearQuarantine: async () => true,
       launchBar: async () => {
         /* noop */
       },
@@ -2323,7 +2185,7 @@ describe('bar install: launch retry finding — quarantine failure skips launch 
     expect(promptCalled).toBe(true);
   });
 
-  it('clearQuarantine true + --launch: launchBar invoked as before', async () => {
+  it('--launch invokes launchBar', async () => {
     const appsDir = path.join(tempHome, 'Applications');
     let launchCalled = false;
 
@@ -2331,7 +2193,6 @@ describe('bar install: launch retry finding — quarantine failure skips launch 
 
     await handleBarInstall(['--launch'], {
       ...baseDeps(appsDir),
-      clearQuarantine: async () => true,
       launchBar: async () => {
         launchCalled = true;
       },
@@ -2362,7 +2223,6 @@ describe('bar install: launch flags and prompt (GH-1504)', () => {
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' as const }),
       readAppBundleVersion: () => '1.0.0',
-      clearQuarantine: async () => true,
       // isBarRunning injected as false so tests are deterministic regardless of
       // whether the real CCS Bar process is running on the test machine.
       isBarRunning: async () => false,
@@ -2473,52 +2333,6 @@ describe('bar install: launch flags and prompt (GH-1504)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Finding 1 — PATH hijack: xattr must use absolute path /usr/bin/xattr
-// (The default impl is internal; tested via injectable clearQuarantine seam.
-//  The production behavior is captured by the contract test below.)
-// ---------------------------------------------------------------------------
-
-describe('bar install: xattr absolute path contract (Finding 1)', () => {
-  const FAKE_DOWNLOAD_URL =
-    'https://github.com/kaitranntt/ccs/releases/download/ccs-bar-latest/CCS-Bar.app.zip';
-
-  function fakeExtract(appsDir: string) {
-    return async (_url: string, dest: string) => {
-      fs.mkdirSync(path.join(dest, 'CCS Bar.app'), { recursive: true });
-    };
-  }
-
-  it('clearQuarantine injectable dep receives the correct app path (contract test)', async () => {
-    const appsDir = path.join(tempHome, 'Applications');
-    const quarantineArgs: string[] = [];
-
-    const { handleBarInstall } = await loadInstallSubcommand();
-
-    await handleBarInstall([], {
-      fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
-      downloadAndExtract: fakeExtract(appsDir),
-      verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
-      readAppBundleVersion: () => '1.0.0',
-      clearQuarantine: async (appPath: string) => {
-        quarantineArgs.push(appPath);
-        return true;
-      },
-      launchBar: async () => {
-        /* noop */
-      },
-      promptLaunch: async () => false,
-      isBarRunning: async () => false,
-      getCcsDir: () => path.join(tempHome, '.ccs'),
-      getAppsDir: () => appsDir,
-    });
-
-    // Production invokes clearQuarantine with the full app path — not a bare binary name.
-    expect(quarantineArgs).toHaveLength(1);
-    expect(quarantineArgs[0]).toBe(path.join(appsDir, 'CCS Bar.app'));
-  });
-});
-
-// ---------------------------------------------------------------------------
 // Finding 2 — TTY gate: prompt gated on stdin.isTTY, not stdout.isTTY
 // ---------------------------------------------------------------------------
 
@@ -2538,7 +2352,6 @@ describe('bar install: stdin-TTY gate for launch prompt (Finding 2)', () => {
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' as const }),
       readAppBundleVersion: () => '1.0.0',
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       getCcsDir: () => path.join(tempHome, '.ccs'),
       getAppsDir: () => appsDir,
@@ -2627,7 +2440,6 @@ describe('bar install: already-running detection (Finding 3)', () => {
       downloadAndExtract: fakeExtract(appsDir),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' as const }),
       readAppBundleVersion: () => '1.0.0',
-      clearQuarantine: async () => true,
       getCcsDir: () => path.join(tempHome, '.ccs'),
       getAppsDir: () => appsDir,
       ...extra,
@@ -2792,7 +2604,6 @@ describe('bar install: whitespace-only CFBundleShortVersionString yields null (F
       },
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
       // readAppBundleVersion intentionally omitted → uses production default
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       promptLaunch: async () => false,
       getCcsDir: () => ccsDir,
@@ -2825,7 +2636,6 @@ describe('bar install: stage-then-swap safety (Data Loss finding)', () => {
       fetchReleaseAsset: async () => ({ downloadUrl: FAKE_DOWNLOAD_URL, sha256: FAKE_SHA256 }),
       verifyCompat: async () => ({ compatible: true, reason: 'ok' as const }),
       readAppBundleVersion: () => '2.0.0',
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       launchBar: async () => {
         /* noop */
@@ -3024,7 +2834,6 @@ describe('bar install: silent-decline fix — hint on user decline (review findi
       },
       verifyCompat: async () => ({ compatible: true, reason: 'ok' as const }),
       readAppBundleVersion: () => '1.0.0',
-      clearQuarantine: async () => true,
       isBarRunning: async () => false,
       launchBar: async () => {
         /* noop */

@@ -60,15 +60,13 @@ export async function showHelp(): Promise<void> {
   }
 
   console.log(dim('  macOS only. The app communicates with the CCS web-server on localhost only.'));
+  console.log(dim('  Gatekeeper quarantine is kept in place for macOS first-launch verification.'));
   console.log(
     dim('  `ccs bar launch` spawns the server detached — the terminal is freed immediately.')
   );
   console.log(dim('  The server persists until stopped with `ccs bar stop` or system reboot.'));
   console.log(
-    dim(
-      '  Gatekeeper quarantine is cleared automatically after install. If the app is still blocked,'
-    )
+    dim('  If macOS blocks the app, right-click > Open to make an explicit trust decision.')
   );
-  console.log(dim('  right-click > Open or run `xattr -dr com.apple.quarantine` manually.'));
   console.log('');
 }

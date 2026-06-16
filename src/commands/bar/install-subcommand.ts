@@ -86,13 +86,6 @@ export interface InstallDeps {
   /** Destination directory for the .app bundle (~/Applications by default). */
   getAppsDir: () => string;
   /**
-   * Clear the macOS Gatekeeper quarantine attribute from the installed app.
-   * Run via `/usr/bin/xattr -dr com.apple.quarantine <appPath>` (execFile, not shell-string).
-   * Returns true on success, false if xattr is unavailable or the call fails (non-fatal).
-   * Injectable for tests — avoids touching the real system.
-   */
-  clearQuarantine: (appPath: string) => Promise<boolean>;
-  /**
    * Invoke handleBarLaunch after a successful install when the user consents.
    * Injectable so tests can assert invocation without starting a real server.
    */
@@ -416,25 +409,6 @@ function defaultGetAppsDir(): string {
   return path.join(os.homedir(), 'Applications');
 }
 
-/**
- * Clear the macOS Gatekeeper quarantine attribute from the installed app.
- * Uses absolute path `/usr/bin/xattr` to avoid PATH hijacking.
- * Runs `/usr/bin/xattr -dr com.apple.quarantine <appPath>` via execFile (not shell-string)
- * so the path is passed as an argument, not interpolated into a shell command.
- * Returns true on success, false on any error (non-fatal — install already succeeded).
- */
-async function defaultClearQuarantine(appPath: string): Promise<boolean> {
-  try {
-    const { execFile } = await import('child_process');
-    const { promisify } = await import('util');
-    const execFileAsync = promisify(execFile);
-    await execFileAsync('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', appPath]);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function defaultRemoveExistingApp(appPath: string): void {
   fs.rmSync(appPath, { recursive: true, force: true });
 }
@@ -524,7 +498,6 @@ export async function handleBarInstall(
   const downloadAndExtract = deps.downloadAndExtract ?? defaultDownloadAndExtract;
   const verifyCompat = deps.verifyCompat ?? defaultVerifyCompat;
   const readAppBundleVersion = deps.readAppBundleVersion ?? defaultReadAppBundleVersion;
-  const clearQuarantine = deps.clearQuarantine ?? defaultClearQuarantine;
   const launchBar = deps.launchBar ?? defaultLaunchBar;
   const promptLaunch = deps.promptLaunch ?? defaultPromptLaunch;
   const isBarRunning = deps.isBarRunning ?? defaultIsBarRunning;
@@ -678,13 +651,11 @@ export async function handleBarInstall(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[!] Could not write launch.json: ${msg}`);
-    // Non-fatal — continue to quarantine clear + launch handoff.
+    // Non-fatal — continue to Gatekeeper note + launch handoff.
   }
 
   // 5. Capability handshake via GET /api/bar/summary.
-  //    Runs BEFORE the quarantine-clear + launch handoff because it is a server-side
-  //    check unrelated to Gatekeeper. A failed quarantine clear must not prevent the
-  //    compat result from being shown to the user.
+  //    This server-side check is unrelated to Gatekeeper.
   //    Read bar.json for baseUrl if present; otherwise fall back to localhost:3000.
   const barJsonPath = path.join(ccsDir, 'bar.json');
   let baseUrl = 'http://127.0.0.1:3000';
@@ -715,22 +686,14 @@ export async function handleBarInstall(
     console.log('[i] Run `ccs bar` to start the server and recheck.');
   }
 
-  // 6. Quarantine handling: run `xattr -dr com.apple.quarantine` automatically.
-  //    This clears the Gatekeeper quarantine flag that ad-hoc builds receive on download.
-  //    On success: print [OK] confirmation. On failure: fall back to printed guidance and
-  //    SKIP the launch handoff entirely — launching a still-quarantined app hits the
-  //    Gatekeeper block, so the user must clear quarantine manually first.
-  const quarantineCleared = await clearQuarantine(appPath);
-  if (quarantineCleared) {
-    console.log('[OK] Cleared Gatekeeper quarantine.');
-  } else {
-    console.log('[i] Gatekeeper note (ad-hoc build):');
-    console.log('    If macOS says the app is "damaged" or "unverified", run:');
-    console.log(`      xattr -dr com.apple.quarantine "${appPath}"`);
-    console.log('    Or right-click the app and select Open.');
-    console.log('[i] After clearing quarantine, run `ccs bar` to launch.');
-    return;
-  }
+  // 6. Gatekeeper handling: keep quarantine in place for downloaded apps.
+  //    CCS Bar is installed from a floating release asset and is not verified by a
+  //    pinned checksum/signature here, so do not strip macOS's quarantine marker.
+  //    If Gatekeeper blocks first launch, the user can make an explicit manual
+  //    trust decision outside the installer.
+  console.log('[i] Gatekeeper note:');
+  console.log('    macOS may verify this downloaded app on first launch.');
+  console.log('    If macOS blocks it, right-click the app and select Open.');
 
   // 7. Launch handoff.
   //    Already-running check: if CCS Bar is running after a (re)install, skip the
