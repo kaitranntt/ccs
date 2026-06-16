@@ -99,11 +99,15 @@ function usesImplicitDefaultProfile(cleanArgs: string[]): boolean {
  * and only reached on the profile-not-found path, so a real configured profile
  * of the same name always wins.
  */
-export function isBareClaudeSubcommandPassthrough(profile: string, args: string[]): boolean {
+export function isBareClaudeSubcommandPassthrough(
+  profile: string,
+  args: string[],
+  profileConfig?: Parameters<typeof resolveTargetType>[1]
+): boolean {
   if (profile === 'default') return false;
   if (getClaudeSubcommandName([profile]) === null) return false;
   try {
-    return resolveTargetType(args) === 'claude';
+    return resolveTargetType(args, profileConfig) === 'claude';
   } catch {
     return false;
   }
@@ -158,10 +162,19 @@ export async function resolveProfileAndTarget(
   } catch (profileError) {
     // Bare Claude subcommand passthrough: forward `ccs agents`, `ccs mcp`, ...
     // through the default profile instead of failing as an unknown profile.
-    if (isBareClaudeSubcommandPassthrough(profile, args)) {
-      remainingArgs = [profile, ...remainingArgs];
-      profile = 'default';
-      profileInfo = detector.detectProfileType(profile);
+    if (profile !== 'default' && getClaudeSubcommandName([profile]) !== null) {
+      const defaultProfileInfo = detector.detectProfileType('default');
+      const defaultProfileConfig = defaultProfileInfo.target
+        ? { target: defaultProfileInfo.target }
+        : undefined;
+
+      if (isBareClaudeSubcommandPassthrough(profile, args, defaultProfileConfig)) {
+        remainingArgs = [profile, ...remainingArgs];
+        profile = 'default';
+        profileInfo = defaultProfileInfo;
+      } else {
+        throw profileError;
+      }
     } else {
       throw profileError;
     }
