@@ -658,8 +658,8 @@ export async function preflightCheck(provider: CLIProxyProvider): Promise<Prefli
   // match the locked tier.  If it doesn't, route to a healthy account in the
   // locked tier instead.  Locks are per-provider: locking "agy" to "ultra"
   // does NOT constrain "claude", "codex", "gemini", or "ghcp".
-  // Graceful degradation: if no locked-tier account is available, fall through
-  // to the default (don't block the request entirely).
+  // This is intentionally strict: if no locked-tier account is available, do
+  // not fail open to a cross-tier default.
   const tierLock = getTierLockForProvider(quotaConfig.manual, provider);
   if (tierLock !== null && (defaultAccount.tier || 'unknown') !== tierLock) {
     const lockedTierAccount = await findHealthyAccount(provider, []);
@@ -673,7 +673,12 @@ export async function preflightCheck(provider: CLIProxyProvider): Promise<Prefli
         reason: `Tier lock: selected ${tierLock} account`,
       };
     }
-    // No locked-tier account available — fall through and use default
+
+    return {
+      proceed: false,
+      accountId: '',
+      reason: `Tier lock: no healthy ${tierLock} account available`,
+    };
   }
 
   // Check if default is paused

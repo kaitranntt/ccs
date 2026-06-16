@@ -353,6 +353,49 @@ describe('quota-manager findHealthyAccount — tier_lock', () => {
   });
 
   // -------------------------------------------------------------------------
+  // preflightCheck must enforce the same strict tier lock as findHealthyAccount
+  // -------------------------------------------------------------------------
+
+  it('preflightCheck blocks a cross-tier default when no healthy locked-tier account exists', async () => {
+    writeMinimalConfig(tempHome, { agy: 'pro' });
+    _mockAccounts = [ULTRA_ACCOUNT, PRO_ACCOUNT];
+
+    const uid = `preflight-lock-pro-exhausted-${Date.now()}-${Math.random()}`;
+    const { preflightCheck, setCachedQuota } = await import(
+      `../../../src/cliproxy/quota/quota-manager?${uid}`
+    );
+
+    // Default is ultra, but agy is locked to pro. The only pro account is
+    // exhausted, so preflight must not fail open to the healthy ultra default.
+    setCachedQuota('agy', ULTRA_ACCOUNT.id, HEALTHY_QUOTA as never);
+    setCachedQuota('agy', PRO_ACCOUNT.id, EXHAUSTED_QUOTA as never);
+
+    const result = await preflightCheck('agy');
+    expect(result.proceed).toBe(false);
+    expect(result.accountId).not.toBe(ULTRA_ACCOUNT.id);
+    expect(result.reason).toBe('Tier lock: no healthy pro account available');
+  });
+
+  it('preflightCheck switches a cross-tier default to a healthy locked-tier account', async () => {
+    writeMinimalConfig(tempHome, { agy: 'pro' });
+    _mockAccounts = [ULTRA_ACCOUNT, PRO_ACCOUNT];
+
+    const uid = `preflight-lock-pro-healthy-${Date.now()}-${Math.random()}`;
+    const { preflightCheck, setCachedQuota } = await import(
+      `../../../src/cliproxy/quota/quota-manager?${uid}`
+    );
+
+    setCachedQuota('agy', ULTRA_ACCOUNT.id, HEALTHY_QUOTA as never);
+    setCachedQuota('agy', PRO_ACCOUNT.id, HEALTHY_QUOTA as never);
+
+    const result = await preflightCheck('agy');
+    expect(result.proceed).toBe(true);
+    expect(result.accountId).toBe(PRO_ACCOUNT.id);
+    expect(result.switchedFrom).toBe(ULTRA_ACCOUNT.id);
+    expect(result.reason).toBe('Tier lock: selected pro account');
+  });
+
+  // -------------------------------------------------------------------------
   // Baseline: no tier_lock — any available healthy account is returned.
   //
   // Same pattern: write null-lock and invalidate cache immediately before import.
