@@ -57,7 +57,7 @@ interface ChannelsCommandOptions {
   setTokenChannel?: OfficialChannelId;
   setTokenMissing: boolean;
   clearTokenInvalid?: string;
-  setTokenInvalid?: string;
+  setTokenInvalid: boolean;
   help: boolean;
 }
 
@@ -83,13 +83,13 @@ export function parseChannelsCommandArgs(args: string[]): ChannelsCommandOptions
   }
 
   let parsedSetTokenChannel: OfficialChannelId | undefined;
-  let setTokenInvalid: string | undefined;
+  let setTokenInvalid = false;
   if (setToken.found && !setToken.missingValue && setToken.value) {
     const channelId = setToken.value.trim().toLowerCase();
     if (isOfficialChannelId(channelId)) {
       parsedSetTokenChannel = channelId;
     } else {
-      setTokenInvalid = setToken.value;
+      setTokenInvalid = true;
     }
   }
 
@@ -378,11 +378,7 @@ export async function handleConfigChannelsCommand(args: string[]): Promise<void>
     return;
   }
   if (options.setTokenInvalid) {
-    console.error(
-      fail(
-        `Invalid --set-token value: ${options.setTokenInvalid} (use ${getOfficialChannelChoices()})`
-      )
-    );
+    console.error(fail(`Invalid --set-token value (use ${getOfficialChannelChoices()})`));
     process.exitCode = 1;
     return;
   }
