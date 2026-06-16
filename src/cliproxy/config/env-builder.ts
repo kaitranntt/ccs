@@ -31,7 +31,11 @@ import {
   normalizeIFlowLegacyModelAliases,
   normalizeModelIdForProvider,
 } from '../ai-providers/model-id-normalizer';
-import { getGlobalEnvConfig, getCcsDir } from '../../config/config-loader-facade';
+import {
+  getGlobalEnvConfig,
+  getOutputLimitsEnv,
+  getCcsDir,
+} from '../../config/config-loader-facade';
 
 /** Settings file structure for user overrides */
 interface ProviderSettings {
@@ -310,13 +314,21 @@ export function resolveProviderSettingsPath(provider: CLIProxyProvider): string 
 /**
  * Get global env vars to inject into all third-party profiles.
  * Returns empty object if disabled.
+ *
+ * Opt-in output limits (issue #231) are merged in on top of the global env so
+ * they reach every cliproxy launch path (local, remote, composite). When unset,
+ * getOutputLimitsEnv() returns {} and nothing is injected, preserving the
+ * downstream CLI's own default caps. Output limits are independent of the
+ * global_env enable flag: a user can opt into limits without enabling global
+ * telemetry-disable env.
  */
 function getGlobalEnvVars(): Record<string, string> {
+  const outputLimitsEnv = getOutputLimitsEnv();
   const globalEnvConfig = getGlobalEnvConfig();
   if (!globalEnvConfig.enabled) {
-    return {};
+    return { ...outputLimitsEnv };
   }
-  return globalEnvConfig.env;
+  return { ...globalEnvConfig.env, ...outputLimitsEnv };
 }
 
 /**
@@ -465,7 +477,10 @@ export function getEffectiveEnvVars(
           migrateDeprecatedModelNames(expandedPath, provider, settings);
           // Migrate legacy iFlow placeholders to supported model IDs
           migrateIFlowPlaceholderModel(expandedPath, provider, settings);
-          // Custom variant settings found - merge with global env
+          // Custom variant settings found - merge with global env.
+          // settings.env is spread AFTER globalEnv, so an explicit per-variant
+          // value (e.g. MAX_MCP_OUTPUT_TOKENS) intentionally overrides the
+          // config.runtime.outputLimits value carried in globalEnv.
           envVars = { ...globalEnv, ...settings.env };
           // Ensure required vars are present (fall back to defaults if missing)
           envVars = ensureRequiredEnvVars(envVars, provider, port);
@@ -498,7 +513,10 @@ export function getEffectiveEnvVars(
         migrateDeprecatedModelNames(settingsPath, provider, settings);
         // Migrate legacy iFlow placeholders to supported model IDs
         migrateIFlowPlaceholderModel(settingsPath, provider, settings);
-        // User override found - merge with global env
+        // User override found - merge with global env.
+        // settings.env is spread AFTER globalEnv, so an explicit per-variant
+        // value (e.g. MAX_MCP_OUTPUT_TOKENS) intentionally overrides the
+        // config.runtime.outputLimits value carried in globalEnv.
         envVars = { ...globalEnv, ...settings.env };
         // Ensure required vars are present (fall back to defaults if missing)
         envVars = ensureRequiredEnvVars(envVars, provider, port);

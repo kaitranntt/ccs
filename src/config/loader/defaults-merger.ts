@@ -331,5 +331,9 @@ export function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfi
       profile_backends:
         partial.image_analysis?.profile_backends ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.profile_backends,
     }),
+    // Runtime config (issue #231) - optional, opt-in spawned-CLI knobs.
+    // Passed through only when present so an absent section stays absent and
+    // no output-limit env is injected (downstream defaults preserved).
+    runtime: partial.runtime,
   };
 }

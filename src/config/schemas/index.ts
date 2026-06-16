@@ -51,6 +51,10 @@ export type {
 export { DEFAULT_THINKING_TIER_DEFAULTS, DEFAULT_THINKING_CONFIG } from './thinking';
 export type { ThinkingMode, ThinkingTierDefaults, ThinkingConfig } from './thinking';
 
+// Runtime (spawned-CLI) types, output-limit env mapping (issue #231)
+export { OUTPUT_LIMITS_ENV_KEYS, buildOutputLimitsEnv } from './runtime';
+export type { OutputLimitsConfig, RuntimeConfig } from './runtime';
+
 // Official channels types and defaults
 export { DEFAULT_OFFICIAL_CHANNELS_CONFIG } from './channels';
 export type { OfficialChannelId, OfficialChannelsConfig } from './channels';

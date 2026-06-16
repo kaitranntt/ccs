@@ -18,6 +18,7 @@ import {
   DEFAULT_LOGGING_CONFIG,
   DEFAULT_OFFICIAL_CHANNELS_CONFIG,
   DEFAULT_THINKING_CONFIG,
+  buildOutputLimitsEnv,
 } from '../unified-config-types';
 import type {
   BrowserConfig,
@@ -176,6 +177,19 @@ export function getGlobalEnvConfig(): GlobalEnvConfig {
     enabled: config.global_env?.enabled ?? true,
     env: config.global_env?.env ?? { ...DEFAULT_GLOBAL_ENV },
   };
+}
+
+/**
+ * Get opt-in output-limit env vars for the spawned downstream CLI (issue #231).
+ *
+ * Returns ONLY the env vars the user has explicitly configured under
+ * config.runtime.outputLimits. When the section is absent or empty, returns an
+ * empty object so callers inject nothing and the downstream CLI keeps its own
+ * defaults. All values are strings.
+ */
+export function getOutputLimitsEnv(): Record<string, string> {
+  const config = getConfig();
+  return buildOutputLimitsEnv(config.runtime?.outputLimits);
 }
 
 /**

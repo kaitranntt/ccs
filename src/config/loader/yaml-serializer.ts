@@ -268,6 +268,22 @@ export function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push('');
   }
 
+  // Runtime section (opt-in spawned-CLI launch knobs, e.g. output limits)
+  if (config.runtime) {
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push('# Runtime: opt-in knobs for how CCS launches the downstream CLI');
+    lines.push('# outputLimits raises the spawned CLI output caps via env vars (issue #231):');
+    lines.push('#   maxMcpOutputTokens  -> MAX_MCP_OUTPUT_TOKENS');
+    lines.push('#   bashMaxOutputLength -> BASH_MAX_OUTPUT_LENGTH');
+    lines.push('# Each field is optional; when unset CCS injects nothing and the downstream');
+    lines.push('# CLI keeps its own default caps.');
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push(
+      yaml.dump({ runtime: config.runtime }, { indent: 2, lineWidth: -1, quotingType: '"' }).trim()
+    );
+    lines.push('');
+  }
+
   // Official Channels section
   if (config.channels) {
     lines.push('# ----------------------------------------------------------------------------');

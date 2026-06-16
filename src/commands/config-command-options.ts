@@ -121,6 +121,15 @@ export function showConfigCommandHelp(): void {
   console.log('    --provider-override <p> <t> <l> Set provider tier override');
   console.log('    --clear-provider-override <p> [t] Remove provider override');
   console.log('');
+  console.log('  Output limits (opt-in)');
+  console.log('    Raise the spawned CLI output caps without hand-editing its settings.');
+  console.log('    Edit ~/.ccs/config.yaml and add (both fields optional):');
+  console.log('      runtime:');
+  console.log('        outputLimits:');
+  console.log('          maxMcpOutputTokens: 100000   # -> MAX_MCP_OUTPUT_TOKENS');
+  console.log('          bashMaxOutputLength: 200000  # -> BASH_MAX_OUTPUT_LENGTH');
+  console.log('    When unset, the spawned CLI keeps its own default caps.');
+  console.log('');
   console.log('Options:');
   console.log('  --port, -p PORT    Specify server port (default: auto-detect)');
   console.log('  --host, -H HOST    Bind dashboard server host (default: localhost)');

@@ -33,6 +33,7 @@ export {
   setDefaultProfile,
   getWebSearchConfig,
   getGlobalEnvConfig,
+  getOutputLimitsEnv,
   getContinuityInheritanceMap,
   getCliproxySafetyConfig,
   getThinkingConfig,

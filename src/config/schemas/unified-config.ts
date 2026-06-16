@@ -34,6 +34,7 @@ import type { QuotaManagementConfig } from './quota';
 import { DEFAULT_QUOTA_MANAGEMENT_CONFIG } from './quota';
 import type { ThinkingConfig } from './thinking';
 import { DEFAULT_THINKING_CONFIG } from './thinking';
+import type { RuntimeConfig } from './runtime';
 import type { OfficialChannelsConfig } from './channels';
 import { DEFAULT_OFFICIAL_CHANNELS_CONFIG } from './channels';
 import type { BrowserConfig } from './browser';
@@ -78,6 +79,8 @@ export interface UnifiedConfig {
   quota_management?: QuotaManagementConfig;
   /** Thinking/reasoning budget configuration (v8+) */
   thinking?: ThinkingConfig;
+  /** Runtime (spawned-CLI) configuration, e.g. opt-in output limits (issue #231) */
+  runtime?: RuntimeConfig;
   /** Official Channels runtime auto-enable preferences (v11+) */
   channels?: OfficialChannelsConfig;
   /** Dashboard authentication configuration (optional) */

@@ -94,6 +94,7 @@ export type { GeminiWebSearchInfo } from './loader/config-getters';
 export {
   getWebSearchConfig,
   getGlobalEnvConfig,
+  getOutputLimitsEnv,
   getContinuityInheritanceMap,
   getCliproxySafetyConfig,
   getThinkingConfig,
