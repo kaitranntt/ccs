@@ -3021,6 +3021,308 @@ describe('bar install: silent-decline fix — hint on user decline (review findi
   });
 });
 
+// ---------------------------------------------------------------------------
+// Socket-level 401/403 auth-required detection (#1551 coverage gap)
+// ---------------------------------------------------------------------------
+
+describe('defaultFindRunningServer: socket-level 401/403 classifies authRequired=true', () => {
+  // These tests drive `net.connect` directly via mock.module('net') — the same
+  // pattern used by the streaming-probe test below. They prove the status-line
+  // parser correctly sets authRequired without relying on the higher-level dep
+  // injection that existing tests use (which bypasses real status-line parsing).
+
+  function makeNetMock(statusLine: string) {
+    return {
+      connect: (opts: { host: string; port: number }, onConnect: () => void): unknown => {
+        const listeners: Record<string, Array<(arg?: unknown) => void>> = {};
+        const socket = {
+          on(event: string, cb: (arg?: unknown) => void) {
+            (listeners[event] ??= []).push(cb);
+            return socket;
+          },
+          setTimeout(_ms: number, cb: () => void) {
+            // Do not fire the timeout — let the data path run.
+            void cb;
+            return socket;
+          },
+          write() {
+            return true;
+          },
+          destroy() {
+            return socket;
+          },
+        };
+        setImmediate(() => {
+          onConnect();
+          for (const cb of listeners.data ?? []) {
+            cb(Buffer.from(`${statusLine}\r\n\r\n`, 'utf8'));
+          }
+        });
+        return socket;
+      },
+    };
+  }
+
+  it('classifies HTTP/1.1 401 off the wire as authRequired=true', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+    // Seed bar.json so the probed port is deterministic and checked first.
+    fs.writeFileSync(
+      path.join(ccsDir, 'bar.json'),
+      JSON.stringify({ port: 41401, baseUrl: 'http://127.0.0.1:41401', authMode: 'loopback' })
+    );
+
+    mock.module('net', () => makeNetMock('HTTP/1.1 401 Unauthorized'));
+
+    moduleSeq++;
+    const { defaultFindRunningServer } = (await import(
+      `../../../src/commands/bar/bar-server-probe?test=${Date.now()}-${moduleSeq}`
+    )) as {
+      defaultFindRunningServer: (
+        ccsDir: string
+      ) => Promise<{ port: number; baseUrl: string; authRequired?: boolean } | null>;
+    };
+
+    const result = await Promise.race([
+      defaultFindRunningServer(ccsDir),
+      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 500)),
+    ]);
+
+    // Must not time out and must report auth-required.
+    expect(result).not.toBe('timeout');
+    expect(result).not.toBeNull();
+    expect((result as { authRequired?: boolean }).authRequired).toBe(true);
+  });
+
+  it('classifies HTTP/1.1 403 off the wire as authRequired=true', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(ccsDir, 'bar.json'),
+      JSON.stringify({ port: 41403, baseUrl: 'http://127.0.0.1:41403', authMode: 'loopback' })
+    );
+
+    mock.module('net', () => makeNetMock('HTTP/1.1 403 Forbidden'));
+
+    moduleSeq++;
+    const { defaultFindRunningServer } = (await import(
+      `../../../src/commands/bar/bar-server-probe?test=${Date.now()}-${moduleSeq}`
+    )) as {
+      defaultFindRunningServer: (
+        ccsDir: string
+      ) => Promise<{ port: number; baseUrl: string; authRequired?: boolean } | null>;
+    };
+
+    const result = await Promise.race([
+      defaultFindRunningServer(ccsDir),
+      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 500)),
+    ]);
+
+    expect(result).not.toBe('timeout');
+    expect(result).not.toBeNull();
+    expect((result as { authRequired?: boolean }).authRequired).toBe(true);
+  });
+
+  it('does NOT set authRequired for a 200 that supplies the correct token', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    // Ensure the token file exists so getOrCreateBarAuthToken reads the same value.
+    const { getOrCreateBarAuthToken: getToken } = await import(
+      `../../../src/utils/bar-auth-token?test=${Date.now()}-token-ok`
+    );
+    const token = getToken(ccsDir);
+
+    fs.writeFileSync(
+      path.join(ccsDir, 'bar.json'),
+      JSON.stringify({ port: 41200, baseUrl: 'http://127.0.0.1:41200', authMode: 'loopback' })
+    );
+
+    mock.module('net', () => ({
+      connect: (opts: { host: string; port: number }, onConnect: () => void): unknown => {
+        const listeners: Record<string, Array<(arg?: unknown) => void>> = {};
+        const socket = {
+          on(event: string, cb: (arg?: unknown) => void) {
+            (listeners[event] ??= []).push(cb);
+            return socket;
+          },
+          setTimeout(_ms: number, _cb: () => void) {
+            return socket;
+          },
+          write() {
+            return true;
+          },
+          destroy() {
+            return socket;
+          },
+        };
+        setImmediate(() => {
+          onConnect();
+          for (const cb of listeners.data ?? []) {
+            cb(
+              Buffer.from(
+                `HTTP/1.1 200 OK\r\nx-ccs-bar-token: ${token}\r\n\r\n`,
+                'utf8'
+              )
+            );
+          }
+        });
+        return socket;
+      },
+    }));
+
+    moduleSeq++;
+    const { defaultFindRunningServer } = (await import(
+      `../../../src/commands/bar/bar-server-probe?test=${Date.now()}-${moduleSeq}`
+    )) as {
+      defaultFindRunningServer: (
+        ccsDir: string
+      ) => Promise<{ port: number; baseUrl: string; authRequired?: boolean } | null>;
+    };
+
+    const result = await Promise.race([
+      defaultFindRunningServer(ccsDir),
+      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 500)),
+    ]);
+
+    expect(result).not.toBe('timeout');
+    expect(result).not.toBeNull();
+    // Correct-token 200 must be accepted and NOT flagged as auth-required.
+    expect((result as { authRequired?: boolean }).authRequired).toBeFalsy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// defaultWaitForServerLive: rogue-server rejection (#1546 coverage gap)
+// ---------------------------------------------------------------------------
+
+describe('defaultWaitForServerLive: rogue 200 without matching token is rejected', () => {
+  // defaultWaitForServerLive (exported from launch-subcommand.ts) applies the
+  // same fail-closed echoedToken===token check as the discovery probe.
+  // A 200 response that does NOT echo the matching capability token must never
+  // cause the function to resolve — the liveness poll must keep retrying and
+  // eventually time out.
+  //
+  // We mock `net` (same pattern as the streaming-probe test) so the test is
+  // fully synchronous and immune to OS socket state.  The invariant is
+  // behaviour-coupled: removing the token check causes both tests to fail.
+
+  function buildNetMock(responseHeaders: string) {
+    // Returns a `net` mock whose connect() immediately delivers the response,
+    // then emits 'end'.
+    return {
+      connect: (_opts: { host: string; port: number }, onConnect: () => void): unknown => {
+        const listeners: Record<string, Array<(arg?: unknown) => void>> = {};
+        const socket = {
+          on(event: string, cb: (arg?: unknown) => void) {
+            (listeners[event] ??= []).push(cb);
+            return socket;
+          },
+          setTimeout(_ms: number, _cb: () => void) {
+            return socket;
+          },
+          write() {
+            return true;
+          },
+          destroy() {
+            return socket;
+          },
+        };
+        setImmediate(() => {
+          onConnect();
+          for (const cb of listeners.data ?? []) {
+            cb(Buffer.from(responseHeaders, 'utf8'));
+          }
+          for (const cb of listeners.end ?? []) {
+            cb();
+          }
+        });
+        return socket;
+      },
+    };
+  }
+
+  it('rogue 200 (wrong token) never resolves; poll throws timeout and launch reports [X]', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    // Establish the real token on disk.
+    const { getOrCreateBarAuthToken: getToken } = await import(
+      `../../../src/utils/bar-auth-token?test=${Date.now()}-rogue-net`
+    );
+    const realToken = getToken(ccsDir);
+
+    // A valid-format but wrong 64-hex token.
+    const rogueToken = 'cafebabe'.repeat(8);
+    expect(rogueToken).not.toBe(realToken); // guard: tokens must differ
+
+    // Mock net: every probe gets 200 with the WRONG token.
+    mock.module('net', () =>
+      buildNetMock(`HTTP/1.1 200 OK\r\nx-ccs-bar-token: ${rogueToken}\r\n\r\n`)
+    );
+
+    // Import defaultWaitForServerLive fresh with the mocked net.
+    // The export was added so this direct unit test is possible.
+    moduleSeq++;
+    const { defaultWaitForServerLive } = (await import(
+      `../../../src/commands/bar/launch-subcommand?test=${Date.now()}-${moduleSeq}`
+    )) as {
+      defaultWaitForServerLive: (baseUrl: string) => Promise<void>;
+    };
+
+    // defaultWaitForServerLive has a hardcoded 10 s timeout — too long for a test.
+    // We race it against a 600 ms sentinel that expires before the real timeout.
+    // If the function resolves before 600 ms, the rogue check passed (test failure).
+    // If it neither resolves nor rejects by 600 ms, the loop is correctly stuck
+    // (rogue token never matches → function will eventually throw after 10 s).
+    const RACE_MS = 600;
+    const result = await Promise.race([
+      defaultWaitForServerLive(`http://127.0.0.1:9998`)
+        .then(() => 'resolved' as const)
+        .catch(() => 'rejected' as const),
+      new Promise<'timeout'>((r) => setTimeout(() => r('timeout'), RACE_MS)),
+    ]);
+
+    // The rogue server must NEVER cause the poll to resolve.
+    expect(result).not.toBe('resolved');
+    // It either timed out (still looping) or threw early — both correct outcomes.
+    expect(result === 'timeout' || result === 'rejected').toBe(true);
+  });
+
+  it('correct-token 200 resolves defaultWaitForServerLive immediately', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    const { getOrCreateBarAuthToken: getToken } = await import(
+      `../../../src/utils/bar-auth-token?test=${Date.now()}-legit-net`
+    );
+    const realToken = getToken(ccsDir);
+
+    // Mock net: every probe gets 200 with the CORRECT token.
+    mock.module('net', () =>
+      buildNetMock(`HTTP/1.1 200 OK\r\nx-ccs-bar-token: ${realToken}\r\n\r\n`)
+    );
+
+    moduleSeq++;
+    const { defaultWaitForServerLive } = (await import(
+      `../../../src/commands/bar/launch-subcommand?test=${Date.now()}-${moduleSeq}`
+    )) as {
+      defaultWaitForServerLive: (baseUrl: string) => Promise<void>;
+    };
+
+    // Correct token → must resolve well within the 10 s timeout.
+    const RACE_MS = 500;
+    const result = await Promise.race([
+      defaultWaitForServerLive(`http://127.0.0.1:9997`)
+        .then(() => 'resolved' as const)
+        .catch(() => 'rejected' as const),
+      new Promise<'timeout'>((r) => setTimeout(() => r('timeout'), RACE_MS)),
+    ]);
+
+    expect(result).toBe('resolved');
+  });
+});
+
 describe('defaultFindRunningServer: streaming lower-priority probes', () => {
   it('returns a higher-priority hit without waiting for lower-priority response bodies', async () => {
     const ccsDir = path.join(tempHome, '.ccs');

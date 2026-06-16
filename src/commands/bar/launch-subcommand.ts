@@ -138,7 +138,7 @@ function isAuthRequiredStatus(statusCode: number): boolean {
   return statusCode === 401 || statusCode === 403;
 }
 
-async function defaultWaitForServerLive(baseUrl: string): Promise<void> {
+export async function defaultWaitForServerLive(baseUrl: string): Promise<void> {
   const net = await import('net');
   const token = getOrCreateBarAuthToken();
   const INTERVAL_MS = 250;
