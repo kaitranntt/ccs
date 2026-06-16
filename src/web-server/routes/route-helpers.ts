@@ -437,6 +437,18 @@ export function validateFilePath(filePath: string): {
     if (pathSegments.includes('.git') || pathSegments.includes('node_modules')) {
       return { valid: false, readonly: false, error: 'Access to this path is not allowed' };
     }
+
+    // launch.json is an executable descriptor consumed by the native macOS bar.
+    // It must only be written by trusted bar install/launch code paths, not the
+    // generic dashboard file API.
+    if (
+      pathSegments.length === 2 &&
+      pathSegments[0] === 'bar' &&
+      pathSegments[1] === 'launch.json'
+    ) {
+      return { valid: false, readonly: false, error: 'Access to this path is not allowed' };
+    }
+
     return { valid: true, readonly: false };
   }
 

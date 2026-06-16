@@ -1,4 +1,9 @@
 import Foundation
+#if os(Linux)
+import Glibc
+#else
+import Darwin
+#endif
 import CCSBarCore
 
 /// Reads `~/.ccs/bar/launch.json` and spawns the CCS bar server detached,
@@ -36,10 +41,80 @@ struct BarServerLauncher: Sendable {
 
   private func loadDescriptor() -> BarLaunchDescriptor? {
     let path = BarLaunchDescriptor.defaultPath(home: home)
-    guard FileManager.default.fileExists(atPath: path),
-      let data = FileManager.default.contents(atPath: path)
+    guard isSafeDescriptorFile(path),
+      let data = FileManager.default.contents(atPath: path),
+      let descriptor = try? JSONDecoder().decode(BarLaunchDescriptor.self, from: data),
+      isSafeDescriptor(descriptor)
     else { return nil }
-    return try? JSONDecoder().decode(BarLaunchDescriptor.self, from: data)
+    return descriptor
+  }
+
+  /// Treat launch.json as untrusted because it lives under a user-writable CCS
+  /// directory. Refuse symlinks, files not owned by the current user, and files
+  /// writable by group/other before decoding executable details.
+  private func isSafeDescriptorFile(_ path: String) -> Bool {
+    let fm = FileManager.default
+    guard fm.fileExists(atPath: path) else { return false }
+
+    guard let linkValues = try? URL(fileURLWithPath: path).resourceValues(forKeys: [.isSymbolicLinkKey]),
+      linkValues.isSymbolicLink != true,
+      let attrs = try? fm.attributesOfItem(atPath: path),
+      (attrs[.type] as? FileAttributeType) == .typeRegular,
+      let owner = attrs[.ownerAccountID] as? NSNumber,
+      owner.uint32Value == getuid(),
+      let permissions = attrs[.posixPermissions] as? NSNumber
+    else { return false }
+
+    // Disallow group/other write bits. User-writable is expected so CCS can refresh it.
+    return (permissions.uint16Value & 0o022) == 0
+  }
+
+  /// Validate the descriptor schema and constrain it to the expected CCS bar
+  /// server command shape: runtime absolute path + absolute entry point +
+  /// exactly "bar serve". This blocks shell descriptors such as
+  /// /bin/sh -c attacker-command while preserving the installed launch path.
+  private func isSafeDescriptor(_ descriptor: BarLaunchDescriptor) -> Bool {
+    guard descriptor.schema == 1, descriptor.args.count == 3 else { return false }
+    guard descriptor.args[1] == "bar", descriptor.args[2] == "serve" else { return false }
+    guard isAbsolutePath(descriptor.runtime), isAbsolutePath(descriptor.args[0]) else { return false }
+    guard descriptor.home == home else { return false }
+    if let ccsHome = descriptor.ccsHome, !ccsHome.isEmpty, !isAbsolutePath(ccsHome) {
+      return false
+    }
+
+    let runtimeName = URL(fileURLWithPath: descriptor.runtime).lastPathComponent.lowercased()
+    let allowedRuntimes: Set<String> = ["node", "nodejs", "bun"]
+    guard allowedRuntimes.contains(runtimeName) else { return false }
+    guard FileManager.default.isExecutableFile(atPath: descriptor.runtime) else { return false }
+
+    let entry = descriptor.args[0]
+    let entryName = URL(fileURLWithPath: entry).lastPathComponent.lowercased()
+    guard entryName == "ccs.js" || entryName == "ccs.ts" else { return false }
+    guard isSafeEntrypointFile(entry), !isUnderCcsDir(entry) else { return false }
+
+    return true
+  }
+
+  private func isSafeEntrypointFile(_ path: String) -> Bool {
+    guard let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+      (attrs[.type] as? FileAttributeType) == .typeRegular,
+      let permissions = attrs[.posixPermissions] as? NSNumber
+    else { return false }
+
+    return (permissions.uint16Value & 0o022) == 0
+  }
+
+  private func isUnderCcsDir(_ path: String) -> Bool {
+    let ccsPath = URL(fileURLWithPath: home)
+      .appendingPathComponent(".ccs")
+      .standardizedFileURL
+      .path
+    let targetPath = URL(fileURLWithPath: path).standardizedFileURL.path
+    return targetPath == ccsPath || targetPath.hasPrefix(ccsPath + "/")
+  }
+
+  private func isAbsolutePath(_ path: String) -> Bool {
+    path.hasPrefix("/")
   }
 
   // MARK: - Spawn from descriptor
