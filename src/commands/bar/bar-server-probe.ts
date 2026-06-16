@@ -34,9 +34,9 @@ export function resolveBarPort(ccsDir: string): number | null {
  *
  * Both IPv4 (127.0.0.1) and IPv6 (::1) loopback addresses are probed for each
  * port. All probes are fired concurrently so worst-case latency is ~1.5 s
- * (one timeout) rather than N × 1.5 s sequentially. Priority selection is
- * applied after all results are in: the bar.json port is preferred over the
- * defaults, and within a port 127.0.0.1 is preferred over [::1].
+ * (one timeout) rather than N × 1.5 s sequentially. Results are awaited in
+ * priority order so a lower-priority slow or streaming response cannot block
+ * returning an already-known higher-priority hit.
  */
 export async function defaultFindRunningServer(ccsDir: string): Promise<DashboardInfo | null> {
   const { request } = await import('undici');
@@ -48,7 +48,22 @@ export async function defaultFindRunningServer(ccsDir: string): Promise<Dashboar
         headersTimeout: 1500,
         bodyTimeout: 1500,
       });
-      await body.text();
+
+      // The summary endpoint only needs the status code for liveness. Do not
+      // buffer the response body: a non-CCS loopback service can stream forever
+      // and keep discovery from returning a higher-priority hit. Release the
+      // response as soon as headers arrive.
+      try {
+        if (typeof body.resume === 'function') {
+          body.resume();
+        } else if (typeof body.destroy === 'function') {
+          body.destroy();
+        }
+      } catch {
+        // Closing the response is a best-effort cleanup; liveness depends only
+        // on the status code already received.
+      }
+
       return { ok: statusCode === 200 };
     } catch {
       return { ok: false };
@@ -65,10 +80,10 @@ export async function defaultFindRunningServer(ccsDir: string): Promise<Dashboar
     { port, baseUrl: `http://[::1]:${port}`, url: `http://[::1]:${port}/api/bar/summary` },
   ]);
 
-  const results = await Promise.all(probeTargets.map((t) => probe(t.url)));
+  const probes = probeTargets.map((t) => probe(t.url));
 
   for (let i = 0; i < probeTargets.length; i++) {
-    if (results[i].ok) {
+    if ((await probes[i]).ok) {
       const { port, baseUrl } = probeTargets[i];
       return { port, baseUrl };
     }

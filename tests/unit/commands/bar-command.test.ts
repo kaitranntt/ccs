@@ -3026,3 +3026,60 @@ describe('bar install: silent-decline fix — hint on user decline (review findi
     expect(allOutput).not.toMatch(/Run `ccs bar` to launch later/i);
   });
 });
+
+describe('defaultFindRunningServer: streaming lower-priority probes', () => {
+  it('returns a higher-priority hit without waiting for lower-priority response bodies', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(ccsDir, 'bar.json'),
+      JSON.stringify({ port: 41235, baseUrl: 'http://127.0.0.1:41235', authMode: 'loopback' })
+    );
+
+    let highPriorityBodyDestroyed = false;
+    let lowerPriorityProbeStarted = false;
+
+    mock.module('undici', () => ({
+      request: (url: string) => {
+        if (url === 'http://127.0.0.1:41235/api/bar/summary') {
+          return Promise.resolve({
+            statusCode: 200,
+            body: {
+              destroy: () => {
+                highPriorityBodyDestroyed = true;
+              },
+            },
+          });
+        }
+
+        if (url === 'http://127.0.0.1:3000/api/bar/summary') {
+          lowerPriorityProbeStarted = true;
+          return new Promise(() => {
+            // Simulate a lower-priority service that never finishes responding.
+          });
+        }
+
+        return Promise.resolve({
+          statusCode: 404,
+          body: { destroy: () => {} },
+        });
+      },
+    }));
+
+    moduleSeq++;
+    const { defaultFindRunningServer } = (await import(
+      `../../../src/commands/bar/bar-server-probe?test=${Date.now()}-${moduleSeq}`
+    )) as {
+      defaultFindRunningServer: (ccsDir: string) => Promise<{ port: number; baseUrl: string } | null>;
+    };
+
+    const result = await Promise.race([
+      defaultFindRunningServer(ccsDir),
+      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 250)),
+    ]);
+
+    expect(result).toEqual({ port: 41235, baseUrl: 'http://127.0.0.1:41235' });
+    expect(highPriorityBodyDestroyed).toBe(true);
+    expect(lowerPriorityProbeStarted).toBe(true);
+  });
+});
