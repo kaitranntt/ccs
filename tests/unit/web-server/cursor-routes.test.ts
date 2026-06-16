@@ -52,9 +52,11 @@ let checkAuthStatus: () => {
   };
 };
 let getTokenStoragePath: () => string;
-let getDaemonStartPreconditionError: (
-  input: { enabled: boolean; authenticated: boolean; tokenExpired?: boolean }
-) => { status: number; error: string } | null;
+let getDaemonStartPreconditionError: (input: {
+  enabled: boolean;
+  authenticated: boolean;
+  tokenExpired?: boolean;
+}) => { status: number; error: string } | null;
 let getAutoDetectFailureStatus: (
   reason?:
     | 'db_not_found'
@@ -65,13 +67,15 @@ let getAutoDetectFailureStatus: (
     | 'invalid_token_format'
 ) => number;
 
-function seedCursorConfig(overrides: {
-  enabled?: boolean;
-  port?: number;
-  auto_start?: boolean;
-  ghost_mode?: boolean;
-  model?: string;
-} = {}): void {
+function seedCursorConfig(
+  overrides: {
+    enabled?: boolean;
+    port?: number;
+    auto_start?: boolean;
+    ghost_mode?: boolean;
+    model?: string;
+  } = {}
+): void {
   const config = loadOrCreateUnifiedConfig();
   config.cursor = {
     enabled: overrides.enabled ?? true,
@@ -329,7 +333,10 @@ describe('Cursor Routes Logic', () => {
       try {
         const dbPath = getTokenStoragePath();
         fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-        execFileSync('sqlite3', [dbPath, 'CREATE TABLE IF NOT EXISTS itemTable (key TEXT PRIMARY KEY, value TEXT);']);
+        execFileSync('sqlite3', [
+          dbPath,
+          'CREATE TABLE IF NOT EXISTS itemTable (key TEXT PRIMARY KEY, value TEXT);',
+        ]);
         execFileSync('sqlite3', [
           dbPath,
           `INSERT OR REPLACE INTO itemTable (key, value) VALUES ('cursorAuth/accessToken', '${token}');`,
@@ -471,27 +478,28 @@ describe('Cursor Routes Logic', () => {
       expect(json.error).toContain('expired');
     });
 
-    it(
-      'POST /api/cursor/daemon/start starts daemon and /daemon/stop stops it',
-      async () => {
-        const port = 15000 + Math.floor(Math.random() * 20000);
-        seedCursorConfig({ enabled: true, port });
-        seedCredentials(false);
+    it('POST /api/cursor/daemon/start starts daemon and /daemon/stop stops it', async () => {
+      const port = 15000 + Math.floor(Math.random() * 20000);
+      seedCursorConfig({ enabled: true, port });
+      seedCredentials(false);
 
-        const startRes = await fetch(`${baseUrl}/api/cursor/daemon/start`, { method: 'POST' });
-        expect(startRes.status).toBe(200);
+      const startRes = await fetch(`${baseUrl}/api/cursor/daemon/start`, { method: 'POST' });
+      expect(startRes.status).toBe(200);
 
-        const startJson = (await startRes.json()) as { success?: boolean; pid?: number };
-        expect(startJson.success).toBe(true);
-        expect(typeof startJson.pid).toBe('number');
+      const startJson = (await startRes.json()) as {
+        success?: boolean;
+        pid?: number;
+        daemonToken?: string;
+      };
+      expect(startJson.success).toBe(true);
+      expect(typeof startJson.pid).toBe('number');
+      expect(startJson.daemonToken).toBeUndefined();
 
-        const stopRes = await fetch(`${baseUrl}/api/cursor/daemon/stop`, { method: 'POST' });
-        expect(stopRes.status).toBe(200);
-        const stopJson = (await stopRes.json()) as { success?: boolean };
-        expect(stopJson.success).toBe(true);
-      },
-      35000
-    );
+      const stopRes = await fetch(`${baseUrl}/api/cursor/daemon/stop`, { method: 'POST' });
+      expect(stopRes.status).toBe(200);
+      const stopJson = (await stopRes.json()) as { success?: boolean };
+      expect(stopJson.success).toBe(true);
+    }, 35000);
 
     it('POST /api/cursor/daemon/stop returns success when daemon is not running', async () => {
       const res = await fetch(`${baseUrl}/api/cursor/daemon/stop`, { method: 'POST' });
