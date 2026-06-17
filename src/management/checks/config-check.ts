@@ -9,6 +9,14 @@ import { HealthCheck, IHealthChecker, createSpinner } from './types';
 
 import { getClaudeConfigDir } from '../../utils/claude-config-path';
 import { getCcsDir } from '../../config/config-loader-facade';
+import { PROVIDER_PRESET_DEFINITIONS } from '../../shared/provider-preset-catalog';
+
+// Canonical GLM default model. Single source of truth = the provider preset
+// catalog (which governs NEW profile creation). Existing glm.settings.json
+// profiles never follow preset changes retroactively, so this value is read
+// from the catalog to keep the drift check self-correcting.
+const GLM_DEFAULT_MODEL =
+  PROVIDER_PRESET_DEFINITIONS.find((preset) => preset.id === 'glm')?.defaultModel ?? 'glm-5.2';
 import {
   CODEX_TRANSLATOR_URL_MARKER,
   findCodexTranslatorUrlPaths,
@@ -150,7 +158,7 @@ export class ConfigFilesChecker implements IHealthChecker {
       const spinner = ora(`Checking ${file.name}`).start();
       try {
         const content = fs.readFileSync(filePath, 'utf8');
-        JSON.parse(content);
+        const parsed = JSON.parse(content) as { env?: { ANTHROPIC_MODEL?: string } };
 
         // Check if API key is properly configured
         const validation = DelegationValidator.validate(file.profile);
@@ -178,6 +186,25 @@ export class ConfigFilesChecker implements IHealthChecker {
           status: status,
           info: fileInfo,
         });
+
+        // GLM model drift: the preset catalog only governs NEW profiles. An
+        // existing glm.settings.json keeps its old model forever, so warn when
+        // it lags the canonical default. Read-only - never rewrites the file.
+        if (file.profile === 'glm') {
+          const currentModel = parsed.env?.ANTHROPIC_MODEL;
+          if (currentModel && currentModel !== GLM_DEFAULT_MODEL) {
+            console.log(
+              `  ${warn('GLM Model'.padEnd(22))}  uses ${currentModel}, recommended ${GLM_DEFAULT_MODEL}`
+            );
+            results.addCheck(
+              'GLM Model',
+              'warning',
+              `glm.settings.json uses '${currentModel}' but the recommended default is '${GLM_DEFAULT_MODEL}'`,
+              `Run: ccs config set glm model ${GLM_DEFAULT_MODEL}`,
+              { status: 'WARN', info: `model=${currentModel}` }
+            );
+          }
+        }
       } catch (e) {
         spinner.fail();
         console.log(`  ${fail(file.name.padEnd(22))}  Invalid JSON`);

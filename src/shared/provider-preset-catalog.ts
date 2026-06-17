@@ -160,7 +160,7 @@ const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
     description: 'Direct Z.AI Anthropic-compatible API profile',
     baseUrl: 'https://api.z.ai/api/anthropic',
     defaultProfileName: 'glm',
-    defaultModel: 'glm-5',
+    defaultModel: 'glm-5.2',
     apiKeyPlaceholder: 'ghp_...',
     apiKeyHint: 'Get your API key from Z.AI',
     category: 'alternative',

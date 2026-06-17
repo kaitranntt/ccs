@@ -539,6 +539,20 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
     cacheCreationPerMillion: 0.0,
     cacheReadPerMillion: 0.2,
   },
+  // glm-5.2 / glm-5.1: $0 - Z.AI has no standalone API pricing (Coding Plan ~$18/mo only).
+  // Tokens are still counted accurately; only the computed $ cost is 0.
+  'glm-5.2': {
+    inputPerMillion: 0.0,
+    outputPerMillion: 0.0,
+    cacheCreationPerMillion: 0.0,
+    cacheReadPerMillion: 0.0,
+  },
+  'glm-5.1': {
+    inputPerMillion: 0.0,
+    outputPerMillion: 0.0,
+    cacheCreationPerMillion: 0.0,
+    cacheReadPerMillion: 0.0,
+  },
   'glm-4.7': {
     inputPerMillion: 0.4,
     outputPerMillion: 1.5,
