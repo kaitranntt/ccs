@@ -23,6 +23,7 @@ export const PROVIDER_PRESET_IDS = [
   'qwen',
   'ollama-cloud',
   'novita',
+  'pinstripes',
 ] as const;
 
 export type ProviderPresetId = (typeof PROVIDER_PRESET_IDS)[number];
@@ -265,6 +266,20 @@ const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
     requiresApiKey: true,
     badge: 'Anthropic-compatible',
     icon: '/icons/novita.svg',
+  },
+  {
+    id: 'pinstripes',
+    name: 'Pinstripes',
+    description: 'OpenAI-compatible inference: DeepSeek V4 Flash, GLM-4.5-Air, Qwen3-35B, MiniMax M2.7 (192K ctx)',
+    baseUrl: 'https://api.pinstripes.io/v1',
+    defaultProfileName: 'pinstripes',
+    defaultModel: 'deepseek-v4-flash',
+    apiKeyPlaceholder: 'YOUR_PINSTRIPES_API_KEY',
+    apiKeyHint: 'Get your API key at pinstripes.io',
+    category: 'alternative',
+    requiresApiKey: true,
+    badge: 'Prefix caching',
+    defaultTarget: 'droid',
   },
 ];
 
