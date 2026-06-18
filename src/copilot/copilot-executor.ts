@@ -35,7 +35,7 @@ import {
   resolveImageAnalysisRuntimeStatus,
 } from '../utils/hooks';
 import { stripClaudeCodeEnv } from '../utils/shell-executor';
-import { createLogger } from '../services/logging';
+import { createLogger, forwardRequestIdEnv } from '../services/logging';
 import { getGlobalEnvConfig } from '../config/config-loader-facade';
 
 const logger = createLogger('copilot:executor');
@@ -324,7 +324,7 @@ export async function executeCopilotProfile(
 
     const proc = spawn(claudeCliPath, launchArgs, {
       stdio: 'inherit',
-      env: { ...env, ...traceEnv },
+      env: { ...env, ...traceEnv, ...forwardRequestIdEnv() },
       shell: process.platform === 'win32',
     });
 
