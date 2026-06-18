@@ -146,6 +146,25 @@ Use `stage()` whenever the entry corresponds to one of the canonical lifecycle s
 
 Default level is `info`. Configure via `logging.level` in `~/.ccs/config.yaml`. Streaming providers MUST gate per-chunk metrics behind `debug`.
 
+## `error.code` values (exit codes)
+
+Typed errors (`src/errors/error-types.ts`) carry an `ExitCode` that `handleError` propagates to `process.exit`. Log readers can branch on `error.code` for differentiated handling. The full mapping lives in `src/errors/exit-codes.ts`; the per-class assignment:
+
+| Typed class | ExitCode | Value |
+|---|---|---:|
+| `ConfigError` | `CONFIG_ERROR` | 2 |
+| `NetworkError` | `NETWORK_ERROR` | 3 (recoverable) |
+| `AuthError` | `AUTH_ERROR` | 4 |
+| `BinaryError` | `BINARY_ERROR` | 5 |
+| `ProviderError` | `PROVIDER_ERROR` | 6 (recoverable) |
+| `ProfileError` | `PROFILE_ERROR` | 7 |
+| `ProxyError` | `PROXY_ERROR` | 8 |
+| `MigrationError` | `MIGRATION_ERROR` | 9 |
+| `UserAbortError` | `USER_ABORT` | 130 |
+| `ValidationError`, `RetryableError` | `GENERAL_ERROR` | 1 |
+
+New throws must use a typed class (enforced by `ccs/no-new-throw-error`, see `docs/code-standards.md`). Redaction scrubs credential token shapes in both context values and message strings, so routing errors into the logger is safe — but keep messages clean prose and put sensitive data in context under a sensitive key (auto-redacted).
+
 ## Backward Compatibility
 
 - All new `LogEntry` fields (`requestId`, `stage`, `latencyMs`, `error`) are optional. Old readers ignore them.
