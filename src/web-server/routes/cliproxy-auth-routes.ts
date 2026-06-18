@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express';
+
+import { createLogger } from '../../services/logging';
 import {
   getAllAuthStatus,
   getOAuthConfig,
@@ -78,6 +80,7 @@ import { buildOAuthStartFailureGuidance } from '../../cliproxy/auth/oauth-start-
 import { getStoredConfiguredBackend } from '../../cliproxy/binary-manager';
 
 const router = Router();
+const logger = createLogger('web-server:routes:cliproxy-auth');
 const MANUAL_AUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const POLLED_AUTH_LOCAL_TOKEN_GRACE_MS = 15 * 1000;
 
@@ -1097,8 +1100,10 @@ router.post('/:provider/start-url', async (req: Request, res: Response): Promise
     getStoredConfiguredBackend()
   );
   if (credentialError) {
-    console.error(
-      `[cliproxy-auth-routes] start-url credential guard fired for provider=${provider}: ${credentialError}`
+    logger.warn(
+      'cliproxy_auth.start_url.credential_guard_fired',
+      'start-url credential guard fired for Plus-backend provider',
+      { provider, reason: credentialError }
     );
     res.status(400).json({
       error: 'plus_oauth_credentials_missing',
@@ -1154,8 +1159,10 @@ router.post('/:provider/start-url', async (req: Request, res: Response): Promise
       const authUrlError = getPlusAuthUrlCredentialError(provider as CLIProxyProvider, authUrl);
       if (authUrlError) {
         const redactedUrl = authUrl.split('?')[0];
-        console.error(
-          `[cliproxy-auth-routes] Plus emitted OAuth URL without client_id for provider=${provider} url=${redactedUrl}`
+        logger.error(
+          'cliproxy_auth.start_url.missing_client_id',
+          'Plus emitted OAuth URL without client_id',
+          { provider, urlOrigin: redactedUrl }
         );
         res.status(502).json({
           error: 'plus_oauth_url_missing_client_id',
@@ -1192,8 +1199,10 @@ router.post('/:provider/start-url', async (req: Request, res: Response): Promise
     });
   } catch (error) {
     if (error instanceof SyntaxError) {
-      console.error(
-        `[cliproxy-auth-routes] Invalid OAuth start response for provider=${provider}: ${error.message}`
+      logger.error(
+        'cliproxy_auth.start_url.invalid_response',
+        'Invalid OAuth start response from CLIProxyAPI',
+        { provider, err: { name: error.name, message: error.message } }
       );
       res.status(502).json({
         error: 'cliproxy_oauth_start_invalid_response',
@@ -1211,7 +1220,11 @@ router.post('/:provider/start-url', async (req: Request, res: Response): Promise
       startPath: startPath ?? `/v0/management/${authUrlProvider}-auth-url?is_webui=true`,
       cause: error,
     });
-    console.error(`[cliproxy-auth-routes] ${guidance.message} ${guidance.details}`);
+    logger.error(
+      'cliproxy_auth.start_url.request_failed',
+      guidance.message || 'OAuth start request failed',
+      { provider, details: guidance.details }
+    );
     res.status(503).json(guidance);
   }
 });

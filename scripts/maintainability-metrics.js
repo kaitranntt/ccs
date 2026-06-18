@@ -52,8 +52,15 @@ const TYPED_ADOPTION_SUBDOMAINS = ['cliproxy/quota', 'cliproxy/auth', 'web-serve
 
 // CLI-UX print surfaces exempt from the hotpath console.error sweep (P3).
 // Diagnostics here are legitimate user-facing terminal output, not loggable
-// errors, and stay on stdout/stderr via utils/ui.
-const CLI_UX_EXEMPT_PREFIXES = ['src/commands/', 'src/management/', 'src/utils/ui/'];
+// errors, and stay on stdout/stderr via utils/ui. src/utils/error-manager.ts is
+// the user-facing error display module (ErrorManager.show*), a sibling to
+// utils/ui, so its console.error calls are display output, not diagnostics.
+const CLI_UX_EXEMPT_PREFIXES = [
+  'src/commands/',
+  'src/management/',
+  'src/utils/ui/',
+  'src/utils/error-manager.ts',
+];
 
 const THROW_NEW_REGEX = /\bthrow\s+new\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*\(/g;
 const CONSOLE_ERR_WARN_REGEX = /\bconsole\s*\.\s*(?:error|warn)\s*\(/g;

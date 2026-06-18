@@ -7,6 +7,7 @@
  * - Map models and configure parameters
  */
 
+import { createLogger } from '../../services/logging';
 import { LocaleEnforcer } from '../locale-enforcer';
 import { ReasoningEnforcer } from '../reasoning-enforcer';
 import { ContentTransformer } from './content-transformer';
@@ -17,6 +18,8 @@ import type {
   ThinkingConfig,
   TransformResult,
 } from './types';
+
+const logger = createLogger('glmt:pipeline:request-transformer');
 
 export interface RequestTransformerConfig {
   defaultThinking?: boolean;
@@ -131,7 +134,9 @@ export class RequestTransformer {
       return { openaiRequest, thinkingConfig };
     } catch (error) {
       const err = error as Error;
-      console.error('[RequestTransformer] Transformation error:', err);
+      logger.error('transform_failed', 'Anthropic to OpenAI request transformation failed', {
+        err: { name: err.name, message: err.message },
+      });
       return {
         openaiRequest: anthropicRequest,
         thinkingConfig: { thinking: false, effort: 'medium' },

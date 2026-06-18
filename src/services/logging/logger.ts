@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { getResolvedLoggingConfig } from './log-config';
 import { getRequestContext } from './log-context';
-import { redactContext } from './log-redaction';
+import { maskSecretTokens, redactContext } from './log-redaction';
 import { appendStructuredLogEntry } from './log-storage';
 import type { LogEntry, LogStage, LoggingLevel } from './log-types';
 
@@ -29,7 +29,7 @@ function createEntry(
     level,
     source,
     event,
-    message,
+    message: maskSecretTokens(message),
     processId: process.pid,
     runId: processRunId,
     context: config.redact ? redactContext(context) : context,

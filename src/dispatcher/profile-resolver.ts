@@ -190,7 +190,7 @@ export async function resolveProfileAndTarget(
       profileInfo.target ? { target: profileInfo.target } : undefined
     );
   } catch (error) {
-    console.error(fail((error as Error).message));
+    process.stderr.write(String(fail((error as Error).message)) + '\n');
     process.exit(1);
     // Unreachable; needed so TS knows resolvedTarget is always assigned below
     throw error;
@@ -219,7 +219,7 @@ export async function resolveProfileAndTarget(
   // so users get the most actionable error even when the target CLI is not installed.
   if (resolvedTarget !== 'claude') {
     if (!targetAdapter) {
-      console.error(fail(`Target adapter not found for "${resolvedTarget}"`));
+      process.stderr.write(String(fail(`Target adapter not found for "${resolvedTarget}"`)) + '\n');
       process.exit(1);
     }
 
@@ -235,13 +235,15 @@ export async function resolveProfileAndTarget(
         cliproxyBridgeProvider: resolvedCliproxyBridge?.provider ?? null,
       });
       if (!compatibility.supported) {
-        console.error(
-          fail(
-            compatibility.reason || `${targetAdapter.displayName} does not support this profile.`
-          )
+        process.stderr.write(
+          String(
+            fail(
+              compatibility.reason || `${targetAdapter.displayName} does not support this profile.`
+            )
+          ) + '\n'
         );
         if (compatibility.suggestion) {
-          console.error(info(compatibility.suggestion));
+          process.stderr.write(String(info(compatibility.suggestion)) + '\n');
         }
         process.exit(1);
       }
@@ -255,13 +257,15 @@ export async function resolveProfileAndTarget(
         isComposite: profileInfo.type === 'cliproxy' ? Boolean(profileInfo.isComposite) : undefined,
       });
       if (!compatibility.supported) {
-        console.error(
-          fail(
-            compatibility.reason || `${targetAdapter.displayName} does not support this profile.`
-          )
+        process.stderr.write(
+          String(
+            fail(
+              compatibility.reason || `${targetAdapter.displayName} does not support this profile.`
+            )
+          ) + '\n'
         );
         if (compatibility.suggestion) {
-          console.error(info(compatibility.suggestion));
+          process.stderr.write(String(info(compatibility.suggestion)) + '\n');
         }
         process.exit(1);
       }
@@ -269,7 +273,9 @@ export async function resolveProfileAndTarget(
 
     if (profileInfo.type === 'default') {
       if (!targetAdapter.supportsProfileType('default')) {
-        console.error(fail(`${targetAdapter.displayName} does not support default profile mode`));
+        process.stderr.write(
+          String(fail(`${targetAdapter.displayName} does not support default profile mode`)) + '\n'
+        );
         process.exit(1);
       }
 
@@ -278,12 +284,16 @@ export async function resolveProfileAndTarget(
         const baseUrl = process.env['ANTHROPIC_BASE_URL'] || '';
         const apiKey = process.env['ANTHROPIC_AUTH_TOKEN'] || '';
         if (!baseUrl.trim() || !apiKey.trim()) {
-          console.error(
-            fail(
-              `${targetAdapter.displayName} default mode requires ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN`
-            )
+          process.stderr.write(
+            String(
+              fail(
+                `${targetAdapter.displayName} default mode requires ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN`
+              )
+            ) + '\n'
           );
-          console.error(info('Use a settings-based profile instead: ccs glm --target droid'));
+          process.stderr.write(
+            String(info('Use a settings-based profile instead: ccs glm --target droid')) + '\n'
+          );
           process.exit(1);
         }
       }
@@ -324,15 +334,17 @@ export async function resolveProfileAndTarget(
         ? getBlockedBrowserOverrideWarning('Codex Browser Tools', codexBrowserExposure)
         : undefined;
   if (blockedBrowserOverrideWarning) {
-    console.error(warn(blockedBrowserOverrideWarning));
+    process.stderr.write(String(warn(blockedBrowserOverrideWarning)) + '\n');
   }
   if (resolvedTarget !== 'claude' && !targetBinaryInfo) {
     const displayName = targetAdapter?.displayName || resolvedTarget;
-    console.error(fail(`${displayName} CLI not found.`));
+    process.stderr.write(String(fail(`${displayName} CLI not found.`)) + '\n');
     if (resolvedTarget === 'droid') {
-      console.error(info('Install: npm i -g @factory/cli'));
+      process.stderr.write(String(info('Install: npm i -g @factory/cli')) + '\n');
     } else if (resolvedTarget === 'codex') {
-      console.error(info('Install a recent @openai/codex build, then retry.'));
+      process.stderr.write(
+        String(info('Install a recent @openai/codex build, then retry.')) + '\n'
+      );
     }
     process.exit(1);
   }
@@ -344,7 +356,9 @@ export async function resolveProfileAndTarget(
       const activeProfiles = allProfiles.settings.filter((name) => /^[a-zA-Z0-9._-]+$/.test(name));
       await pruneOrphanedModels(activeProfiles);
     } catch (error) {
-      console.error(warn(`[!] Droid prune skipped: ${(error as Error).message}`));
+      process.stderr.write(
+        String(warn(`[!] Droid prune skipped: ${(error as Error).message}`)) + '\n'
+      );
     }
   }
 
@@ -364,15 +378,19 @@ export async function resolveProfileAndTarget(
         runtimeReasoningOverride = runtime.reasoningOverride;
       } else {
         if (droidRoute.duplicateReasoningDisplays.length > 0) {
-          console.error(
-            warn(
-              `[!] Multiple reasoning flags detected. Using first occurrence: ${droidRoute.reasoningSourceDisplay || '<first-flag>'}`
-            )
+          process.stderr.write(
+            String(
+              warn(
+                `[!] Multiple reasoning flags detected. Using first occurrence: ${droidRoute.reasoningSourceDisplay || '<first-flag>'}`
+              )
+            ) + '\n'
           );
         }
         if (droidRoute.autoPrependedExec && process.stdout.isTTY) {
-          console.error(
-            info('Detected Droid exec-only flags. Routing as: droid exec <flags> [prompt]')
+          process.stderr.write(
+            String(
+              info('Detected Droid exec-only flags. Routing as: droid exec <flags> [prompt]')
+            ) + '\n'
           );
         }
       }

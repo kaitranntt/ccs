@@ -24,6 +24,18 @@ export interface ModelWarningsContext {
 }
 
 /**
+ * Write a line to stderr preserving prior `console.error` semantics.
+ *
+ * These lines are primary user-facing model warnings (rendered via the ui
+ * `warn()` helper or human-readable guidance the user must act on), so they
+ * stay on stderr verbatim rather than being routed through the structured
+ * logger.
+ */
+function stderr(line: string): void {
+  process.stderr.write(String(line) + '\n');
+}
+
+/**
  * Check all active models for known issues and emit warnings.
  *
  * For composite variants, checks every tier model.
@@ -40,17 +52,17 @@ export function warnBrokenModels(context: ModelWarningsContext): void {
       if (tierConfig && isModelBroken(tierConfig.provider, tierConfig.model)) {
         const modelEntry = findModel(tierConfig.provider, tierConfig.model);
         const issueUrl = getModelIssueUrl(tierConfig.provider, tierConfig.model);
-        console.error('');
-        console.error(
+        stderr('');
+        stderr(
           warn(
             `${tier} tier: ${modelEntry?.name || tierConfig.model} has known issues with Claude Code`
           )
         );
-        console.error('    Tool calls will fail. Consider changing the model in config.yaml.');
+        stderr('    Tool calls will fail. Consider changing the model in config.yaml.');
         if (issueUrl) {
-          console.error(`    Tracking: ${issueUrl}`);
+          stderr(`    Tracking: ${issueUrl}`);
         }
-        console.error('');
+        stderr('');
       }
     }
   } else {
@@ -59,22 +71,22 @@ export function warnBrokenModels(context: ModelWarningsContext): void {
       const modelEntry = findModel(provider, currentModel);
       const issueUrl = getModelIssueUrl(provider, currentModel);
       const replacementModel = getSuggestedReplacementModel(provider, currentModel);
-      console.error('');
-      console.error(warn(`${modelEntry?.name || currentModel} has known issues with Claude Code`));
+      stderr('');
+      stderr(warn(`${modelEntry?.name || currentModel} has known issues with Claude Code`));
       if (replacementModel) {
-        console.error(`    Tool calls will fail. Use "${replacementModel}" instead.`);
+        stderr(`    Tool calls will fail. Use "${replacementModel}" instead.`);
       } else {
-        console.error('    Tool calls will fail. Consider changing the model in config.yaml.');
+        stderr('    Tool calls will fail. Consider changing the model in config.yaml.');
       }
       if (issueUrl) {
-        console.error(`    Tracking: ${issueUrl}`);
+        stderr(`    Tracking: ${issueUrl}`);
       }
       if (skipLocalAuth) {
-        console.error('    Note: Model may be overridden by remote proxy configuration.');
+        stderr('    Note: Model may be overridden by remote proxy configuration.');
       } else {
-        console.error(`    Run "ccs ${provider} --config" to change model.`);
+        stderr(`    Run "ccs ${provider} --config" to change model.`);
       }
-      console.error('');
+      stderr('');
     }
   }
 }

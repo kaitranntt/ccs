@@ -13,6 +13,9 @@
 import { ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import { fail, info, warn } from '../../utils/ui';
+import { createLogger } from '../../services/logging';
+
+const logger = createLogger('cliproxy:executor');
 import {
   generateConfig,
   getProviderConfig,
@@ -107,14 +110,14 @@ export async function execClaudeWithCLIProxy(
 
   // Validate Claude CLI exists before proceeding
   if (!fs.existsSync(claudeCli)) {
-    console.error(fail(`Claude CLI not found at: ${claudeCli}`));
-    console.error('    Run "ccs doctor --fix" to reinstall or check your PATH');
+    process.stderr.write(`${fail(`Claude CLI not found at: ${claudeCli}`)}\n`);
+    process.stderr.write('    Run "ccs doctor --fix" to reinstall or check your PATH\n');
     process.exit(1);
   }
 
   const log = (msg: string) => {
     if (verbose) {
-      console.error(`[cliproxy] ${msg}`);
+      logger.info('verbose', msg);
     }
   };
 
@@ -203,16 +206,16 @@ export async function execClaudeWithCLIProxy(
   const thinkingCfg = getThinkingConfig();
 
   if (thinkingParse.duplicateDisplays.length > 0) {
-    console.warn(
-      `[!] Multiple reasoning flags detected. Using first occurrence: ${thinkingParse.sourceDisplay}`
+    process.stderr.write(
+      `[!] Multiple reasoning flags detected. Using first occurrence: ${thinkingParse.sourceDisplay}\n`
     );
   }
 
   if (thinkingParse.sourceFlag === '--effort' && provider !== 'codex') {
-    console.warn(
-      warn(
+    process.stderr.write(
+      `${warn(
         '`--effort` is primarily for codex. Continuing as alias of `--thinking` for compatibility.'
-      )
+      )}\n`
     );
   }
 
@@ -227,7 +230,9 @@ export async function execClaudeWithCLIProxy(
       console.log(
         warn('Composite variants use per-tier config. Edit config.yaml to change tier models.')
       );
-      console.error(`    Use "ccs cliproxy edit ${variantName}" to modify composite variants`);
+      process.stderr.write(
+        `    Use "ccs cliproxy edit ${variantName}" to modify composite variants\n`
+      );
       process.exit(1);
     } else {
       // Run the one-time stale-pin migration on the pre-existing settings file
@@ -369,7 +374,7 @@ export async function execClaudeWithCLIProxy(
       );
     } catch (error) {
       const err = error as Error;
-      console.error(warn(`Failed to start HTTPS tunnel: ${err.message}`));
+      process.stderr.write(`${warn(`Failed to start HTTPS tunnel: ${err.message}`)}\n`);
       throw new Error(`HTTPS tunnel startup failed: ${err.message}`);
     }
   } else if (useRemoteProxy && proxyConfig.protocol === 'https' && provider === 'codex') {
@@ -526,16 +531,16 @@ export async function execClaudeWithCLIProxy(
 
   const webSearchEnv = getWebSearchHookEnv();
   if (process.env.CCS_DEBUG) {
-    console.error(
-      `[cliproxy-browser-debug] keys=${Object.keys(env)
+    logger.info('browser-env-keys', 'CCS_BROWSER_* keys in environment', {
+      keys: Object.keys(env)
         .filter((key) => key.startsWith('CCS_BROWSER_'))
-        .sort()
-        .join(',')} ws=${env.CCS_BROWSER_DEVTOOLS_WS_URL || ''}`
-    );
+        .sort(),
+      ws: env.CCS_BROWSER_DEVTOOLS_WS_URL || '',
+    });
   }
   logEnvironment(env, webSearchEnv, verbose);
   if (imageAnalysisWarning) {
-    console.error(info(imageAnalysisWarning));
+    process.stderr.write(`${info(imageAnalysisWarning)}\n`);
   }
 
   // 11b. Print thinking status feedback (TTY only, non-piped sessions)
@@ -547,7 +552,7 @@ export async function execClaudeWithCLIProxy(
       thinkingParse.sourceDisplay
     );
 
-    console.error(`[i] Thinking: ${thinkingLabel} (${sourceLabel})`);
+    process.stderr.write(`[i] Thinking: ${thinkingLabel} (${sourceLabel})\n`);
   }
 
   // 12. Filter CCS flags, spawn Claude CLI, start quota monitor, wire cleanup

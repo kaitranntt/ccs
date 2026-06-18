@@ -14,6 +14,8 @@
  *   const events = transformer.transformDelta(openaiEvent, acc);
  */
 
+import { createLogger } from '../services/logging';
+
 interface ThinkingConfig {
   [key: string]: unknown;
 }
@@ -94,6 +96,7 @@ export class DeltaAccumulator {
   private finalized: boolean;
   private inputTokens: number;
   private outputTokens: number;
+  private readonly logger = createLogger('glmt:delta-accumulator');
 
   constructor(_thinkingConfig: ThinkingConfig = {}, options: DeltaAccumulatorOptions = {}) {
     this.messageId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(7);
@@ -179,7 +182,11 @@ export class DeltaAccumulator {
     const block = this.getCurrentBlock();
     if (!block) {
       // FIX: Guard against null block (should never happen, but defensive)
-      console.error('[DeltaAccumulator] ERROR: addDelta called with no current block');
+      this.logger.error(
+        'delta.no_current_block',
+        'DeltaAccumulator addDelta called with no current block',
+        { currentBlockIndex: this.currentBlockIndex }
+      );
       return;
     }
 
@@ -193,8 +200,15 @@ export class DeltaAccumulator {
 
       // FIX: Verify assignment succeeded (paranoid check for race conditions)
       if (block.content.length !== this.thinkingBuffer.length) {
-        console.error('[DeltaAccumulator] ERROR: Block content assignment failed');
-        console.error(`Expected: ${this.thinkingBuffer.length}, Got: ${block.content.length}`);
+        this.logger.error(
+          'delta.assignment_failed',
+          'DeltaAccumulator block content assignment failed',
+          {
+            blockIndex: block.index,
+            expected: this.thinkingBuffer.length,
+            actual: block.content.length,
+          }
+        );
       }
     } else if (block.type === 'text') {
       // C-02 Fix: Enforce buffer size limit
@@ -216,9 +230,10 @@ export class DeltaAccumulator {
 
       // FIX: Log block closure for debugging (helps diagnose timing issues)
       if (block.type === 'thinking' && process.env.CCS_DEBUG === '1') {
-        console.error(
-          `[DeltaAccumulator] Stopped thinking block ${block.index}: ${block.content?.length || 0} chars`
-        );
+        this.logger.debug('delta.stopped_thinking_block', 'Stopped thinking block', {
+          blockIndex: block.index,
+          contentLength: block.content?.length || 0,
+        });
       }
     }
   }

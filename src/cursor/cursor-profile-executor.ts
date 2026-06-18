@@ -113,23 +113,23 @@ export async function executeCursorProfile(
   claudeCliPath = 'claude'
 ): Promise<number> {
   if (!config.enabled) {
-    console.error(fail('Cursor integration is not enabled.'));
-    console.error('');
-    console.error('Enable it first: ccs legacy cursor enable');
+    process.stderr.write(fail('Cursor integration is not enabled.') + '\n');
+    process.stderr.write('\n');
+    process.stderr.write('Enable it first: ccs legacy cursor enable\n');
     return 1;
   }
 
   const authStatus = checkAuthStatus();
   if (!authStatus.authenticated) {
-    console.error(fail('Cursor credentials not found.'));
-    console.error('');
-    console.error('Authenticate first: ccs legacy cursor auth');
+    process.stderr.write(fail('Cursor credentials not found.') + '\n');
+    process.stderr.write('\n');
+    process.stderr.write('Authenticate first: ccs legacy cursor auth\n');
     return 1;
   }
   if (authStatus.expired) {
-    console.error(fail('Cursor credentials have expired.'));
-    console.error('');
-    console.error('Refresh them with: ccs legacy cursor auth');
+    process.stderr.write(fail('Cursor credentials have expired.') + '\n');
+    process.stderr.write('\n');
+    process.stderr.write('Refresh them with: ccs legacy cursor auth\n');
     return 1;
   }
 
@@ -145,17 +145,17 @@ export async function executeCursorProfile(
         daemon_token: daemonToken,
       });
       if (!result.success) {
-        console.error(fail(`Failed to start cursor daemon: ${result.error}`));
+        process.stderr.write(fail(`Failed to start cursor daemon: ${result.error}`) + '\n');
         return 1;
       }
       console.log(ok(`Daemon started on port ${config.port}`));
       daemonRunning = true;
     } else {
-      console.error(fail('Cursor daemon is not running.'));
-      console.error('');
-      console.error('Start the daemon:');
-      console.error('  ccs legacy cursor start');
-      console.error('Or enable auto_start in the Cursor config section.');
+      process.stderr.write(fail('Cursor daemon is not running.') + '\n');
+      process.stderr.write('\n');
+      process.stderr.write('Start the daemon:\n');
+      process.stderr.write('  ccs legacy cursor start\n');
+      process.stderr.write('Or enable auto_start in the Cursor config section.\n');
       return 1;
     }
   }
@@ -204,7 +204,7 @@ export async function executeCursorProfile(
     });
 
     proc.on('error', (err) => {
-      console.error(fail(`Failed to start Claude: ${err.message}`));
+      process.stderr.write(fail(`Failed to start Claude: ${err.message}`) + '\n');
       resolve(1);
     });
   });

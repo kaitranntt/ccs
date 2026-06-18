@@ -95,18 +95,18 @@ export async function handleImport(context: AuthCoordinationContext): Promise<bo
   if (!forceImport) return false;
 
   if (provider !== 'kiro') {
-    console.error(fail('--import is only available for Kiro'));
-    console.error(`    Run "ccs ${provider} --auth" to authenticate`);
+    process.stderr.write(String(fail('--import is only available for Kiro')) + '\n');
+    process.stderr.write(`    Run "ccs ${provider} --auth" to authenticate` + '\n');
     process.exit(1);
   }
   if (forceAuth) {
-    console.error(fail('Cannot use --import with --auth'));
-    console.error('    --import: Import existing token from Kiro IDE');
-    console.error('    --auth: Trigger new OAuth flow in browser');
+    process.stderr.write(String(fail('Cannot use --import with --auth')) + '\n');
+    process.stderr.write('    --import: Import existing token from Kiro IDE' + '\n');
+    process.stderr.write('    --auth: Trigger new OAuth flow in browser' + '\n');
     process.exit(1);
   }
   if (forceLogout) {
-    console.error(fail('Cannot use --import with --logout'));
+    process.stderr.write(String(fail('Cannot use --import with --logout')) + '\n');
     process.exit(1);
   }
 
@@ -121,8 +121,8 @@ export async function handleImport(context: AuthCoordinationContext): Promise<bo
     ...(setNickname ? { nickname: setNickname } : {}),
   });
   if (!authSuccess) {
-    console.error(fail('Failed to import Kiro token from IDE'));
-    console.error('    Make sure you are logged into Kiro IDE first');
+    process.stderr.write(String(fail('Failed to import Kiro token from IDE')) + '\n');
+    process.stderr.write('    Make sure you are logged into Kiro IDE first' + '\n');
     process.exit(1);
   }
   process.exit(0);
@@ -177,7 +177,10 @@ export async function runAntigravityGate(
         `Antigravity auth blocked. Re-run after completing confirmation or pass ${ANTIGRAVITY_ACCEPT_RISK_FLAGS[0]}.`
       );
     }
-    console.error(info('Remote proxy mode is active; local OAuth flow is skipped in --auth mode.'));
+    process.stderr.write(
+      String(info('Remote proxy mode is active; local OAuth flow is skipped in --auth mode.')) +
+        '\n'
+    );
     return { earlyReturn: true };
   }
 
@@ -189,10 +192,12 @@ export async function runAntigravityGate(
         acceptedByFlag: acceptAgyRisk,
       });
       if (!acknowledged) {
-        console.error(
-          fail(
-            `Antigravity session blocked. Re-run after completing confirmation or pass ${ANTIGRAVITY_ACCEPT_RISK_FLAGS[0]}.`
-          )
+        process.stderr.write(
+          String(
+            fail(
+              `Antigravity session blocked. Re-run after completing confirmation or pass ${ANTIGRAVITY_ACCEPT_RISK_FLAGS[0]}.`
+            )
+          ) + '\n'
         );
         process.exit(1);
       }
@@ -262,9 +267,9 @@ export async function ensureProviderAuthentication(
       }
       if (failures.length > 0) {
         const succeeded = compositeProviders.filter((p) => !failures.includes(p));
-        console.error(fail(`Auth failed for: ${failures.join(', ')}`));
+        process.stderr.write(String(fail(`Auth failed for: ${failures.join(', ')}`)) + '\n');
         if (succeeded.length > 0) {
-          console.error(info(`Succeeded: ${succeeded.join(', ')}`));
+          process.stderr.write(String(info(`Succeeded: ${succeeded.join(', ')}`)) + '\n');
         }
         process.exit(1);
       }
@@ -279,9 +284,11 @@ export async function ensureProviderAuthentication(
       }
     }
     if (unauthenticatedProviders.length > 0) {
-      console.error(fail('Composite variant requires authentication for multiple providers:'));
+      process.stderr.write(
+        String(fail('Composite variant requires authentication for multiple providers:')) + '\n'
+      );
       for (const p of unauthenticatedProviders) {
-        console.error(`    - ${p} (run "ccs ${p} --auth")`);
+        process.stderr.write(`    - ${p} (run "ccs ${p} --auth")` + '\n');
       }
       process.exit(1);
     }

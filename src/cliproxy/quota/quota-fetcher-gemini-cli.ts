@@ -28,6 +28,12 @@ import {
   normalizeProviderTierId,
 } from '../auth/provider-entitlement-evidence';
 import type { ProviderEntitlementEvidence } from '../auth/provider-entitlement-types';
+import { createLogger } from '../../services/logging';
+
+// Diagnostic-only logger: quota fetch progress, upstream HTTP status, and
+// recovery hints. accountId is attached as provider context; token values
+// are never logged (they live in auth files and are not read into messages).
+const logger = createLogger('cliproxy:quota:gemini-cli');
 
 /** Google Cloud Code API endpoints */
 const GEMINI_CLI_API_BASE = 'https://cloudcode-pa.googleapis.com';
@@ -620,8 +626,10 @@ async function fetchGeminiCliSupplementary(
     if (response.status !== 200) {
       if (verbose) {
         const source = response.viaManagement ? 'managed' : 'direct';
-        console.error(
-          `[i] Gemini CLI supplementary metadata unavailable via ${source}: HTTP ${response.status}`
+        logger.info(
+          'gemini_cli.supplementary_metadata_unavailable',
+          `Gemini CLI supplementary metadata unavailable via ${source}: HTTP ${response.status}`,
+          { provider: 'gemini', accountId, httpStatus: response.status, source }
         );
       }
       return { tierLabel: null, tierId: null, creditBalance: null, normalizedTier: 'unknown' };
@@ -637,7 +645,15 @@ async function fetchGeminiCliSupplementary(
   } catch (error) {
     if (verbose) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[i] Gemini CLI supplementary metadata skipped: ${message}`);
+      logger.info(
+        'gemini_cli.supplementary_metadata_skipped',
+        `Gemini CLI supplementary metadata skipped: ${message}`,
+        {
+          provider: 'gemini',
+          accountId,
+          err: error instanceof Error ? { name: error.name, message } : { message },
+        }
+      );
     }
     return { tierLabel: null, tierId: null, creditBalance: null, normalizedTier: 'unknown' };
   }
@@ -954,7 +970,12 @@ async function fetchWithAuthData(
 ): Promise<GeminiCliQuotaResult> {
   if (!authData.projectId) {
     const error = 'Cannot resolve project ID from auth file';
-    if (verbose) console.error(`[!] Error: ${error}`);
+    if (verbose) {
+      logger.error('gemini_cli.missing_project_id', `Error: ${error}`, {
+        provider: 'gemini',
+        accountId,
+      });
+    }
     return buildGeminiCliFailureResult(accountId, null, {
       error,
       errorCode: 'missing_project_id',
@@ -985,7 +1006,11 @@ async function fetchWithAuthData(
 
     if (verbose) {
       const source = response.viaManagement ? 'managed' : 'direct';
-      console.error(`[i] Gemini CLI API status via ${source}: ${response.status}`);
+      logger.info(
+        'gemini_cli.api_status',
+        `Gemini CLI API status via ${source}: ${response.status}`,
+        { provider: 'gemini', accountId, httpStatus: response.status, source }
+      );
     }
 
     if (response.status !== 200) {
@@ -1002,7 +1027,13 @@ async function fetchWithAuthData(
     const buckets = buildGeminiCliBuckets(rawBuckets);
     const supplementary = await supplementaryPromise;
 
-    if (verbose) console.error(`[i] Gemini CLI buckets found: ${buckets.length}`);
+    if (verbose) {
+      logger.info('gemini_cli.buckets_found', `Gemini CLI buckets found: ${buckets.length}`, {
+        provider: 'gemini',
+        accountId,
+        bucketCount: buckets.length,
+      });
+    }
 
     if (supplementary.normalizedTier !== 'unknown') {
       setAccountTier('gemini', accountId, supplementary.normalizedTier);
@@ -1045,7 +1076,13 @@ async function fetchWithAuthData(
           ? err.message
           : 'Unknown error';
 
-    if (verbose) console.error(`[!] Gemini CLI quota error: ${errorMsg}`);
+    if (verbose) {
+      logger.error('gemini_cli.quota_fetch_error', `Gemini CLI quota error: ${errorMsg}`, {
+        provider: 'gemini',
+        accountId,
+        err: err instanceof Error ? { name: err.name, message: errorMsg } : { message: errorMsg },
+      });
+    }
 
     return buildGeminiCliFailureResult(accountId, authData.projectId, {
       error: errorMsg,
@@ -1069,12 +1106,22 @@ export async function fetchGeminiCliQuota(
   accountId: string,
   verbose = false
 ): Promise<GeminiCliQuotaResult> {
-  if (verbose) console.error(`[i] Fetching Gemini CLI quota for ${accountId}...`);
+  if (verbose) {
+    logger.info('gemini_cli.fetch_start', `Fetching Gemini CLI quota for ${accountId}...`, {
+      provider: 'gemini',
+      accountId,
+    });
+  }
 
   const authData = readGeminiCliAuthData(accountId);
   if (!authData) {
     const error = 'Auth file not found for Gemini account';
-    if (verbose) console.error(`[!] Error: ${error}`);
+    if (verbose) {
+      logger.error('gemini_cli.auth_file_missing', `Error: ${error}`, {
+        provider: 'gemini',
+        accountId,
+      });
+    }
     return buildGeminiCliFailureResult(accountId, null, {
       error,
       errorCode: 'auth_file_missing',
@@ -1086,8 +1133,10 @@ export async function fetchGeminiCliQuota(
   if (authData.isExpired && verbose) {
     const expiresAt = getTokenExpiryTimestamp(authData.expiresAt);
     const expiryLabel = expiresAt ? new Date(expiresAt).toISOString() : 'unknown';
-    console.error(
-      `[i] Gemini access token is expired (${expiryLabel}); quota requests will defer to managed auth when available.`
+    logger.info(
+      'gemini_cli.token_expired',
+      `Gemini access token is expired (${expiryLabel}); quota requests will defer to managed auth when available.`,
+      { provider: 'gemini', accountId, tokenExpired: true, expiresAt: expiryLabel }
     );
   }
 

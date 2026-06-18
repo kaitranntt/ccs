@@ -14,6 +14,9 @@ import {
   buildClaudeQuotaWindows,
   buildClaudeCoreUsageSummary,
 } from './quota-fetcher-claude-normalizer';
+import { createLogger } from '../../services/logging';
+
+const logger = createLogger('cliproxy:quota:claude');
 
 export { buildClaudeQuotaWindows, buildClaudeCoreUsageSummary };
 
@@ -250,7 +253,11 @@ async function runClaudeUsageFetch(
       });
 
       if (verbose) {
-        console.error(`[i] Claude OAuth usage status: ${response.status} (attempt ${attempt})`);
+        logger.info('quota.fetch.status', `Claude OAuth usage status: ${response.status}`, {
+          provider: 'claude',
+          status: response.status,
+          attempt,
+        });
       }
 
       if (response.status === 401) {
@@ -331,10 +338,17 @@ async function runClaudeUsageFetch(
             : 'Unknown error';
 
       if (verbose) {
-        const errorDetails =
-          error instanceof Error ? (error.stack ?? error.message) : JSON.stringify(error);
-        console.error(
-          `[!] Claude OAuth usage failed (attempt ${attempt}): ${lastError}${errorDetails ? `\n${errorDetails}` : ''}`
+        logger.warn(
+          'quota.fetch.failed',
+          `Claude OAuth usage failed (attempt ${attempt}): ${lastError}`,
+          {
+            provider: 'claude',
+            attempt,
+            err:
+              error instanceof Error
+                ? { name: error.name, message: error.message }
+                : { message: String(error) },
+          }
         );
       }
 

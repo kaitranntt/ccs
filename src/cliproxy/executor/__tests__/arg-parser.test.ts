@@ -167,7 +167,7 @@ describe('parseExecutorFlags', () => {
   beforeEach(() => {
     originalExitCode = process.exitCode as number | undefined;
     process.exitCode = 0;
-    errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    errorSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
     exitSpy = jest
       .spyOn(process, 'exit')
       .mockImplementation((() => undefined as never) as typeof process.exit);
@@ -290,7 +290,7 @@ describe('validateFlagCombinations', () => {
   beforeEach(() => {
     originalExitCode = process.exitCode as number | undefined;
     process.exitCode = 0;
-    errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    errorSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
   });
 
   afterEach(() => {

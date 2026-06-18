@@ -12,6 +12,9 @@ import { fail, warn, info } from '../../utils/ui';
 import { CLIProxyProvider } from '../types';
 import { handleBanDetection, warnPossible403Ban } from '../accounts/account-safety';
 import { CompositeTierConfig } from '../../config/unified-config-types';
+import { createLogger } from '../../services/logging';
+
+const logger = createLogger('cliproxy:executor:retry-handler');
 
 /**
  * Check if error is network-related
@@ -32,12 +35,12 @@ export function isNetworkError(error: Error): boolean {
  * Handle network error with user-friendly message
  */
 export function handleNetworkError(_error: Error): never {
-  console.error('');
-  console.error(fail('No network connection detected'));
-  console.error('');
-  console.error('CLIProxy binary download requires internet access.');
-  console.error('Please check your network connection and try again.');
-  console.error('');
+  process.stderr.write(String('') + '\n');
+  process.stderr.write(String(fail('No network connection detected')) + '\n');
+  process.stderr.write(String('') + '\n');
+  process.stderr.write(String('CLIProxy binary download requires internet access.') + '\n');
+  process.stderr.write(String('Please check your network connection and try again.') + '\n');
+  process.stderr.write(String('') + '\n');
   process.exit(1);
 }
 
@@ -63,16 +66,16 @@ export async function handleTokenExpiration(
     }
 
     // Token expired and refresh failed - trigger re-auth
-    console.error(warn('OAuth token expired and refresh failed'));
+    process.stderr.write(String(warn('OAuth token expired and refresh failed')) + '\n');
     if (tokenResult.error) {
-      console.error(`    ${tokenResult.error}`);
+      process.stderr.write(String(`    ${tokenResult.error}`) + '\n');
     }
-    console.error(`    Run "ccs ${provider} --auth" to re-authenticate`);
+    process.stderr.write(String(`    Run "ccs ${provider} --auth" to re-authenticate`) + '\n');
     process.exit(1);
   }
 
   if (tokenResult.refreshed && verbose) {
-    console.error('[cliproxy] Token was refreshed proactively');
+    logger.info('token.refreshed', 'Token was refreshed proactively', { provider, verbose });
   }
 }
 
@@ -86,7 +89,7 @@ export async function handleQuotaCheck(provider: CLIProxyProvider): Promise<void
   const preflight = await preflightCheck(provider);
 
   if (!preflight.proceed) {
-    console.error(fail(`Cannot start session: ${preflight.reason}`));
+    process.stderr.write(String(fail(`Cannot start session: ${preflight.reason}`)) + '\n');
     process.exit(1);
   }
 

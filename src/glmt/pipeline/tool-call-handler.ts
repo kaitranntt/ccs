@@ -7,8 +7,11 @@
  * - Handle input_json_delta events
  */
 
+import { createLogger } from '../../services/logging';
 import type { DeltaAccumulator } from '../delta-accumulator';
 import type { OpenAIToolCallDelta, OpenAIToolCall, ContentBlock, AnthropicSSEEvent } from './types';
+
+const logger = createLogger('glmt:pipeline:tool-call-handler');
 
 export class ToolCallHandler {
   processToolCalls(toolCalls: OpenAIToolCall[]): ContentBlock[] {
@@ -20,7 +23,15 @@ export class ToolCallHandler {
         parsedInput = JSON.parse(toolCall.function.arguments || '{}');
       } catch (parseError) {
         const err = parseError as Error;
-        console.error(`[ToolCallHandler] Invalid JSON in tool arguments: ${err.message}`);
+        logger.warn(
+          'tool_arguments_invalid_json',
+          'Tool call arguments contained invalid JSON, storing raw value',
+          {
+            err: { name: err.name, message: err.message },
+            toolCallId: toolCall.id,
+            toolCallName: toolCall.function.name,
+          }
+        );
         parsedInput = { _error: 'Invalid JSON', _raw: toolCall.function.arguments };
       }
 

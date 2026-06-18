@@ -12,9 +12,6 @@
 
 import * as http from 'http';
 import * as https from 'https';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 import { URL } from 'url';
 import { ToolNameMapper, type Tool, type ContentBlock } from '../ai-providers/tool-name-mapper';
 import { sanitizeToolSchemas } from '../ai-providers/schema-sanitizer';
@@ -28,7 +25,6 @@ import {
 import { getModelMaxLevel } from '../model-catalog';
 
 import { createLogger } from '../../services/logging';
-import { getCcsDir } from '../../config/config-loader-facade';
 import {
   attachUpstreamResponseTimeout,
   writeForwardResponseHead,
@@ -273,8 +269,6 @@ export class ToolSanitizationProxy {
   private server: http.Server | null = null;
   private port: number | null = null;
   private readonly config: Required<ToolSanitizationProxyConfig>;
-  private readonly logFilePath: string;
-  private readonly debugMode: boolean;
   private readonly logger = createLogger('cliproxy:tool-sanitization-proxy');
 
   constructor(config: ToolSanitizationProxyConfig) {
@@ -285,69 +279,6 @@ export class ToolSanitizationProxy {
       timeoutMs: config.timeoutMs ?? 120000,
       allowSelfSigned: config.allowSelfSigned ?? false,
     };
-    this.debugMode = process.env.CCS_DEBUG === '1';
-    this.logFilePath = this.initLogFile();
-  }
-
-  /**
-   * Initialize log file path and ensure directory exists.
-   */
-  private initLogFile(): string {
-    const logsDir = path.join(getCcsDir(), 'logs');
-
-    try {
-      if (!fs.existsSync(logsDir)) {
-        fs.mkdirSync(logsDir, { recursive: true });
-      }
-    } catch (err) {
-      // Fallback to temp directory if logs dir creation fails
-      if (this.debugMode) {
-        console.error(
-          `[tool-sanitization-proxy] Failed to create logs dir: ${(err as Error).message}`
-        );
-      }
-      return path.join(os.tmpdir(), 'tool-sanitization-proxy.log');
-    }
-
-    return path.join(logsDir, 'tool-sanitization-proxy.log');
-  }
-
-  /**
-   * Write log entry to file (always) and console (if CCS_DEBUG=1).
-   */
-  private writeLog(level: 'info' | 'warn' | 'error', message: string): void {
-    const timestamp = new Date().toISOString();
-    const prefix = level === 'info' ? '[i]' : level === 'warn' ? '[!]' : '[X]';
-    const logLine = `${timestamp} ${prefix} ${message}\n`;
-
-    // Always write to file
-    try {
-      fs.appendFileSync(this.logFilePath, logLine);
-    } catch {
-      // Silently ignore file write errors
-    }
-
-    // Console output only in debug mode
-    if (this.debugMode) {
-      console.error(`${prefix} ${message}`);
-    }
-
-    this.logger[level](level, message, {
-      debugMode: this.debugMode,
-      logFilePath: this.logFilePath,
-    });
-  }
-
-  private log(message: string): void {
-    if (this.config.verbose) {
-      this.writeLog('info', `[tool-sanitization-proxy] ${message}`);
-    }
-  }
-
-  private warn(message: string): void {
-    if (this.config.warnOnSanitize) {
-      this.writeLog('warn', `Tool name sanitized: ${message}`);
-    }
   }
 
   /**
@@ -365,7 +296,10 @@ export class ToolSanitizationProxy {
       this.server.listen(0, '127.0.0.1', () => {
         const address = this.server?.address();
         this.port = typeof address === 'object' && address ? address.port : 0;
-        this.writeLog('info', `Tool sanitization proxy active (port ${this.port})`);
+        this.logger.info(
+          'tool-sanitization.proxy.active',
+          `Tool sanitization proxy active (port ${this.port})`
+        );
         resolve(this.port);
       });
 
@@ -418,7 +352,12 @@ export class ToolSanitizationProxy {
     const fullUpstreamUrl = new URL(requestPath, upstreamBase);
     const providerFromPath = extractProviderFromPathname(fullUpstreamUrl.pathname);
 
-    this.log(`${method} ${requestPath} → ${fullUpstreamUrl.href}`);
+    if (this.config.verbose) {
+      this.logger.info(
+        'tool-sanitization.proxy.request',
+        `${method} ${requestPath} → ${fullUpstreamUrl.href}`
+      );
+    }
 
     // Only buffer+rewrite JSON POST requests
     const contentType = String(req.headers['content-type'] || '');
@@ -458,9 +397,14 @@ export class ToolSanitizationProxy {
         }
         const normalizedModel = normalizeModelIdForRouting(modifiedBody.model, providerFromPath);
         if (normalizedModel !== modifiedBody.model) {
-          this.writeLog(
-            'warn',
-            `[tool-sanitization-proxy] Model normalized for provider routing (${providerFromPath ?? 'root'}): "${modifiedBody.model}" → "${normalizedModel}"`
+          this.logger.warn(
+            'tool-sanitization.proxy.model-normalized',
+            `Model normalized for provider routing (${providerFromPath ?? 'root'}): "${modifiedBody.model}" → "${normalizedModel}"`,
+            {
+              provider: providerFromPath ?? 'root',
+              from: modifiedBody.model,
+              to: normalizedModel,
+            }
           );
           modifiedBody = { ...modifiedBody, model: normalizedModel };
         }
@@ -480,14 +424,22 @@ export class ToolSanitizationProxy {
 
         if (schemaResult.totalRemoved > 0) {
           for (const entry of schemaResult.removedByTool) {
-            this.writeLog(
-              'warn',
-              `[tool-sanitization-proxy] Schema sanitized for "${entry.name}": removed ${entry.removed.length} Gemini-unsupported properties`
+            this.logger.warn(
+              'tool-sanitization.proxy.schema-sanitized',
+              `Schema sanitized for "${entry.name}": removed ${entry.removed.length} Gemini-unsupported properties`,
+              { tool: entry.name, removedFields: entry.removed }
             );
           }
-          this.log(
-            `Sanitized ${schemaResult.totalRemoved} schema properties across ${schemaResult.removedByTool.length} tool(s)`
-          );
+          if (this.config.verbose) {
+            this.logger.info(
+              'tool-sanitization.proxy.schema-summary',
+              `Sanitized ${schemaResult.totalRemoved} schema properties across ${schemaResult.removedByTool.length} tool(s)`,
+              {
+                totalRemoved: schemaResult.totalRemoved,
+                toolCount: schemaResult.removedByTool.length,
+              }
+            );
+          }
         }
 
         let rewrittenTools = schemaResult.tools as Tool[];
@@ -501,14 +453,26 @@ export class ToolSanitizationProxy {
 
           if (fieldResult.totalRemoved > 0) {
             for (const entry of fieldResult.removedByTool) {
-              this.writeLog(
-                'warn',
-                `[tool-sanitization-proxy] Tool fields stripped for "${entry.name}" (${providerFromPath ?? 'model-routed'}): ${entry.removed.join(', ')}`
+              this.logger.warn(
+                'tool-sanitization.proxy.fields-stripped',
+                `Tool fields stripped for "${entry.name}" (${providerFromPath ?? 'model-routed'}): ${entry.removed.join(', ')}`,
+                {
+                  tool: entry.name,
+                  provider: providerFromPath ?? 'model-routed',
+                  removedFields: entry.removed,
+                }
               );
             }
-            this.log(
-              `Stripped ${fieldResult.totalRemoved} unsupported top-level tool field(s) across ${fieldResult.removedByTool.length} tool(s)`
-            );
+            if (this.config.verbose) {
+              this.logger.info(
+                'tool-sanitization.proxy.fields-summary',
+                `Stripped ${fieldResult.totalRemoved} unsupported top-level tool field(s) across ${fieldResult.removedByTool.length} tool(s)`,
+                {
+                  totalRemoved: fieldResult.totalRemoved,
+                  toolCount: fieldResult.removedByTool.length,
+                }
+              );
+            }
           }
 
           rewrittenTools = fieldResult.tools;
@@ -521,19 +485,32 @@ export class ToolSanitizationProxy {
         // Log sanitization warnings
         if (mapper.hasChanges()) {
           const changes = mapper.getChanges();
-          for (const change of changes) {
-            this.warn(`"${change.original}" → "${change.sanitized}"`);
+          if (this.config.warnOnSanitize) {
+            for (const change of changes) {
+              this.logger.warn(
+                'tool-sanitization.proxy.name-sanitized',
+                `Tool name sanitized: "${change.original}" → "${change.sanitized}"`,
+                { from: change.original, to: change.sanitized }
+              );
+            }
           }
-          this.log(`Sanitized ${changes.length} tool name(s)`);
+          if (this.config.verbose) {
+            this.logger.info(
+              'tool-sanitization.proxy.name-summary',
+              `Sanitized ${changes.length} tool name(s)`,
+              { count: changes.length }
+            );
+          }
         }
 
         // Warn about hash collisions (multiple originals → same sanitized)
         if (mapper.hasCollisions()) {
           const collisions = mapper.getCollisions();
           for (const collision of collisions) {
-            this.writeLog(
-              'warn',
-              `[tool-sanitization-proxy] Hash collision detected: ${collision.originals.join(', ')} → "${collision.sanitized}"`
+            this.logger.warn(
+              'tool-sanitization.proxy.hash-collision',
+              `Hash collision detected: ${collision.originals.join(', ')} → "${collision.sanitized}"`,
+              { originals: collision.originals, sanitized: collision.sanitized }
             );
           }
         }
@@ -549,7 +526,11 @@ export class ToolSanitizationProxy {
       }
     } catch (error) {
       const err = error as Error;
-      this.log(`Error: ${err.message}`);
+      if (this.config.verbose) {
+        this.logger.error('tool-sanitization.proxy.request-error', `Error: ${err.message}`, {
+          error: err.message,
+        });
+      }
       if (!res.headersSent) {
         res.writeHead(502, { 'Content-Type': 'application/json' });
       }
@@ -845,9 +826,9 @@ export class ToolSanitizationProxy {
               clearUpstreamResponseTimeout();
               try {
                 if (!lifecycle.hasContent && isSuccessResponse && lifecycle.hasData) {
-                  this.writeLog(
-                    'warn',
-                    '[tool-sanitization-proxy] Empty response detected from upstream (no content blocks). Injecting synthetic response to prevent client crash.'
+                  this.logger.warn(
+                    'tool-sanitization.proxy.empty-response',
+                    'Empty response detected from upstream (no content blocks). Injecting synthetic response to prevent client crash.'
                   );
                   clientRes.write(
                     this.buildSyntheticErrorResponse(
@@ -903,9 +884,9 @@ export class ToolSanitizationProxy {
 
               // Safety net: if upstream sent data but no content blocks, inject synthetic response
               if (!lifecycle.hasContent && isSuccessResponse && lifecycle.hasData) {
-                this.writeLog(
-                  'warn',
-                  '[tool-sanitization-proxy] Empty response detected from upstream (no content blocks). Injecting synthetic response to prevent client crash.'
+                this.logger.warn(
+                  'tool-sanitization.proxy.empty-response',
+                  'Empty response detected from upstream (no content blocks). Injecting synthetic response to prevent client crash.'
                 );
                 clientRes.write(
                   this.buildSyntheticErrorResponse(

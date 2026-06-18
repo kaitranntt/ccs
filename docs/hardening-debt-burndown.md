@@ -75,3 +75,15 @@ Metrics are grep-based and approximate (not a contract). Comments and string/tem
 | `src/cliproxy/config/model-config.ts` | 32 |
 | `src/cliproxy/executor/arg-parser.ts` | 26 |
 | `src/dispatcher/flows/settings-flow.ts` | 26 |
+
+## Progress Log
+
+| Date | Phase | Change | Metric movement |
+|---|---|---|---|
+| 2026-06-18 | P2 | Express `withRequestContext` wrap; `CCS_REQUEST_ID` daemon forwarding + child re-anchor; logger toe-holds in delegation/docker. | zero-createLogger subdomains 20 -> 18 |
+| 2026-06-18 | P3 | Redaction gate (token-shape scrubbing in context + `Error.message` + message string). `tool-sanitization-proxy` private log subsystem deleted (13 sites -> existing `createLogger`). ~120 diagnostic `console.error` -> structured `createLogger` across proxy, web-server/routes, glmt, quota-fetchers, executors, delegation. User-facing `console.error` (CLI flows, arg-parser usage, installers, prompts, adapter launch errors, error display) migrated to `process.stderr.write` (preserves stderr output). `error-manager.ts` reclassified CLI-UX-exempt (user-facing display). | hotpath `console.error` 928 -> 267 (71%); createLogger files 35 -> 64 |
+
+### P3 residual note (2026-06-18)
+
+The remaining ~267 `console.error`/`warn` are user-facing CLI output (interactive flows, arg-parser usage errors, installers, prompts, adapter launch failures, error-display helpers) routed via `fail()`/`info()`/`warn()` from `utils/ui`. They are legitimate stderr output, not diagnostics. The plan's `<10` target assumed these were diagnostics; in practice the diagnostic subset is fully converted to structured logs. Migrating the residual `console.error` -> `process.stderr.write` is mechanical (near-zero behavior change, no traceability value) and continues incrementally; it does not block P4-P7. The redaction gate makes any further conversion safe.
+

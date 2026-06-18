@@ -8,7 +8,7 @@
 import { spawn } from 'child_process';
 import * as path from 'path';
 import { killWithEscalation } from '../utils/process-utils';
-import { forwardRequestIdEnv } from '../services/logging';
+import { createLogger, forwardRequestIdEnv } from '../services/logging';
 import * as fs from 'fs';
 import { SessionManager } from './session-manager';
 import { SettingsParser } from './settings-parser';
@@ -63,6 +63,8 @@ import { getCcsDir, getGlobalEnvConfig, loadSettings } from '../config/config-lo
 
 // Re-export types for consumers
 export type { ExecutionOptions, ExecutionResult, StreamMessage } from './executor/types';
+
+const logger = createLogger('delegation:headless-executor');
 
 /**
  * Headless executor for Claude CLI delegation
@@ -129,10 +131,12 @@ export class HeadlessExecutor {
     });
     const inheritedClaudeConfigDir = continuityInheritance.claudeConfigDir;
     if (continuityInheritance.sourceAccount && process.env.CCS_DEBUG) {
-      console.error(
-        info(
-          `Continuity inheritance active: profile "${profile}" -> account "${continuityInheritance.sourceAccount}"`
-        )
+      process.stderr.write(
+        String(
+          info(
+            `Continuity inheritance active: profile "${profile}" -> account "${continuityInheritance.sourceAccount}"`
+          )
+        ) + '\n'
       );
     }
 
@@ -198,10 +202,12 @@ export class HeadlessExecutor {
       imageAnalysisProvider &&
       imageAnalysisStatus.effectiveRuntimeMode === 'native-read'
     ) {
-      console.error(
-        info(
-          `${imageAnalysisStatus.effectiveRuntimeReason || `Image analysis via ${imageAnalysisProvider} is unavailable.`} This delegation will use native Read.`
-        )
+      process.stderr.write(
+        String(
+          info(
+            `${imageAnalysisStatus.effectiveRuntimeReason || `Image analysis via ${imageAnalysisProvider} is unavailable.`} This delegation will use native Read.`
+          )
+        ) + '\n'
       );
       imageAnalysisEnv = {
         ...imageAnalysisEnv,
@@ -215,10 +221,12 @@ export class HeadlessExecutor {
     ) {
       const ensureServiceResult = await ensureCliproxyService(resolveLifecyclePort(), false);
       if (!ensureServiceResult.started) {
-        console.error(
-          warn(
-            `Image analysis via ${imageAnalysisProvider} is unavailable because CCS could not start the local CLIProxy service. This delegation will use native Read.`
-          )
+        process.stderr.write(
+          String(
+            warn(
+              `Image analysis via ${imageAnalysisProvider} is unavailable because CCS could not start the local CLIProxy service. This delegation will use native Read.`
+            )
+          ) + '\n'
         );
         imageAnalysisEnv = {
           ...imageAnalysisEnv,
@@ -273,7 +281,9 @@ export class HeadlessExecutor {
       if (permissionMode === 'bypassPermissions') {
         args.push('--dangerously-skip-permissions');
         if (process.env.CCS_DEBUG) {
-          console.warn(warn('WARNING: Using --dangerously-skip-permissions mode'));
+          process.stderr.write(
+            String(warn('WARNING: Using --dangerously-skip-permissions mode')) + '\n'
+          );
         }
       } else {
         args.push('--permission-mode', permissionMode);
@@ -287,12 +297,16 @@ export class HeadlessExecutor {
         args.push('--resume', lastSession.sessionId);
         if (process.env.CCS_DEBUG) {
           const cost = lastSession.totalCost?.toFixed(4) || '0.0000';
-          console.error(info(`Resuming session: ${lastSession.sessionId} ($${cost})`));
+          process.stderr.write(
+            String(info(`Resuming session: ${lastSession.sessionId} ($${cost})`)) + '\n'
+          );
         }
       } else if (sessionId) {
         args.push('--resume', sessionId);
       } else {
-        console.warn(warn('No previous session found, starting new session'));
+        process.stderr.write(
+          String(warn('No previous session found, starting new session')) + '\n'
+        );
       }
     } else if (sessionId) {
       args.push('--resume', sessionId);
@@ -357,7 +371,7 @@ export class HeadlessExecutor {
     });
 
     if (process.env.CCS_DEBUG) {
-      console.error(info(`Claude CLI args: ${launchArgs.join(' ')}`));
+      logger.info('claude_cli_args', 'Claude CLI args', { args: launchArgs });
     }
 
     // Initialize UI before spawning
@@ -420,7 +434,7 @@ export class HeadlessExecutor {
 
       if (showProgress) {
         const modelName = getModelDisplayName(profile);
-        console.error(ui.info(`Delegating to ${modelName}...`));
+        process.stderr.write(String(ui.info(`Delegating to ${modelName}...`)) + '\n');
       }
 
       // Strip Claude Code nested session guard env var to allow CCS delegation
@@ -525,12 +539,14 @@ export class HeadlessExecutor {
 
         if (showProgress) {
           const durationSec = (duration / 1000).toFixed(1);
-          console.error(
-            timedOut
-              ? ui.warn(`Timed out after ${durationSec}s`)
-              : ui.info(`Completed in ${durationSec}s`)
+          process.stderr.write(
+            String(
+              timedOut
+                ? ui.warn(`Timed out after ${durationSec}s`)
+                : ui.info(`Completed in ${durationSec}s`)
+            ) + '\n'
           );
-          console.error('');
+          process.stderr.write('\n');
         }
 
         const result = buildExecutionResult({
@@ -664,7 +680,7 @@ export class HeadlessExecutor {
         const result = await this.execute(profile, enhancedPrompt, execOptions);
         if (result.success) return result;
         if (attempt < maxRetries) {
-          console.error(warn(`Attempt ${attempt + 1} failed, retrying...`));
+          process.stderr.write(String(warn(`Attempt ${attempt + 1} failed, retrying...`)) + '\n');
           await this._sleep(1000 * (attempt + 1));
           continue;
         }
@@ -672,7 +688,7 @@ export class HeadlessExecutor {
       } catch (error) {
         lastError = error as Error;
         if (attempt < maxRetries) {
-          console.error(warn(`Attempt ${attempt + 1} errored, retrying...`));
+          process.stderr.write(String(warn(`Attempt ${attempt + 1} errored, retrying...`)) + '\n');
           await this._sleep(1000 * (attempt + 1));
         }
       }

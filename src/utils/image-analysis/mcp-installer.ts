@@ -59,8 +59,10 @@ function hasMatchingContents(sourcePath: string, destinationPath: string): boole
     return source.equals(destination);
   } catch (error) {
     if (process.env.CCS_DEBUG) {
-      console.error(
-        warn(`Existing Image Analysis MCP server is unreadable: ${(error as Error).message}`)
+      process.stderr.write(
+        String(
+          warn(`Existing Image Analysis MCP server is unreadable: ${(error as Error).message}`)
+        ) + '\n'
       );
     }
     return false;
@@ -170,7 +172,9 @@ function removeManagedServerConfig(configPath: string): boolean {
       const config = readClaudeUserConfig(configPath);
       if (config === null) {
         if (process.env.CCS_DEBUG) {
-          console.error(warn(`Malformed Claude config prevents MCP cleanup: ${configPath}`));
+          process.stderr.write(
+            String(warn(`Malformed Claude config prevents MCP cleanup: ${configPath}`)) + '\n'
+          );
         }
         return false;
       }
@@ -198,15 +202,19 @@ function removeManagedServerConfig(configPath: string): boolean {
       try {
         writeClaudeUserConfig(configPath, nextConfig);
         if (process.env.CCS_DEBUG) {
-          console.error(info(`Removed Image Analysis MCP config from ${configPath}`));
+          process.stderr.write(
+            String(info(`Removed Image Analysis MCP config from ${configPath}`)) + '\n'
+          );
         }
         return true;
       } catch (error) {
         if (process.env.CCS_DEBUG) {
-          console.error(
-            warn(
-              `Failed to remove Image Analysis MCP config from ${configPath}: ${(error as Error).message}`
-            )
+          process.stderr.write(
+            String(
+              warn(
+                `Failed to remove Image Analysis MCP config from ${configPath}: ${(error as Error).message}`
+              )
+            ) + '\n'
           );
         }
         return false;
@@ -215,10 +223,12 @@ function removeManagedServerConfig(configPath: string): boolean {
   } catch (error) {
     if (isLockUnavailableError(error)) {
       if (process.env.CCS_DEBUG) {
-        console.error(
-          warn(
-            `Image Analysis MCP cleanup skipped because ${configPath} is locked by another process`
-          )
+        process.stderr.write(
+          String(
+            warn(
+              `Image Analysis MCP cleanup skipped because ${configPath} is locked by another process`
+            )
+          ) + '\n'
         );
       }
       return false;
@@ -249,8 +259,9 @@ export function installImageAnalysisMcpServer(): boolean {
   const missingArtifact = artifacts.find((artifact) => !artifact.sourcePath);
   if (missingArtifact) {
     if (process.env.CCS_DEBUG) {
-      console.error(
-        warn(`Image Analysis MCP runtime source not found: ${missingArtifact.fileName}`)
+      process.stderr.write(
+        String(warn(`Image Analysis MCP runtime source not found: ${missingArtifact.fileName}`)) +
+          '\n'
       );
     }
     return false;
@@ -301,8 +312,9 @@ export function installImageAnalysisMcpServer(): boolean {
     return true;
   } catch (error) {
     if (process.env.CCS_DEBUG) {
-      console.error(
-        warn(`Failed to install Image Analysis MCP server: ${(error as Error).message}`)
+      process.stderr.write(
+        String(warn(`Failed to install Image Analysis MCP server: ${(error as Error).message}`)) +
+          '\n'
       );
     }
     return false;
@@ -333,7 +345,9 @@ export function ensureImageAnalysisMcpConfig(): boolean {
 
       if (config === null) {
         if (process.env.CCS_DEBUG) {
-          console.error(warn('Malformed ~/.claude.json prevents Image Analysis MCP provisioning'));
+          process.stderr.write(
+            String(warn('Malformed ~/.claude.json prevents Image Analysis MCP provisioning')) + '\n'
+          );
         }
         return false;
       }
@@ -364,12 +378,16 @@ export function ensureImageAnalysisMcpConfig(): boolean {
       try {
         writeClaudeUserConfig(claudeUserConfigPath, nextConfig);
         if (process.env.CCS_DEBUG) {
-          console.error(info(`Ensured Image Analysis MCP config in ${claudeUserConfigPath}`));
+          process.stderr.write(
+            String(info(`Ensured Image Analysis MCP config in ${claudeUserConfigPath}`)) + '\n'
+          );
         }
         return true;
       } catch (error) {
         if (process.env.CCS_DEBUG) {
-          console.error(warn(`Failed to update ~/.claude.json: ${(error as Error).message}`));
+          process.stderr.write(
+            String(warn(`Failed to update ~/.claude.json: ${(error as Error).message}`)) + '\n'
+          );
         }
         return false;
       }
@@ -377,10 +395,12 @@ export function ensureImageAnalysisMcpConfig(): boolean {
   } catch (error) {
     if (isLockUnavailableError(error)) {
       if (process.env.CCS_DEBUG) {
-        console.error(
-          warn(
-            `Image Analysis MCP provisioning skipped because ${claudeUserConfigPath} is locked by another process`
-          )
+        process.stderr.write(
+          String(
+            warn(
+              `Image Analysis MCP provisioning skipped because ${claudeUserConfigPath} is locked by another process`
+            )
+          ) + '\n'
         );
       }
       return false;
@@ -426,8 +446,9 @@ export function uninstallImageAnalysisMcpServer(): boolean {
     return removed;
   } catch (error) {
     if (process.env.CCS_DEBUG) {
-      console.error(
-        warn(`Failed to remove Image Analysis MCP server: ${(error as Error).message}`)
+      process.stderr.write(
+        String(warn(`Failed to remove Image Analysis MCP server: ${(error as Error).message}`)) +
+          '\n'
       );
     }
     return false;
@@ -461,10 +482,12 @@ export function ensureImageAnalysisMcpOrThrow(): boolean {
 
   const ready = ensureImageAnalysisMcp();
   if (!ready) {
-    console.error(
-      warn(
-        'Image Analysis is enabled, but CCS could not prepare the local ImageAnalysis tool. This session will fall back to native Read.'
-      )
+    process.stderr.write(
+      String(
+        warn(
+          'Image Analysis is enabled, but CCS could not prepare the local ImageAnalysis tool. This session will fall back to native Read.'
+        )
+      ) + '\n'
     );
   }
 
