@@ -8,6 +8,7 @@
 import { spawn } from 'child_process';
 import * as path from 'path';
 import { killWithEscalation } from '../utils/process-utils';
+import { forwardRequestIdEnv } from '../services/logging';
 import * as fs from 'fs';
 import { SessionManager } from './session-manager';
 import { SettingsParser } from './settings-parser';
@@ -432,6 +433,7 @@ export class HeadlessExecutor {
         ...imageAnalysisEnv,
         ...traceEnv,
         ...(claudeConfigDir ? { CLAUDE_CONFIG_DIR: claudeConfigDir } : {}),
+        ...forwardRequestIdEnv(),
         CCS_PROFILE_TYPE: 'settings',
       });
 

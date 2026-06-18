@@ -18,6 +18,11 @@ export {
   getRequestContext,
   getRequestId,
   mergeRequestContext,
+  resolveRequestIdFromEnv,
+  forwardRequestIdEnv,
+  REQUEST_ID_HEADER,
+  REQUEST_ID_ENV,
+  REQUEST_ID_PATTERN,
 } from './log-context';
 export type { RequestContext } from './log-context';
 export {

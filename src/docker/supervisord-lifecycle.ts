@@ -10,9 +10,11 @@
 import * as fs from 'fs';
 import { execSync } from 'child_process';
 import { CLIPROXY_DEFAULT_PORT } from '../cliproxy/config/port-manager';
+import { createLogger } from '../services/logging';
 
 const SUPERVISOR_SOCK = '/var/run/supervisor.sock';
 const SUPERVISOR_CONF = '/etc/supervisord.conf';
+const logger = createLogger('docker:supervisord-lifecycle');
 
 /** True when running inside a supervisord-managed container. */
 export function isRunningUnderSupervisord(): boolean {
@@ -30,7 +32,9 @@ export function restartCliproxyViaSupervisord(): {
     return { success: true, port: CLIPROXY_DEFAULT_PORT };
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    console.error(`[cliproxy] supervisorctl restart failed: ${detail}`);
+    logger.error('cliproxy.restart.failed', 'supervisorctl restart failed', {
+      detail,
+    });
     return { success: false, error: 'supervisorctl restart failed' };
   }
 }

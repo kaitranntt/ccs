@@ -7,6 +7,7 @@
 import * as http from 'http';
 import { Readable } from 'stream';
 import { CursorExecutor } from './cursor-executor';
+import { runWithRequestId } from '../services/logging';
 import {
   createAnthropicErrorResponse,
   createAnthropicProxyResponse,
@@ -417,13 +418,18 @@ export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Ser
 }
 
 if (require.main === module) {
-  const options = parseArgs(process.argv.slice(2));
-  const server = startCursorDaemonServer(options);
+  // Re-anchor to a requestId forwarded by the spawning CLI (CCS_REQUEST_ID env)
+  // so daemon startup logs correlate with the parent invocation. AsyncLocalStorage
+  // does not cross the spawn boundary, so the env bridge is mandatory here.
+  runWithRequestId(() => {
+    const options = parseArgs(process.argv.slice(2));
+    const server = startCursorDaemonServer(options);
 
-  const shutdown = () => {
-    server.close();
-  };
+    const shutdown = () => {
+      server.close();
+    };
 
-  process.on('SIGTERM', shutdown);
-  process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
+  });
 }

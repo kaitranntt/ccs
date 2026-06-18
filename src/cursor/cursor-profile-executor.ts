@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import type { CursorConfig } from '../config/unified-config-types';
 
 import { ensureCliproxyService } from '../cliproxy';
+import { forwardRequestIdEnv } from '../services/logging';
 import { resolveLifecyclePort } from '../cliproxy/config/port-manager';
 import { fail, info, ok } from '../utils/ui';
 import {
@@ -194,7 +195,7 @@ export async function executeCursorProfile(
 
     const proc = spawn(claudeCliPath, launchArgs, {
       stdio: 'inherit',
-      env: { ...env, ...traceEnv },
+      env: { ...env, ...traceEnv, ...forwardRequestIdEnv() },
       shell: process.platform === 'win32',
     });
 
