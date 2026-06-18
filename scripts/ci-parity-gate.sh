@@ -57,6 +57,37 @@ if git show-ref --verify --quiet "refs/remotes/origin/$BASE_BRANCH"; then
   fi
 fi
 
+# Hardening inventory freshness: the maintainability metrics artifact must be
+# regenerated within 30 days so the burndown stays current. Runs only after the
+# skip conditions above (CCS_SKIP_PREPUSH_GATE, detached HEAD, behind origin).
+HARDENING_JSON="docs/reports/hardening-inventory.json"
+if [[ ! -f "$HARDENING_JSON" ]]; then
+  echo "[X] Missing $HARDENING_JSON."
+  echo "    Regenerate with: bun run report:hardening"
+  exit 1
+fi
+HARDENING_TS=""
+# If the working-tree copy differs from HEAD (contributor regenerated but not
+# yet committed), use filesystem mtime; otherwise use the last commit time,
+# which is stable across CI clones (checkout resets mtimes) and so correctly
+# flags a stale committed artifact.
+if git diff --quiet -- "$HARDENING_JSON" 2>/dev/null && git diff --cached --quiet -- "$HARDENING_JSON" 2>/dev/null; then
+  HARDENING_TS=$(git log -1 --format=%ct -- "$HARDENING_JSON" 2>/dev/null)
+else
+  HARDENING_TS=$(stat -f %m "$HARDENING_JSON" 2>/dev/null || stat -c %Y "$HARDENING_JSON" 2>/dev/null)
+fi
+if [[ -n "$HARDENING_TS" ]]; then
+  NOW_TS=$(date +%s)
+  AGE_DAYS=$(( (NOW_TS - HARDENING_TS) / 86400 ))
+  if (( AGE_DAYS > 30 )); then
+    echo "[X] Hardening inventory is stale (${AGE_DAYS}d old; max 30d)."
+    echo "    Regenerate with: bun run report:hardening"
+    echo "    Then commit docs/reports/hardening-inventory.{json,md}."
+    exit 1
+  fi
+  echo "[i] Hardening inventory fresh (${AGE_DAYS}d old; max 30d)."
+fi
+
 echo "[i] Running CI-parity local checks..."
 # `set -euo pipefail` above makes every step fail fast. Keep these commands
 # explicit so parity drift is visible when CI changes.

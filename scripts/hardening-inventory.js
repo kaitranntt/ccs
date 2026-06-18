@@ -3,6 +3,8 @@
 const fs = require('fs');
 const path = require('path');
 
+const { collectMaintainabilityMetrics } = require('./maintainability-metrics.js');
+
 const ROOT_DIR = path.resolve(__dirname, '..');
 const SRC_DIR = path.join(ROOT_DIR, 'src');
 const REPORT_DIR = path.join(ROOT_DIR, 'docs', 'reports');
@@ -430,6 +432,7 @@ function buildReport() {
           .filter((file) => /shim|re-export|compat/i.test(path.basename(file)))
       ),
     },
+    maintainability: collectMaintainabilityMetrics(ROOT_DIR),
   };
 }
 
@@ -489,6 +492,55 @@ function renderMarkdown(report) {
     lines.push('- _none_');
   }
 
+  const m = report.maintainability;
+  if (m) {
+    lines.push('## Maintainability Metrics');
+    lines.push('');
+    lines.push('| Metric | Value |');
+    lines.push('|---|---:|');
+    lines.push(
+      `| typed-error adoption (typed/total throws) | ${(m.typedErrors.adoptionRatio * 100).toFixed(1)}% (${m.typedErrors.typedThrows}/${m.typedErrors.totalThrows}) |`
+    );
+    lines.push(
+      `| typed-error adoption (P4 locked subdomains) | ${(m.typedErrorAdoption.ratio * 100).toFixed(1)}% (${m.typedErrorAdoption.numerator}/${m.typedErrorAdoption.denominator}), target 40% |`
+    );
+    lines.push(
+      `| hotpath console.error/warn occurrences | ${m.hotpathConsoleErrors.hotpathOccurrences} (${m.hotpathConsoleErrors.totalOccurrences} total, ${m.hotpathConsoleErrors.exemptOccurrences} CLI-UX exempt) |`
+    );
+    lines.push(`| hotpath console.error/warn files | ${m.hotpathConsoleErrors.filesAffected} |`);
+    lines.push(
+      `| files with createLogger | ${m.loggerCoverage.filesWithCreateLogger}/${m.loggerCoverage.totalSourceFiles} |`
+    );
+    lines.push(
+      `| subdomains with zero createLogger | ${m.loggerCoverage.subdomainsWithZeroCreateLogger.length} (${m.loggerCoverage.subdomainsWithZeroCreateLogger.join(', ') || 'none'}) |`
+    );
+    lines.push(`| files > 400 LOC | ${m.largeFiles.countOver400} |`);
+    lines.push(`| files > 600 LOC | ${m.largeFiles.countOver600} |`);
+    lines.push('');
+    lines.push('### Top Hotpath console.error/warn Files');
+    lines.push('');
+    lines.push('| File | console.error/warn |');
+    lines.push('|---|---:|');
+    for (const item of m.hotpathConsoleErrors.topFiles) {
+      lines.push(`| \`${item.file}\` | ${item.count} |`);
+    }
+    if (m.hotpathConsoleErrors.topFiles.length === 0) {
+      lines.push('| _none_ | 0 |');
+    }
+    lines.push('');
+    lines.push('### Files > 400 LOC (top 15)');
+    lines.push('');
+    lines.push('| File | LOC |');
+    lines.push('|---|---:|');
+    for (const item of m.largeFiles.topOver400) {
+      lines.push(`| \`${item.file}\` | ${item.loc} |`);
+    }
+    if (m.largeFiles.topOver400.length === 0) {
+      lines.push('| _none_ | 0 |');
+    }
+    lines.push('');
+  }
+
   lines.push('');
   return lines.join('\n');
 }
@@ -510,12 +562,14 @@ function main() {
   console.log(
     `[hardening-inventory] legacy markers total=${report.legacyShim.totalMarkers}, files=${report.legacyShim.filesAffected}`
   );
+  if (report.maintainability) {
+    const mt = report.maintainability;
+    console.log(
+      `[hardening-inventory] maintainability: typed-adoption=${(mt.typedErrors.adoptionRatio * 100).toFixed(1)}% (${mt.typedErrors.typedThrows}/${mt.typedErrors.totalThrows}), locked=${(mt.typedErrorAdoption.ratio * 100).toFixed(1)}% (${mt.typedErrorAdoption.numerator}/${mt.typedErrorAdoption.denominator}), console.error=${mt.hotpathConsoleErrors.hotpathOccurrences}, zero-logger-subdomains=${mt.loggerCoverage.subdomainsWithZeroCreateLogger.length}, >400LOC=${mt.largeFiles.countOver400}`
+    );
+  }
   console.log(`[hardening-inventory] wrote ${relJson}`);
   console.log(`[hardening-inventory] wrote ${relMd}`);
-}
-
-if (require.main === module) {
-  main();
 }
 
 module.exports = {
@@ -524,3 +578,7 @@ module.exports = {
   renderMarkdown,
   stripComments,
 };
+
+if (require.main === module) {
+  main();
+}
