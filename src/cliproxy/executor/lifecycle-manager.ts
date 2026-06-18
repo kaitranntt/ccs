@@ -14,6 +14,9 @@ import { fail } from '../../utils/ui';
 import { getCliproxyWritablePath } from '../config/config-generator';
 import { getPortCheckCommand, getCatCommand } from '../../utils/platform-commands';
 import { CLIProxyBackend } from '../types';
+import { createLogger } from '../../services/logging';
+
+const logger = createLogger('cliproxy:executor:lifecycle-manager');
 
 /**
  * Wait for TCP port to become available
@@ -62,7 +65,7 @@ export async function waitForProxyReady(
 export function spawnProxy(binaryPath: string, configPath: string, verbose: boolean): ChildProcess {
   const log = (msg: string) => {
     if (verbose) {
-      console.error(`[cliproxy] ${msg}`);
+      logger.info('executor.lifecycle.spawn_verbose', msg);
     }
   };
 
@@ -81,7 +84,7 @@ export function spawnProxy(binaryPath: string, configPath: string, verbose: bool
   proxy.unref();
 
   proxy.on('error', (error) => {
-    console.error(fail(`CLIProxy spawn error: ${error.message}`));
+    process.stderr.write(String(fail(`CLIProxy spawn error: ${error.message}`)) + '\n');
   });
 
   return proxy;
@@ -108,20 +111,20 @@ export async function waitForProxyReadyWithSpinner(
     readySpinner.fail(`${backendLabel} startup failed`);
 
     const err = error as Error;
-    console.error('');
-    console.error(fail(`${backendLabel} failed to start`));
-    console.error('');
-    console.error('Possible causes:');
-    console.error(`  1. Port ${port} already in use`);
-    console.error('  2. Binary crashed on startup');
-    console.error('  3. Invalid configuration');
-    console.error('');
-    console.error('Troubleshooting:');
-    console.error(`  - Check port: ${getPortCheckCommand(port)}`);
-    console.error('  - Run with --verbose for detailed logs');
-    console.error(`  - View config: ${getCatCommand(configPath)}`);
-    console.error('  - Try: ccs doctor --fix');
-    console.error('');
+    process.stderr.write('' + '\n');
+    process.stderr.write(String(fail(`${backendLabel} failed to start`)) + '\n');
+    process.stderr.write('' + '\n');
+    process.stderr.write('Possible causes:' + '\n');
+    process.stderr.write(`  1. Port ${port} already in use` + '\n');
+    process.stderr.write('  2. Binary crashed on startup' + '\n');
+    process.stderr.write('  3. Invalid configuration' + '\n');
+    process.stderr.write('' + '\n');
+    process.stderr.write('Troubleshooting:' + '\n');
+    process.stderr.write(`  - Check port: ${getPortCheckCommand(port)}` + '\n');
+    process.stderr.write('  - Run with --verbose for detailed logs' + '\n');
+    process.stderr.write(`  - View config: ${getCatCommand(configPath)}` + '\n');
+    process.stderr.write('  - Try: ccs doctor --fix' + '\n');
+    process.stderr.write('' + '\n');
 
     throw new Error(`CLIProxy startup failed: ${err.message}`);
   }

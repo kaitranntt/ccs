@@ -12,6 +12,12 @@ import { loadOrCreateUnifiedConfig, mutateConfig } from '../../config/config-loa
 import { getInstalledCliproxyVersion } from '../binary-manager';
 import { compareVersions } from '../../utils/update-checker';
 import { getConfigYamlPath } from '../../config/loader/io-locks';
+import { createLogger } from '../../services/logging';
+
+// Diagnostic-only logger for internal binary-compatibility notices. The
+// user-facing result of enablePoolRouting is returned via the result
+// message; this logger captures the version-compat caveat for diagnostics.
+const logger = createLogger('cliproxy:routing:strategy');
 
 export const DEFAULT_CLIPROXY_ROUTING_STRATEGY: CliproxyRoutingStrategy = 'round-robin';
 export const DEFAULT_CLIPROXY_SESSION_AFFINITY_ENABLED = false;
@@ -205,10 +211,15 @@ export function enablePoolRouting(
   try {
     const installedVersion = getInstalledCliproxyVersion();
     if (compareVersions(installedVersion, POOL_ROUTING_MIN_VERSION) < 0) {
-      console.warn(
-        `[!] CLIProxy v${installedVersion} is older than the pool routing minimum (v${POOL_ROUTING_MIN_VERSION}).\n` +
-          `    The max-retry-credentials and cooling keys may be silently ignored by the running binary.\n` +
-          `    Run 'ccs cliproxy --latest' to update CLIProxy, then restart with 'ccs cliproxy restart'.`
+      logger.warn(
+        'pool_routing.binary_below_minimum',
+        `CLIProxy v${installedVersion} is older than the pool routing minimum (v${POOL_ROUTING_MIN_VERSION}). ` +
+          `The max-retry-credentials and cooling keys may be silently ignored by the running binary. ` +
+          `Run 'ccs cliproxy --latest' to update CLIProxy, then restart with 'ccs cliproxy restart'.`,
+        {
+          installedVersion,
+          minimumVersion: POOL_ROUTING_MIN_VERSION,
+        }
       );
     }
   } catch {

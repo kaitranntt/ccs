@@ -57,6 +57,9 @@ import {
 import { installDashboardCliproxyVersion } from '../services/cliproxy-dashboard-install-service';
 import { restartDashboardCliproxy } from '../services/cliproxy-dashboard-restart-service';
 import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
+import { createLogger } from '../../services/logging';
+
+const logger = createLogger('web-server:routes:cliproxy-stats');
 
 const router = Router();
 type RestartDashboardCliproxyHandler = typeof restartDashboardCliproxy;
@@ -297,7 +300,12 @@ const handleStatsRequest = async (_req: Request, res: Response): Promise<void> =
 
     res.json(stats);
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -322,7 +330,12 @@ router.get('/status', async (_req: Request, res: Response): Promise<void> => {
     const running = await isCliproxyRunning(resolveLifecyclePort());
     res.json({ running });
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -360,7 +373,12 @@ router.get('/proxy-status', async (_req: Request, res: Response): Promise<void> 
       res.json(sessionStatus);
     }
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -375,7 +393,12 @@ router.post('/proxy-start', async (_req: Request, res: Response): Promise<void> 
     const result = await ensureCliproxyService(resolveLifecyclePort());
     res.json(result);
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -389,7 +412,12 @@ router.post('/proxy-stop', async (_req: Request, res: Response): Promise<void> =
     const result = await stopProxy(resolveLifecyclePort());
     res.json(result);
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -405,7 +433,12 @@ router.get('/update-check', async (_req: Request, res: Response): Promise<void> 
 
     res.json(result);
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -438,7 +471,12 @@ router.get('/models', async (_req: Request, res: Response): Promise<void> => {
 
     res.json(modelsResponse);
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -486,7 +524,12 @@ router.get('/error-logs', async (_req: Request, res: Response): Promise<void> =>
 
     res.json({ files: filesWithMetadata });
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -526,7 +569,12 @@ router.get('/error-logs/:name', async (req: Request, res: Response): Promise<voi
 
     res.type('text/plain').send(content);
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -548,7 +596,12 @@ router.get('/config.yaml', async (_req: Request, res: Response): Promise<void> =
     const content = fs.readFileSync(configPath, 'utf8');
     res.type('text/yaml').send(content);
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -582,7 +635,12 @@ router.put('/config.yaml', async (req: Request, res: Response): Promise<void> =>
 
     res.json({ success: true, path: configPath });
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -617,7 +675,12 @@ router.get('/auth-files', async (_req: Request, res: Response): Promise<void> =>
 
     res.json({ files, directory: authDir });
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -654,7 +717,12 @@ router.get('/auth-files/download', async (req: Request, res: Response): Promise<
     res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
     res.type('application/octet-stream').send(content);
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -742,7 +810,12 @@ router.put('/models/:provider', async (req: Request, res: Response): Promise<voi
 
     res.json({ success: true, provider, model: canonicalModel });
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -794,7 +867,12 @@ router.get('/quota/codex/:accountId', async (req: Request, res: Response): Promi
 
     res.json(result);
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -842,7 +920,12 @@ router.get('/quota/claude/:accountId', async (req: Request, res: Response): Prom
 
     res.json(result);
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -890,7 +973,12 @@ router.get('/quota/gemini/:accountId', async (req: Request, res: Response): Prom
 
     res.json(result);
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -938,7 +1026,12 @@ router.get('/quota/ghcp/:accountId', async (req: Request, res: Response): Promis
 
     res.json(result);
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -997,7 +1090,12 @@ router.get('/quota/:provider/:accountId', async (req: Request, res: Response): P
 
     res.json(result);
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1013,7 +1111,12 @@ router.get('/versions', async (_req: Request, res: Response): Promise<void> => {
     const backend = getStoredConfiguredBackend();
     res.json(await resolveCliproxyVersionsPayload(backend));
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1074,7 +1177,12 @@ router.post('/install', async (req: Request, res: Response): Promise<void> => {
       ...installResult,
     });
   } catch (error) {
-    console.error(`[cliproxy-stats] ${(error as Error).message}`);
+    logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1092,7 +1200,12 @@ export function registerCliproxyRestartRoute(
       const result = await restartHandler();
       res.json(result);
     } catch (error) {
-      console.error(`[cliproxy-stats] ${(error as Error).message}`);
+      logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
+        err:
+          error instanceof Error
+            ? { name: error.name, message: error.message }
+            : { message: String(error) },
+      });
       res.status(500).json({ error: 'Internal server error' });
     }
   });

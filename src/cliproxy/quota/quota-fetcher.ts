@@ -28,6 +28,9 @@ import {
   buildProxyUrl,
   getProxyTarget,
 } from '../proxy/proxy-target-resolver';
+import { createLogger } from '../../services/logging';
+
+const logger = createLogger('cliproxy:quota:fetcher');
 
 /** Individual model quota info */
 export interface ModelQuota {
@@ -829,12 +832,13 @@ export async function fetchAccountQuota(
   accountId: string,
   verbose = false
 ): Promise<QuotaResult> {
-  if (verbose) console.error(`[i] Fetching quota for ${accountId}...`);
+  if (verbose)
+    logger.info('quota.fetch.start', 'Fetching quota for account', { provider, accountId });
 
   // Only Antigravity supports quota fetching
   if (provider !== 'agy') {
     const error = `Quota not supported for provider: ${provider}`;
-    if (verbose) console.error(`[!] Error: ${error}`);
+    if (verbose) logger.warn('quota.fetch.unsupported_provider', error, { provider });
     // Stable machine code so callers branch on a code, not the human string.
     // This is "no quota API for this provider", which is healthy — distinct
     // from a transient fetch failure or an expired token.
@@ -851,7 +855,7 @@ export async function fetchAccountQuota(
   const authData = readAuthData(provider, accountId);
   if (!authData) {
     const error = 'Auth file not found for account';
-    if (verbose) console.error(`[!] Error: ${error}`);
+    if (verbose) logger.warn('quota.fetch.auth_missing', error, { provider, accountId });
     return {
       success: false,
       models: [],
@@ -869,7 +873,10 @@ export async function fetchAccountQuota(
       : authData.expiresAt
         ? `expires ${authData.expiresAt}`
         : 'expiry unknown';
-    console.error(`[i] Auth token state: ${expiryState}`);
+    logger.info('quota.fetch.auth_state', `Auth token state: ${expiryState}`, {
+      provider,
+      state: expiryState,
+    });
   }
 
   // Get project ID and tier - prefer stored project ID, but always call API for tier
@@ -884,7 +891,12 @@ export async function fetchAccountQuota(
 
   if (!lastProjectResult.projectId && !projectId) {
     const error = lastProjectResult.error || 'Failed to retrieve project ID';
-    if (verbose) console.error(`[!] Error: ${error}`);
+    if (verbose)
+      logger.warn('quota.fetch.project_lookup_failed', error, {
+        provider,
+        errorCode: lastProjectResult.errorCode,
+        httpStatus: lastProjectResult.httpStatus,
+      });
     return {
       success: false,
       models: [],
@@ -909,12 +921,19 @@ export async function fetchAccountQuota(
   rawTierId = lastProjectResult.rawTierId || null;
   rawTierLabel = lastProjectResult.rawTierLabel || null;
 
-  if (verbose) console.error(`[i] Project ID: ${projectId || 'not found'}`);
+  if (verbose)
+    logger.info('quota.fetch.project_resolved', `Project ID: ${projectId || 'not found'}`, {
+      provider,
+    });
 
   // Fetch models with quota
   const result = await fetchAvailableModels(accountId, accessToken, projectId as string);
 
-  if (verbose) console.error(`[i] Models found: ${result.models.length}`);
+  if (verbose)
+    logger.info('quota.fetch.models', `Models found: ${result.models.length}`, {
+      provider,
+      count: result.models.length,
+    });
   result.accountId = accountId;
   result.projectId = projectId || undefined;
 

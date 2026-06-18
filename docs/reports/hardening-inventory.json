@@ -1,10 +1,10 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2304,
-    "filesAffected": 243,
-    "hotpathOccurrences": 1949,
-    "hotpathFilesAffected": 193,
+    "totalOccurrences": 2301,
+    "filesAffected": 242,
+    "hotpathOccurrences": 1946,
+    "hotpathFilesAffected": 192,
     "topHotpathFiles": [
       {
         "file": "src/cliproxy/__tests__/pool-routing-phase3.test.ts",
@@ -561,9 +561,9 @@
       "targetRatio": 0.4
     },
     "loggerCoverage": {
-      "filesWithCreateLogger": 35,
+      "filesWithCreateLogger": 64,
       "totalSourceFiles": 685,
-      "coverageRatio": 0.0511,
+      "coverageRatio": 0.0934,
       "subdomainsWithZeroCreateLogger": [
         "api",
         "bin",
@@ -573,16 +573,11 @@
         "cliproxy/ai-providers",
         "cliproxy/binary",
         "cliproxy/config",
-        "cliproxy/executor",
         "cliproxy/management",
-        "cliproxy/quota",
-        "cliproxy/routing",
         "cliproxy/sync",
         "cliproxy/types",
         "config",
-        "delegation",
         "dispatcher",
-        "docker",
         "shared",
         "types"
       ],
@@ -590,7 +585,7 @@
         {
           "subdomain": "web-server",
           "count": 103,
-          "withLogger": 3
+          "withLogger": 10
         },
         {
           "subdomain": "utils",
@@ -635,75 +630,75 @@
         {
           "subdomain": "cliproxy/executor",
           "count": 17,
-          "withLogger": 0
+          "withLogger": 4
         }
       ]
     },
     "hotpathConsoleErrors": {
-      "totalOccurrences": 1091,
-      "exemptOccurrences": 160,
-      "hotpathOccurrences": 931,
-      "filesAffected": 134,
+      "totalOccurrences": 569,
+      "exemptOccurrences": 302,
+      "hotpathOccurrences": 267,
+      "filesAffected": 82,
       "topFiles": [
         {
-          "file": "src/utils/error-manager.ts",
-          "count": 142
+          "file": "src/errors/error-handler.ts",
+          "count": 11
         },
         {
-          "file": "src/cliproxy/accounts/account-safety.ts",
-          "count": 56
+          "file": "src/utils/prompt.ts",
+          "count": 11
         },
         {
-          "file": "src/cliproxy/config/model-config.ts",
-          "count": 32
+          "file": "src/utils/websearch/profile-hook-injector.ts",
+          "count": 10
         },
         {
-          "file": "src/cliproxy/executor/arg-parser.ts",
-          "count": 26
+          "file": "src/cliproxy/accounts/account-safety-cross-lane.ts",
+          "count": 9
         },
         {
-          "file": "src/dispatcher/flows/settings-flow.ts",
-          "count": 26
+          "file": "src/utils/hooks/image-analyzer-profile-hook-injector.ts",
+          "count": 9
         },
         {
-          "file": "src/copilot/copilot-executor.ts",
-          "count": 24
+          "file": "src/utils/websearch/hook-installer.ts",
+          "count": 8
         },
         {
-          "file": "src/delegation/delegation-handler.ts",
-          "count": 23
+          "file": "src/cliproxy/auth/token-manager.ts",
+          "count": 7
         },
         {
-          "file": "src/dispatcher/cli-argument-parser.ts",
-          "count": 22
+          "file": "src/cliproxy/binary/downloader.ts",
+          "count": 7
         },
         {
-          "file": "src/web-server/routes/cliproxy-stats-routes.ts",
-          "count": 22
+          "file": "src/cliproxy/executor/account-resolution.ts",
+          "count": 7
         },
         {
-          "file": "src/cliproxy/executor/lifecycle-manager.ts",
-          "count": 16
+          "file": "src/config/unified-config-loader.ts",
+          "count": 7
         },
         {
-          "file": "src/cursor/cursor-profile-executor.ts",
-          "count": 16
+          "file": "src/targets/claude-adapter.ts",
+          "count": 7
         },
         {
-          "file": "src/dispatcher/profile-resolver.ts",
-          "count": 16
+          "file": "src/utils/shell-executor.ts",
+          "count": 7
         },
         {
-          "file": "src/cliproxy/auth/antigravity-responsibility.ts",
-          "count": 15
+          "file": "src/utils/websearch/hook-config.ts",
+          "count": 7
         },
         {
-          "file": "src/cliproxy/executor/auth-coordinator.ts",
-          "count": 14
+          "file": "src/targets/droid-detector.ts",
+          "count": 6
         },
         {
-          "file": "src/cliproxy/executor/model-warnings.ts",
-          "count": 13
+          "file": "src/utils/hooks/image-analyzer-hook-installer.ts",
+          "count": 6
         }
       ]
     },
@@ -717,11 +712,15 @@
         },
         {
           "file": "src/web-server/routes/cliproxy-auth-routes.ts",
-          "loc": 1502
+          "loc": 1515
         },
         {
           "file": "src/cliproxy/auth/oauth-handler.ts",
           "loc": 1453
+        },
+        {
+          "file": "src/web-server/routes/cliproxy-stats-routes.ts",
+          "loc": 1238
         },
         {
           "file": "src/cursor/cursor-executor.ts",
@@ -729,19 +728,15 @@
         },
         {
           "file": "src/cliproxy/quota/quota-fetcher-gemini-cli.ts",
-          "loc": 1130
+          "loc": 1183
         },
         {
           "file": "src/commands/cliproxy/quota-subcommand.ts",
           "loc": 1130
         },
         {
-          "file": "src/web-server/routes/cliproxy-stats-routes.ts",
-          "loc": 1103
-        },
-        {
           "file": "src/cliproxy/quota/quota-fetcher.ts",
-          "loc": 1087
+          "loc": 1094
         },
         {
           "file": "src/commands/persist-command.ts",
@@ -756,12 +751,12 @@
           "loc": 1040
         },
         {
-          "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
-          "loc": 1039
-        },
-        {
           "file": "src/cliproxy/config/env-builder.ts",
           "loc": 1037
+        },
+        {
+          "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
+          "loc": 1022
         },
         {
           "file": "src/cliproxy/auth/oauth-process.ts",

@@ -7,8 +7,10 @@ import rateLimit from 'express-rate-limit';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getClaudeSettingsPath } from '../../utils/claude-config-path';
+import { createLogger } from '../../services/logging';
 
 const router = Router();
+const logger = createLogger('web-server:routes:persist');
 
 /** Rate limiter for restore endpoint - prevents abuse */
 const restoreRateLimiter = rateLimit({
@@ -263,7 +265,16 @@ router.post('/restore', restoreRateLimiter, async (req: Request, res: Response):
           fs.unlinkSync(tempPath);
         }
       } catch (rollbackErr) {
-        console.error('[persist-routes] Rollback failed:', rollbackErr);
+        const e = rollbackErr as Error;
+        logger.error(
+          'persist.restore_rollback_failed',
+          'Restore failed and rollback unsuccessful - manual recovery may be needed',
+          {
+            timestamp: backup.timestamp,
+            settingsPath,
+            err: { name: e.name, message: e.message },
+          }
+        );
         res.status(500).json({
           error: 'Restore failed and rollback unsuccessful - manual recovery may be needed',
         });

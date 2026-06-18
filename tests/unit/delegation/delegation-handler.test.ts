@@ -10,11 +10,12 @@ import { DelegationHandler } from '../../../src/delegation/delegation-handler';
 
 describe('DelegationHandler', () => {
   let handler: DelegationHandler;
+  // Validation warnings are written to stderr (process.stderr.write), not console.error.
   let consoleErrorSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
     handler = new DelegationHandler();
-    consoleErrorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    consoleErrorSpy = spyOn(process.stderr, 'write').mockImplementation(() => true);
   });
 
   afterEach(() => {

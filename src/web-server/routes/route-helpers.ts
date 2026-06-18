@@ -21,6 +21,9 @@ import type { TargetType } from '../../targets/target-adapter';
 import { isPersistedTargetType } from '../../targets/target-metadata';
 import { ValidationError } from '../../errors/error-types';
 import { getCcsDir, loadConfigSafe, loadSettings } from '../../config/config-loader-facade';
+import { createLogger } from '../../services/logging';
+
+const logger = createLogger('web-server:routes:helpers');
 
 /** Model mapping for API profiles */
 export interface ModelMapping {
@@ -498,11 +501,14 @@ export function createRouteErrorHelpers(prefix: string): {
   ) => void;
 } {
   function logRouteError(context: string, error: unknown): void {
-    if (error instanceof Error) {
-      console.error(`[${prefix}] ${context}: ${error.message}`);
-      return;
-    }
-    console.error(`[${prefix}] ${context}: unknown error`);
+    logger.error('route.error', `${prefix}: ${context}`, {
+      prefix,
+      context,
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
   }
 
   function respondInternalError(

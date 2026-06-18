@@ -9,8 +9,11 @@
  */
 
 import * as crypto from 'crypto';
+import { createLogger } from '../../services/logging';
 import type { DeltaAccumulator } from '../delta-accumulator';
 import type { AccumulatorBlock, AnthropicSSEEvent, ThinkingSignature } from './types';
+
+const logger = createLogger('glmt:pipeline:response-builder');
 
 export class ResponseBuilder {
   private verbose: boolean;
@@ -101,11 +104,10 @@ export class ResponseBuilder {
     // FIX: Guard against empty content (signature timing race)
     if (!block.content || block.content.length === 0) {
       if (this.verbose) {
-        console.error(
-          `[ResponseBuilder] WARNING: Skipping signature for empty thinking block ${block.index}`
-        );
-        console.error(
-          `This indicates a race condition - signature requested before content accumulated`
+        logger.warn(
+          'signature_empty_thinking_block',
+          'Skipping signature for empty thinking block - possible race condition',
+          { blockIndex: block.index }
         );
       }
       return null;
@@ -114,9 +116,10 @@ export class ResponseBuilder {
     const signature = this.generateThinkingSignature(block.content);
 
     if (this.verbose) {
-      console.error(
-        `[ResponseBuilder] Generating signature for block ${block.index}: ${block.content.length} chars`
-      );
+      logger.info('signature_generated', 'Generated thinking signature', {
+        blockIndex: block.index,
+        contentLength: block.content.length,
+      });
     }
 
     return {

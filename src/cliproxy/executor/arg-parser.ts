@@ -207,9 +207,9 @@ export function parseExecutorFlags(
   const forceHeadless = args.includes('--headless');
 
   if (pasteCallback && portForward) {
-    console.error(fail('Cannot use --paste-callback with --port-forward'));
-    console.error('    --paste-callback: Manually paste OAuth redirect URL');
-    console.error('    --port-forward: Use SSH port forwarding for callback');
+    process.stderr.write(String(fail('Cannot use --paste-callback with --port-forward')) + '\n');
+    process.stderr.write('    --paste-callback: Manually paste OAuth redirect URL\n');
+    process.stderr.write('    --port-forward: Use SSH port forwarding for callback\n');
     process.exit(1);
   }
 
@@ -247,8 +247,8 @@ export function parseExecutorFlags(
   if (kiroMethodValue.present) {
     const rawMethod = kiroMethodValue.value;
     if (kiroMethodValue.missingValue || !rawMethod) {
-      console.error(fail('--kiro-auth-method requires a value'));
-      console.error('    Supported values: aws, aws-authcode, google, github, idc');
+      process.stderr.write(String(fail('--kiro-auth-method requires a value')) + '\n');
+      process.stderr.write('    Supported values: aws, aws-authcode, google, github, idc\n');
       process.exitCode = 1;
       // Caller must check parseFailed and bail — matching original return behavior
       return buildPartialFlags({
@@ -280,8 +280,8 @@ export function parseExecutorFlags(
     }
     const normalized = rawMethod.trim().toLowerCase();
     if (!isKiroAuthMethod(normalized)) {
-      console.error(fail(`Invalid --kiro-auth-method value: ${rawMethod}`));
-      console.error('    Supported values: aws, aws-authcode, google, github, idc');
+      process.stderr.write(String(fail(`Invalid --kiro-auth-method value: ${rawMethod}`)) + '\n');
+      process.stderr.write('    Supported values: aws, aws-authcode, google, github, idc\n');
       process.exitCode = 1;
       return buildPartialFlags({
         forceAuth,
@@ -318,7 +318,7 @@ export function parseExecutorFlags(
   if (kiroIDCStartUrlValue.present && kiroIDCStartUrlValue.value) {
     kiroIDCStartUrl = kiroIDCStartUrlValue.value;
   } else if (kiroIDCStartUrlValue.present) {
-    console.error(fail('--kiro-idc-start-url requires a value'));
+    process.stderr.write(String(fail('--kiro-idc-start-url requires a value')) + '\n');
     process.exitCode = 1;
     return buildPartialFlags({
       forceAuth,
@@ -353,7 +353,7 @@ export function parseExecutorFlags(
   if (kiroIDCRegionValue.present && kiroIDCRegionValue.value) {
     kiroIDCRegion = kiroIDCRegionValue.value;
   } else if (kiroIDCRegionValue.present) {
-    console.error(fail('--kiro-idc-region requires a value'));
+    process.stderr.write(String(fail('--kiro-idc-region requires a value')) + '\n');
     process.exitCode = 1;
     return buildPartialFlags({
       forceAuth,
@@ -388,8 +388,8 @@ export function parseExecutorFlags(
   if (kiroIDCFlowValue.present) {
     const rawFlow = kiroIDCFlowValue.value;
     if (kiroIDCFlowValue.missingValue || !rawFlow) {
-      console.error(fail('--kiro-idc-flow requires a value'));
-      console.error('    Supported values: authcode, device');
+      process.stderr.write(String(fail('--kiro-idc-flow requires a value')) + '\n');
+      process.stderr.write('    Supported values: authcode, device\n');
       process.exitCode = 1;
       return buildPartialFlags({
         forceAuth,
@@ -420,8 +420,8 @@ export function parseExecutorFlags(
     }
     const normalized = rawFlow.trim().toLowerCase();
     if (!isKiroIDCFlow(normalized)) {
-      console.error(fail(`Invalid --kiro-idc-flow value: ${rawFlow}`));
-      console.error('    Supported values: authcode, device');
+      process.stderr.write(String(fail(`Invalid --kiro-idc-flow value: ${rawFlow}`)) + '\n');
+      process.stderr.write('    Supported values: authcode, device\n');
       process.exitCode = 1;
       return buildPartialFlags({
         forceAuth,
@@ -458,7 +458,7 @@ export function parseExecutorFlags(
   if (gitlabBaseUrlValue.present && gitlabBaseUrlValue.value) {
     gitlabBaseUrl = gitlabBaseUrlValue.value.trim();
   } else if (gitlabBaseUrlValue.present) {
-    console.error(fail('--gitlab-url requires a value'));
+    process.stderr.write(String(fail('--gitlab-url requires a value')) + '\n');
     process.exitCode = 1;
     return buildPartialFlags({
       forceAuth,
@@ -492,14 +492,14 @@ export function parseExecutorFlags(
   const thinkingParse = parseThinkingOverride(args);
   if (thinkingParse.error) {
     const { flag } = thinkingParse.error;
-    console.error(fail(`${flag} requires a value`));
+    process.stderr.write(String(fail(`${flag} requires a value`)) + '\n');
 
     if (provider === 'codex') {
-      console.error('    Codex examples: --effort xhigh, --effort high, --effort medium');
-      console.error('    Alias: --thinking xhigh (same behavior)');
+      process.stderr.write('    Codex examples: --effort xhigh, --effort high, --effort medium\n');
+      process.stderr.write('    Alias: --thinking xhigh (same behavior)\n');
     } else {
-      console.error('    Examples: --thinking low, --thinking 8192, --thinking off');
-      console.error('    Levels: minimal, low, medium, high, xhigh, max, auto');
+      process.stderr.write('    Examples: --thinking low, --thinking 8192, --thinking off\n');
+      process.stderr.write('    Levels: minimal, low, medium, high, xhigh, max, auto\n');
     }
 
     process.exit(1);
@@ -511,7 +511,7 @@ export function parseExecutorFlags(
   const hasNo1mFlag = args.includes('--no-1m') || args.some((arg) => arg.startsWith('--no-1m='));
 
   if (has1mFlag && hasNo1mFlag) {
-    console.error(fail('Cannot use both --1m and --no-1m flags'));
+    process.stderr.write(String(fail('Cannot use both --1m and --no-1m flags')) + '\n');
     process.exit(1);
   } else if (has1mFlag) {
     extendedContextOverride = true;
@@ -584,7 +584,7 @@ export function validateFlagCombinations(
   } = parsed;
 
   if (kiroAuthMethod && provider !== 'kiro' && !compositeProviders.includes('kiro')) {
-    console.error(fail('--kiro-auth-method is only valid for ccs kiro'));
+    process.stderr.write(String(fail('--kiro-auth-method is only valid for ccs kiro')) + '\n');
     process.exitCode = 1;
     return false;
   }
@@ -594,19 +594,21 @@ export function validateFlagCombinations(
     provider !== 'kiro' &&
     !compositeProviders.includes('kiro')
   ) {
-    console.error(
-      fail(
-        '--kiro-idc-start-url, --kiro-idc-region, and --kiro-idc-flow are only valid for ccs kiro'
-      )
+    process.stderr.write(
+      String(
+        fail(
+          '--kiro-idc-start-url, --kiro-idc-region, and --kiro-idc-flow are only valid for ccs kiro'
+        )
+      ) + '\n'
     );
     process.exitCode = 1;
     return false;
   }
 
   if (kiroAuthMethod === 'idc' && !kiroIDCStartUrl) {
-    console.error(fail('Kiro IDC login requires --kiro-idc-start-url'));
-    console.error(
-      '    Example: ccs kiro --auth --kiro-auth-method idc --kiro-idc-start-url https://d-xxx.awsapps.com/start'
+    process.stderr.write(String(fail('Kiro IDC login requires --kiro-idc-start-url')) + '\n');
+    process.stderr.write(
+      '    Example: ccs kiro --auth --kiro-auth-method idc --kiro-idc-start-url https://d-xxx.awsapps.com/start\n'
     );
     process.exitCode = 1;
     return false;
@@ -617,10 +619,12 @@ export function validateFlagCombinations(
     kiroAuthMethod !== 'idc' &&
     (kiroIDCStartUrl || kiroIDCRegion || kiroIDCFlow)
   ) {
-    console.error(
-      fail(
-        '--kiro-idc-start-url, --kiro-idc-region, and --kiro-idc-flow require --kiro-auth-method idc'
-      )
+    process.stderr.write(
+      String(
+        fail(
+          '--kiro-idc-start-url, --kiro-idc-region, and --kiro-idc-flow require --kiro-auth-method idc'
+        )
+      ) + '\n'
     );
     process.exitCode = 1;
     return false;
@@ -628,7 +632,7 @@ export function validateFlagCombinations(
 
   if ((gitlabTokenLogin || gitlabBaseUrl) && provider !== 'gitlab') {
     const flagName = gitlabTokenLogin ? getGitLabTokenLoginFlagName(args) : '--gitlab-url';
-    console.error(fail(`${flagName} is only valid for ccs gitlab`));
+    process.stderr.write(String(fail(`${flagName} is only valid for ccs gitlab`)) + '\n');
     process.exitCode = 1;
     return false;
   }

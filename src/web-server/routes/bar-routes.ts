@@ -23,6 +23,9 @@ import type { HealthReport } from '../health-service';
 import type { CliproxyUsageHistoryDetail } from '../usage/cliproxy-usage-transformer';
 import { computeBarAnalyticsFromDaily } from '../usage/bar-analytics';
 import type { DailyUsage, HourlyUsage } from '../usage/types';
+import { createLogger } from '../../services/logging';
+
+const logger = createLogger('web-server:routes:bar');
 
 // ============================================================================
 // Types
@@ -551,7 +554,11 @@ export function createBarRouter(deps: BarRouterDeps): Router {
 
       res.json([...rows, ...nativeRows].map(serializeBarRow));
     } catch (err) {
-      console.error('[bar-routes] /summary error:', (err as Error).message);
+      const e = err as Error;
+      logger.error('bar.summary_failed', 'Failed to build bar summary payload', {
+        refresh: req.query['refresh'] === 'true',
+        err: { name: e.name, message: e.message },
+      });
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -575,7 +582,10 @@ export function createBarRouter(deps: BarRouterDeps): Router {
       const analytics = computeBarAnalyticsFromDaily(daily ?? [], hourly ?? [], new Date());
       res.json(analytics);
     } catch (err) {
-      console.error('[bar-routes] /analytics error:', (err as Error).message);
+      const e = err as Error;
+      logger.error('bar.analytics_failed', 'Failed to compute bar analytics payload', {
+        err: { name: e.name, message: e.message },
+      });
       res.status(500).json({ error: 'Internal server error' });
     }
   });

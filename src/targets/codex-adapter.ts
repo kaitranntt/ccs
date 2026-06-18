@@ -383,27 +383,30 @@ export class CodexAdapter implements TargetAdapter {
 
     const codexPath = options?.binaryInfo?.path || detectCodexCli();
     if (!codexPath) {
-      console.error('[X] Codex CLI not found. Install a recent @openai/codex build first.');
+      process.stderr.write(
+        String('[X] Codex CLI not found. Install a recent @openai/codex build first.') + '\n'
+      );
       return exitWithCleanup(1);
     }
 
     try {
       const stat = fs.statSync(codexPath);
       if (!stat.isFile()) {
-        console.error(`[X] Codex CLI path is not a file: ${codexPath}`);
+        process.stderr.write(`[X] Codex CLI path is not a file: ${codexPath}\n`);
         return exitWithCleanup(1);
       }
     } catch (err) {
       const error = err as NodeJS.ErrnoException;
-      console.error(
-        `[X] Codex CLI path is not accessible (${error.code || 'unknown'}): ${codexPath}`
+      process.stderr.write(
+        String(`[X] Codex CLI path is not accessible (${error.code || 'unknown'}): ${codexPath}`) +
+          '\n'
       );
       return exitWithCleanup(1);
     }
 
     const codexHomePreparation = prepareExplicitCodexHome(env, args);
     if (codexHomePreparation.error) {
-      console.error(codexHomePreparation.error);
+      process.stderr.write(String(codexHomePreparation.error) + '\n');
       return exitWithCleanup(1);
     }
     const launchEnv = codexHomePreparation.env;
@@ -450,18 +453,22 @@ export class CodexAdapter implements TargetAdapter {
 
     wireChildProcessSignals(child, (err: NodeJS.ErrnoException) => {
       if (err.code === 'EACCES') {
-        console.error(`[X] Codex CLI is not executable: ${codexPath}`);
-        console.error('    Check file permissions and executable bit.');
+        process.stderr.write(`[X] Codex CLI is not executable: ${codexPath}\n`);
+        process.stderr.write('    Check file permissions and executable bit.\n');
       } else if (err.code === 'ENOENT') {
         if (isPowerShellScript) {
-          console.error('[X] PowerShell executable not found (required for .ps1 wrapper launch).');
+          process.stderr.write(
+            String('[X] PowerShell executable not found (required for .ps1 wrapper launch).') + '\n'
+          );
         } else if (needsShell) {
-          console.error('[X] Windows command shell not found for Codex wrapper launch.');
+          process.stderr.write(
+            String('[X] Windows command shell not found for Codex wrapper launch.') + '\n'
+          );
         } else {
-          console.error(`[X] Codex CLI not found: ${codexPath}`);
+          process.stderr.write(`[X] Codex CLI not found: ${codexPath}\n`);
         }
       } else {
-        console.error(`[X] Failed to start Codex CLI (${codexPath}): ${err.message}`);
+        process.stderr.write(`[X] Failed to start Codex CLI (${codexPath}): ${err.message}\n`);
       }
       return exitWithCleanup(1);
     });

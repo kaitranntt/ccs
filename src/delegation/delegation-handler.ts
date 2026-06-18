@@ -7,6 +7,9 @@ import { DelegationValidator } from '../utils/delegation-validator';
 import { SettingsParser } from './settings-parser';
 import { fail, warn } from '../utils/ui';
 import { getCcsDir } from '../config/config-loader-facade';
+import { createLogger } from '../services/logging';
+
+const logger = createLogger('delegation:handler');
 
 const PROFILE_FLAGS_WITH_VALUE = new Set(['-p', '--prompt', '--effort']);
 const PROMPT_FLAGS_WITH_VALUE = new Set(['-p', '--prompt']);
@@ -85,13 +88,13 @@ function parseStringFlag(
 
   // Reject dash-prefixed values (likely another flag)
   if (!options?.allowDashPrefix && value.startsWith('-')) {
-    console.error(warn(`${flagName} value "${value}" looks like a flag. Ignoring.`));
+    process.stderr.write(warn(`${flagName} value "${value}" looks like a flag. Ignoring.`) + '\n');
     return undefined;
   }
 
   // Reject empty/whitespace-only
   if (!value.trim()) {
-    console.error(warn(`${flagName} value is empty. Ignoring.`));
+    process.stderr.write(warn(`${flagName} value is empty. Ignoring.`) + '\n');
     return undefined;
   }
 
@@ -149,9 +152,14 @@ export class DelegationHandler {
       // 6. Exit with proper code
       process.exit(result.exitCode || 0);
     } catch (error) {
-      console.error(fail(`Delegation error: ${(error as Error).message}`));
+      process.stderr.write(fail(`Delegation error: ${(error as Error).message}`) + '\n');
       if (process.env.CCS_DEBUG) {
-        console.error((error as Error).stack);
+        logger.error('delegation.route.failure', 'Delegation route failed', {
+          err:
+            error instanceof Error
+              ? { name: error.name, message: error.message, stack: error.stack }
+              : { message: String(error) },
+        });
       }
       process.exit(1);
     }
@@ -169,8 +177,10 @@ export class DelegationHandler {
     const lastSession = sessionMgr.getLastSession(baseProfile);
 
     if (!lastSession) {
-      console.error(fail(`No previous session found for ${baseProfile}`));
-      console.error(`    Start a new session first with: ccs ${baseProfile} -p "task"`);
+      process.stderr.write(fail(`No previous session found for ${baseProfile}`) + '\n');
+      process.stderr.write(
+        `    Start a new session first with: ccs ${baseProfile} -p "task"` + '\n'
+      );
       process.exit(1);
     }
 
@@ -256,8 +266,8 @@ export class DelegationHandler {
     }
 
     if (index === -1 || index === args.length - 1) {
-      console.error(fail('Missing prompt after -p flag'));
-      console.error('    Usage: ccs glm -p "task description"');
+      process.stderr.write(fail('Missing prompt after -p flag') + '\n');
+      process.stderr.write('    Usage: ccs glm -p "task description"' + '\n');
       process.exit(1);
     }
 
@@ -301,11 +311,13 @@ export class DelegationHandler {
       if (!isNaN(val) && val > 0 && val <= 600000) {
         options.timeout = val;
       } else if (isNaN(val)) {
-        console.error(warn(`--timeout "${rawVal}" is not a number. Using default.`));
+        process.stderr.write(warn(`--timeout "${rawVal}" is not a number. Using default.`) + '\n');
       } else if (val <= 0) {
-        console.error(warn(`--timeout ${val} must be positive. Using default.`));
+        process.stderr.write(warn(`--timeout ${val} must be positive. Using default.`) + '\n');
       } else if (val > 600000) {
-        console.error(warn(`--timeout ${val} exceeds max (600000ms). Using default.`));
+        process.stderr.write(
+          warn(`--timeout ${val} exceeds max (600000ms). Using default.`) + '\n'
+        );
       }
     }
 
@@ -322,11 +334,11 @@ export class DelegationHandler {
       if (!isNaN(val) && val > 0 && val <= 100) {
         options.maxTurns = val;
       } else if (isNaN(val)) {
-        console.error(warn(`--max-turns "${rawVal}" is not a number. Ignoring.`));
+        process.stderr.write(warn(`--max-turns "${rawVal}" is not a number. Ignoring.`) + '\n');
       } else if (val <= 0) {
-        console.error(warn(`--max-turns ${val} must be positive. Ignoring.`));
+        process.stderr.write(warn(`--max-turns ${val} must be positive. Ignoring.`) + '\n');
       } else if (val > 100) {
-        console.error(warn(`--max-turns ${val} exceeds max (100). Using 100.`));
+        process.stderr.write(warn(`--max-turns ${val} exceeds max (100). Using 100.`) + '\n');
         options.maxTurns = 100;
       }
     }
@@ -342,7 +354,7 @@ export class DelegationHandler {
         JSON.parse(agentsValue);
         options.agents = agentsValue;
       } catch {
-        console.error(warn('--agents must be valid JSON. Ignoring.'));
+        process.stderr.write(warn('--agents must be valid JSON. Ignoring.') + '\n');
       }
     }
 
@@ -400,20 +412,20 @@ export class DelegationHandler {
    */
   _validateProfile(profile: string): void {
     if (!profile) {
-      console.error(fail('No profile specified'));
-      console.error('    Usage: ccs <profile> -p "task"');
-      console.error('    Examples: ccs glm -p "task", ccs km -p "task"');
+      process.stderr.write(fail('No profile specified') + '\n');
+      process.stderr.write('    Usage: ccs <profile> -p "task"' + '\n');
+      process.stderr.write('    Examples: ccs glm -p "task", ccs km -p "task"' + '\n');
       process.exit(1);
     }
 
     // Use DelegationValidator to check profile
     const validation = DelegationValidator.validate(profile);
     if (!validation.valid) {
-      console.error(fail(`Profile '${profile}' is not configured for delegation`));
-      console.error(`    ${validation.error}`);
-      console.error('');
-      console.error('    Run: ccs doctor');
-      console.error(`    Or configure: ${getCcsDir()}/${profile}.settings.json`);
+      process.stderr.write(fail(`Profile '${profile}' is not configured for delegation`) + '\n');
+      process.stderr.write(`    ${validation.error}` + '\n');
+      process.stderr.write('' + '\n');
+      process.stderr.write('    Run: ccs doctor' + '\n');
+      process.stderr.write(`    Or configure: ${getCcsDir()}/${profile}.settings.json` + '\n');
       process.exit(1);
     }
   }

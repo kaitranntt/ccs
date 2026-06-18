@@ -135,13 +135,17 @@ export async function configureProviderModel(
   const safeDefaultIdx = defaultIdx >= 0 ? defaultIdx : 0;
 
   // Show header with context (gradient like ccs doctor)
-  console.error('');
-  console.error(header(`Configure ${catalog.displayName} Model`));
-  console.error('');
-  console.error(dim('    Select which model to use for this provider.'));
-  console.error(dim('    Models marked [Pro]/[Ultra] require a paid provider plan.'));
-  console.error(dim('    Models marked [DEPRECATED] are not recommended for use.'));
-  console.error('');
+  process.stderr.write('\n');
+  process.stderr.write(String(header(`Configure ${catalog.displayName} Model`)) + '\n');
+  process.stderr.write('\n');
+  process.stderr.write(String(dim('    Select which model to use for this provider.')) + '\n');
+  process.stderr.write(
+    String(dim('    Models marked [Pro]/[Ultra] require a paid provider plan.')) + '\n'
+  );
+  process.stderr.write(
+    String(dim('    Models marked [DEPRECATED] are not recommended for use.')) + '\n'
+  );
+  process.stderr.write('\n');
 
   // Interactive selection
   const selectedModel = await InteractivePrompt.selectFromList('Select model:', options, {
@@ -209,19 +213,21 @@ export async function configureProviderModel(
   const selectedEntry = catalog.models.find((m) => m.id === selectedModel);
   const displayName = selectedEntry?.name || selectedModel;
 
-  console.error('');
-  console.error(ok(`Model set to: ${bold(displayName)}`));
-  console.error(dim(`     Config saved: ${settingsPath}`));
+  process.stderr.write('\n');
+  process.stderr.write(String(ok(`Model set to: ${bold(displayName)}`)) + '\n');
+  process.stderr.write(String(dim(`     Config saved: ${settingsPath}`)) + '\n');
 
   // Show deprecation warning if model is deprecated
   if (selectedEntry?.deprecated) {
-    console.error('');
-    console.error(color('[!] DEPRECATION WARNING', 'warning'));
+    process.stderr.write('\n');
+    process.stderr.write(String(color('[!] DEPRECATION WARNING', 'warning')) + '\n');
     const reason = selectedEntry.deprecationReason || 'This model is deprecated';
-    console.error(dim(`     ${reason}`));
-    console.error(dim('     Consider using a non-deprecated model for better compatibility.'));
+    process.stderr.write(String(dim(`     ${reason}`)) + '\n');
+    process.stderr.write(
+      String(dim('     Consider using a non-deprecated model for better compatibility.')) + '\n'
+    );
   }
-  console.error('');
+  process.stderr.write('\n');
 
   return true;
 }
@@ -231,7 +237,9 @@ export async function configureProviderModel(
  */
 export async function showCurrentConfig(provider: CLIProxyProvider): Promise<void> {
   if (!supportsModelConfig(provider)) {
-    console.error(info(`Provider ${provider} does not support model configuration`));
+    process.stderr.write(
+      String(info(`Provider ${provider} does not support model configuration`)) + '\n'
+    );
     return;
   }
 
@@ -247,33 +255,33 @@ export async function showCurrentConfig(provider: CLIProxyProvider): Promise<voi
     ? canonicalizeModelForProvider(provider, currentModel)
     : undefined;
 
-  console.error('');
-  console.error(header(`${catalog.displayName} Model Configuration`));
-  console.error('');
+  process.stderr.write('\n');
+  process.stderr.write(String(header(`${catalog.displayName} Model Configuration`)) + '\n');
+  process.stderr.write('\n');
 
   if (currentModel) {
     const entry = catalog.models.find((m) => m.id === normalizedCurrentModel);
     const displayName = entry?.name || 'Unknown';
-    console.error(
-      `  ${bold('Current:')} ${color(displayName, 'success')} ${dim(`(${currentModel})`)}`
+    process.stderr.write(
+      `  ${bold('Current:')} ${color(displayName, 'success')} ${dim(`(${currentModel})`)}\n`
     );
-    console.error(`  ${bold('Config:')}  ${dim(settingsPath)}`);
+    process.stderr.write(`  ${bold('Config:')}  ${dim(settingsPath)}\n`);
   } else {
-    console.error(`  ${bold('Current:')} ${dim('(using defaults)')}`);
-    console.error(`  ${bold('Default:')} ${catalog.defaultModel}`);
+    process.stderr.write(`  ${bold('Current:')} ${dim('(using defaults)')}\n`);
+    process.stderr.write(`  ${bold('Default:')} ${catalog.defaultModel}\n`);
   }
 
-  console.error('');
-  console.error(bold('Available models:'));
-  console.error(dim('  [Pro]/[Ultra] = Requires a paid provider plan'));
-  console.error(dim('  [DEPRECATED] = Not recommended for use'));
-  console.error('');
+  process.stderr.write('\n');
+  process.stderr.write(String(bold('Available models:')) + '\n');
+  process.stderr.write(String(dim('  [Pro]/[Ultra] = Requires a paid provider plan')) + '\n');
+  process.stderr.write(String(dim('  [DEPRECATED] = Not recommended for use')) + '\n');
+  process.stderr.write('\n');
   catalog.models.forEach((m) => {
     const isCurrent = m.id === normalizedCurrentModel;
-    console.error(formatModelDetailed(m, isCurrent));
+    process.stderr.write(String(formatModelDetailed(m, isCurrent)) + '\n');
   });
 
-  console.error('');
-  console.error(dim(`Run "ccs ${provider} --config" to change`));
-  console.error('');
+  process.stderr.write('\n');
+  process.stderr.write(String(dim(`Run "ccs ${provider} --config" to change`)) + '\n');
+  process.stderr.write('\n');
 }

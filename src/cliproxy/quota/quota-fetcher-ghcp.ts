@@ -9,6 +9,13 @@ import * as fs from 'node:fs';
 import { getAccountTokenPath, getProviderAccounts } from '../accounts/account-manager';
 import type { GhcpQuotaResult, GhcpQuotaSnapshot } from './quota-types';
 import { clampPercent } from '../../utils/percentage';
+import { createLogger } from '../../services/logging';
+
+// Diagnostic-only logger: token load failures, fetch progress, and upstream
+// error reasons. accountId is attached as provider context; token values are
+// never logged (the error string from readGhcpAccessToken is generic and
+// contains no token material).
+const logger = createLogger('cliproxy:quota:ghcp');
 
 const GHCP_USAGE_URL = 'https://api.github.com/copilot_internal/user';
 const GHCP_USAGE_TIMEOUT_MS = 10000;
@@ -174,11 +181,22 @@ export async function fetchGhcpQuota(accountId: string, verbose = false): Promis
   const { accessToken, error } = readGhcpAccessToken(accountId);
   if (!accessToken) {
     // Safe diagnostic: accountId + generic error only (never log token values/file contents).
-    if (verbose) console.error(`[!] ghcp quota token error (${accountId}): ${error}`);
+    if (verbose) {
+      logger.error('ghcp.token_load_error', `ghcp quota token error (${accountId}): ${error}`, {
+        provider: 'ghcp',
+        accountId,
+        reason: error ?? 'unknown',
+      });
+    }
     return buildEmptyQuotaResult(error || 'Failed to load auth token', accountId);
   }
 
-  if (verbose) console.error(`[i] Fetching ghcp quota for ${accountId}...`);
+  if (verbose) {
+    logger.info('ghcp.fetch_start', `Fetching ghcp quota for ${accountId}...`, {
+      provider: 'ghcp',
+      accountId,
+    });
+  }
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), GHCP_USAGE_TIMEOUT_MS);

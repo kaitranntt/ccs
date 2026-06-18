@@ -2,7 +2,7 @@
  * CLI argument parsing and normalization utilities.
  *
  * Extracted from src/ccs.ts (lines 129-244, 246-296, 371-392).
- * Pure functions — no side effects except console.error and process.exit.
+ * Pure functions — no side effects except process.stderr.write and process.exit.
  *
  * Also contains bootstrapAndParseEarlyCli() — the Phase A bootstrap extracted
  * from main() (lines 128-232 of the original). Handles: adapter registration,
@@ -74,19 +74,21 @@ export async function bootstrapAndParseEarlyCli(rawArgs: string[]): Promise<Disp
     }
 
     if (!configDirValue || configDirValue.startsWith('-')) {
-      console.error(fail('--config-dir requires a path argument'));
+      process.stderr.write(String(fail('--config-dir requires a path argument')) + '\n');
       process.exit(1);
     }
 
     try {
       const stat = fs.statSync(configDirValue);
       if (!stat.isDirectory()) {
-        console.error(fail(`Not a directory: ${configDirValue}`));
+        process.stderr.write(String(fail(`Not a directory: ${configDirValue}`)) + '\n');
         process.exit(1);
       }
     } catch {
-      console.error(fail(`Config directory not found: ${configDirValue}`));
-      console.error(info('Create the directory first, then copy your config files into it.'));
+      process.stderr.write(String(fail(`Config directory not found: ${configDirValue}`)) + '\n');
+      process.stderr.write(
+        String(info('Create the directory first, then copy your config files into it.')) + '\n'
+      );
       process.exit(1);
     }
 
@@ -95,9 +97,9 @@ export async function bootstrapAndParseEarlyCli(rawArgs: string[]): Promise<Disp
     // Security warning: cloud sync paths expose OAuth tokens
     const cloudService = detectCloudSyncPath(configDirValue);
     if (!isCompletionCommand && cloudService) {
-      console.error(warn(`CCS directory is under ${cloudService}.`));
-      console.error('    OAuth tokens in cliproxy/auth/ will be synced to cloud.');
-      console.error('    Consider: CCS_DIR=/path/outside/cloud ccs ...');
+      process.stderr.write(String(warn(`CCS directory is under ${cloudService}.`)) + '\n');
+      process.stderr.write('    OAuth tokens in cliproxy/auth/ will be synced to cloud.\n');
+      process.stderr.write('    Consider: CCS_DIR=/path/outside/cloud ccs ...\n');
     }
 
     // Remove consumed args so they don't leak to Claude CLI
@@ -108,17 +110,17 @@ export async function bootstrapAndParseEarlyCli(rawArgs: string[]): Promise<Disp
     // Also warn for CCS_DIR env var pointing to cloud sync
     const cloudService = detectCloudSyncPath(process.env.CCS_DIR);
     if (!isCompletionCommand && cloudService) {
-      console.error(warn(`CCS directory is under ${cloudService}.`));
-      console.error('    OAuth tokens in cliproxy/auth/ will be synced to cloud.');
-      console.error('    Consider: CCS_DIR=/path/outside/cloud ccs ...');
+      process.stderr.write(String(warn(`CCS directory is under ${cloudService}.`)) + '\n');
+      process.stderr.write('    OAuth tokens in cliproxy/auth/ will be synced to cloud.\n');
+      process.stderr.write('    Consider: CCS_DIR=/path/outside/cloud ccs ...\n');
     }
   } else if (process.env.CCS_HOME) {
     // Also warn for CCS_HOME env var pointing to cloud sync
     const cloudService = detectCloudSyncPath(process.env.CCS_HOME);
     if (!isCompletionCommand && cloudService) {
-      console.error(warn(`CCS directory is under ${cloudService}.`));
-      console.error('    OAuth tokens in cliproxy/auth/ will be synced to cloud.');
-      console.error('    Consider: CCS_DIR=/path/outside/cloud ccs ...');
+      process.stderr.write(String(warn(`CCS directory is under ${cloudService}.`)) + '\n');
+      process.stderr.write('    OAuth tokens in cliproxy/auth/ will be synced to cloud.\n');
+      process.stderr.write('    Consider: CCS_DIR=/path/outside/cloud ccs ...\n');
     }
   }
 
@@ -135,7 +137,7 @@ export async function bootstrapAndParseEarlyCli(rawArgs: string[]): Promise<Disp
     browserLaunchOverride = browserLaunchFlags.override;
     args = browserLaunchFlags.argsWithoutFlags;
   } catch (error) {
-    console.error(fail((error as Error).message));
+    process.stderr.write(String(fail((error as Error).message)) + '\n');
     process.exit(1);
     // process.exit never returns but TypeScript needs the unreachable return
     return { args, isCompletionCommand, browserLaunchOverride: undefined, exitNow: true };
@@ -228,15 +230,18 @@ export function normalizeLegacyCursorArgs(args: string[]): string[] {
 }
 
 export function printCursorLegacySubcommandDeprecation(subcommand: string): void {
-  console.error(
-    warn(`\`ccs cursor ${subcommand}\` is deprecated for the legacy Cursor IDE bridge.`)
+  process.stderr.write(
+    String(warn(`\`ccs cursor ${subcommand}\` is deprecated for the legacy Cursor IDE bridge.`)) +
+      '\n'
   );
-  console.error(
-    warn(
-      `Use \`ccs legacy cursor ${subcommand}\` for the old bridge, or \`ccs cursor --auth|--accounts|--config\` for the CLIProxy provider.`
-    )
+  process.stderr.write(
+    String(
+      warn(
+        `Use \`ccs legacy cursor ${subcommand}\` for the old bridge, or \`ccs cursor --auth|--accounts|--config\` for the CLIProxy provider.`
+      )
+    ) + '\n'
   );
-  console.error('');
+  process.stderr.write('\n');
 }
 
 // ========== Runtime Reasoning Flags ==========
@@ -248,10 +253,12 @@ export function resolveRuntimeReasoningFlags(
   const runtime = resolveDroidReasoningRuntime(args, envThinkingValue);
 
   if (runtime.duplicateDisplays.length > 0) {
-    console.error(
-      warn(
-        `[!] Multiple reasoning flags detected. Using first occurrence: ${runtime.sourceDisplay || '<first-flag>'}`
-      )
+    process.stderr.write(
+      String(
+        warn(
+          `[!] Multiple reasoning flags detected. Using first occurrence: ${runtime.sourceDisplay || '<first-flag>'}`
+        )
+      ) + '\n'
     );
   }
 
@@ -280,11 +287,11 @@ export function exitWithRuntimeReasoningFlagError(
     includeDroidExecExample?: boolean;
   }
 ): never {
-  console.error(fail(message));
-  console.error('    Examples: --thinking low, --thinking 8192, --thinking off');
-  console.error(`    Codex alias: --effort ${options.codexAliasLevels}`);
+  process.stderr.write(String(fail(message)) + '\n');
+  process.stderr.write('    Examples: --thinking low, --thinking 8192, --thinking off\n');
+  process.stderr.write(`    Codex alias: --effort ${options.codexAliasLevels}\n`);
   if (options.includeDroidExecExample) {
-    console.error('    Droid exec: --reasoning-effort high');
+    process.stderr.write('    Droid exec: --reasoning-effort high\n');
   }
   process.exit(1);
 }

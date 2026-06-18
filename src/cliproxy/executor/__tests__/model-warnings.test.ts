@@ -57,7 +57,7 @@ describe('warnBrokenModels', () => {
   let errorSpy: ReturnType<typeof jest.spyOn>;
 
   beforeEach(() => {
-    errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    errorSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
     mockGetCurrentModel.mockReset();
     mockIsModelBroken.mockReturnValue(false);
     mockGetModelIssueUrl.mockReturnValue(undefined);

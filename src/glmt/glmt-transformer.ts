@@ -135,7 +135,6 @@ export class GlmtTransformer {
         undefined,
         { level: 'error', error: { name: err.name, message: err.message } }
       );
-      console.error('[glmt-transformer] Response transformation error:', err);
       return {
         id: 'msg_error_' + Date.now(),
         type: 'message',
@@ -186,16 +185,14 @@ export class GlmtTransformer {
       fs.writeFileSync(filepath, JSON.stringify(redacted, null, 2) + '\n', 'utf8');
     } catch (error) {
       this.logger.warn('debug-log.write_failed', 'GLMT debug log write failed', {
-        message: (error as Error).message,
+        err: { name: (error as Error).name, message: (error as Error).message },
       });
-      console.error(`[glmt-transformer] Debug log error: ${(error as Error).message}`);
     }
   }
 
   private log(message: string): void {
     if (this.verbose) {
       this.logger.debug('transformer.verbose', message);
-      console.error(`[glmt-transformer] [${new Date().toTimeString().split(' ')[0]}] ${message}`);
     }
   }
 
