@@ -19,7 +19,7 @@ import type { CLIProxyProvider } from '../../cliproxy/types';
 import type { Config, Settings } from '../../types/config';
 import type { TargetType } from '../../targets/target-adapter';
 import { isPersistedTargetType } from '../../targets/target-metadata';
-import { ValidationError } from '../../errors/error-types';
+import { ConfigError, ValidationError } from '../../errors/error-types';
 import { getCcsDir, loadConfigSafe, loadSettings } from '../../config/config-loader-facade';
 import { createLogger } from '../../services/logging';
 
@@ -232,7 +232,7 @@ export function updateSettingsFile(
   const settingsPath = path.join(getCcsDir(), `${name}.settings.json`);
 
   if (!fs.existsSync(settingsPath)) {
-    throw new Error('Settings file not found');
+    throw new ConfigError('Settings file not found', settingsPath);
   }
 
   const settings = loadSettings(settingsPath);

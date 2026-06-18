@@ -15,6 +15,7 @@ import {
   getTokenRefreshOwnership,
   isRefreshDelegatedToCLIProxy,
 } from '../../provider-capabilities';
+import { AuthError } from '../../../errors/error-types';
 
 /** Token refresh result */
 export interface ProviderRefreshResult {
@@ -26,7 +27,7 @@ export interface ProviderRefreshResult {
 }
 
 function assertNever(value: never): never {
-  throw new Error(`Unhandled token refresh ownership: ${String(value)}`);
+  throw new AuthError(`Unhandled token refresh ownership: ${String(value)}`);
 }
 
 /**

@@ -37,6 +37,7 @@ import {
   getDeniedModelIdReasonForProvider,
 } from '../../cliproxy/ai-providers/model-id-normalizer';
 import { createRouteErrorHelpers } from './route-helpers';
+import { ConfigError, ValidationError } from '../../errors/error-types';
 import {
   getImageAnalysisProfileSettingsPath,
   hasImageAnalysisProfileHook,
@@ -71,7 +72,7 @@ function resolvePathWithin(basePath: string, targetPath: string): string {
     path.isAbsolute(targetPath) ? targetPath : path.join(resolvedBase, targetPath)
   );
   if (!isPathWithin(resolvedBase, resolvedTarget)) {
-    throw new Error('Invalid settings path');
+    throw new ConfigError('Invalid settings path', targetPath);
   }
   return resolvedTarget;
 }
@@ -102,7 +103,7 @@ function getRealCcsDir(): string {
 
 function requirePathWithinRealCcsDir(targetPath: string): void {
   if (!isPathWithin(getRealCcsDir(), targetPath)) {
-    throw new Error('Invalid settings path');
+    throw new ConfigError('Invalid settings path', targetPath);
   }
 }
 
@@ -142,7 +143,7 @@ function requireWritableSettingsPathWithinCcs(settingsPath: string): void {
 
   const realParentPath = findExistingParentRealPath(settingsPath);
   if (!realParentPath) {
-    throw new Error('Invalid settings path');
+    throw new ConfigError('Invalid settings path', settingsPath);
   }
   requirePathWithinRealCcsDir(realParentPath);
 }
@@ -189,7 +190,7 @@ function classifyConfigSaveFailure(error: unknown): { statusCode: number; messag
  */
 function resolveSettingsPath(profileOrVariant: string): string {
   if (!SETTINGS_IDENTIFIER_PATTERN.test(profileOrVariant)) {
-    throw new Error('Invalid profile name');
+    throw new ValidationError('Invalid profile name', 'profile');
   }
 
   const ccsDir = getCcsDir();
@@ -431,7 +432,7 @@ function withSettingsFileLock<T>(settingsPath: string, callback: () => T): T {
     ? settingsPath
     : findExistingParentRealPath(settingsPath);
   if (!lockTarget) {
-    throw new Error('Invalid settings path');
+    throw new ConfigError('Invalid settings path', settingsPath);
   }
   let release: (() => void) | undefined;
 
@@ -456,7 +457,7 @@ function loadCanonicalProfileSettings(
   strictPersist = false
 ): Settings {
   if (!requireExistingSettingsPathWithinCcs(settingsPath)) {
-    throw new Error('Settings not found');
+    throw new ConfigError('Settings not found', settingsPath);
   }
 
   const loaded = loadSettings(settingsPath);

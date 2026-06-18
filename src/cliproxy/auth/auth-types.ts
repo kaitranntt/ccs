@@ -5,6 +5,7 @@
  */
 
 import { CLIProxyProvider } from '../types';
+import { ProfileError, ValidationError } from '../../errors/error-types';
 import type { AccountInfo } from '../accounts/account-manager';
 import {
   buildProviderMap,
@@ -109,7 +110,7 @@ export function getKiroCLIAuthArgs(
 
   const startUrl = options?.idcStartUrl?.trim();
   if (!startUrl) {
-    throw new Error('Kiro IDC login requires --kiro-idc-start-url');
+    throw new ValidationError('Kiro IDC login requires --kiro-idc-start-url', 'kiroIDCStartUrl');
   }
 
   const args = [getKiroCLIAuthFlag('idc'), '--kiro-idc-start-url', startUrl];
@@ -382,7 +383,7 @@ export function getManagementOAuthCallbackPath(): string {
 export function getOAuthConfig(provider: CLIProxyProvider): ProviderOAuthConfig {
   const config = OAUTH_CONFIGS[provider];
   if (!config) {
-    throw new Error(`Unknown provider: ${provider}`);
+    throw new ProfileError(`Unknown provider: ${provider}`, provider);
   }
   return config;
 }

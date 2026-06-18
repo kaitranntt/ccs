@@ -13,6 +13,7 @@ import {
   mutateConfig,
 } from '../config/config-loader-facade';
 import { normalizeSharedResourceMetadata, type SharedResourceMode } from './shared-resource-policy';
+import { ConfigError, ProfileError } from '../errors/error-types';
 
 const logger = createLogger('auth:profile-registry');
 
@@ -132,7 +133,7 @@ export class ProfileRegistry {
       return JSON.parse(data) as ProfileData;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to read profiles: ${message}`);
+      throw new ConfigError(`Failed to read profiles: ${message}`, this.profilesPath);
     }
   }
 
@@ -159,7 +160,7 @@ export class ProfileRegistry {
         fs.unlinkSync(tempPath);
       }
       const message = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to write profiles: ${message}`);
+      throw new ConfigError(`Failed to write profiles: ${message}`, this.profilesPath);
     }
   }
 
@@ -170,7 +171,7 @@ export class ProfileRegistry {
     const data = this._read();
 
     if (data.profiles[name]) {
-      throw new Error(`Profile already exists: ${name}`);
+      throw new ProfileError(`Profile already exists: ${name}`, name);
     }
 
     // v3.0 minimal schema: only essential fields
@@ -203,7 +204,7 @@ export class ProfileRegistry {
     const data = this._read();
 
     if (!data.profiles[name]) {
-      throw new Error(`Profile not found: ${name}`);
+      throw new ProfileError(`Profile not found: ${name}`, name);
     }
 
     return this.normalizeLegacyProfileMetadata(data.profiles[name]);
@@ -216,7 +217,7 @@ export class ProfileRegistry {
     const data = this._read();
 
     if (!data.profiles[name]) {
-      throw new Error(`Profile not found: ${name}`);
+      throw new ProfileError(`Profile not found: ${name}`, name);
     }
 
     data.profiles[name] = this.normalizeLegacyProfileMetadata({
@@ -234,7 +235,7 @@ export class ProfileRegistry {
     const data = this._read();
 
     if (!data.profiles[name]) {
-      throw new Error(`Profile not found: ${name}`);
+      throw new ProfileError(`Profile not found: ${name}`, name);
     }
 
     delete data.profiles[name];
@@ -287,7 +288,7 @@ export class ProfileRegistry {
     const data = this._read();
 
     if (!data.profiles[name]) {
-      throw new Error(`Profile not found: ${name}`);
+      throw new ProfileError(`Profile not found: ${name}`, name);
     }
 
     data.default = name;
@@ -330,7 +331,7 @@ export class ProfileRegistry {
   createAccountUnified(name: string, metadata: CreateMetadata = {}): void {
     mutateConfig((config) => {
       if (config.accounts[name]) {
-        throw new Error(`Account already exists: ${name}`);
+        throw new ProfileError(`Account already exists: ${name}`, name);
       }
       config.accounts[name] = this.normalizeUnifiedAccountConfig({
         created: new Date().toISOString(),
@@ -350,7 +351,7 @@ export class ProfileRegistry {
   updateAccountUnified(name: string, updates: Partial<AccountConfig>): void {
     mutateConfig((config) => {
       if (!config.accounts[name]) {
-        throw new Error(`Account not found: ${name}`);
+        throw new ProfileError(`Account not found: ${name}`, name);
       }
       config.accounts[name] = this.normalizeUnifiedAccountConfig({
         ...config.accounts[name],
@@ -365,7 +366,7 @@ export class ProfileRegistry {
   removeAccountUnified(name: string): void {
     mutateConfig((config) => {
       if (!config.accounts[name]) {
-        throw new Error(`Account not found: ${name}`);
+        throw new ProfileError(`Account not found: ${name}`, name);
       }
       delete config.accounts[name];
       if (config.default === name) {
@@ -382,7 +383,7 @@ export class ProfileRegistry {
       const exists =
         config.accounts[name] || config.profiles[name] || config.cliproxy?.variants?.[name];
       if (!exists) {
-        throw new Error(`Profile not found: ${name}`);
+        throw new ProfileError(`Profile not found: ${name}`, name);
       }
       config.default = name;
     });
@@ -434,7 +435,7 @@ export class ProfileRegistry {
   touchAccountUnified(name: string): void {
     mutateConfig((config) => {
       if (!config.accounts[name]) {
-        throw new Error(`Account not found: ${name}`);
+        throw new ProfileError(`Account not found: ${name}`, name);
       }
       config.accounts[name].last_used = new Date().toISOString();
       config.accounts[name] = this.normalizeUnifiedAccountConfig(config.accounts[name]);
