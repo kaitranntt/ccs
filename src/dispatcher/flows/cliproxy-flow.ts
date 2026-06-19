@@ -14,7 +14,6 @@ import {
 } from '../../cliproxy';
 import { getEffectiveEnvVars, getCompositeEnvVars } from '../../cliproxy/config/env-builder';
 import { resolveLifecyclePort } from '../../cliproxy/config/port-manager';
-import { ensureWebSearchMcpOrThrow } from '../../utils/websearch-manager';
 import { ensureImageAnalysisMcpOrThrow } from '../../utils/image-analysis';
 import {
   ensureProfileHooks as ensureImageAnalyzerHooks,
@@ -38,9 +37,6 @@ export async function runCliproxyFlow(ctx: ProfileDispatchContext): Promise<void
 
   const imageAnalysisMcpReady =
     resolvedTarget === 'claude' ? ensureImageAnalysisMcpOrThrow() : true;
-  if (resolvedTarget === 'claude') {
-    ensureWebSearchMcpOrThrow();
-  }
   const provider = profileInfo.provider || (profileInfo.name as CLIProxyProvider);
   const expandedCliproxySettingsPath = profileInfo.settingsPath
     ? expandPath(profileInfo.settingsPath)

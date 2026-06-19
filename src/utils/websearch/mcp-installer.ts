@@ -438,3 +438,30 @@ export function ensureWebSearchMcpOrThrow(): void {
     throw new Error('WebSearch is enabled, but CCS could not prepare the local WebSearch tool.');
   }
 }
+
+/**
+ * Prepare WebSearch for a user launch without blocking Claude startup.
+ *
+ * Returns true when the normal WebSearch status line is still accurate. A
+ * failed MCP prepare already prints a degraded-path warning, so callers should
+ * skip the ready/status line when this returns false.
+ */
+export function ensureWebSearchMcpForLaunch(): boolean {
+  const wsConfig = getWebSearchConfig();
+  if (!wsConfig.enabled) {
+    return true;
+  }
+
+  const ready = ensureWebSearchMcp();
+  if (!ready) {
+    process.stderr.write(
+      String(
+        warn(
+          'WebSearch is enabled, but CCS could not prepare the local WebSearch tool. This session will continue without local WebSearch.'
+        )
+      ) + '\n'
+    );
+  }
+
+  return ready;
+}

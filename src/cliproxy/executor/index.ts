@@ -26,7 +26,11 @@ import { supportsModelConfig } from '../model-catalog';
 import { CLIProxyProvider, ExecutorConfig } from '../types';
 import { CodexReasoningProxy } from '../ai-providers/codex-reasoning-proxy';
 import { ToolSanitizationProxy } from '../proxy/tool-sanitization-proxy';
-import { ensureWebSearchMcpOrThrow, displayWebSearchStatus } from '../../utils/websearch-manager';
+import {
+  ensureWebSearchMcpForLaunch,
+  ensureWebSearchMcpOrThrow,
+  displayWebSearchStatus,
+} from '../../utils/websearch-manager';
 import {
   ensureImageAnalysisMcpOrThrow,
   syncImageAnalysisMcpToConfigDir,
@@ -157,10 +161,7 @@ export async function execClaudeWithCLIProxy(
       log,
     });
 
-  // Setup first-class CCS WebSearch runtime
-  ensureWebSearchMcpOrThrow();
   const imageAnalysisMcpReady = ensureImageAnalysisMcpOrThrow();
-  displayWebSearchStatus();
 
   const providerConfig = getProviderConfig(provider);
   log(`Provider: ${providerConfig.displayName}`);
@@ -191,6 +192,7 @@ export async function execClaudeWithCLIProxy(
 
   const {
     forceConfig,
+    forceImport,
     addAccount,
     showAccounts,
     useAccount,
@@ -224,6 +226,8 @@ export async function execClaudeWithCLIProxy(
 
   // Handle --config
   if (forceConfig && supportsModelConfig(provider)) {
+    ensureWebSearchMcpOrThrow();
+
     // Block --config for composite variants (per-tier models in config.yaml)
     if (cfg.isComposite) {
       const variantName = cfg.profileName || provider;
@@ -266,7 +270,16 @@ export async function execClaudeWithCLIProxy(
   await handleLogout(authCtx);
 
   // Handle --import (early exit, Kiro only)
+  if (forceImport) {
+    ensureWebSearchMcpOrThrow();
+  }
   await handleImport(authCtx);
+
+  // Setup first-class CCS WebSearch runtime for non-strict user launches.
+  const shouldDisplayWebSearchStatus = ensureWebSearchMcpForLaunch();
+  if (shouldDisplayWebSearchStatus) {
+    displayWebSearchStatus();
+  }
 
   // 3. Ensure OAuth completed (if provider requires it)
   const remoteAuthToken = proxyConfig.authToken?.trim();

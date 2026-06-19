@@ -14,7 +14,7 @@ import {
   validateAnthropicKey,
 } from '../../utils/api-key-validator';
 import {
-  ensureWebSearchMcpOrThrow,
+  ensureWebSearchMcpForLaunch,
   displayWebSearchStatus,
   getWebSearchHookEnv,
   syncWebSearchMcpToConfigDir,
@@ -94,15 +94,18 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
   if (browserAttachRuntime?.warning) {
     process.stderr.write(`${warn(browserAttachRuntime.warning)}\n`);
   }
+  let shouldDisplayWebSearchStatus = true;
   if (resolvedTarget === 'claude') {
-    ensureWebSearchMcpOrThrow();
+    shouldDisplayWebSearchStatus = ensureWebSearchMcpForLaunch();
     if (browserRuntimeEnv) {
       ensureBrowserMcpOrThrow();
     }
   }
 
   // Display WebSearch status (single line, equilibrium UX)
-  displayWebSearchStatus();
+  if (shouldDisplayWebSearchStatus) {
+    displayWebSearchStatus();
+  }
 
   const continuityInheritance =
     resolvedTarget === 'claude'

@@ -64,6 +64,7 @@ export {
   removeWebSearchMcpConfig,
   uninstallWebSearchMcp,
   syncWebSearchMcpToConfigDir,
+  ensureWebSearchMcpForLaunch,
   ensureWebSearchMcpOrThrow,
 } from './websearch/mcp-installer';
 

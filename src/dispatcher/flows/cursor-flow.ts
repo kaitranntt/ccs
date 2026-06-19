@@ -5,7 +5,7 @@
  */
 
 import { fail, info } from '../../utils/ui';
-import { ensureWebSearchMcpOrThrow } from '../../utils/websearch-manager';
+import { ensureWebSearchMcpForLaunch } from '../../utils/websearch-manager';
 import { ensureProfileHooks as ensureImageAnalyzerHooks } from '../../utils/hooks/image-analyzer-profile-hook-injector';
 import { installImageAnalyzerHook } from '../../utils/hooks';
 import type { ProfileDispatchContext } from '../dispatcher-context';
@@ -19,7 +19,7 @@ export async function runCursorFlow(ctx: ProfileDispatchContext): Promise<void> 
     resolveProfileContinuityInheritance,
   } = ctx;
 
-  ensureWebSearchMcpOrThrow();
+  ensureWebSearchMcpForLaunch();
   installImageAnalyzerHook();
   ensureImageAnalyzerHooks({
     profileName: profileInfo.name,

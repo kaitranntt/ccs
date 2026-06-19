@@ -5,7 +5,7 @@
  */
 
 import { fail, info } from '../../utils/ui';
-import { ensureWebSearchMcpOrThrow } from '../../utils/websearch-manager';
+import { ensureWebSearchMcpForLaunch } from '../../utils/websearch-manager';
 import { ensureImageAnalysisMcpOrThrow } from '../../utils/image-analysis';
 import {
   ensureProfileHooks as ensureImageAnalyzerHooks,
@@ -23,7 +23,7 @@ export async function runCopilotFlow(ctx: ProfileDispatchContext): Promise<void>
     resolveProfileContinuityInheritance,
   } = ctx;
 
-  ensureWebSearchMcpOrThrow();
+  ensureWebSearchMcpForLaunch();
   const imageAnalysisMcpReady = ensureImageAnalysisMcpOrThrow();
   if (resolvedTarget === 'claude') {
     if (imageAnalysisMcpReady) {

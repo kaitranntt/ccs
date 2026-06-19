@@ -54,7 +54,7 @@ import {
   appendThirdPartyWebSearchToolArgs,
   appendWebSearchTrace,
   createWebSearchTraceContext,
-  ensureWebSearchMcpOrThrow,
+  ensureWebSearchMcpForLaunch,
   getWebSearchHookEnv,
   readWebSearchTraceRecords,
   syncWebSearchMcpToConfigDir,
@@ -159,7 +159,7 @@ export class HeadlessExecutor {
       );
     }
 
-    ensureWebSearchMcpOrThrow();
+    ensureWebSearchMcpForLaunch();
     const imageAnalysisMcpReady = ensureImageAnalysisMcpOrThrow();
     syncWebSearchMcpToConfigDir(inheritedClaudeConfigDir);
     syncImageAnalysisMcpToConfigDir(inheritedClaudeConfigDir);
