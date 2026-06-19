@@ -60,6 +60,7 @@ import {
 } from '../../cliproxy/auth/auth-types';
 import {
   getOAuthFlowType,
+  getUnsupportedAuthStartReason,
   isBrowserUrlAuthProvider,
   mapExternalProviderName,
 } from '../../cliproxy/provider-capabilities';
@@ -285,6 +286,11 @@ export function getStartUrlUnsupportedReason(
   provider: CLIProxyProvider,
   options?: { kiroMethod?: KiroAuthMethod }
 ): string | null {
+  const unsupportedAuthStartReason = getStartAuthUnsupportedReason(provider);
+  if (unsupportedAuthStartReason) {
+    return unsupportedAuthStartReason;
+  }
+
   if (provider === 'kiro') {
     const kiroMethod = options?.kiroMethod ?? normalizeKiroAuthMethod();
     if (kiroMethod === 'idc') {
@@ -314,6 +320,10 @@ export function getStartAuthFailureMessage(provider: CLIProxyProvider): string {
     return 'Authentication failed, was cancelled, or GitHub Copilot verification did not complete. Ensure the account has an active Copilot subscription and retry.';
   }
   return 'Authentication failed or was cancelled';
+}
+
+export function getStartAuthUnsupportedReason(provider: CLIProxyProvider): string | null {
+  return getUnsupportedAuthStartReason(provider);
 }
 
 function getManualCallbackRegistrationError(provider: CLIProxyProvider): string {
@@ -683,6 +693,12 @@ router.post('/:provider/start', async (req: Request, res: Response): Promise<voi
   }
 
   const localProvider = provider as CLIProxyProvider;
+  const unsupportedReason = getStartAuthUnsupportedReason(localProvider);
+  if (unsupportedReason) {
+    res.status(400).json({ error: unsupportedReason, code: 'AUTH_START_UNSUPPORTED' });
+    return;
+  }
+
   const existingAccounts = getProviderAccounts(localProvider);
   const reauthTarget = getReauthAccountTarget(accountId, existingAccounts);
   if (reauthTarget.error) {

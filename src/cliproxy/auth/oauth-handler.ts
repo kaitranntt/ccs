@@ -79,6 +79,7 @@ import {
 import { maybeOfferPoolRouting } from '../routing/pool-opt-in-prompt';
 import { checkCrossLaneEmailOverlap } from '../accounts/account-safety-cross-lane';
 import { ensureCliAntigravityResponsibility } from '../auth/antigravity-responsibility';
+import { getUnsupportedAuthStartReason } from '../provider-capabilities';
 import { InteractivePrompt } from '../../utils/prompt';
 import { getCcsDir } from '../../utils/config-manager';
 import { generateSessionId } from './project-selection-handler';
@@ -616,6 +617,11 @@ function buildOAuthArgs(
     kiroIDCFlow?: OAuthOptions['kiroIDCFlow'];
   } = {}
 ): string[] {
+  const unsupportedReason = getUnsupportedAuthStartReason(provider);
+  if (unsupportedReason) {
+    throw new AuthError(unsupportedReason, provider);
+  }
+
   const args = ['--config', configPath];
 
   if (provider === 'kiro') {
@@ -1091,6 +1097,12 @@ export async function triggerOAuth(
   options: OAuthOptions = {}
 ): Promise<AccountInfo | null> {
   const oauthConfig = getOAuthConfig(provider);
+  const unsupportedReason = getUnsupportedAuthStartReason(provider);
+  if (unsupportedReason) {
+    console.log(fail(unsupportedReason));
+    return null;
+  }
+
   warnOAuthBanRisk(provider);
   const oauthStartedAt = Date.now();
   logger.stage('auth', 'cliproxy.oauth.start', 'Triggering OAuth flow', {

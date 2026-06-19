@@ -1,7 +1,9 @@
 import type { CLIProxyProvider } from './types';
+import { ConfigError } from '../errors/error-types';
 
 export type OAuthFlowType = 'authorization_code' | 'device_code';
 export type TokenRefreshOwnership = 'ccs' | 'cliproxy' | 'unsupported';
+export type AuthStartSupport = 'cliproxy-cli' | 'unsupported';
 
 export interface ProviderCapabilities {
   displayName: string;
@@ -14,6 +16,10 @@ export interface ProviderCapabilities {
   authUrlProviderName: string;
   /** Who owns token refresh logic for this provider. */
   refreshOwnership: TokenRefreshOwnership;
+  /** Whether CCS can start account linking through the bundled CLIProxy binary. */
+  authStartSupport: AuthStartSupport;
+  /** User-facing reason when account linking cannot be started. */
+  authStartUnsupportedReason?: string;
   /** Filename prefixes used to identify auth tokens for this provider. */
   authFilePrefixes: readonly string[];
   /** Token JSON "type" values accepted for this provider. */
@@ -34,6 +40,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     callbackProviderName: 'gemini',
     authUrlProviderName: 'gemini-cli',
     refreshOwnership: 'cliproxy',
+    authStartSupport: 'cliproxy-cli',
     authFilePrefixes: ['gemini-', 'google-'],
     tokenTypeValues: ['gemini'],
     aliases: ['gemini-cli'],
@@ -46,6 +53,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     callbackProviderName: 'codex',
     authUrlProviderName: 'codex',
     refreshOwnership: 'cliproxy',
+    authStartSupport: 'cliproxy-cli',
     authFilePrefixes: ['codex-', 'openai-'],
     tokenTypeValues: ['codex'],
     aliases: [],
@@ -58,6 +66,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     callbackProviderName: 'antigravity',
     authUrlProviderName: 'antigravity',
     refreshOwnership: 'cliproxy',
+    authStartSupport: 'cliproxy-cli',
     authFilePrefixes: ['antigravity-', 'agy-'],
     tokenTypeValues: ['antigravity'],
     aliases: ['antigravity'],
@@ -69,7 +78,10 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     callbackPort: null,
     callbackProviderName: 'qwen',
     authUrlProviderName: 'qwen',
-    refreshOwnership: 'cliproxy',
+    refreshOwnership: 'unsupported',
+    authStartSupport: 'unsupported',
+    authStartUnsupportedReason:
+      'Alibaba Qwen account linking is not supported by the bundled CLIProxy runtime. Use an API-key Qwen profile; CLIProxyAPI does not expose Qwen OAuth yet.',
     authFilePrefixes: ['qwen-'],
     tokenTypeValues: ['qwen'],
     aliases: [],
@@ -82,6 +94,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     callbackProviderName: 'iflow',
     authUrlProviderName: 'iflow',
     refreshOwnership: 'cliproxy',
+    authStartSupport: 'cliproxy-cli',
     authFilePrefixes: ['iflow-'],
     tokenTypeValues: ['iflow'],
     aliases: [],
@@ -94,6 +107,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     callbackProviderName: 'kiro',
     authUrlProviderName: 'kiro',
     refreshOwnership: 'cliproxy',
+    authStartSupport: 'cliproxy-cli',
     authFilePrefixes: ['kiro-', 'aws-', 'codewhisperer-'],
     tokenTypeValues: ['kiro', 'codewhisperer'],
     aliases: ['codewhisperer'],
@@ -106,6 +120,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     callbackProviderName: 'copilot',
     authUrlProviderName: 'github',
     refreshOwnership: 'cliproxy',
+    authStartSupport: 'cliproxy-cli',
     authFilePrefixes: ['github-copilot-', 'copilot-', 'gh-'],
     tokenTypeValues: ['github-copilot', 'copilot'],
     aliases: ['github-copilot', 'copilot'],
@@ -118,6 +133,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     callbackProviderName: 'anthropic',
     authUrlProviderName: 'anthropic',
     refreshOwnership: 'unsupported',
+    authStartSupport: 'cliproxy-cli',
     authFilePrefixes: ['claude-', 'anthropic-'],
     tokenTypeValues: ['claude', 'anthropic'],
     aliases: ['anthropic'],
@@ -130,6 +146,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     callbackProviderName: 'kimi',
     authUrlProviderName: 'kimi',
     refreshOwnership: 'cliproxy',
+    authStartSupport: 'cliproxy-cli',
     authFilePrefixes: ['kimi-'],
     tokenTypeValues: ['kimi'],
     aliases: ['moonshot'],
@@ -142,6 +159,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     callbackProviderName: 'cursor',
     authUrlProviderName: 'cursor',
     refreshOwnership: 'cliproxy',
+    authStartSupport: 'cliproxy-cli',
     authFilePrefixes: ['cursor.', 'cursor-'],
     tokenTypeValues: ['cursor'],
     aliases: [],
@@ -154,6 +172,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     callbackProviderName: 'gitlab',
     authUrlProviderName: 'gitlab',
     refreshOwnership: 'cliproxy',
+    authStartSupport: 'cliproxy-cli',
     authFilePrefixes: ['gitlab-'],
     tokenTypeValues: ['gitlab'],
     aliases: ['gitlab-duo'],
@@ -166,6 +185,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     callbackProviderName: 'codebuddy',
     authUrlProviderName: 'codebuddy',
     refreshOwnership: 'cliproxy',
+    authStartSupport: 'cliproxy-cli',
     authFilePrefixes: ['codebuddy-'],
     tokenTypeValues: ['codebuddy'],
     aliases: ['tencent'],
@@ -178,6 +198,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     callbackProviderName: 'kilo',
     authUrlProviderName: 'kilo',
     refreshOwnership: 'unsupported',
+    authStartSupport: 'cliproxy-cli',
     authFilePrefixes: ['kilo-'],
     tokenTypeValues: ['kilo'],
     aliases: [],
@@ -190,6 +211,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     callbackProviderName: 'qoder',
     authUrlProviderName: 'qoder',
     refreshOwnership: 'unsupported',
+    authStartSupport: 'cliproxy-cli',
     authFilePrefixes: ['qoder-'],
     tokenTypeValues: ['qoder'],
     aliases: [],
@@ -254,7 +276,7 @@ export function buildProviderAliasMap(
 
     const existingProvider = aliasMap.get(normalized);
     if (existingProvider && existingProvider !== provider) {
-      throw new Error(
+      throw new ConfigError(
         `Provider alias collision for "${normalized}": ${existingProvider} and ${provider}`
       );
     }
@@ -328,6 +350,17 @@ export function getTokenRefreshOwnership(provider: CLIProxyProvider): TokenRefre
 
 export function isRefreshDelegatedToCLIProxy(provider: CLIProxyProvider): boolean {
   return PROVIDER_CAPABILITIES[provider].refreshOwnership === 'cliproxy';
+}
+
+export function getUnsupportedAuthStartReason(provider: CLIProxyProvider): string | null {
+  const capabilities = PROVIDER_CAPABILITIES[provider];
+  if (capabilities.authStartSupport !== 'unsupported') {
+    return null;
+  }
+  return (
+    capabilities.authStartUnsupportedReason ??
+    `${capabilities.displayName} account linking is not supported by the bundled CLIProxy runtime.`
+  );
 }
 
 export function getProviderAuthFilePrefixes(provider: CLIProxyProvider): readonly string[] {

@@ -61,10 +61,13 @@ CCS gives you one stable command surface while letting you switch between:
 
 - multiple runtimes such as Claude Code, Factory Droid, and Codex CLI
 - multiple Claude subscriptions and isolated account contexts
-- OAuth providers like Codex, Kiro, Claude, Qwen, Kimi, and more, with legacy
+- OAuth providers like Codex, Kiro, Claude, Kimi, and more, with legacy
   Copilot compatibility for existing setups
 - API and local-model profiles like GLM, Kimi, OpenRouter, Ollama, llama.cpp,
   Novita, Fireworks AI, and Alibaba Coding Plan
+
+Qwen Code account linking is not available in the bundled CLIProxy runtime yet;
+use an API-key Qwen profile such as Alibaba Coding Plan for Qwen models.
 
 The goal is simple: stop rewriting config files, stop breaking active sessions,
 and move between providers in seconds.
