@@ -98,6 +98,11 @@ async function loadInstallSubcommand() {
   };
 }
 
+async function loadLaunchDescriptor() {
+  moduleSeq++;
+  return import(`../../../src/commands/bar/launch-descriptor?test=${Date.now()}-${moduleSeq}`);
+}
+
 // ---------------------------------------------------------------------------
 // Setup / teardown
 // ---------------------------------------------------------------------------
@@ -718,6 +723,8 @@ describe('launch: detached-spawn model', () => {
     };
     expect(desc.schema).toBe(1);
     expect(desc.runtime).toBe(process.execPath);
+    expect(path.basename(desc.args[0])).toBe('ccs.js');
+    expect(desc.args[0]).not.toContain(`${path.sep}.ccs${path.sep}`);
     expect(desc.args).toContain('bar');
     expect(desc.args).toContain('serve');
     expect(desc.home).toBe(os.homedir());
@@ -751,6 +758,56 @@ describe('launch: detached-spawn model', () => {
 
     // On the reuse path there is no need to refresh launch.json
     expect(descriptorWritten).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// launch-descriptor: safe shim for native app self-start
+// ---------------------------------------------------------------------------
+
+describe('launch descriptor shim', () => {
+  it('creates a private ccs.js shim for symlinked Bun-style entrypoints', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    const packageDist = path.join(
+      tempHome,
+      '.bun',
+      'install',
+      'global',
+      'node_modules',
+      '@kaitranntt',
+      'ccs',
+      'dist'
+    );
+    const binDir = path.join(tempHome, '.bun', 'bin');
+    const realEntrypoint = path.join(packageDist, 'ccs.js');
+    const symlinkedEntrypoint = path.join(binDir, 'ccs');
+
+    fs.mkdirSync(packageDist, { recursive: true });
+    fs.mkdirSync(binDir, { recursive: true });
+    fs.writeFileSync(realEntrypoint, 'console.log("ccs");\n', { mode: 0o777 });
+    fs.symlinkSync(realEntrypoint, symlinkedEntrypoint);
+
+    const { createBarLaunchDescriptor, getLaunchShimPath } = await loadLaunchDescriptor();
+    const descriptor = createBarLaunchDescriptor({
+      entrypointPath: symlinkedEntrypoint,
+      runtime: '/usr/local/bin/node',
+      home: tempHome,
+      ccsHome: ccsDir,
+    });
+
+    const shimPath = getLaunchShimPath(tempHome);
+    expect(descriptor.runtime).toBe('/usr/local/bin/node');
+    expect(descriptor.args).toEqual([shimPath, 'bar', 'serve']);
+    expect(path.basename(descriptor.args[0])).toBe('ccs.js');
+    expect(descriptor.args[0]).not.toContain(`${path.sep}.ccs${path.sep}`);
+    expect(fs.lstatSync(descriptor.args[0]).isSymbolicLink()).toBe(false);
+
+    const mode = fs.statSync(descriptor.args[0]).mode & 0o777;
+    expect((mode & 0o022) === 0).toBe(true);
+    const resolvedEntrypoint = fs.realpathSync(realEntrypoint);
+    expect(fs.readFileSync(descriptor.args[0], 'utf8')).toContain(
+      `require(${JSON.stringify(resolvedEntrypoint)});`
+    );
   });
 });
 
@@ -800,6 +857,8 @@ describe('install: writeLaunchDescriptor called after successful install', () =>
     };
     expect(desc.schema).toBe(1);
     expect(desc.runtime).toBe(process.execPath);
+    expect(path.basename(desc.args[0])).toBe('ccs.js');
+    expect(desc.args[0]).not.toContain(`${path.sep}.ccs${path.sep}`);
     expect(desc.args).toContain('bar');
     expect(desc.args).toContain('serve');
     expect(desc.home).toBe(os.homedir());

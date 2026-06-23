@@ -99,6 +99,7 @@ beforeEach(() => {
 afterEach(() => {
   restoreConsole();
   mock.restore();
+  process.exitCode = 0;
 
   if (originalCcsHome === undefined) {
     delete process.env.CCS_HOME;
@@ -197,6 +198,8 @@ describe('bar command dispatcher (index.ts)', () => {
     const handleBarCommand = await loadHandleBarCommand();
     // Should print help or error but not crash
     await expect(handleBarCommand(['unknown-subcommand'])).resolves.toBeUndefined();
+    expect(process.exitCode).toBe(1);
+    process.exitCode = 0;
   });
 
   it('dispatches `ccs bar --help` to help subcommand and does not launch', async () => {
