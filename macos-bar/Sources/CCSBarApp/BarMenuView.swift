@@ -5,11 +5,13 @@ import CCSBarCore
 // MARK: - Content height preference key
 
 /// Preference key used to bubble the measured content VStack height up to the
-/// ScrollView parent without a feedback loop. The reduction takes the MAX so
-/// that intermediate layout passes that report a smaller size don't cause the
-/// frame to shrink, which would trigger another layout pass (the classic
-/// GeometryReader loop). A `@State` var is updated only when the value changes,
-/// keeping SwiftUI's diffing stable.
+/// ScrollView parent. The reduction takes the MAX only to combine multiple
+/// simultaneous reporters into one value (in practice a single background
+/// GeometryReader reports here, so the max is just that reader's height). The
+/// consumer (`onPreferenceChange`) then tracks the height in both directions so
+/// the popover frame can shrink back when content collapses. This is safe from
+/// the classic GeometryReader feedback loop because the reader measures the
+/// intrinsic content VStack, whose height does not depend on the consumer frame.
 private struct ContentHeightKey: PreferenceKey {
   static let defaultValue: CGFloat = 0
   static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -151,9 +153,14 @@ struct BarMenuView: View {
         // until the first preference fires.
         .frame(height: scrollAreaHeight, alignment: .top)
         .onPreferenceChange(ContentHeightKey.self) { measured in
-          // Only grow, never shrink — prevents a feedback loop where a smaller
-          // frame triggers a re-layout that reports an even smaller height.
-          if measured > contentHeight {
+          // Track the measured content height in BOTH directions so the popover
+          // collapses back when content shrinks (e.g. alert / reauth rows clear)
+          // instead of staying stuck at a past peak and rendering blank space
+          // below. The background GeometryReader measures the intrinsic content
+          // VStack, whose height does not depend on this frame, so updating in
+          // either direction cannot feed the classic GeometryReader layout loop.
+          // The 0.5pt deadband avoids churn on sub-pixel remeasures.
+          if abs(measured - contentHeight) > 0.5 {
             contentHeight = measured
           }
         }
@@ -276,9 +283,15 @@ struct BarMenuView: View {
                     BarSubscriptionCard(
                       row: row, isParked: row.paused,
                       onRefresh: { viewModel.forceRefresh() })
-                      // 340 leaves 10px side padding inside the 360-wide popover.
-                      .frame(width: 340, alignment: .leading)
-                      .padding(.horizontal, 2)
+                      // Each card spans exactly the horizontal scroll viewport so
+                      // .paging snaps to one whole card per page. A fixed width
+                      // wider than the viewport (the 360 popover minus the content
+                      // VStack's 14pt padding leaves ~332pt) drifts a few points on
+                      // every page and leaves the card stuck off-center after
+                      // paging forward and back. containerRelativeFrame keeps the
+                      // card width == viewport width, so paging stays aligned and
+                      // the card is centered like the single-profile card.
+                      .containerRelativeFrame(.horizontal)
                       .id(row.id)
                   }
                 }
