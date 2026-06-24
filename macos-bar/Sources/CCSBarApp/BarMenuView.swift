@@ -351,12 +351,15 @@ struct BarMenuView: View {
   }
 
   /// Swipeable profile pager: one full-width card visible at a time, an HStack of
-  /// the provider's cards offset to the current page. A horizontal DragGesture
-  /// follows the finger/mouse and commits a page change on release (works for a
-  /// trackpad two-finger swipe AND a click-drag — the previous ScrollView only
-  /// reliably paged on trackpad). No ScrollView, so there is no paging drift and
-  /// the card is always centered. The ends rubber-band so an over-drag past the
-  /// first/last card resists instead of exposing blank space.
+  /// the provider's cards offset to the current page. Two complementary inputs
+  /// move between pages so no device is left out:
+  ///   - a `DragGesture` for a mouse/trackpad press-drag (the previous ScrollView
+  ///     never paged on a plain mouse click-drag), committing on release past a
+  ///     20% threshold, with the ends rubber-banding so an over-drag resists;
+  ///   - a `CarouselScrollPager` overlay that turns a non-clicking horizontal
+  ///     trackpad / Magic Mouse swipe (delivered as scroll-wheel events, which a
+  ///     DragGesture does not see) into a page step.
+  /// No ScrollView, so there is no paging drift and the card is always centered.
   @ViewBuilder private func profileCarousel(prov: String, rows: [BarSummaryRow]) -> some View {
     let currentId = selectedProfileByProvider[prov] ?? rows.first?.id
     let curIdx = rows.firstIndex(where: { $0.id == currentId }) ?? 0
@@ -395,9 +398,24 @@ struct BarMenuView: View {
             }
           }
       )
+      // Trackpad / Magic Mouse horizontal swipe (scroll-wheel events) → page step.
+      // Transparent to clicks and to the DragGesture; only observes scroll.
+      .overlay(
+        CarouselScrollPager { step in page(prov: prov, by: step, rows: rows) }
+      )
     }
     .frame(height: carouselHeight(rows))
     .clipped()  // hide the neighbouring cards that sit outside the page viewport
+  }
+
+  /// Step the given provider's carousel by ±1 page, clamped to the ends. Used by
+  /// the horizontal scroll-swipe overlay; the arrows/dots call `selectPage`
+  /// directly.
+  private func page(prov: String, by step: Int, rows: [BarSummaryRow]) {
+    let currentId = selectedProfileByProvider[prov] ?? rows.first?.id
+    let curIdx = rows.firstIndex(where: { $0.id == currentId }) ?? 0
+    let newIdx = min(max(curIdx + step, 0), rows.count - 1)
+    if newIdx != curIdx { selectPage(prov, rows[newIdx].id) }
   }
 
   /// Prev/next arrows + clickable dots for a provider's profile carousel, so it
@@ -983,5 +1001,95 @@ struct Chip: View {
       .padding(.vertical, 1.5)
       .background(tint.opacity(0.22), in: Capsule())
       .foregroundStyle(textColor)
+  }
+}
+
+/// Adds horizontal trackpad / Magic Mouse swipe paging to the profile carousel.
+/// SwiftUI's `DragGesture` handles a mouse or trackpad press-drag, but a
+/// non-clicking two-finger swipe arrives as scroll-wheel events it never sees.
+///
+/// This hosts a transparent AppKit anchor view (click- and drag-transparent via
+/// a nil `hitTest`, so it never blocks the cards' buttons or the DragGesture) and
+/// a local scroll-wheel monitor scoped to that view's on-screen frame. A
+/// predominantly horizontal scroll pages once per gesture; a vertical scroll is
+/// passed straight through so the popover still scrolls. If the frame math ever
+/// fails to match, the worst case is that scroll-swipe simply does nothing —
+/// drag and the arrows/dots still work — so the failure mode is benign.
+struct CarouselScrollPager: NSViewRepresentable {
+  /// Called with +1 (next) or -1 (previous) when a horizontal swipe commits.
+  let onPage: (Int) -> Void
+
+  func makeCoordinator() -> Coordinator { Coordinator(onPage: onPage) }
+
+  func makeNSView(context: Context) -> NSView {
+    let view = PassthroughView()
+    context.coordinator.attach(to: view)
+    return view
+  }
+
+  func updateNSView(_ nsView: NSView, context: Context) {
+    context.coordinator.onPage = onPage
+  }
+
+  static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+    coordinator.detach()
+  }
+
+  /// Anchor view that is transparent to all mouse hit-testing, so clicks and the
+  /// SwiftUI DragGesture pass through to the cards beneath it.
+  final class PassthroughView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+  }
+
+  /// Owns the local scroll-wheel monitor and the per-gesture accumulator.
+  final class Coordinator {
+    var onPage: (Int) -> Void
+    private weak var view: NSView?
+    private var monitor: Any?
+    private var accumulated: CGFloat = 0
+    private var firedThisGesture = false
+    private let threshold: CGFloat = 40
+
+    init(onPage: @escaping (Int) -> Void) { self.onPage = onPage }
+
+    func attach(to view: NSView) {
+      self.view = view
+      monitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel]) { [weak self] event in
+        self?.handle(event) ?? event
+      }
+    }
+
+    func detach() {
+      if let monitor { NSEvent.removeMonitor(monitor) }
+      monitor = nil
+    }
+
+    /// Return nil to consume a horizontal swipe inside the carousel; return the
+    /// event unchanged otherwise so vertical popover scroll is never swallowed.
+    private func handle(_ event: NSEvent) -> NSEvent? {
+      guard let view, let window = view.window, event.window === window else { return event }
+      let frameInWindow = view.convert(view.bounds, to: nil)
+      guard frameInWindow.contains(event.locationInWindow) else { return event }
+
+      let dx = event.scrollingDeltaX
+      let dy = event.scrollingDeltaY
+      guard abs(dx) > abs(dy) else { return event }  // vertical → let the popover scroll
+
+      if event.phase.contains(.began) || event.momentumPhase.contains(.began) {
+        accumulated = 0
+        firedThisGesture = false
+      }
+      accumulated += dx
+      if !firedThisGesture && abs(accumulated) >= threshold {
+        firedThisGesture = true
+        // Natural scrolling: content moving left (negative dx) advances to next.
+        onPage(accumulated < 0 ? 1 : -1)
+      }
+      if event.phase.contains(.ended) || event.momentumPhase.contains(.ended) {
+        accumulated = 0
+        firedThisGesture = false
+      }
+      return nil
+    }
   }
 }
