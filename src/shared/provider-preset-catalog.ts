@@ -25,6 +25,7 @@ export const PROVIDER_PRESET_IDS = [
   'ollama-cloud',
   'novita',
   'fireworks',
+  'requesty',
 ] as const;
 
 export type ProviderPresetId = (typeof PROVIDER_PRESET_IDS)[number];
@@ -296,6 +297,19 @@ const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
     category: 'alternative',
     requiresApiKey: true,
     badge: 'Anthropic-compatible',
+  },
+  {
+    id: 'requesty',
+    name: 'Requesty',
+    description: 'OpenAI-compatible LLM gateway (provider/model naming, e.g. openai/gpt-4o-mini)',
+    baseUrl: 'https://router.requesty.ai/v1',
+    defaultProfileName: 'requesty',
+    defaultModel: 'openai/gpt-4o-mini',
+    apiKeyPlaceholder: 'rqsty-sk-...',
+    apiKeyHint: 'Create an API key at app.requesty.ai/api-keys',
+    category: 'alternative',
+    requiresApiKey: true,
+    badge: 'OpenAI-compatible',
   },
 ];
 
