@@ -1,7 +1,7 @@
 import { ChildProcess, spawn } from 'child_process';
 import * as fs from 'fs';
 import type { ProfileType } from '../types/profile';
-import { runCleanup } from '../errors';
+import { ConfigError, runCleanup } from '../errors';
 import { expandPath } from '../utils/helpers';
 import { wireChildProcessSignals } from '../utils/signal-forwarder';
 import {
@@ -25,6 +25,7 @@ import {
 } from './codex-detector';
 import { createLogger } from '../services/logging';
 import { getEffectiveApiKey } from '../cliproxy/auth/auth-token-manager';
+import { normalizeCodexResponsesBaseUrl } from '../cliproxy/config/provider-route';
 import { resolveLifecyclePort } from '../cliproxy/config/port-manager';
 import { getModelMaxLevel } from '../cliproxy/model-catalog';
 import { parseCodexModelTuningAlias } from '../cliproxy/ai-providers/model-id-normalizer';
@@ -53,7 +54,7 @@ function buildConfigOverrideArgs(overrides: string[]): string[] {
 
 function buildConfigOverrideSupportError(binaryInfo?: TargetBinaryInfo): Error {
   const versionSummary = binaryInfo?.version ? ` (${binaryInfo.version})` : '';
-  return new Error(
+  return new ConfigError(
     `Codex CLI${versionSummary} does not advertise --config overrides. Upgrade Codex before using CCS-backed Codex profiles or runtime reasoning overrides.`
   );
 }
@@ -100,7 +101,7 @@ function normalizeCodexReasoningOverride(value: string | number | undefined): st
   if (typeof value === 'string' && CODEX_REASONING_LEVELS.has(value)) {
     return value;
   }
-  throw new Error(
+  throw new ConfigError(
     'Codex target supports reasoning levels only: minimal, low, medium, high, xhigh.'
   );
 }
@@ -272,7 +273,7 @@ export class CodexAdapter implements TargetAdapter {
       const providerRepair = await ensureCodexCliproxyProviderConfig(resolveLifecyclePort());
       this.ccsxpCliproxyEnvKey = providerRepair.envKey;
     } catch (error) {
-      throw new Error(
+      throw new ConfigError(
         `ccsxp could not repair the native Codex cliproxy provider: ${(error as Error).message}`
       );
     }
@@ -316,14 +317,14 @@ export class CodexAdapter implements TargetAdapter {
     }
 
     if (!creds?.baseUrl?.trim() || !creds.apiKey?.trim()) {
-      throw new Error(
+      throw new ConfigError(
         'Codex target requires base URL and API key for CCS-backed profile launches.'
       );
     }
 
     const disallowedFlags = findDisallowedCodexManagedFlags(userArgs);
     if (disallowedFlags.length > 0) {
-      throw new Error(
+      throw new ConfigError(
         `Codex target does not allow ${disallowedFlags.join(', ')} when CCS manages the runtime provider. Remove native Codex provider selection flags and retry.`
       );
     }
@@ -331,7 +332,9 @@ export class CodexAdapter implements TargetAdapter {
     const overrides = [
       `model_provider=${formatTomlString(CODEX_RUNTIME_PROVIDER_ID)}`,
       `model_providers.${CODEX_RUNTIME_PROVIDER_ID}.name=${formatTomlString('CCS Runtime')}`,
-      `model_providers.${CODEX_RUNTIME_PROVIDER_ID}.base_url=${formatTomlString(creds.baseUrl)}`,
+      `model_providers.${CODEX_RUNTIME_PROVIDER_ID}.base_url=${formatTomlString(
+        normalizeCodexResponsesBaseUrl(creds.baseUrl)
+      )}`,
       `model_providers.${CODEX_RUNTIME_PROVIDER_ID}.env_key=${formatTomlString(CODEX_RUNTIME_ENV_KEY)}`,
       `model_providers.${CODEX_RUNTIME_PROVIDER_ID}.wire_api=${formatTomlString('responses')}`,
     ];
@@ -360,7 +363,7 @@ export class CodexAdapter implements TargetAdapter {
     }
     if (profileType !== 'default') {
       if (!creds.apiKey?.trim()) {
-        throw new Error('Codex target requires an API key for CCS-backed profile launches.');
+        throw new ConfigError('Codex target requires an API key for CCS-backed profile launches.');
       }
       env[CODEX_RUNTIME_ENV_KEY] = creds.apiKey;
     }

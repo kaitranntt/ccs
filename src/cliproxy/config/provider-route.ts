@@ -40,3 +40,44 @@ export function buildLocalProviderBaseUrl(
   const rootUrl = `http://127.0.0.1:${port}`;
   return `${rootUrl}${buildCliproxyProviderPath(provider, backend)}`;
 }
+
+export function buildCodexResponsesProviderPath(
+  backend: CLIProxyBackend = getConfiguredCliproxyBackend()
+): string {
+  return usesScopedProviderRoutes(backend) ? '/api/provider/codex' : '/backend-api/codex';
+}
+
+export function buildLocalCodexResponsesBaseUrl(
+  port: number,
+  backend: CLIProxyBackend = getConfiguredCliproxyBackend()
+): string {
+  return `http://127.0.0.1:${port}${buildCodexResponsesProviderPath(backend)}`;
+}
+
+export function normalizeCodexResponsesBaseUrl(
+  baseUrl: string,
+  backend: CLIProxyBackend = getConfiguredCliproxyBackend()
+): string {
+  const trimmed = baseUrl.trim();
+  if (!trimmed) return baseUrl;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return baseUrl;
+
+    const currentPath = parsed.pathname.replace(/\/+$/, '') || '/';
+    const expectedPath = buildCodexResponsesProviderPath(backend);
+    if (currentPath === expectedPath) return trimmed;
+
+    const legacyCodexPath = '/api/provider/codex';
+    const managedPaths = new Set(['/', legacyCodexPath]);
+    if (!managedPaths.has(currentPath)) return trimmed;
+
+    parsed.pathname = expectedPath;
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    return baseUrl;
+  }
+}

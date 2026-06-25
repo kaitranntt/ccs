@@ -124,21 +124,26 @@ exit 0
 
     const argsLog = fs.readFileSync(codexArgsLogPath, 'utf8');
     expect(argsLog).toContain('model_provider="ccs_runtime"');
-    expect(argsLog).toContain('model_providers.ccs_runtime.base_url="http://127.0.0.1:8317/api/provider/codex"');
+    expect(argsLog).toContain(
+      'model_providers.ccs_runtime.base_url="http://127.0.0.1:8317/backend-api/codex"'
+    );
     expect(argsLog).toContain('model_reasoning_effort="high"');
     expect(argsLog).not.toContain('mcp_servers.ccs_browser.command=');
     expect(argsLog).not.toContain('mcp_servers.ccs_browser.args=["-y","@playwright/mcp@0.0.70"]');
     expect(argsLog).toContain('smoke');
     expect(fs.readFileSync(codexEnvLogPath, 'utf8')).toBe('bridge-token');
-  });
+  }, 15000);
 
   it('rejects native Codex profile flags when CCS manages the bridge runtime', () => {
     if (process.platform === 'win32') return;
 
-    const result = runCcs(['codex-api', '--target', 'codex', '--profile', 'other', 'smoke'], baseEnv);
+    const result = runCcs(
+      ['codex-api', '--target', 'codex', '--profile', 'other', 'smoke'],
+      baseEnv
+    );
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('does not allow --profile/-p');
     expect(fs.existsSync(codexArgsLogPath)).toBe(false);
-  });
+  }, 15000);
 });

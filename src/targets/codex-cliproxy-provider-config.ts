@@ -9,9 +9,8 @@ import {
 import { getModelMaxLevel } from '../cliproxy/model-catalog';
 import { parseCodexModelTuningAlias } from '../cliproxy/ai-providers/model-id-normalizer';
 import {
-  buildLocalProviderBaseUrl,
+  buildLocalCodexResponsesBaseUrl,
   getConfiguredCliproxyBackend,
-  usesScopedProviderRoutes,
 } from '../cliproxy/config/provider-route';
 import { ConfigError } from '../errors/error-types';
 
@@ -52,11 +51,7 @@ export function buildCodexCliproxyProviderBaseUrl(port: number): string {
   // (issue #1597). Use the chatgpt_base_url-compatible "/backend-api/codex" alias,
   // which both backends serve; keep the provider-scoped alias for the Plus backend
   // to preserve its existing per-provider routing.
-  const backend = getConfiguredCliproxyBackend();
-  if (usesScopedProviderRoutes(backend)) {
-    return buildLocalProviderBaseUrl('codex', port, backend);
-  }
-  return `http://127.0.0.1:${port}/backend-api/codex`;
+  return buildLocalCodexResponsesBaseUrl(port, getConfiguredCliproxyBackend());
 }
 
 export function isCcsxpCliproxyShortcut(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -150,6 +145,7 @@ function isProviderReady(
     typeof provider.base_url === 'string' &&
     resolveProviderBaseUrl(provider, expectedBaseUrl) === provider.base_url.trim() &&
     provider.env_key === envKey &&
+    provider.auth === undefined &&
     provider.wire_api === 'responses' &&
     provider.requires_openai_auth === false &&
     provider.supports_websockets === false
@@ -261,6 +257,7 @@ export async function ensureCodexCliproxyProviderConfig(
       ...currentProvider,
       ...buildProviderConfig(resolveProviderBaseUrl(currentProvider, expectedBaseUrl), envKey),
     };
+    delete (providers[CODEX_CLIPROXY_PROVIDER_ID] as Record<string, unknown>).auth;
   }
 
   if (providerReady && !normalizedModelAlias) {

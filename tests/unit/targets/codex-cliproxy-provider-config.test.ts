@@ -55,9 +55,7 @@ describe('codex cliproxy provider config repair', () => {
     // original CLIProxy backend serves the Codex Responses API only under the
     // "/backend-api/codex" alias, never at the bare root. Returning the root here
     // makes Codex call "http://127.0.0.1:8317/responses" -> 404 (issue #1597).
-    expect(buildCodexCliproxyProviderBaseUrl(8317)).toBe(
-      'http://127.0.0.1:8317/backend-api/codex'
-    );
+    expect(buildCodexCliproxyProviderBaseUrl(8317)).toBe('http://127.0.0.1:8317/backend-api/codex');
   });
 
   it('produces a Codex Responses endpoint the original backend actually serves (regression #1597)', () => {
@@ -133,6 +131,36 @@ wire_api = "responses"
     expect(rawText).toContain('env_key = "CLIPROXY_API_KEY"');
     expect(rawText).toContain('requires_openai_auth = false');
     expect(rawText).toContain('supports_websockets = false');
+  });
+
+  it('removes native provider auth when ccsxp injects the token through env_key', async () => {
+    fs.mkdirSync(codexHome, { recursive: true });
+    fs.writeFileSync(
+      configPath,
+      `[model_providers.cliproxy]
+name = "CLIProxy Codex"
+base_url = "http://127.0.0.1:8317/backend-api/codex"
+env_key = "CLIPROXY_API_KEY"
+wire_api = "responses"
+requires_openai_auth = false
+supports_websockets = false
+
+[model_providers.cliproxy.auth]
+command = "/tmp/cliproxy-token"
+timeout_ms = 5000
+refresh_interval_ms = 300000
+`,
+      'utf8'
+    );
+
+    const result = await ensureCodexCliproxyProviderConfig(8317, env);
+
+    expect(result.changed).toBe(true);
+    expect(result.envKey).toBe('CLIPROXY_API_KEY');
+    const rawText = fs.readFileSync(configPath, 'utf8');
+    expect(rawText).toContain('env_key = "CLIPROXY_API_KEY"');
+    expect(rawText).not.toContain('[model_providers.cliproxy.auth]');
+    expect(rawText).not.toContain('cliproxy-token');
   });
 
   it('preserves custom cliproxy provider values while repairing other fields', async () => {

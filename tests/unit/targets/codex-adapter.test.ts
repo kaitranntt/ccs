@@ -128,7 +128,7 @@ describe('CodexAdapter', () => {
       profileType: 'cliproxy',
       creds: {
         profile: 'codex',
-        baseUrl: 'http://127.0.0.1:8317/api/provider/codex',
+        baseUrl: 'http://127.0.0.1:8317',
         apiKey: 'cliproxy-token',
         model: 'gpt-5.4',
         reasoningOverride: 'high',
@@ -143,6 +143,9 @@ describe('CodexAdapter', () => {
 
     expect(args).toContain('-c');
     expect(args).toContain('model_provider="ccs_runtime"');
+    expect(args).toContain(
+      'model_providers.ccs_runtime.base_url="http://127.0.0.1:8317/backend-api/codex"'
+    );
     expect(args).toContain('model_providers.ccs_runtime.env_key="CCS_CODEX_API_KEY"');
     expect(args).toContain('model="gpt-5.4"');
     expect(args).toContain(
