@@ -9,6 +9,12 @@
 import type { ComponentStatus } from '../../types/utils';
 
 /**
+ * Antigravity CLI (agy) installation status
+ * @deprecated Use ComponentStatus directly
+ */
+export type AgyCliStatus = ComponentStatus;
+
+/**
  * Gemini CLI installation status
  * @deprecated Use ComponentStatus directly
  */
@@ -40,6 +46,7 @@ export type WebSearchProviderId =
   | 'brave'
   | 'searxng'
   | 'duckduckgo'
+  | 'agy'
   | 'gemini'
   | 'grok'
   | 'opencode';
@@ -112,6 +119,7 @@ export interface WebSearchConfig {
     brave?: WebSearchProviderConfig;
     searxng?: WebSearchProviderConfig;
     duckduckgo?: WebSearchProviderConfig;
+    agy?: WebSearchProviderConfig;
     gemini?: WebSearchProviderConfig;
     opencode?: WebSearchProviderConfig;
     grok?: WebSearchProviderConfig;

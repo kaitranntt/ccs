@@ -41,6 +41,9 @@ export function getWebSearchHookConfig(): Record<string, unknown> {
 
   // Compute max timeout from enabled providers
   const timeouts: number[] = [];
+  if (wsConfig.providers?.agy?.enabled && wsConfig.providers.agy.timeout) {
+    timeouts.push(wsConfig.providers.agy.timeout);
+  }
   if (wsConfig.providers?.gemini?.enabled && wsConfig.providers.gemini.timeout) {
     timeouts.push(wsConfig.providers.gemini.timeout);
   }

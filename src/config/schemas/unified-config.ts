@@ -154,6 +154,11 @@ export function createEmptyUnifiedConfig(): UnifiedConfig {
           enabled: true,
           max_results: 5,
         },
+        agy: {
+          enabled: false,
+          model: 'gemini-2.5-flash',
+          timeout: 90,
+        },
         gemini: {
           enabled: false,
           model: 'gemini-2.5-flash',

@@ -70,9 +70,10 @@ That shared launch helper applies to normal third-party settings profiles, CLIPr
 | Brave Search | HTTP API | `BRAVE_API_KEY` | No | Cleaner snippets and metadata |
 | SearXNG | JSON API | `providers.searxng.url` | No | Self-hosted/public SearXNG backend via `/search?format=json` |
 | DuckDuckGo | HTML fetch | None | Yes | Built-in zero-setup fallback |
-| Gemini CLI | Legacy CLI | `npm i -g @google/gemini-cli` | No | Optional compatibility fallback |
-| OpenCode | Legacy CLI | `curl -fsSL https://opencode.ai/install \| bash` | No | Optional compatibility fallback |
-| Grok CLI | Legacy CLI | `npm i -g @vibe-kit/grok-cli` + `GROK_API_KEY` | No | Optional compatibility fallback |
+| Antigravity (agy) | LLM CLI | `curl -fsSL https://antigravity.google/cli/install.sh \| bash` | No | Recommended LLM CLI fallback (Gemini CLI successor) |
+| Gemini CLI | LLM CLI | Deprecated, use Antigravity (agy) | No | Deprecated. Google retired the gemini CLI on 2026-06-18 |
+| OpenCode | LLM CLI | `curl -fsSL https://opencode.ai/install \| bash` | No | Optional compatibility fallback |
+| Grok CLI | LLM CLI | `npm i -g @vibe-kit/grok-cli` + `GROK_API_KEY` | No | Optional compatibility fallback |
 
 ## Configuration
 
@@ -111,6 +112,10 @@ websearch:
     duckduckgo:
       enabled: true
       max_results: 5
+    agy:
+      enabled: false
+      model: gemini-2.5-flash
+      timeout: 90
     gemini:
       enabled: false
       model: gemini-2.5-flash
