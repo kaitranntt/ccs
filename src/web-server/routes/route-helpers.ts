@@ -377,7 +377,9 @@ export function updateSettingsFile(
  */
 function normalizePathForComparison(filePath: string): string {
   const normalized = path.resolve(path.normalize(filePath));
-  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+  return process.platform === 'win32' || process.platform === 'darwin'
+    ? normalized.toLowerCase()
+    : normalized;
 }
 
 function isPathWithin(basePath: string, targetPath: string): boolean {
@@ -437,7 +439,8 @@ export function validateFilePath(filePath: string): {
     // Block access to sensitive subdirectories
     const relativePath = path.relative(ccsDir, normalizedPath);
     const pathSegments = relativePath.split(path.sep).filter(Boolean);
-    if (pathSegments.includes('.git') || pathSegments.includes('node_modules')) {
+    const comparisonSegments = pathSegments.map((segment) => segment.toLowerCase());
+    if (comparisonSegments.includes('.git') || comparisonSegments.includes('node_modules')) {
       return { valid: false, readonly: false, error: 'Access to this path is not allowed' };
     }
 
@@ -445,9 +448,9 @@ export function validateFilePath(filePath: string): {
     // It must only be written by trusted bar install/launch code paths, not the
     // generic dashboard file API.
     if (
-      pathSegments.length === 2 &&
-      pathSegments[0] === 'bar' &&
-      pathSegments[1] === 'launch.json'
+      comparisonSegments.length === 2 &&
+      comparisonSegments[0] === 'bar' &&
+      comparisonSegments[1] === 'launch.json'
     ) {
       return { valid: false, readonly: false, error: 'Access to this path is not allowed' };
     }

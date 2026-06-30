@@ -105,12 +105,19 @@ struct BarServerLauncher: Sendable {
   }
 
   private func isUnderCcsDir(_ path: String) -> Bool {
-    let ccsPath = URL(fileURLWithPath: home)
-      .appendingPathComponent(".ccs")
-      .standardizedFileURL
-      .path
-    let targetPath = URL(fileURLWithPath: path).standardizedFileURL.path
+    let ccsPath = pathForComparison(
+      URL(fileURLWithPath: home)
+        .appendingPathComponent(".ccs")
+    )
+    let targetPath = pathForComparison(URL(fileURLWithPath: path))
     return targetPath == ccsPath || targetPath.hasPrefix(ccsPath + "/")
+  }
+
+  private func pathForComparison(_ url: URL) -> String {
+    url.standardizedFileURL
+      .resolvingSymlinksInPath()
+      .path
+      .lowercased()
   }
 
   private func isAbsolutePath(_ path: String) -> Bool {
