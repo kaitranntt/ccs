@@ -125,22 +125,46 @@ function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
   });
 }
 
+function headerMatchesToken(header: string | string[] | undefined, expectedToken: string): boolean {
+  if (typeof header === 'string') {
+    return header === expectedToken;
+  }
+
+  if (Array.isArray(header)) {
+    return header.includes(expectedToken);
+  }
+
+  return false;
+}
+
+function authorizationMatchesToken(
+  header: string | string[] | undefined,
+  expectedToken: string
+): boolean {
+  const values = Array.isArray(header) ? header : header ? [header] : [];
+  return values.some((value) => {
+    const trimmed = value.trim();
+    if (trimmed === expectedToken) {
+      return true;
+    }
+
+    const match = /^Bearer\s+(.+)$/i.exec(trimmed);
+    return match?.[1] === expectedToken;
+  });
+}
+
 function hasValidDaemonToken(req: http.IncomingMessage): boolean {
   const expectedToken = process.env.CCS_CURSOR_DAEMON_TOKEN;
   if (!expectedToken) {
     return false;
   }
 
-  const provided = req.headers['x-ccs-cursor-token'];
-  if (typeof provided === 'string') {
-    return provided === expectedToken;
-  }
-
-  if (Array.isArray(provided)) {
-    return provided.includes(expectedToken);
-  }
-
-  return false;
+  return (
+    headerMatchesToken(req.headers['x-ccs-cursor-token'], expectedToken) ||
+    headerMatchesToken(req.headers['anthropic-auth-token'], expectedToken) ||
+    headerMatchesToken(req.headers['x-api-key'], expectedToken) ||
+    authorizationMatchesToken(req.headers.authorization, expectedToken)
+  );
 }
 function normalizeMessages(raw: unknown): NormalizedOpenAIMessage[] {
   if (!Array.isArray(raw)) {

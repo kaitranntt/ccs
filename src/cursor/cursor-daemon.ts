@@ -12,6 +12,7 @@ import * as path from 'path';
 import * as http from 'http';
 import type { CursorDaemonConfig, CursorDaemonStatus } from './types';
 import { getPidFromFile, writePidToFile, removePidFile } from './cursor-daemon-pid';
+import { getCursorDaemonToken } from './cursor-daemon-auth';
 import { verifyDaemonOwnership } from './daemon-process-ownership';
 import { createLogger } from '../services/logging';
 export { getPidFromFile, writePidToFile, removePidFile } from './cursor-daemon-pid';
@@ -108,8 +109,11 @@ export async function isDaemonRunning(port: number, daemonToken?: string): Promi
 /**
  * Get daemon status.
  */
-export async function getDaemonStatus(port: number): Promise<CursorDaemonStatus> {
-  const running = await isDaemonRunning(port);
+export async function getDaemonStatus(
+  port: number,
+  daemonToken = getCursorDaemonToken()
+): Promise<CursorDaemonStatus> {
+  const running = await isDaemonRunning(port, daemonToken);
   const pid = getPidFromFile();
 
   return {
