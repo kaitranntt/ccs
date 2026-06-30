@@ -8,7 +8,10 @@ import {
 } from '../web-server/services/compatible-cli-toml-file-service';
 import { getModelMaxLevel } from '../cliproxy/model-catalog';
 import { parseCodexModelTuningAlias } from '../cliproxy/ai-providers/model-id-normalizer';
-import { buildLocalProviderBaseUrl } from '../cliproxy/config/provider-route';
+import {
+  buildLocalCodexResponsesBaseUrl,
+  getConfiguredCliproxyBackend,
+} from '../cliproxy/config/provider-route';
 import { ConfigError } from '../errors/error-types';
 
 export const CCSXP_CLIPROXY_SHORTCUT_ENV = 'CCSXP_CLIPROXY_SHORTCUT';
@@ -39,7 +42,16 @@ function resolveCodexConfigPath(env: NodeJS.ProcessEnv = process.env): {
 }
 
 export function buildCodexCliproxyProviderBaseUrl(port: number): string {
-  return buildLocalProviderBaseUrl('codex', port);
+  // The Codex CLI provider uses wire_api = "responses", so the Codex CLI appends
+  // "/responses" to this base_url. The local CLIProxy backends do NOT serve the
+  // Codex Responses API at the bare root:
+  //   - original backend: only "/v1/responses" and "/backend-api/codex/responses"
+  //   - plus backend:     additionally "/api/provider/codex/responses"
+  // Returning the root makes Codex call "http://127.0.0.1:<port>/responses" -> 404
+  // (issue #1597). Use the chatgpt_base_url-compatible "/backend-api/codex" alias,
+  // which both backends serve; keep the provider-scoped alias for the Plus backend
+  // to preserve its existing per-provider routing.
+  return buildLocalCodexResponsesBaseUrl(port, getConfiguredCliproxyBackend());
 }
 
 export function isCcsxpCliproxyShortcut(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -133,6 +145,7 @@ function isProviderReady(
     typeof provider.base_url === 'string' &&
     resolveProviderBaseUrl(provider, expectedBaseUrl) === provider.base_url.trim() &&
     provider.env_key === envKey &&
+    provider.auth === undefined &&
     provider.wire_api === 'responses' &&
     provider.requires_openai_auth === false &&
     provider.supports_websockets === false
@@ -244,6 +257,7 @@ export async function ensureCodexCliproxyProviderConfig(
       ...currentProvider,
       ...buildProviderConfig(resolveProviderBaseUrl(currentProvider, expectedBaseUrl), envKey),
     };
+    delete (providers[CODEX_CLIPROXY_PROVIDER_ID] as Record<string, unknown>).auth;
   }
 
   if (providerReady && !normalizedModelAlias) {

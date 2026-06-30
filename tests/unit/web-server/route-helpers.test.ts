@@ -50,6 +50,14 @@ describe('validateFilePath', () => {
     expect(result.readonly).toBe(false);
   });
 
+  test('rejects case variants of the macOS bar launch descriptor', () => {
+    const filePath = path.join(tempDir, '.ccs', 'BAR', 'LAUNCH.JSON');
+    const result = validateFilePath(filePath);
+
+    expect(result.valid).toBe(false);
+    expect(result.readonly).toBe(false);
+  });
+
   test('still allows other writes inside the bar directory', () => {
     const filePath = path.join(tempDir, '.ccs', 'bar', 'serve.log');
     const result = validateFilePath(filePath);

@@ -18,6 +18,7 @@ import {
 } from '../cursor';
 
 import { DEFAULT_CURSOR_CONFIG } from '../config/unified-config-types';
+import { getCursorDaemonToken } from '../cursor/cursor-daemon-auth';
 import {
   renderCursorHelp,
   renderCursorModels,
@@ -253,6 +254,7 @@ async function handleStart(): Promise<number> {
   const result = await startDaemon({
     port: cursorConfig.port,
     ghost_mode: cursorConfig.ghost_mode,
+    daemon_token: getCursorDaemonToken(),
   });
 
   if (result.success) {

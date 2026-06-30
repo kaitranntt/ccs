@@ -22,14 +22,9 @@ import * as path from 'path';
 import type { ChildProcess } from 'child_process';
 import { getCcsDir } from '../../config/config-loader-facade';
 import { BAR_AUTH_TOKEN_HEADER, getOrCreateBarAuthToken } from '../../utils/bar-auth-token';
-import {
-  getBarDir,
-  getBarJsonPath,
-  getLaunchJsonPath,
-  getServeLogPath,
-  LAUNCH_JSON_SCHEMA,
-} from './bar-paths';
+import { getBarDir, getBarJsonPath, getLaunchJsonPath, getServeLogPath } from './bar-paths';
 import type { LaunchJson } from './bar-paths';
+import { createBarLaunchDescriptor } from './launch-descriptor';
 import {
   defaultFindRunningServer as _defaultFindRunningServer,
   resolveBarPort as _resolveBarPort,
@@ -305,14 +300,8 @@ export async function handleBarLaunch(
   }
 
   // 2b. Write/refresh launch.json so the Swift app can self-start next time.
-  const launchDescriptor: LaunchJson = {
-    schema: LAUNCH_JSON_SCHEMA,
-    runtime: process.execPath,
-    args: [process.argv[1], 'bar', 'serve'],
-    home: os.homedir(),
-    ...(process.env.CCS_HOME ? { ccsHome: process.env.CCS_HOME } : {}),
-  };
   try {
+    const launchDescriptor = createBarLaunchDescriptor();
     writeLaunchDescriptor(launchJsonPath, launchDescriptor);
   } catch (err) {
     // Non-fatal — the Swift app falls back to resolving `ccs` via PATH.

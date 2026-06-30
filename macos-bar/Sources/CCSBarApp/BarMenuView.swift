@@ -5,11 +5,13 @@ import CCSBarCore
 // MARK: - Content height preference key
 
 /// Preference key used to bubble the measured content VStack height up to the
-/// ScrollView parent without a feedback loop. The reduction takes the MAX so
-/// that intermediate layout passes that report a smaller size don't cause the
-/// frame to shrink, which would trigger another layout pass (the classic
-/// GeometryReader loop). A `@State` var is updated only when the value changes,
-/// keeping SwiftUI's diffing stable.
+/// ScrollView parent. The reduction takes the MAX only to combine multiple
+/// simultaneous reporters into one value (in practice a single background
+/// GeometryReader reports here, so the max is just that reader's height). The
+/// consumer (`onPreferenceChange`) then tracks the height in both directions so
+/// the popover frame can shrink back when content collapses. This is safe from
+/// the classic GeometryReader feedback loop because the reader measures the
+/// intrinsic content VStack, whose height does not depend on the consumer frame.
 private struct ContentHeightKey: PreferenceKey {
   static let defaultValue: CGFloat = 0
   static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -36,6 +38,19 @@ struct BarMenuView: View {
   /// monotonically (ContentHeightKey.reduce takes the max), so the frame never
   /// thrashes downward.
   @State private var contentHeight: CGFloat = 0
+  /// Multi-profile carousel: which provider page is currently visible. Resets to
+  /// first provider on popover re-open (KISS — no UserDefaults persistence needed).
+  // Per-provider carousel position: provider -> selected profile row id. Each
+  // provider has its own profile carousel, so selection is tracked per provider.
+  @State private var selectedProfileByProvider: [String: String] = [:]
+  /// Live horizontal drag translation per provider while a swipe is in progress.
+  /// Reset to 0 (and committed to a page change) on drag release. Keyed by
+  /// provider so each carousel tracks its own in-flight swipe independently.
+  @State private var dragByProvider: [String: CGFloat] = [:]
+  /// Whether the Alerts section is expanded to show every alert. Collapsed by
+  /// default: only the most-severe few render, with a "+N more" toggle, so a
+  /// burst of conditions never buries the cockpit under a wall of rows.
+  @State private var alertsExpanded = false
 
   // MARK: - Screen cap
 
@@ -84,14 +99,10 @@ struct BarMenuView: View {
 
             // (2) ALERTS — urgent quota crossings surface above accounts.
             // Spend-cap alerts are opt-in OFF by default, so by default only
-            // quota/reauth/cooldown conditions appear here.
+            // quota/reauth/cooldown conditions appear here. Deduped, severity-
+            // ranked, compact, and collapsed past a few — see alertsSection.
             if !viewModel.activeAlerts.isEmpty {
-              VStack(alignment: .leading, spacing: 8) {
-                SectionLabel("Alerts")
-                ForEach(viewModel.activeAlerts) { alert in
-                  AlertRow(alert: alert)
-                }
-              }
+              alertsSection
             }
 
             // (3) SUBSCRIPTIONS — the dominant section, opens here.
@@ -146,9 +157,14 @@ struct BarMenuView: View {
         // until the first preference fires.
         .frame(height: scrollAreaHeight, alignment: .top)
         .onPreferenceChange(ContentHeightKey.self) { measured in
-          // Only grow, never shrink — prevents a feedback loop where a smaller
-          // frame triggers a re-layout that reports an even smaller height.
-          if measured > contentHeight {
+          // Track the measured content height in BOTH directions so the popover
+          // collapses back when content shrinks (e.g. alert / reauth rows clear)
+          // instead of staying stuck at a past peak and rendering blank space
+          // below. The background GeometryReader measures the intrinsic content
+          // VStack, whose height does not depend on this frame, so updating in
+          // either direction cannot feed the classic GeometryReader layout loop.
+          // The 0.5pt deadband avoids churn on sub-pixel remeasures.
+          if abs(measured - contentHeight) > 0.5 {
             contentHeight = measured
           }
         }
@@ -164,11 +180,16 @@ struct BarMenuView: View {
       viewModel.onOpen()
       // Disarm quit on every popover open so a stale armed state never persists.
       quitArmed = false
+      // Reset each provider's carousel to its first profile on every open — KISS,
+      // no persistence needed. Clear any in-flight drag and re-collapse alerts.
+      selectedProfileByProvider = [:]
+      dragByProvider = [:]
+      alertsExpanded = false
     }
   }
 
   /// "Update available" banner. Shown when `viewModel.updateAvailable` is true.
-  /// Styled to match the existing AlertRow / ErrorBanner patterns (tinted
+  /// Styled to match the existing CompactAlertRow / ErrorBanner patterns (tinted
   /// background card, section label, borderless button).
   @ViewBuilder private var updateBanner: some View {
     VStack(alignment: .leading, spacing: 8) {
@@ -218,7 +239,7 @@ struct BarMenuView: View {
   /// present, preserving the single "Accounts" header for a CLIProxy-only setup.
   @ViewBuilder private var accountsSection: some View {
     let parts = BarFormatting.partitionSubscriptions(viewModel.rows)
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: 6) {
       if let error = viewModel.lastError {
         ErrorBanner(message: error)
       }
@@ -234,9 +255,40 @@ struct BarMenuView: View {
           BarRowView(row: row, viewModel: viewModel)
         }
       } else {
+        // Per-provider profile carousels: group subscription rows by provider, and
+        // render each provider as its OWN horizontally-paged carousel of PROFILE
+        // cards — one profile visible at a time, swipe left/right between that
+        // provider's profiles, page dots indicate count. Provider sections stack
+        // vertically. A provider with a single profile shows just its card (no
+        // carousel, no dots).
+        let groups = Dictionary(
+          grouping: orderedSubscriptions(parts.subscriptions), by: { $0.provider })
+        let providers = groups.keys.sorted()  // stable: "claude-code" < "codex"
+        let multiProvider = providers.count > 1
         subscriptionsHeader(parts.subscriptions)
-        ForEach(orderedSubscriptions(parts.subscriptions)) { row in
-          BarSubscriptionCard(row: row, onRefresh: { viewModel.forceRefresh() })
+        ForEach(providers, id: \.self) { prov in
+          let rows = groups[prov] ?? []
+          VStack(alignment: .leading, spacing: 4) {
+            // Provider caption to delineate sections when more than one provider.
+            if multiProvider {
+              Text(BarFormatting.providerLabel(prov))
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.secondary)
+            }
+            if rows.count <= 1 {
+              // Single profile — render the card directly, no carousel.
+              if let row = rows.first {
+                BarSubscriptionCard(
+                  row: row, isParked: row.paused,
+                  onRefresh: { viewModel.forceRefresh() })
+              }
+            } else {
+              profileCarousel(prov: prov, rows: rows)
+              // Page controls — clickable prev/next arrows + dots so the carousel
+              // is also navigable by MOUSE click, not only by drag/swipe.
+              carouselControls(prov: prov, rows: rows)
+            }
+          }
         }
       }
     }
@@ -274,11 +326,14 @@ struct BarMenuView: View {
     }
   }
 
-  /// Order subscription cards by tightest binding window ascending (closest to
-  /// empty on top). Rows with no binding window (error/reauth) sink to the bottom
-  /// so the actionable quota always leads.
+  /// Order subscription cards so the default/base account leads its provider
+  /// carousel (it is the account the user runs by default), then by tightest
+  /// binding window ascending (closest to empty next). Rows with no binding
+  /// window (error/reauth) sink to the bottom so actionable quota leads.
   private func orderedSubscriptions(_ subs: [BarSummaryRow]) -> [BarSummaryRow] {
     subs.sorted { a, b in
+      // Default account first within its provider group.
+      if a.isDefault != b.isDefault { return a.isDefault }
       let ra = BarQuotaGauge.selectBindingWindow(a.quotaWindows ?? [])?.remainingPercent
       let rb = BarQuotaGauge.selectBindingWindow(b.quotaWindows ?? [])?.remainingPercent
       switch (ra, rb) {
@@ -291,6 +346,218 @@ struct BarMenuView: View {
         return false
       case (.none, .none):
         return (a.displayName ?? a.provider) < (b.displayName ?? b.provider)
+      }
+    }
+  }
+
+  /// Swipeable profile pager: one full-width card visible at a time, an HStack of
+  /// the provider's cards offset to the current page. Two complementary inputs
+  /// move between pages so no device is left out:
+  ///   - a `DragGesture` for a mouse/trackpad press-drag (the previous ScrollView
+  ///     never paged on a plain mouse click-drag), committing on release past a
+  ///     20% threshold, with the ends rubber-banding so an over-drag resists;
+  ///   - a `CarouselScrollPager` overlay that turns a non-clicking horizontal
+  ///     trackpad / Magic Mouse swipe (delivered as scroll-wheel events, which a
+  ///     DragGesture does not see) into a page step.
+  /// No ScrollView, so there is no paging drift and the card is always centered.
+  @ViewBuilder private func profileCarousel(prov: String, rows: [BarSummaryRow]) -> some View {
+    let currentId = selectedProfileByProvider[prov] ?? rows.first?.id
+    let curIdx = rows.firstIndex(where: { $0.id == currentId }) ?? 0
+    GeometryReader { geo in
+      let pageWidth = geo.size.width
+      HStack(spacing: 0) {
+        ForEach(rows) { row in
+          BarSubscriptionCard(
+            row: row, isParked: row.paused,
+            onRefresh: { viewModel.forceRefresh() })
+            .frame(width: pageWidth)
+        }
+      }
+      .offset(x: -CGFloat(curIdx) * pageWidth + (dragByProvider[prov] ?? 0))
+      .contentShape(Rectangle())
+      .gesture(
+        DragGesture(minimumDistance: 8)
+          .onChanged { value in
+            // Rubber-band at the ends: an over-drag past the first/last card moves
+            // at a third the rate so it springs back instead of revealing a gap.
+            let raw = value.translation.width
+            let atStart = curIdx == 0 && raw > 0
+            let atEnd = curIdx == rows.count - 1 && raw < 0
+            dragByProvider[prov] = (atStart || atEnd) ? raw / 3 : raw
+          }
+          .onEnded { value in
+            // Commit a page change when the swipe passes 20% of the page width;
+            // otherwise snap back to the current card.
+            let threshold = pageWidth * 0.2
+            var newIdx = curIdx
+            if value.translation.width <= -threshold { newIdx = min(curIdx + 1, rows.count - 1) }
+            else if value.translation.width >= threshold { newIdx = max(curIdx - 1, 0) }
+            withAnimation(.easeOut(duration: 0.2)) {
+              dragByProvider[prov] = 0
+              selectedProfileByProvider[prov] = rows[newIdx].id
+            }
+          }
+      )
+      // Trackpad / Magic Mouse horizontal swipe (scroll-wheel events) → page step.
+      // Transparent to clicks and to the DragGesture; only observes scroll.
+      .overlay(
+        CarouselScrollPager { step in page(prov: prov, by: step, rows: rows) }
+      )
+    }
+    .frame(height: carouselHeight(rows))
+    .clipped()  // hide the neighbouring cards that sit outside the page viewport
+  }
+
+  /// Step the given provider's carousel by ±1 page, clamped to the ends. Used by
+  /// the horizontal scroll-swipe overlay; the arrows/dots call `selectPage`
+  /// directly.
+  private func page(prov: String, by step: Int, rows: [BarSummaryRow]) {
+    let currentId = selectedProfileByProvider[prov] ?? rows.first?.id
+    let curIdx = rows.firstIndex(where: { $0.id == currentId }) ?? 0
+    let newIdx = min(max(curIdx + step, 0), rows.count - 1)
+    if newIdx != curIdx { selectPage(prov, rows[newIdx].id) }
+  }
+
+  /// Prev/next arrows + clickable dots for a provider's profile carousel, so it
+  /// is navigable by MOUSE click, not only by drag/swipe. Selecting a page sets
+  /// `selectedProfileByProvider`, which animates the pager offset to that card.
+  @ViewBuilder private func carouselControls(prov: String, rows: [BarSummaryRow]) -> some View {
+    let currentId = selectedProfileByProvider[prov] ?? rows.first?.id
+    let curIdx = rows.firstIndex(where: { $0.id == currentId }) ?? 0
+    HStack(spacing: 7) {
+      pageArrow(systemName: "chevron.left", enabled: curIdx > 0) {
+        if curIdx > 0 { selectPage(prov, rows[curIdx - 1].id) }
+      }
+      ForEach(rows) { row in
+        Circle()
+          .fill(currentId == row.id ? theme.subscription : Color.secondary.opacity(0.3))
+          .frame(width: 6, height: 6)
+          .padding(4)  // larger mouse hit target than the 6pt dot
+          .contentShape(Rectangle())
+          .onTapGesture { selectPage(prov, row.id) }
+      }
+      pageArrow(systemName: "chevron.right", enabled: curIdx < rows.count - 1) {
+        if curIdx < rows.count - 1 { selectPage(prov, rows[curIdx + 1].id) }
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .center)
+  }
+
+  /// Animate the carousel to the given profile card (mouse click or dot tap).
+  private func selectPage(_ prov: String, _ id: String) {
+    withAnimation(.easeInOut(duration: 0.2)) {
+      selectedProfileByProvider[prov] = id
+    }
+  }
+
+  @ViewBuilder private func pageArrow(
+    systemName: String, enabled: Bool, action: @escaping () -> Void
+  ) -> some View {
+    Button(action: action) {
+      Image(systemName: systemName)
+        .font(.system(size: 9, weight: .bold))
+        .frame(width: 16, height: 16)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .disabled(!enabled)
+    .opacity(enabled ? 0.7 : 0.25)
+  }
+
+  /// Height of the tallest single card in a carousel — only one card is visible
+  /// at a time, so the paged frame is sized to fit it WITHOUT reserving blank
+  /// space beneath. Card = vertical padding (16) + title row (~22) + one bar per
+  /// quota window (~20) + an optional stale footnote (~16); a parked/reauth card
+  /// is just the title row plus a one-line status.
+  private func carouselHeight(_ rows: [BarSummaryRow]) -> CGFloat {
+    let maxWindows = rows.map { $0.quotaWindows?.count ?? 0 }.max() ?? 0
+    if maxWindows == 0 { return 60 }
+    let hasFootnote = rows.contains { $0.staleAsOf != nil }
+    return 40 + CGFloat(maxWindows) * 20 + (hasFootnote ? 16 : 0)
+  }
+
+  // MARK: Alerts
+
+  /// One displayed alert after de-duplication: the representative notification
+  /// plus how many identical conditions it stands for (e.g. the same "ck needs
+  /// re-authentication" firing on two surfaces collapses to one row with ×2).
+  private struct GroupedAlert: Identifiable {
+    let id: String
+    let alert: BarNotification
+    let count: Int
+  }
+
+  /// De-duplicate alerts by their visible text and rank by severity so the most
+  /// actionable condition leads. Two alerts that render identically (same title +
+  /// body) collapse into one group with a count, killing the "ck reauth" /
+  /// "ck reauth" / "ck paused" / "ck paused" repetition seen with multi-surface
+  /// profiles.
+  private func groupedAlerts(_ alerts: [BarNotification]) -> [GroupedAlert] {
+    var order: [String] = []
+    var byKey: [String: (alert: BarNotification, count: Int)] = [:]
+    for a in alerts {
+      let key = a.title + "\u{1F}" + a.body
+      if let hit = byKey[key] {
+        byKey[key] = (hit.alert, hit.count + 1)
+      } else {
+        byKey[key] = (a, 1)
+        order.append(key)
+      }
+    }
+    return order
+      .map { GroupedAlert(id: $0, alert: byKey[$0]!.alert, count: byKey[$0]!.count) }
+      .sorted { alertSeverityRank($0.alert.kind) < alertSeverityRank($1.alert.kind) }
+  }
+
+  /// Severity order for alert ranking: reauth (account unusable) first, spend
+  /// caps next, then quota, then the soft paused/cooldown note.
+  private func alertSeverityRank(_ kind: BarAlertKind) -> Int {
+    switch kind {
+    case .reauthNeeded: return 0
+    case .dailySpendAbove, .monthSpendAbove: return 1
+    case .quotaRemainingBelow: return 2
+    case .accountCooldownOrPaused: return 3
+    }
+  }
+
+  /// Calm, compact alerts: a labelled header with a total count, then a few
+  /// single-line rows (most-severe first). Collapsed past `collapsedCap` behind a
+  /// "+N more" toggle so a burst of conditions never floods the popover. Replaces
+  /// the previous stack of tall two-line cards.
+  @ViewBuilder private var alertsSection: some View {
+    let groups = groupedAlerts(viewModel.activeAlerts)
+    let collapsedCap = 3
+    let overflow = groups.count - collapsedCap
+    let visible = alertsExpanded ? groups : Array(groups.prefix(collapsedCap))
+    VStack(alignment: .leading, spacing: 5) {
+      HStack(spacing: 6) {
+        SectionLabel("Alerts")
+        Text("\(groups.count)")
+          .font(.system(size: 10, weight: .semibold))
+          .padding(.horizontal, 5)
+          .padding(.vertical, 1)
+          .background(Color.secondary.opacity(0.18), in: Capsule())
+          .foregroundStyle(.secondary)
+        Spacer(minLength: 0)
+      }
+      ForEach(visible) { g in
+        CompactAlertRow(alert: g.alert, count: g.count)
+      }
+      if overflow > 0 {
+        Button {
+          withAnimation(.easeInOut(duration: 0.15)) { alertsExpanded.toggle() }
+        } label: {
+          HStack(spacing: 4) {
+            Image(systemName: alertsExpanded ? "chevron.up" : "chevron.down")
+              .font(.system(size: 9, weight: .bold))
+            Text(alertsExpanded ? "Show less" : "\(overflow) more")
+              .font(.caption2)
+          }
+          .foregroundStyle(.secondary)
+          .padding(.vertical, 2)
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
       }
     }
   }
@@ -654,33 +921,38 @@ struct ErrorBanner: View {
   }
 }
 
-/// One in-dropdown alert row. Mirrors a delivered notification so the conditions
-/// are visible even when system notifications are denied. The icon is keyed off
-/// the alert kind so each rule reads at a glance.
-struct AlertRow: View {
+/// Compact, single-line alert row used by the condensed Alerts section. One
+/// glanceable line — kind icon + the self-describing body (the title is dropped
+/// as redundant with the icon) + an optional ×N when several identical
+/// conditions were merged. The tint is softer than the old `AlertRow` card so a
+/// list of them reads as informative, not alarming.
+struct CompactAlertRow: View {
   @Environment(\.barTheme) private var theme
   let alert: BarNotification
+  let count: Int
 
   var body: some View {
-    HStack(alignment: .top, spacing: 6) {
+    HStack(spacing: 6) {
       Image(systemName: icon)
         .foregroundStyle(tint)
-        .font(.caption)
-        .padding(.top, 1)
-      VStack(alignment: .leading, spacing: 1) {
-        Text(alert.title)
-          .font(.caption.weight(.medium))
-        Text(alert.body)
-          .font(.caption2)
+        .font(.caption2)
+        .frame(width: 12)
+      Text(alert.body)
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .truncationMode(.tail)
+      if count > 1 {
+        Text("×\(count)")
+          .font(.system(size: 9, weight: .semibold))
           .foregroundStyle(.secondary)
-          .lineLimit(2)
       }
       Spacer(minLength: 0)
     }
-    .padding(.vertical, 5)
+    .padding(.vertical, 4)
     .padding(.horizontal, 8)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 7))
+    .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
   }
 
   private var icon: String {
@@ -693,8 +965,6 @@ struct AlertRow: View {
   }
 
   private var tint: Color {
-    // Themed: quota warnings take the brand accent, reauth the critical band,
-    // so alert chips match the rest of the dropdown on both plates.
     switch alert.kind {
     case .quotaRemainingBelow: return theme.accent
     case .dailySpendAbove, .monthSpendAbove: return theme.accent
@@ -731,5 +1001,95 @@ struct Chip: View {
       .padding(.vertical, 1.5)
       .background(tint.opacity(0.22), in: Capsule())
       .foregroundStyle(textColor)
+  }
+}
+
+/// Adds horizontal trackpad / Magic Mouse swipe paging to the profile carousel.
+/// SwiftUI's `DragGesture` handles a mouse or trackpad press-drag, but a
+/// non-clicking two-finger swipe arrives as scroll-wheel events it never sees.
+///
+/// This hosts a transparent AppKit anchor view (click- and drag-transparent via
+/// a nil `hitTest`, so it never blocks the cards' buttons or the DragGesture) and
+/// a local scroll-wheel monitor scoped to that view's on-screen frame. A
+/// predominantly horizontal scroll pages once per gesture; a vertical scroll is
+/// passed straight through so the popover still scrolls. If the frame math ever
+/// fails to match, the worst case is that scroll-swipe simply does nothing —
+/// drag and the arrows/dots still work — so the failure mode is benign.
+struct CarouselScrollPager: NSViewRepresentable {
+  /// Called with +1 (next) or -1 (previous) when a horizontal swipe commits.
+  let onPage: (Int) -> Void
+
+  func makeCoordinator() -> Coordinator { Coordinator(onPage: onPage) }
+
+  func makeNSView(context: Context) -> NSView {
+    let view = PassthroughView()
+    context.coordinator.attach(to: view)
+    return view
+  }
+
+  func updateNSView(_ nsView: NSView, context: Context) {
+    context.coordinator.onPage = onPage
+  }
+
+  static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+    coordinator.detach()
+  }
+
+  /// Anchor view that is transparent to all mouse hit-testing, so clicks and the
+  /// SwiftUI DragGesture pass through to the cards beneath it.
+  final class PassthroughView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+  }
+
+  /// Owns the local scroll-wheel monitor and the per-gesture accumulator.
+  final class Coordinator {
+    var onPage: (Int) -> Void
+    private weak var view: NSView?
+    private var monitor: Any?
+    private var accumulated: CGFloat = 0
+    private var firedThisGesture = false
+    private let threshold: CGFloat = 40
+
+    init(onPage: @escaping (Int) -> Void) { self.onPage = onPage }
+
+    func attach(to view: NSView) {
+      self.view = view
+      monitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel]) { [weak self] event in
+        self?.handle(event) ?? event
+      }
+    }
+
+    func detach() {
+      if let monitor { NSEvent.removeMonitor(monitor) }
+      monitor = nil
+    }
+
+    /// Return nil to consume a horizontal swipe inside the carousel; return the
+    /// event unchanged otherwise so vertical popover scroll is never swallowed.
+    private func handle(_ event: NSEvent) -> NSEvent? {
+      guard let view, let window = view.window, event.window === window else { return event }
+      let frameInWindow = view.convert(view.bounds, to: nil)
+      guard frameInWindow.contains(event.locationInWindow) else { return event }
+
+      let dx = event.scrollingDeltaX
+      let dy = event.scrollingDeltaY
+      guard abs(dx) > abs(dy) else { return event }  // vertical → let the popover scroll
+
+      if event.phase.contains(.began) || event.momentumPhase.contains(.began) {
+        accumulated = 0
+        firedThisGesture = false
+      }
+      accumulated += dx
+      if !firedThisGesture && abs(accumulated) >= threshold {
+        firedThisGesture = true
+        // Natural scrolling: content moving left (negative dx) advances to next.
+        onPage(accumulated < 0 ? 1 : -1)
+      }
+      if event.phase.contains(.ended) || event.momentumPhase.contains(.ended) {
+        accumulated = 0
+        firedThisGesture = false
+      }
+      return nil
+    }
   }
 }

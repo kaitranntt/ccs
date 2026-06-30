@@ -97,6 +97,22 @@ export interface BarSummaryRow {
   /** True if account token is expired and needs re-authentication */
   needsReauth: boolean;
   /**
+   * Native subscription surface: "ccs" (Claude Code) or "ccsx" (Codex).
+   * Present ONLY on native subscription rows; omitted on CLIProxy pool rows.
+   */
+  surface?: string;
+  /**
+   * Native profile name (e.g. "work", "ck", "personal").
+   * Present ONLY on native subscription rows; omitted on CLIProxy pool rows.
+   */
+  profile?: string;
+  /**
+   * Explicit native-subscription flag. true on all native rows; omitted on
+   * CLIProxy pool rows (decodes to false/nil). Replaces the brittle
+   * accountId == "claude-code" heuristic in Swift.
+   */
+  is_subscription?: boolean;
+  /**
    * Native-only per-window quota breakdown (Claude: 5h/week/opus/sonnet,
    * Codex: 5h/week). CLIProxy rows OMIT this field so existing decode/encode
    * tests and the Swift legacy path stay unaffected. Serialized as

@@ -161,16 +161,17 @@ describe('GlmtTransformer', () => {
   });
 
   describe('Thinking signature', () => {
-    it('generates thinking signature', () => {
+    it('generates thinking signature as a non-empty opaque string', () => {
       const transformer = new GlmtTransformer();
       const thinking = 'This is my reasoning process';
       const signature = transformer.generateThinkingSignature(thinking);
 
-      assert.strictEqual(signature.type, 'thinking_signature');
-      assert.ok(signature.hash);
-      assert.strictEqual(signature.hash.length, 16);
-      assert.strictEqual(signature.length, thinking.length);
-      assert.ok(signature.timestamp);
+      // Anthropic contract: a thinking block's signature is a non-empty
+      // opaque string, not an object.
+      assert.strictEqual(typeof signature, 'string');
+      assert.ok(signature.length > 0);
+      // Deterministic: same reasoning yields the same signature (no Date.now()).
+      assert.strictEqual(signature, transformer.generateThinkingSignature(thinking));
     });
   });
 

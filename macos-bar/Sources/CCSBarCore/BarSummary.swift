@@ -65,6 +65,16 @@ public struct BarSummaryRow: Codable, Sendable, Identifiable, Equatable {
   public let cached: Bool
   public let fetchedAt: String?
   public let needsReauth: Bool
+  /// Multi-profile: which CCS surface owns this profile ("ccs" = Claude via
+  /// `ccs auth`, "ccsx" = Codex via `ccsx auth`). nil on CLIProxy pool rows.
+  public let surface: String?
+  /// Multi-profile: the profile name (e.g. "work", "ck", "personal"). nil on
+  /// CLIProxy pool rows.
+  public let profile: String?
+  /// Explicit native-subscription flag. true on all native rows (Claude/Codex
+  /// own subscription), nil/false on CLIProxy pool rows. Replaces the brittle
+  /// `accountId == "claude-code"` heuristic.
+  public let isSubscription: Bool?
   /// Native-only per-window quota breakdown (Claude: 5h/week/opus/sonnet,
   /// Codex: 5h/week). nil for CLIProxy pool rows, which omit "quota_windows"
   /// entirely — so legacy payloads decode unchanged (backward compatible).
@@ -93,6 +103,9 @@ public struct BarSummaryRow: Codable, Sendable, Identifiable, Equatable {
     case cached
     case fetchedAt
     case needsReauth
+    case surface
+    case profile
+    case isSubscription = "is_subscription"
     case quotaWindows = "quota_windows"
     case staleAsOf = "stale_as_of"
   }
@@ -113,6 +126,9 @@ public struct BarSummaryRow: Codable, Sendable, Identifiable, Equatable {
     cached: Bool = false,
     fetchedAt: String? = nil,
     needsReauth: Bool = false,
+    surface: String? = nil,
+    profile: String? = nil,
+    isSubscription: Bool? = nil,
     quotaWindows: [QuotaWindowDetail]? = nil,
     staleAsOf: String? = nil
   ) {
@@ -131,6 +147,9 @@ public struct BarSummaryRow: Codable, Sendable, Identifiable, Equatable {
     self.cached = cached
     self.fetchedAt = fetchedAt
     self.needsReauth = needsReauth
+    self.surface = surface
+    self.profile = profile
+    self.isSubscription = isSubscription
     self.quotaWindows = quotaWindows
     self.staleAsOf = staleAsOf
   }
@@ -156,6 +175,9 @@ public struct BarSummaryRow: Codable, Sendable, Identifiable, Equatable {
     cached = try c.decode(Bool.self, forKey: .cached)
     fetchedAt = try c.decodeIfPresent(String.self, forKey: .fetchedAt)
     needsReauth = try c.decode(Bool.self, forKey: .needsReauth)
+    surface = try c.decodeIfPresent(String.self, forKey: .surface)
+    profile = try c.decodeIfPresent(String.self, forKey: .profile)
+    isSubscription = try c.decodeIfPresent(Bool.self, forKey: .isSubscription)
     quotaWindows = try c.decodeIfPresent([QuotaWindowDetail].self, forKey: .quotaWindows)
     staleAsOf = try c.decodeIfPresent(String.self, forKey: .staleAsOf)
   }

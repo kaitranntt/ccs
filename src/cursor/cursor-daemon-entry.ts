@@ -22,6 +22,7 @@ import { translateAnthropicRequest } from './cursor-anthropic-translator';
 import { checkAuthStatus } from './cursor-auth';
 import { getModelsForDaemon, resolveCursorRequestModel } from './cursor-models';
 import type { CursorTool } from './cursor-protobuf-schema';
+import { ValidationError } from '../errors/error-types';
 
 interface DaemonRuntimeOptions {
   port: number;
@@ -132,22 +133,46 @@ function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
   });
 }
 
+function headerMatchesToken(header: string | string[] | undefined, expectedToken: string): boolean {
+  if (typeof header === 'string') {
+    return header === expectedToken;
+  }
+
+  if (Array.isArray(header)) {
+    return header.includes(expectedToken);
+  }
+
+  return false;
+}
+
+function authorizationMatchesToken(
+  header: string | string[] | undefined,
+  expectedToken: string
+): boolean {
+  const values = Array.isArray(header) ? header : header ? [header] : [];
+  return values.some((value) => {
+    const trimmed = value.trim();
+    if (trimmed === expectedToken) {
+      return true;
+    }
+
+    const match = /^Bearer\s+(.+)$/i.exec(trimmed);
+    return match?.[1] === expectedToken;
+  });
+}
+
 function hasValidDaemonToken(req: http.IncomingMessage): boolean {
   const expectedToken = process.env.CCS_CURSOR_DAEMON_TOKEN;
   if (!expectedToken) {
     return false;
   }
 
-  const provided = req.headers['x-ccs-cursor-token'];
-  if (typeof provided === 'string') {
-    return provided === expectedToken;
-  }
-
-  if (Array.isArray(provided)) {
-    return provided.includes(expectedToken);
-  }
-
-  return false;
+  return (
+    headerMatchesToken(req.headers['x-ccs-cursor-token'], expectedToken) ||
+    headerMatchesToken(req.headers['anthropic-auth-token'], expectedToken) ||
+    headerMatchesToken(req.headers['x-api-key'], expectedToken) ||
+    authorizationMatchesToken(req.headers.authorization, expectedToken)
+  );
 }
 
 function resolveInboundRequestId(req: http.IncomingMessage): string | undefined {
@@ -180,17 +205,20 @@ function withCursorDaemonRequestContext<T>(
 
 function normalizeMessages(raw: unknown): NormalizedOpenAIMessage[] {
   if (!Array.isArray(raw)) {
-    throw new Error('messages must be an array');
+    throw new ValidationError('messages must be an array', 'messages');
   }
 
   return raw.map((message, index) => {
     if (typeof message !== 'object' || message === null) {
-      throw new Error(`messages[${index}] must be an object`);
+      throw new ValidationError(`messages[${index}] must be an object`, `messages[${index}]`);
     }
 
     const m = message as Record<string, unknown>;
     if (typeof m.role !== 'string' || !m.role) {
-      throw new Error(`messages[${index}].role must be a non-empty string`);
+      throw new ValidationError(
+        `messages[${index}].role must be a non-empty string`,
+        `messages[${index}].role`
+      );
     }
 
     const content = m.content;
@@ -200,7 +228,10 @@ function normalizeMessages(raw: unknown): NormalizedOpenAIMessage[] {
       typeof content !== 'string' &&
       !Array.isArray(content)
     ) {
-      throw new Error(`messages[${index}].content must be string, array, or null`);
+      throw new ValidationError(
+        `messages[${index}].content must be string, array, or null`,
+        `messages[${index}].content`
+      );
     }
 
     return {
@@ -364,7 +395,11 @@ export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Ser
         }
 
         if (isAnthropicRoute) {
-          const expectedToken = (process.env.ANTHROPIC_AUTH_TOKEN || 'cursor-managed').trim();
+          const expectedToken = (
+            process.env.ANTHROPIC_AUTH_TOKEN ||
+            process.env.CCS_CURSOR_DAEMON_TOKEN ||
+            'cursor-managed'
+          ).trim();
           const requestToken = getAnthropicRequestToken(req.headers);
           if (!expectedToken || requestToken !== expectedToken) {
             await pipeWebResponseToNode(

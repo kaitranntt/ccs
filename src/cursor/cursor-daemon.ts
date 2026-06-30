@@ -12,6 +12,7 @@ import * as path from 'path';
 import * as http from 'http';
 import type { CursorDaemonConfig, CursorDaemonStatus } from './types';
 import { getPidFromFile, writePidToFile, removePidFile } from './cursor-daemon-pid';
+import { getCursorDaemonToken } from './cursor-daemon-auth';
 import { verifyDaemonOwnership } from './daemon-process-ownership';
 import { createLogger, forwardRequestIdEnv } from '../services/logging';
 export { getPidFromFile, writePidToFile, removePidFile } from './cursor-daemon-pid';
@@ -51,6 +52,15 @@ async function resolveDaemonEntrypoint(): Promise<string | null> {
   }
 
   return null;
+}
+
+export function buildDaemonProcessEnv(daemonToken: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    ...forwardRequestIdEnv(),
+    CCS_CURSOR_DAEMON_TOKEN: daemonToken,
+    ANTHROPIC_AUTH_TOKEN: daemonToken,
+  };
 }
 
 /**
@@ -108,8 +118,11 @@ export async function isDaemonRunning(port: number, daemonToken?: string): Promi
 /**
  * Get daemon status.
  */
-export async function getDaemonStatus(port: number): Promise<CursorDaemonStatus> {
-  const running = await isDaemonRunning(port);
+export async function getDaemonStatus(
+  port: number,
+  daemonToken = getCursorDaemonToken()
+): Promise<CursorDaemonStatus> {
+  const running = await isDaemonRunning(port, daemonToken);
   const pid = getPidFromFile();
 
   return {
@@ -224,11 +237,7 @@ export async function startDaemon(
       proc = spawn(process.execPath, args, {
         stdio: 'ignore',
         detached: true,
-        env: {
-          ...process.env,
-          ...forwardRequestIdEnv(),
-          CCS_CURSOR_DAEMON_TOKEN: effectiveConfig.daemon_token || '',
-        },
+        env: buildDaemonProcessEnv(effectiveConfig.daemon_token || ''),
       });
 
       // Unref so parent can exit

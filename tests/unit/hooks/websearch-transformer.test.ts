@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -32,11 +25,7 @@ const hook = require('../../../lib/hooks/websearch-transformer.cjs') as {
     query: string,
     errors: Array<{ provider: string; error: string }>
   ) => HookOutput;
-  buildSuccessHookOutput: (
-    query: string,
-    providerName: string,
-    content: string
-  ) => HookOutput;
+  buildSuccessHookOutput: (query: string, providerName: string, content: string) => HookOutput;
   classifyDuckDuckGoHtml: (
     html: string,
     count: number
@@ -45,7 +34,10 @@ const hook = require('../../../lib/hooks/websearch-transformer.cjs') as {
     kind: 'results' | 'no_results' | 'non_result_html';
     results: Array<{ title: string; url: string; description: string }>;
   };
-  extractDuckDuckGoResults: (html: string, count: number) => Array<{
+  extractDuckDuckGoResults: (
+    html: string,
+    count: number
+  ) => Array<{
     title: string;
     url: string;
     description: string;
@@ -62,7 +54,10 @@ const hook = require('../../../lib/hooks/websearch-transformer.cjs') as {
     results: Array<{ title: string; url: string; description: string }>
   ) => string;
   parseRetryAfterSeconds: (rawValue: string) => number | null;
-  trySearxngSearch: (query: string, timeoutSec?: number) => Promise<{
+  trySearxngSearch: (
+    query: string,
+    timeoutSec?: number
+  ) => Promise<{
     content?: string;
     error?: string;
     statusCode?: number;
@@ -136,7 +131,7 @@ describe('websearch-transformer legacy CLI safety', () => {
     const source = readFileSync(hookPath, 'utf8');
 
     expect(source).not.toContain('shell: isWindows');
-    expect(source.match(/shell: false/g) || []).toHaveLength(3);
+    expect(source.match(/shell: false/g) || []).toHaveLength(4);
   });
 });
 
@@ -411,9 +406,7 @@ describe('websearch-transformer hook helpers', () => {
     const output = JSON.parse(result.stdout.trim()) as HookOutput;
     expect(output.hookSpecificOutput.hookEventName).toBe('PreToolUse');
     expect(output.hookSpecificOutput.permissionDecision).toBe('deny');
-    expect(output.hookSpecificOutput.additionalContext).toContain(
-      'CCS local WebSearch evidence'
-    );
+    expect(output.hookSpecificOutput.additionalContext).toContain('CCS local WebSearch evidence');
     expect(output.hookSpecificOutput.additionalContext).toContain('Provider: DuckDuckGo');
     expect(output.hookSpecificOutput.additionalContext).toContain(
       'URL: https://example.com/article'
@@ -782,8 +775,7 @@ global.fetch = async (url) => {
       expect(
         traceEvents.some(
           (event) =>
-            event.event === 'websearch_provider_success' &&
-            event.providerId === 'duckduckgo'
+            event.event === 'websearch_provider_success' && event.providerId === 'duckduckgo'
         )
       ).toBe(true);
     } finally {
@@ -994,8 +986,7 @@ global.fetch = async (url) => {
       ).toBe(true);
       expect(
         traceEvents.some(
-          (event) =>
-            event.event === 'websearch_provider_success' && event.providerId === 'exa'
+          (event) => event.event === 'websearch_provider_success' && event.providerId === 'exa'
         )
       ).toBe(true);
     } finally {

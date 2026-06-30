@@ -11,6 +11,7 @@ import { join } from 'path';
 import { ok, warn, fail, info } from '../ui';
 
 import { getCcsDir } from '../config-manager';
+import { getAgyCliStatus } from './agy';
 import { getGeminiCliStatus, isGeminiAuthenticated } from './gemini-cli';
 import { getGrokCliStatus } from './grok-cli';
 import { getOpenCodeCliStatus } from './opencode-cli';
@@ -113,12 +114,31 @@ function applyCooldownStatus(
 
 function getLegacyProviderStatuses(): WebSearchCliInfo[] {
   const wsConfig = getWebSearchConfig();
+  const agyStatus = getAgyCliStatus();
   const geminiStatus = getGeminiCliStatus();
   const grokStatus = getGrokCliStatus();
   const opencodeStatus = getOpenCodeCliStatus();
   const geminiAuthed = geminiStatus.installed && isGeminiAuthenticated();
 
   return [
+    {
+      id: 'agy',
+      kind: 'legacy-cli',
+      name: 'Antigravity CLI',
+      command: 'agy',
+      enabled: wsConfig.providers?.agy?.enabled ?? false,
+      available: agyStatus.installed,
+      version: agyStatus.version ?? null,
+      installCommand: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+      docsUrl: 'https://antigravity.google/cli',
+      requiresApiKey: false,
+      description: 'Recommended LLM CLI fallback with Google web search (Gemini CLI successor).',
+      detail: agyStatus.installed
+        ? agyStatus.version
+          ? `Installed (${agyStatus.version})`
+          : 'Installed'
+        : 'Not installed',
+    },
     {
       id: 'gemini',
       kind: 'legacy-cli',
@@ -127,15 +147,16 @@ function getLegacyProviderStatuses(): WebSearchCliInfo[] {
       enabled: wsConfig.providers?.gemini?.enabled ?? false,
       available: geminiAuthed,
       version: geminiStatus.version ?? null,
-      installCommand: 'npm install -g @google/gemini-cli',
-      docsUrl: 'https://github.com/google-gemini/gemini-cli',
+      installCommand: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+      docsUrl: 'https://antigravity.google/cli',
       requiresApiKey: false,
-      description: 'Optional legacy LLM fallback with Google web search.',
+      description:
+        'Deprecated legacy fallback (Google retired the gemini CLI). Prefer Antigravity.',
       detail: geminiStatus.installed
         ? geminiAuthed
           ? 'Authenticated'
           : "Run 'gemini' to login"
-        : 'Not installed',
+        : 'Not installed (retired - use Antigravity)',
     },
     {
       id: 'opencode',
@@ -287,7 +308,7 @@ export function getCliInstallHints(): string[] {
     '    Enable DuckDuckGo in Settings > WebSearch for zero-setup search',
     '    Or enable SearXNG and set a valid base URL (must support /search?format=json)',
     '    Or export EXA_API_KEY, TAVILY_API_KEY, or BRAVE_API_KEY for API-backed search',
-    '    Optional legacy fallback: npm i -g @google/gemini-cli',
+    '    Optional LLM CLI fallback: curl -fsSL https://antigravity.google/cli/install.sh | bash',
   ];
 }
 

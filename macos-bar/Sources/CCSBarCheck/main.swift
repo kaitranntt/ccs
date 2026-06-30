@@ -1686,6 +1686,182 @@ do {
   check(!BarUpdateChecker.isNewer("1.7", than: "1.7.0"), "isNewer: fewer than 3 parts rejected")
 }
 
+// MARK: Multi-profile fields decode (GH-1595)
+//
+// Three new optional wire keys: surface, profile, is_subscription.
+// Native rows carry all three; CLIProxy pool rows omit them — legacy decoders
+// must not fail and must yield nil for the absent fields.
+
+let multiProfileJSON = """
+[
+  {
+    "account_id": "ccs:work",
+    "provider": "claude-code",
+    "surface": "ccs",
+    "profile": "work",
+    "is_subscription": true,
+    "displayName": "work",
+    "tier": "max",
+    "paused": false,
+    "quota_percentage": 62,
+    "quotaStatus": "ok",
+    "next_reset": "2026-06-24T01:00:00.000Z",
+    "is_default": true,
+    "last_activity_at": null,
+    "today_cost": null,
+    "health": "ok",
+    "cached": false,
+    "fetchedAt": "2026-06-23T20:40:00.000Z",
+    "needsReauth": false
+  },
+  {
+    "account_id": "ccsx:ck",
+    "provider": "codex",
+    "surface": "ccsx",
+    "profile": "ck",
+    "is_subscription": true,
+    "displayName": "ck",
+    "tier": "pro",
+    "paused": true,
+    "quota_percentage": 80,
+    "quotaStatus": "ok",
+    "next_reset": null,
+    "is_default": false,
+    "last_activity_at": null,
+    "today_cost": null,
+    "health": "ok",
+    "cached": true,
+    "fetchedAt": "2026-06-23T16:19:00.000Z",
+    "needsReauth": false,
+    "stale_as_of": "2026-06-23T16:19:00.000Z"
+  },
+  {
+    "account_id": "alice@example.com",
+    "provider": "agy",
+    "displayName": "Alice (Ultra)",
+    "tier": "ultra",
+    "paused": false,
+    "quota_percentage": 70,
+    "quotaStatus": "ok",
+    "next_reset": null,
+    "is_default": false,
+    "last_activity_at": null,
+    "today_cost": null,
+    "health": "ok",
+    "cached": true,
+    "fetchedAt": "2026-06-23T20:00:00.000Z",
+    "needsReauth": false
+  }
+]
+"""
+
+do {
+  let rows = try JSONDecoder().decode([BarSummaryRow].self, from: Data(multiProfileJSON.utf8))
+  check(rows.count == 3, "mp: decodes 3 rows (2 native + 1 legacy CLIProxy)")
+
+  // (MP1) Native Claude active row
+  let claudeRow = rows[0]
+  check(claudeRow.accountId == "ccs:work", "mp: native Claude account_id = 'ccs:work'")
+  check(claudeRow.surface == "ccs", "mp: native Claude surface = 'ccs'")
+  check(claudeRow.profile == "work", "mp: native Claude profile = 'work'")
+  check(claudeRow.isSubscription == true, "mp: native Claude is_subscription = true")
+  check(claudeRow.paused == false, "mp: active Claude profile is not paused")
+
+  // (MP2) Parked Codex row
+  let codexRow = rows[1]
+  check(codexRow.accountId == "ccsx:ck", "mp: parked Codex account_id = 'ccsx:ck'")
+  check(codexRow.surface == "ccsx", "mp: parked Codex surface = 'ccsx'")
+  check(codexRow.profile == "ck", "mp: parked Codex profile = 'ck'")
+  check(codexRow.isSubscription == true, "mp: parked Codex is_subscription = true")
+  check(codexRow.paused == true, "mp: parked Codex row has paused = true")
+
+  // (MP3) Legacy CLIProxy row — new fields decode to nil without failure
+  let legacyRow = rows[2]
+  check(legacyRow.surface == nil, "mp: CLIProxy row surface decodes to nil (backward compat)")
+  check(legacyRow.profile == nil, "mp: CLIProxy row profile decodes to nil (backward compat)")
+  check(legacyRow.isSubscription == nil, "mp: CLIProxy row is_subscription decodes to nil")
+
+  // (MP4) isNativeSubscription uses is_subscription flag when present
+  check(
+    BarFormatting.isNativeSubscription(claudeRow),
+    "mp: isNativeSubscription true when is_subscription=true (new flag path)")
+  check(
+    BarFormatting.isNativeSubscription(codexRow),
+    "mp: isNativeSubscription true for parked Codex row (is_subscription=true)")
+  check(
+    !BarFormatting.isNativeSubscription(legacyRow),
+    "mp: isNativeSubscription false for CLIProxy pool row (no is_subscription)")
+
+  // (MP5) Legacy rows without is_subscription use fallback heuristic
+  let legacyClaudeRow = BarSummaryRow(accountId: "claude-code", provider: "claude-code")
+  check(
+    BarFormatting.isNativeSubscription(legacyClaudeRow),
+    "mp: legacy claude-code row uses heuristic fallback -> is native")
+  let legacyCodexRow = BarSummaryRow(accountId: "codex", provider: "codex")
+  check(
+    BarFormatting.isNativeSubscription(legacyCodexRow),
+    "mp: legacy codex row uses heuristic fallback -> is native")
+  let poolCodexRow = BarSummaryRow(accountId: "pool-codex-oauth-1", provider: "codex")
+  check(
+    !BarFormatting.isNativeSubscription(poolCodexRow),
+    "mp: CLIProxy codex pool row with no is_subscription -> not native (heuristic)")
+
+  // (MP6) partitionSubscriptions correctly splits with new flag
+  let parts = BarFormatting.partitionSubscriptions(rows)
+  check(parts.subscriptions.count == 2, "mp: partition yields 2 native subscriptions")
+  check(parts.pool.count == 1, "mp: partition yields 1 CLIProxy pool row")
+  check(
+    parts.subscriptions.map { $0.accountId } == ["ccs:work", "ccsx:ck"],
+    "mp: subscriptions keep backend order")
+
+  // (MP7) surfaceProfileLabel helper
+  check(
+    BarFormatting.surfaceProfileLabel(claudeRow) == "ccs · work",
+    "mp: surfaceProfileLabel for ccs:work -> 'ccs · work'")
+  check(
+    BarFormatting.surfaceProfileLabel(codexRow) == "ccsx · ck",
+    "mp: surfaceProfileLabel for ccsx:ck -> 'ccsx · ck'")
+  check(
+    BarFormatting.surfaceProfileLabel(legacyRow) == nil,
+    "mp: surfaceProfileLabel for CLIProxy row (no profile) -> nil")
+
+  // (MP8) surfaceProfileLabel falls back to provider when surface is absent
+  let noSurfaceRow = BarSummaryRow(
+    accountId: "ccsx:personal", provider: "codex",
+    surface: nil, profile: "personal", isSubscription: true)
+  check(
+    BarFormatting.surfaceProfileLabel(noSurfaceRow) == "codex · personal",
+    "mp: surfaceProfileLabel falls back to provider when surface is nil")
+
+  // (MP9) base/default account vs named profile presentation
+  let defaultCodexRow = BarSummaryRow(
+    accountId: "ccsx:default", provider: "codex",
+    surface: "ccsx", profile: "default", isSubscription: true)
+  check(
+    BarFormatting.isBaseAccount(defaultCodexRow),
+    "mp: 'default' profile is the base account")
+  check(
+    !BarFormatting.isBaseAccount(codexRow),
+    "mp: named profile 'ck' is not the base account")
+  check(
+    BarFormatting.accountTitle(defaultCodexRow) == "ccsx",
+    "mp: accountTitle for default account -> 'ccsx' (bare command)")
+  check(
+    BarFormatting.accountTitle(codexRow) == "ck",
+    "mp: accountTitle for named profile -> 'ck'")
+  check(
+    BarFormatting.accountTag(defaultCodexRow) == "default",
+    "mp: accountTag for default account -> 'default'")
+  check(
+    BarFormatting.accountTag(codexRow) == "ccsx",
+    "mp: accountTag for named profile -> 'ccsx' (surface)")
+  check(
+    BarFormatting.accountTag(legacyRow) == nil,
+    "mp: accountTag for CLIProxy pool row -> nil")
+} catch {
+  check(false, "mp: multi-profile JSON decode failed: \(error)")
+}
+
 // cleanup
 try? FileManager.default.removeItem(atPath: tmp)
 

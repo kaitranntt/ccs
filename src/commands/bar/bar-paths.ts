@@ -41,7 +41,7 @@ export interface LaunchJson {
   schema: typeof LAUNCH_JSON_SCHEMA;
   /** Absolute path to the node/bun binary (process.execPath). */
   runtime: string;
-  /** Absolute CCS entry point + subcommand args: [process.argv[1], 'bar', 'serve']. */
+  /** Absolute private CCS launcher shim + subcommand args: [ccs.js, 'bar', 'serve']. */
   args: string[];
   /** os.homedir() — cwd for the spawned server. */
   home: string;

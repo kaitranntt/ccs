@@ -197,6 +197,15 @@ router.put('/', (req: Request, res: Response): void => {
                   config.websearch?.providers?.searxng?.max_results ?? DEFAULT_WEBSEARCH_MAX_RESULTS
                 ),
               },
+              agy: {
+                enabled:
+                  providers.agy?.enabled ?? config.websearch?.providers?.agy?.enabled ?? false,
+                model:
+                  providers.agy?.model ??
+                  config.websearch?.providers?.agy?.model ??
+                  'gemini-2.5-flash',
+                timeout: providers.agy?.timeout ?? config.websearch?.providers?.agy?.timeout ?? 90,
+              },
               gemini: {
                 enabled:
                   providers.gemini?.enabled ??

@@ -17,6 +17,7 @@ import {
 } from '../../cursor';
 
 import cursorSettingsRoutes from './cursor-settings-routes';
+import { getCursorDaemonToken } from '../../cursor/cursor-daemon-auth';
 import { getCursorConfig } from '../../config/config-loader-facade';
 import { isDashboardWebSocketOriginAllowed } from '../middleware/auth-middleware';
 
@@ -233,6 +234,7 @@ router.post('/daemon/start', async (_req: Request, res: Response): Promise<void>
     const result = await startDaemon({
       port: cursorConfig.port,
       ghost_mode: cursorConfig.ghost_mode,
+      daemon_token: getCursorDaemonToken(),
     });
     const { daemonToken: _redactedDaemonToken, ...publicResult } = result;
     void _redactedDaemonToken;

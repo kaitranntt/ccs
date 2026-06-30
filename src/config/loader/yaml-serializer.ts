@@ -149,8 +149,11 @@ export function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push('# Brave requires BRAVE_API_KEY in your environment.');
     lines.push('# DuckDuckGo works with zero extra setup and is enabled by default.');
     lines.push('#');
-    lines.push('# Legacy LLM fallbacks remain optional if you still want them:');
-    lines.push('#   gemini: npm i -g @google/gemini-cli');
+    lines.push('# Optional LLM CLI fallbacks:');
+    lines.push(
+      '#   agy (recommended): curl -fsSL https://antigravity.google/cli/install.sh | bash'
+    );
+    lines.push('#   gemini (deprecated, retired upstream 2026-06-18): use agy instead');
     lines.push('#   opencode: curl -fsSL https://opencode.ai/install | bash');
     lines.push('#   grok: npm i -g @vibe-kit/grok-cli');
     lines.push('# ----------------------------------------------------------------------------');

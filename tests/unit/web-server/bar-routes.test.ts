@@ -1220,3 +1220,151 @@ describe('/summary native subscription rows', () => {
     expect(body[0].provider).toBe('agy');
   });
 });
+
+// ============================================================================
+// GH-1595: wire contract — native rows carry surface/profile/is_subscription;
+// CLIProxy pool rows OMIT all three fields.
+// ============================================================================
+
+describe('/summary wire contract: surface/profile/is_subscription fields (GH-1595)', () => {
+  /**
+   * Extended wire row type that includes the new optional fields.
+   * BarSummaryRow in the test file omits them; extend locally here.
+   */
+  interface WireRow extends BarSummaryRow {
+    surface?: string;
+    profile?: string;
+    is_subscription?: boolean;
+  }
+
+  function makeNativeRow(
+    surface: 'ccs' | 'ccsx',
+    profile: string,
+    paused = false
+  ): BarSummaryRow {
+    return {
+      account_id: `${surface}:${profile}`,
+      provider: surface === 'ccs' ? 'claude-code' : 'codex',
+      displayName: profile,
+      tier: 'pro',
+      paused,
+      quota_percentage: 55,
+      quotaStatus: 'ok',
+      next_reset: null,
+      is_default: !paused,
+      last_activity_at: null,
+      today_cost: null,
+      health: 'ok',
+      cached: false,
+      fetchedAt: '2026-06-23T20:00:00.000Z',
+      needsReauth: false,
+      // The TS interface now has these optional fields — set them explicitly.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...(({ surface, profile, is_subscription: true }) as any),
+    };
+  }
+
+  async function buildWireRouter(nativeRows: BarSummaryRow[]) {
+    const { createBarRouter, resetForceFreshDebounce: resetDebounce } = await import(
+      '../../../src/web-server/routes/bar-routes'
+    );
+
+    const app = express();
+    app.use(express.json());
+
+    const cliproxyAccount = makeAccountInfo({ id: 'pool@example.com', provider: 'agy' });
+
+    const router = createBarRouter({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      getAllAccountsSummary: () => ({ agy: [cliproxyAccount] }) as any,
+      getCachedQuota: () => makeQuotaResult(),
+      setCachedQuota: () => {},
+      invalidateQuotaCache: () => {},
+      fetchAccountQuota: async () => makeQuotaResult(),
+      getTodayCostByAccount: () => ({}),
+      loadCliproxyDetails: async () => [],
+      loadDailyUsage: async () => [],
+      loadHourlyUsage: async () => [],
+      runHealthChecks: async () => makeHealthReport(),
+      getNativeAccountRows: async () => nativeRows,
+    });
+
+    app.use('/api/bar', router);
+    const srv = await new Promise<Server>((resolve, reject) => {
+      const instance = app.listen(0, '127.0.0.1');
+      instance.once('error', reject);
+      instance.once('listening', () => resolve(instance));
+    });
+    const addr = srv.address();
+    if (!addr || typeof addr === 'string') throw new Error('No server address');
+    resetDebounce();
+    return { srv, url: `http://127.0.0.1:${(addr as { port: number }).port}` };
+  }
+
+  it('native rows include surface, profile, is_subscription=true in the JSON response', async () => {
+    const { srv, url } = await buildWireRouter([
+      makeNativeRow('ccs', 'work', false),
+      makeNativeRow('ccsx', 'personal', false),
+    ]);
+    const { body } = await getJson<WireRow[]>(url, '/api/bar/summary');
+    await new Promise<void>((resolve) => srv.close(() => resolve()));
+
+    const claudeRow = body.find((r) => r.provider === 'claude-code');
+    expect(claudeRow).toBeDefined();
+    expect(claudeRow?.surface).toBe('ccs');
+    expect(claudeRow?.profile).toBe('work');
+    expect(claudeRow?.is_subscription).toBe(true);
+    expect(claudeRow?.account_id).toBe('ccs:work');
+
+    const codexRow = body.find((r) => r.provider === 'codex');
+    expect(codexRow).toBeDefined();
+    expect(codexRow?.surface).toBe('ccsx');
+    expect(codexRow?.profile).toBe('personal');
+    expect(codexRow?.is_subscription).toBe(true);
+    expect(codexRow?.account_id).toBe('ccsx:personal');
+  });
+
+  it('CLIProxy pool rows OMIT surface, profile, is_subscription', async () => {
+    const { srv, url } = await buildWireRouter([
+      makeNativeRow('ccs', 'work', false),
+    ]);
+    const { body } = await getJson<WireRow[]>(url, '/api/bar/summary');
+    await new Promise<void>((resolve) => srv.close(() => resolve()));
+
+    // The CLIProxy row (provider 'agy') should NOT have the new fields.
+    const cliproxyRow = body.find((r) => r.provider === 'agy');
+    expect(cliproxyRow).toBeDefined();
+    expect(cliproxyRow?.surface).toBeUndefined();
+    expect(cliproxyRow?.profile).toBeUndefined();
+    expect(cliproxyRow?.is_subscription).toBeUndefined();
+  });
+
+  it('parked native row (paused:true) is present with is_subscription=true and paused=true', async () => {
+    const { srv, url } = await buildWireRouter([
+      makeNativeRow('ccsx', 'ck', true), // parked Codex profile
+    ]);
+    const { body } = await getJson<WireRow[]>(url, '/api/bar/summary');
+    await new Promise<void>((resolve) => srv.close(() => resolve()));
+
+    const parked = body.find((r) => r.profile === 'ck');
+    expect(parked).toBeDefined();
+    expect(parked?.paused).toBe(true);
+    expect(parked?.is_subscription).toBe(true);
+    expect(parked?.surface).toBe('ccsx');
+  });
+
+  it('account_id on native rows uses the <surface>:<profile> scheme', async () => {
+    const { srv, url } = await buildWireRouter([
+      makeNativeRow('ccs', 'ck', false),
+      makeNativeRow('ccsx', 'ck', true),
+    ]);
+    const { body } = await getJson<WireRow[]>(url, '/api/bar/summary');
+    await new Promise<void>((resolve) => srv.close(() => resolve()));
+
+    const claudeRow = body.find((r) => r.surface === 'ccs');
+    expect(claudeRow?.account_id).toBe('ccs:ck');
+
+    const codexRow = body.find((r) => r.surface === 'ccsx');
+    expect(codexRow?.account_id).toBe('ccsx:ck');
+  });
+});
