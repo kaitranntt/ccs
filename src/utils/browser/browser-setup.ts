@@ -8,7 +8,11 @@ import {
   getRecommendedBrowserUserDataDir,
   isManagedClaudeBrowserAttachConfig,
 } from './browser-settings';
-import { getBrowserConfig, mutateConfig } from '../../config/config-loader-facade';
+import {
+  getBrowserConfig,
+  hasExplicitClaudeBrowserDevtoolsPort,
+  mutateConfig,
+} from '../../config/config-loader-facade';
 
 export interface BrowserSetupResult {
   configUpdated: boolean;
@@ -41,7 +45,9 @@ export async function runBrowserSetup(
   const initialConfig = deps.getBrowserConfig();
   const configUpdated = persistBrowserSetupConfig(deps, initialConfig);
   const persistedConfig = deps.getBrowserConfig();
-  const effectiveConfig = getEffectiveClaudeBrowserAttachConfig(persistedConfig);
+  const effectiveConfig = getEffectiveClaudeBrowserAttachConfig(persistedConfig, process.env, {
+    hasExplicitDevtoolsPort: hasExplicitClaudeBrowserDevtoolsPort(),
+  });
   const createdUserDataDir = isManagedClaudeBrowserAttachConfig(effectiveConfig)
     ? ensureManagedBrowserUserDataDir(effectiveConfig).createdProfileDir
     : false;

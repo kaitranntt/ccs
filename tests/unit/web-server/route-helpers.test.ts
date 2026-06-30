@@ -42,6 +42,22 @@ describe('validateFilePath', () => {
     expect(result.readonly).toBe(false);
   });
 
+  test('rejects writes to the macOS bar launch descriptor', () => {
+    const filePath = path.join(tempDir, '.ccs', 'bar', 'launch.json');
+    const result = validateFilePath(filePath);
+
+    expect(result.valid).toBe(false);
+    expect(result.readonly).toBe(false);
+  });
+
+  test('still allows other writes inside the bar directory', () => {
+    const filePath = path.join(tempDir, '.ccs', 'bar', 'serve.log');
+    const result = validateFilePath(filePath);
+
+    expect(result.valid).toBe(true);
+    expect(result.readonly).toBe(false);
+  });
+
   test('rejects sibling paths that only share ~/.ccs prefix', () => {
     const bypassPath = path.join(tempDir, '.ccs-evil', 'config.yaml');
     const result = validateFilePath(bypassPath);

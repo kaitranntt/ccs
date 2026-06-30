@@ -4,6 +4,7 @@ import {
   getReauthAccountTarget,
   getStartAuthFailureMessage,
   getStartAuthNicknameError,
+  getStartAuthUnsupportedReason,
   getStartUrlUnsupportedReason,
 } from '../../../src/web-server/routes/cliproxy-auth-routes';
 
@@ -13,12 +14,14 @@ describe('cliproxy-auth-routes start-url guard', () => {
       "Kiro method 'aws' uses Device Code flow"
     );
     expect(getStartUrlUnsupportedReason('ghcp')).toContain("Provider 'ghcp' uses Device Code flow");
-    expect(getStartUrlUnsupportedReason('qwen')).toContain("Provider 'qwen' uses Device Code flow");
+    expect(getStartUrlUnsupportedReason('qwen')).toContain('Qwen account linking is not supported');
     expect(getStartUrlUnsupportedReason('codebuddy')).toContain(
       "Provider 'codebuddy' uses Device Code flow"
     );
     expect(getStartUrlUnsupportedReason('kilo')).toContain("Provider 'kilo' uses Device Code flow");
-    expect(getStartUrlUnsupportedReason('qoder')).toContain("Provider 'qoder' uses Device Code flow");
+    expect(getStartUrlUnsupportedReason('qoder')).toContain(
+      "Provider 'qoder' uses Device Code flow"
+    );
   });
 
   it('allows Cursor browser URL auth on start-url', () => {
@@ -89,6 +92,13 @@ describe('cliproxy-auth-routes Kiro IDC start validation', () => {
 });
 
 describe('cliproxy-auth-routes start failure messaging', () => {
+  it('returns a clear unsupported message for Qwen account linking', () => {
+    expect(getStartAuthUnsupportedReason('qwen')).toContain(
+      'Qwen account linking is not supported'
+    );
+    expect(getStartAuthUnsupportedReason('kiro')).toBeNull();
+  });
+
   it('returns ghcp-specific guidance for Copilot verification failures', () => {
     expect(getStartAuthFailureMessage('ghcp')).toContain(
       'GitHub Copilot verification did not complete'

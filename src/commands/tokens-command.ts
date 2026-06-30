@@ -141,6 +141,13 @@ export async function handleTokensCommand(args: string[]): Promise<number> {
     return 1;
   }
 
+  // --variant without --api-key is a misuse — it has no effect without a key to assign.
+  if (variantValue !== undefined && !hasApiKeyFlag) {
+    console.error(fail('--variant requires --api-key'));
+    console.error(info('Usage: ccs tokens --variant <name> --api-key <key>'));
+    return 1;
+  }
+
   let updated = false;
 
   if (regenerateSecretFlag) {

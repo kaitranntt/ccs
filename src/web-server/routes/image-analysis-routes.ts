@@ -28,6 +28,7 @@ import {
   loadSettings,
   mutateConfig,
 } from '../../config/config-loader-facade';
+import { ProviderError } from '../../errors/error-types';
 
 const router = Router();
 const IMAGE_ANALYSIS_LOCAL_ACCESS_ERROR =
@@ -405,7 +406,10 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
           return acc;
         }
         if (!knownBackends.has(normalizedBackend)) {
-          throw new Error(`Unsupported provider backend "${backendId}".`);
+          throw new ProviderError(
+            `Unsupported provider backend "${backendId}".`,
+            normalizedBackend ?? backendId
+          );
         }
         acc[normalizedBackend] = normalizedModel;
         return acc;

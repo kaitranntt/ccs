@@ -8,7 +8,7 @@ import ProfileRegistry from '../profile-registry';
 import { InstanceManager } from '../../management/instance-manager';
 import { exitWithError } from '../../errors';
 import { ExitCode } from '../../errors/exit-codes';
-import { color, fail } from '../../utils/ui';
+import { color } from '../../utils/ui';
 
 // Re-export for backward compatibility
 export { formatRelativeTime } from '../../utils/time';
@@ -100,7 +100,6 @@ export function rejectUnsupportedAuthOptions(
   }
 
   const unknownList = unsupportedOptions.map((flag) => `"${flag}"`).join(', ');
-  console.log(fail(`Unknown option(s): ${unknownList}`));
   console.log('');
   console.log(`Usage: ${color(options.usage, 'command')}`);
   console.log(`Help:  ${color('ccs auth --help', 'command')}`);

@@ -98,7 +98,7 @@ function startRuntime(options: RuntimeOptions): void {
     insecure: options.insecure,
   });
   server.once('error', (error) => {
-    console.error((error as Error).message);
+    process.stderr.write(String((error as Error).message) + '\n');
     process.exit(1);
   });
   const shutdown = () => server.close();

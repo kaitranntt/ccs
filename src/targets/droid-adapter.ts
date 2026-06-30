@@ -104,19 +104,19 @@ export class DroidAdapter implements TargetAdapter {
 
     const droidPath = options?.binaryInfo?.path || detectDroidCli();
     if (!droidPath) {
-      console.error('[X] Droid CLI not found. Install: npm i -g @factory/cli');
+      process.stderr.write('[X] Droid CLI not found. Install: npm i -g @factory/cli\n');
       return exitWithCleanup(1);
     }
     try {
       const stat = fs.statSync(droidPath);
       if (!stat.isFile()) {
-        console.error(`[X] Droid CLI path is not a file: ${droidPath}`);
+        process.stderr.write(`[X] Droid CLI path is not a file: ${droidPath}\n`);
         return exitWithCleanup(1);
       }
     } catch (err) {
       const error = err as NodeJS.ErrnoException;
-      console.error(
-        `[X] Droid CLI path is not accessible (${error.code || 'unknown'}): ${droidPath}`
+      process.stderr.write(
+        `[X] Droid CLI path is not accessible (${error.code || 'unknown'}): ${droidPath}\n`
       );
       return exitWithCleanup(1);
     }
@@ -171,21 +171,23 @@ export class DroidAdapter implements TargetAdapter {
 
     wireChildProcessSignals(child, (err: NodeJS.ErrnoException) => {
       if (err.code === 'EACCES') {
-        console.error(`[X] Droid CLI is not executable: ${droidPath}`);
-        console.error('    Check file permissions and executable bit.');
+        process.stderr.write(`[X] Droid CLI is not executable: ${droidPath}\n`);
+        process.stderr.write('    Check file permissions and executable bit.\n');
       } else if (err.code === 'ENOENT') {
         if (isPowerShellScript) {
-          console.error('[X] PowerShell executable not found (required for .ps1 wrapper launch).');
-          console.error('    Ensure powershell.exe is available in PATH.');
+          process.stderr.write(
+            '[X] PowerShell executable not found (required for .ps1 wrapper launch).\n'
+          );
+          process.stderr.write('    Ensure powershell.exe is available in PATH.\n');
         } else if (needsShell) {
-          console.error('[X] Windows command shell not found for Droid wrapper launch.');
-          console.error('    Ensure cmd.exe is available and accessible.');
+          process.stderr.write('[X] Windows command shell not found for Droid wrapper launch.\n');
+          process.stderr.write('    Ensure cmd.exe is available and accessible.\n');
         } else {
-          console.error(`[X] Droid CLI not found: ${droidPath}`);
-          console.error('    Install: npm i -g @factory/cli');
+          process.stderr.write(`[X] Droid CLI not found: ${droidPath}\n`);
+          process.stderr.write('    Install: npm i -g @factory/cli\n');
         }
       } else {
-        console.error(`[X] Failed to start Droid CLI (${droidPath}):`, err.message);
+        process.stderr.write(`[X] Failed to start Droid CLI (${droidPath}): ${err.message}\n`);
       }
       return exitWithCleanup(1);
     });

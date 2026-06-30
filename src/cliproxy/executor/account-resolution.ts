@@ -150,6 +150,7 @@ export async function resolveAccounts(
         }
       }
       process.exit(1);
+      return { earlyExit: true };
     }
     setDefaultAccount(provider, account.id);
     touchAccount(provider, account.id);
@@ -166,6 +167,7 @@ export async function resolveAccounts(
       console.error(fail(`No account found for ${providerConfig.displayName}`));
       console.error(`    Run "ccs ${provider} --auth" to add an account first`);
       process.exit(1);
+      return { earlyExit: true };
     }
     try {
       const success = renameAccount(provider, defaultAccount.id, setNickname);
@@ -174,12 +176,15 @@ export async function resolveAccounts(
       } else {
         console.error(fail('Failed to rename account'));
         process.exit(1);
+        return { earlyExit: true };
       }
     } catch (err) {
       console.error(fail(err instanceof Error ? err.message : 'Failed to rename account'));
       process.exit(1);
+      return { earlyExit: true };
     }
     process.exit(0);
+    return { earlyExit: true };
   }
 
   return { earlyExit: false };

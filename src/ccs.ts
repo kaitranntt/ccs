@@ -46,31 +46,37 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Phase C: profile + target detection (extracted to dispatcher/profile-resolver.ts)
-  const resolvedProfile = await resolveProfileAndTarget({ args, browserLaunchOverride, cliLogger });
-  const { profile, profileInfo, resolvedTarget, nativeClaudeRemainingArgs } = resolvedProfile;
-
-  // Dynamic imports needed by Phase E flows — preserve original load ordering.
-  const InstanceManagerModule = await import('./management/instance-manager');
-  const InstanceManager = InstanceManagerModule.default;
-  const ProfileRegistryModule = await import('./auth/profile-registry');
-  const ProfileRegistry = ProfileRegistryModule.default;
-  const AccountContextModule = await import('./auth/account-context');
-  const { resolveAccountContextPolicy, isAccountContextMetadata } = AccountContextModule;
-  const ProfileContinuityModule = await import('./auth/profile-continuity-inheritance');
-  const { resolveProfileContinuityInheritance } = ProfileContinuityModule;
-
-  // Build full dispatch context (Phase E)
-  const dispatchCtx = {
-    ...resolvedProfile,
-    InstanceManager,
-    ProfileRegistry,
-    resolveAccountContextPolicy,
-    isAccountContextMetadata,
-    resolveProfileContinuityInheritance,
-  };
-
   try {
+    // Phase C: profile + target detection — inside try so ProfileNotFoundError
+    // reaches the rich showProfileNotFound() handler below instead of falling
+    // through to the bare unhandledRejection handler.
+    const resolvedProfile = await resolveProfileAndTarget({
+      args,
+      browserLaunchOverride,
+      cliLogger,
+    });
+    const { profile, profileInfo, resolvedTarget, nativeClaudeRemainingArgs } = resolvedProfile;
+
+    // Dynamic imports needed by Phase E flows — preserve original load ordering.
+    const InstanceManagerModule = await import('./management/instance-manager');
+    const InstanceManager = InstanceManagerModule.default;
+    const ProfileRegistryModule = await import('./auth/profile-registry');
+    const ProfileRegistry = ProfileRegistryModule.default;
+    const AccountContextModule = await import('./auth/account-context');
+    const { resolveAccountContextPolicy, isAccountContextMetadata } = AccountContextModule;
+    const ProfileContinuityModule = await import('./auth/profile-continuity-inheritance');
+    const { resolveProfileContinuityInheritance } = ProfileContinuityModule;
+
+    // Build full dispatch context (Phase E)
+    const dispatchCtx = {
+      ...resolvedProfile,
+      InstanceManager,
+      ProfileRegistry,
+      resolveAccountContextPolicy,
+      isAccountContextMetadata,
+      resolveProfileContinuityInheritance,
+    };
+
     // Special case: headless delegation (-p/--prompt)
     // Keep existing behavior for Claude targets only; non-claude targets must continue
     // through normal adapter dispatch logic.

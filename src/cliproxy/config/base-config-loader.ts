@@ -16,10 +16,10 @@ interface BaseSettings {
   env: {
     ANTHROPIC_BASE_URL: string;
     ANTHROPIC_AUTH_TOKEN: string;
-    ANTHROPIC_MODEL: string;
-    ANTHROPIC_DEFAULT_OPUS_MODEL: string;
-    ANTHROPIC_DEFAULT_SONNET_MODEL: string;
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: string;
+    ANTHROPIC_MODEL?: string;
+    ANTHROPIC_DEFAULT_OPUS_MODEL?: string;
+    ANTHROPIC_DEFAULT_SONNET_MODEL?: string;
+    ANTHROPIC_DEFAULT_HAIKU_MODEL?: string;
   };
 }
 
@@ -66,16 +66,20 @@ export function loadBaseConfig(provider: CLIProxyProvider): BaseSettings {
       throw new Error('Missing or invalid "env" object');
     }
 
-    const required = [
-      'ANTHROPIC_MODEL',
-      'ANTHROPIC_DEFAULT_OPUS_MODEL',
-      'ANTHROPIC_DEFAULT_SONNET_MODEL',
-      'ANTHROPIC_DEFAULT_HAIKU_MODEL',
-    ];
+    // claude provider is model-neutral: it does not pin model env vars so that
+    // the user's own Claude Code model selection is respected end-to-end.
+    if (provider !== 'claude') {
+      const required = [
+        'ANTHROPIC_MODEL',
+        'ANTHROPIC_DEFAULT_OPUS_MODEL',
+        'ANTHROPIC_DEFAULT_SONNET_MODEL',
+        'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+      ];
 
-    for (const field of required) {
-      if (!settings.env[field as keyof BaseSettings['env']]) {
-        throw new Error(`Missing required field: env.${field}`);
+      for (const field of required) {
+        if (!settings.env[field as keyof BaseSettings['env']]) {
+          throw new Error(`Missing required field: env.${field}`);
+        }
       }
     }
 
@@ -90,14 +94,17 @@ export function loadBaseConfig(provider: CLIProxyProvider): BaseSettings {
 
 /**
  * Get model mapping from base config
- * Extracts model names from env vars
+ * Extracts model names from env vars.
+ * Returns undefined model fields for the claude provider (model-neutral passthrough).
  */
 export function getModelMappingFromConfig(provider: CLIProxyProvider): ProviderModelMapping {
   const config = loadBaseConfig(provider);
 
+  // claude is model-neutral: ANTHROPIC_MODEL is absent from its config; callers
+  // that need model IDs (e.g. getClaudeEnvVars) guard on provider !== 'claude'.
   return {
-    defaultModel: config.env.ANTHROPIC_MODEL,
-    claudeModel: config.env.ANTHROPIC_MODEL,
+    defaultModel: config.env.ANTHROPIC_MODEL ?? '',
+    claudeModel: config.env.ANTHROPIC_MODEL ?? '',
     opusModel: config.env.ANTHROPIC_DEFAULT_OPUS_MODEL,
     sonnetModel: config.env.ANTHROPIC_DEFAULT_SONNET_MODEL,
     haikuModel: config.env.ANTHROPIC_DEFAULT_HAIKU_MODEL,

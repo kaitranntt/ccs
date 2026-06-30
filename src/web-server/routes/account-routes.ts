@@ -38,7 +38,24 @@ import {
 } from './account-route-helpers';
 import type { AccountConfig } from '../../config/unified-config-types';
 import { resolveConfiguredPlainCcsResumeLane } from '../../auth/resume-lane-diagnostics';
-import { isUnifiedMode, loadOrCreateUnifiedConfig } from '../../config/config-loader-facade';
+import {
+  isUnifiedMode,
+  loadOrCreateUnifiedConfig,
+  mutateConfig,
+} from '../../config/config-loader-facade';
+import type { AccountTier } from '../../cliproxy/accounts/types';
+import {
+  isManagedQuotaProvider,
+  MANAGED_QUOTA_PROVIDERS,
+} from '../../cliproxy/quota/quota-manager';
+
+/** Valid account tier values for tier-lock validation */
+const VALID_ACCOUNT_TIERS: ReadonlySet<string> = new Set<AccountTier>([
+  'free',
+  'pro',
+  'ultra',
+  'unknown',
+]);
 
 const router = Router();
 
@@ -628,6 +645,121 @@ router.post('/solo', async (req: Request, res: Response): Promise<void> => {
     }
 
     res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/accounts/tier-lock - Set or clear the tier_lock for a provider
+ *
+ * Body: { provider: string, tier: string | null }
+ *   - tier: the tier name to lock to (e.g. "ultra", "pro"), or null to clear.
+ *
+ * Persists via the existing config write path (mutateConfig → quota_management.manual.tier_lock).
+ * The quota-manager reads this on every preflight/findHealthyAccount call.
+ */
+router.post('/tier-lock', (req: Request, res: Response): void => {
+  try {
+    const { provider, tier } = req.body as { provider?: unknown; tier?: unknown };
+
+    if (!provider || typeof provider !== 'string') {
+      res.status(400).json({ error: 'Missing required field: provider (string)' });
+      return;
+    }
+
+    if (!isCLIProxyProvider(provider)) {
+      res.status(400).json({ error: `Invalid provider: ${provider}` });
+      return;
+    }
+
+    // Fix #8: tier_lock is only enforced by quota-manager for managed-quota providers.
+    // Locking a non-managed provider persists a silently-unenforced entry.
+    // Reject with 400 to avoid misleading the caller.
+    if (!isManagedQuotaProvider(provider)) {
+      res.status(400).json({
+        error:
+          `Provider "${provider}" does not support tier-lock. ` +
+          `Only managed-quota providers support it: ${[...MANAGED_QUOTA_PROVIDERS].join(', ')}.`,
+      });
+      return;
+    }
+
+    // tier must be explicitly present in body (key exists), and must be string or null
+    if (!('tier' in req.body)) {
+      res.status(400).json({ error: 'Missing required field: tier (string | null)' });
+      return;
+    }
+
+    if (tier !== null && typeof tier !== 'string') {
+      res.status(400).json({ error: 'Invalid tier: must be a string or null' });
+      return;
+    }
+
+    // Validate tier against known AccountTier values (null means clear the lock)
+    if (tier !== null && !VALID_ACCOUNT_TIERS.has(tier)) {
+      res.status(400).json({
+        error: `Invalid tier: "${tier}". Must be one of: ${[...VALID_ACCOUNT_TIERS].join(', ')}`,
+      });
+      return;
+    }
+
+    // Persist via existing config write path.
+    // tier_lock is a per-provider map: { [provider]: tier | null }
+    // Setting a provider's entry to null clears the lock for that provider only.
+    mutateConfig((config) => {
+      if (!config.quota_management) {
+        config.quota_management = {
+          mode: 'hybrid',
+          auto: {
+            preflight_check: true,
+            exhaustion_threshold: 5,
+            tier_priority: ['ultra', 'pro', 'free'],
+            cooldown_minutes: 5,
+          },
+          manual: {
+            paused_accounts: [],
+            forced_default: null,
+            tier_lock: { [provider]: tier ?? null },
+          },
+          runtime_monitor: {
+            enabled: true,
+            normal_interval_seconds: 300,
+            critical_interval_seconds: 60,
+            warn_threshold: 20,
+            exhaustion_threshold: 5,
+            cooldown_minutes: 5,
+          },
+        };
+      } else {
+        if (!config.quota_management.manual) {
+          config.quota_management.manual = {
+            paused_accounts: [],
+            forced_default: null,
+            tier_lock: { [provider]: tier ?? null },
+          };
+        } else {
+          // Ensure config.quota_management.manual is an owned object, not a shared
+          // reference from DEFAULT_MANUAL_QUOTA_CONFIG (which createEmptyUnifiedConfig
+          // sets via shallow spread).  Replacing the reference prevents mutation of
+          // the module-level default constant.
+          config.quota_management.manual = { ...config.quota_management.manual };
+
+          // Ensure tier_lock is a map (guard against legacy string shape or null)
+          const existing = config.quota_management.manual.tier_lock;
+          if (!existing || typeof existing !== 'object') {
+            config.quota_management.manual.tier_lock = { [provider]: tier ?? null };
+          } else {
+            // Spread to own the map too before mutating it
+            const ownedMap = { ...(existing as Record<string, string | null>) };
+            ownedMap[provider] = tier ?? null;
+            config.quota_management.manual.tier_lock = ownedMap;
+          }
+        }
+      }
+    });
+
+    res.json({ provider, tier_lock: tier ?? null });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

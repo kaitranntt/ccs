@@ -12,6 +12,10 @@ import { InstanceManager } from '../../management/instance-manager';
 import { installWebSearchHook } from './hook-installer';
 import { appendWebSearchTrace } from './trace';
 import { getWebSearchConfig } from '../../config/config-loader-facade';
+import {
+  isClaudeUserConfigLockUnavailableError as isLockUnavailableError,
+  withClaudeUserConfigLock,
+} from '../claude-user-config-lock';
 
 const WEBSEARCH_MCP_SERVER = 'ccs-websearch-server.cjs';
 const WEBSEARCH_MCP_SERVER_NAME = 'ccs-websearch';
@@ -51,8 +55,9 @@ function hasMatchingContents(sourcePath: string, destinationPath: string): boole
     return source.equals(destination);
   } catch (error) {
     if (process.env.CCS_DEBUG) {
-      console.error(
-        warn(`Existing WebSearch MCP server is unreadable: ${(error as Error).message}`)
+      process.stderr.write(
+        String(warn(`Existing WebSearch MCP server is unreadable: ${(error as Error).message}`)) +
+          '\n'
       );
     }
     return false;
@@ -118,47 +123,69 @@ function removeManagedServerConfig(configPath: string): boolean {
     return false;
   }
 
-  const config = readClaudeUserConfig(configPath);
-  if (config === null) {
-    if (process.env.CCS_DEBUG) {
-      console.error(warn(`Malformed Claude config prevents MCP cleanup: ${configPath}`));
-    }
-    return false;
-  }
-
-  const existingServers =
-    config.mcpServers && typeof config.mcpServers === 'object' && !Array.isArray(config.mcpServers)
-      ? { ...(config.mcpServers as Record<string, unknown>) }
-      : {};
-
-  if (!(WEBSEARCH_MCP_SERVER_NAME in existingServers)) {
-    return false;
-  }
-
-  delete existingServers[WEBSEARCH_MCP_SERVER_NAME];
-
-  const nextConfig: ClaudeUserConfig = { ...config };
-  if (Object.keys(existingServers).length === 0) {
-    delete nextConfig.mcpServers;
-  } else {
-    nextConfig.mcpServers = existingServers;
-  }
-
   try {
-    writeClaudeUserConfig(configPath, nextConfig);
-    if (process.env.CCS_DEBUG) {
-      console.error(info(`Removed WebSearch MCP config from ${configPath}`));
-    }
-    return true;
+    return withClaudeUserConfigLock(configPath, () => {
+      const config = readClaudeUserConfig(configPath);
+      if (config === null) {
+        if (process.env.CCS_DEBUG) {
+          process.stderr.write(
+            String(warn(`Malformed Claude config prevents MCP cleanup: ${configPath}`)) + '\n'
+          );
+        }
+        return false;
+      }
+
+      const existingServers =
+        config.mcpServers &&
+        typeof config.mcpServers === 'object' &&
+        !Array.isArray(config.mcpServers)
+          ? { ...(config.mcpServers as Record<string, unknown>) }
+          : {};
+
+      if (!(WEBSEARCH_MCP_SERVER_NAME in existingServers)) {
+        return false;
+      }
+
+      delete existingServers[WEBSEARCH_MCP_SERVER_NAME];
+
+      const nextConfig: ClaudeUserConfig = { ...config };
+      if (Object.keys(existingServers).length === 0) {
+        delete nextConfig.mcpServers;
+      } else {
+        nextConfig.mcpServers = existingServers;
+      }
+
+      try {
+        writeClaudeUserConfig(configPath, nextConfig);
+        if (process.env.CCS_DEBUG) {
+          process.stderr.write(
+            String(info(`Removed WebSearch MCP config from ${configPath}`)) + '\n'
+          );
+        }
+        return true;
+      } catch (error) {
+        if (process.env.CCS_DEBUG) {
+          process.stderr.write(
+            String(
+              warn(
+                `Failed to remove WebSearch MCP config from ${configPath}: ${(error as Error).message}`
+              )
+            ) + '\n'
+          );
+        }
+        return false;
+      }
+    });
   } catch (error) {
-    if (process.env.CCS_DEBUG) {
-      console.error(
-        warn(
-          `Failed to remove WebSearch MCP config from ${configPath}: ${(error as Error).message}`
-        )
-      );
+    if (isLockUnavailableError(error)) {
+      appendWebSearchTrace('websearch_mcp_config_remove_skipped', {
+        reason: 'user_config_locked',
+        configPath,
+        error: (error as Error).message,
+      });
+      return false;
     }
-    return false;
+    throw error;
   }
 }
 
@@ -172,8 +199,9 @@ export function installWebSearchMcpServer(): boolean {
   if (!installWebSearchHook()) {
     appendWebSearchTrace('websearch_mcp_install_failed', { reason: 'hook_unavailable' });
     if (process.env.CCS_DEBUG) {
-      console.error(
-        warn('WebSearch MCP server install skipped because hook runtime is unavailable')
+      process.stderr.write(
+        String(warn('WebSearch MCP server install skipped because hook runtime is unavailable')) +
+          '\n'
       );
     }
     return false;
@@ -183,7 +211,9 @@ export function installWebSearchMcpServer(): boolean {
   if (!sourcePath) {
     appendWebSearchTrace('websearch_mcp_install_failed', { reason: 'source_missing' });
     if (process.env.CCS_DEBUG) {
-      console.error(warn(`WebSearch MCP server source not found: ${WEBSEARCH_MCP_SERVER}`));
+      process.stderr.write(
+        String(warn(`WebSearch MCP server source not found: ${WEBSEARCH_MCP_SERVER}`)) + '\n'
+      );
     }
     return false;
   }
@@ -225,7 +255,9 @@ export function installWebSearchMcpServer(): boolean {
       error: (error as Error).message,
     });
     if (process.env.CCS_DEBUG) {
-      console.error(warn(`Failed to install WebSearch MCP server: ${(error as Error).message}`));
+      process.stderr.write(
+        String(warn(`Failed to install WebSearch MCP server: ${(error as Error).message}`)) + '\n'
+      );
     }
     return false;
   } finally {
@@ -243,67 +275,94 @@ export function ensureWebSearchMcpConfig(): boolean {
   }
 
   const claudeUserConfigPath = getClaudeUserConfigPath();
-  const claudeUserConfigDir = path.dirname(claudeUserConfigPath);
-  const config = readClaudeUserConfig(claudeUserConfigPath);
-
-  if (config === null) {
-    appendWebSearchTrace('websearch_mcp_config_failed', { reason: 'malformed_user_config' });
-    if (process.env.CCS_DEBUG) {
-      console.error(warn('Malformed ~/.claude.json prevents WebSearch MCP provisioning'));
-    }
-    return false;
-  }
-
-  if (!fs.existsSync(claudeUserConfigDir)) {
-    fs.mkdirSync(claudeUserConfigDir, { recursive: true, mode: 0o700 });
-  }
-
-  const existingServers =
-    config.mcpServers && typeof config.mcpServers === 'object' && !Array.isArray(config.mcpServers)
-      ? (config.mcpServers as Record<string, unknown>)
-      : {};
-  const desiredServerConfig: ManagedWebSearchMcpConfig = {
-    type: 'stdio',
-    command: 'node',
-    args: [getWebSearchMcpServerPath()],
-    env: {},
-  };
-
-  const currentConfig = existingServers[WEBSEARCH_MCP_SERVER_NAME];
-  if (
-    typeof currentConfig === 'object' &&
-    currentConfig !== null &&
-    JSON.stringify(currentConfig) === JSON.stringify(desiredServerConfig)
-  ) {
-    appendWebSearchTrace('websearch_mcp_config_ready', { configPath: claudeUserConfigPath });
-    return true;
-  }
-
-  const nextConfig: ClaudeUserConfig = {
-    ...config,
-    mcpServers: {
-      ...existingServers,
-      [WEBSEARCH_MCP_SERVER_NAME]: desiredServerConfig,
-    },
-  };
 
   try {
-    writeClaudeUserConfig(claudeUserConfigPath, nextConfig);
-    appendWebSearchTrace('websearch_mcp_config_ready', { configPath: claudeUserConfigPath });
-    if (process.env.CCS_DEBUG) {
-      console.error(info(`Ensured WebSearch MCP config in ${claudeUserConfigPath}`));
-    }
-    return true;
-  } catch (error) {
-    appendWebSearchTrace('websearch_mcp_config_failed', {
-      reason: 'write_failed',
-      configPath: claudeUserConfigPath,
-      error: (error as Error).message,
+    return withClaudeUserConfigLock(claudeUserConfigPath, () => {
+      const config = readClaudeUserConfig(claudeUserConfigPath);
+
+      if (config === null) {
+        appendWebSearchTrace('websearch_mcp_config_failed', { reason: 'malformed_user_config' });
+        if (process.env.CCS_DEBUG) {
+          process.stderr.write(
+            String(warn('Malformed ~/.claude.json prevents WebSearch MCP provisioning')) + '\n'
+          );
+        }
+        return false;
+      }
+
+      const existingServers =
+        config.mcpServers &&
+        typeof config.mcpServers === 'object' &&
+        !Array.isArray(config.mcpServers)
+          ? (config.mcpServers as Record<string, unknown>)
+          : {};
+      const desiredServerConfig: ManagedWebSearchMcpConfig = {
+        type: 'stdio',
+        command: 'node',
+        args: [getWebSearchMcpServerPath()],
+        env: {},
+      };
+
+      const currentConfig = existingServers[WEBSEARCH_MCP_SERVER_NAME];
+      if (
+        typeof currentConfig === 'object' &&
+        currentConfig !== null &&
+        JSON.stringify(currentConfig) === JSON.stringify(desiredServerConfig)
+      ) {
+        appendWebSearchTrace('websearch_mcp_config_ready', { configPath: claudeUserConfigPath });
+        return true;
+      }
+
+      const nextConfig: ClaudeUserConfig = {
+        ...config,
+        mcpServers: {
+          ...existingServers,
+          [WEBSEARCH_MCP_SERVER_NAME]: desiredServerConfig,
+        },
+      };
+
+      try {
+        writeClaudeUserConfig(claudeUserConfigPath, nextConfig);
+        appendWebSearchTrace('websearch_mcp_config_ready', { configPath: claudeUserConfigPath });
+        if (process.env.CCS_DEBUG) {
+          process.stderr.write(
+            String(info(`Ensured WebSearch MCP config in ${claudeUserConfigPath}`)) + '\n'
+          );
+        }
+        return true;
+      } catch (error) {
+        appendWebSearchTrace('websearch_mcp_config_failed', {
+          reason: 'write_failed',
+          configPath: claudeUserConfigPath,
+          error: (error as Error).message,
+        });
+        if (process.env.CCS_DEBUG) {
+          process.stderr.write(
+            String(warn(`Failed to update ~/.claude.json: ${(error as Error).message}`)) + '\n'
+          );
+        }
+        return false;
+      }
     });
-    if (process.env.CCS_DEBUG) {
-      console.error(warn(`Failed to update ~/.claude.json: ${(error as Error).message}`));
+  } catch (error) {
+    if (isLockUnavailableError(error)) {
+      appendWebSearchTrace('websearch_mcp_config_failed', {
+        reason: 'user_config_locked',
+        configPath: claudeUserConfigPath,
+        error: (error as Error).message,
+      });
+      if (process.env.CCS_DEBUG) {
+        process.stderr.write(
+          String(
+            warn(
+              `WebSearch MCP config skipped because ${claudeUserConfigPath} is locked by another process`
+            )
+          ) + '\n'
+        );
+      }
+      return false;
     }
-    return false;
+    throw error;
   }
 }
 
@@ -342,7 +401,9 @@ export function uninstallWebSearchMcpServer(): boolean {
     return true;
   } catch (error) {
     if (process.env.CCS_DEBUG) {
-      console.error(warn(`Failed to remove WebSearch MCP server: ${(error as Error).message}`));
+      process.stderr.write(
+        String(warn(`Failed to remove WebSearch MCP server: ${(error as Error).message}`)) + '\n'
+      );
     }
     return false;
   }
@@ -376,4 +437,31 @@ export function ensureWebSearchMcpOrThrow(): void {
   if (!ensureWebSearchMcp()) {
     throw new Error('WebSearch is enabled, but CCS could not prepare the local WebSearch tool.');
   }
+}
+
+/**
+ * Prepare WebSearch for a user launch without blocking Claude startup.
+ *
+ * Returns true when the normal WebSearch status line is still accurate. A
+ * failed MCP prepare already prints a degraded-path warning, so callers should
+ * skip the ready/status line when this returns false.
+ */
+export function ensureWebSearchMcpForLaunch(): boolean {
+  const wsConfig = getWebSearchConfig();
+  if (!wsConfig.enabled) {
+    return true;
+  }
+
+  const ready = ensureWebSearchMcp();
+  if (!ready) {
+    process.stderr.write(
+      String(
+        warn(
+          'WebSearch is enabled, but CCS could not prepare the local WebSearch tool. This session will continue without local WebSearch.'
+        )
+      ) + '\n'
+    );
+  }
+
+  return ready;
 }

@@ -132,15 +132,16 @@ export async function ensureBinary(config: BinaryManagerConfig): Promise<string>
     return binaryPath;
   }
 
-  // Binary missing - download
-  log('Binary not found, downloading...', verbose);
-
+  // Binary missing
   if (!config.allowInstall) {
     throw new Error(
       `${getBackendLabel(backend)} binary is not installed locally. ` +
         'Run "ccs cliproxy install" when you have network access.'
     );
   }
+
+  // Only log download intent when a download will actually happen
+  log('Binary not found, downloading...', verbose);
 
   if (!config.forceVersion) {
     try {

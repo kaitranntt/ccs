@@ -112,6 +112,37 @@ function loadQuotaPaused(): QuotaPausedFile {
   return { entries: [] };
 }
 
+/**
+ * Read-only view of a persisted quota-cooldown pause.
+ * Exposed for visibility surfaces (e.g. `ccs cliproxy quota` pool section)
+ * that must distinguish a quota cooldown (with a reset time) from a manual pause.
+ */
+export interface QuotaCooldownEntry {
+  provider: CLIProxyProvider;
+  accountId: string;
+  /** ISO timestamp when the account was paused (matches AccountInfo.pausedAt) */
+  pausedAt: string;
+  /** Epoch ms when the cooldown is eligible to be lifted */
+  until: number;
+  reason: 'quota_exhausted';
+}
+
+/**
+ * Return the persisted quota-cooldown pauses recorded on disk.
+ *
+ * This is the cross-process source of truth for quota cooldowns: the in-memory
+ * cooldown map in quota-manager is process-local, but quota-paused.json is
+ * written by the long-lived proxy/monitor process and read by short-lived CLI
+ * invocations. Callers use it to label an account as cooling (vs manually
+ * paused) and to show the reset time.
+ *
+ * Entries are returned as-is (including expired ones); callers decide whether to
+ * treat `until <= now` as already cooled down.
+ */
+export function readQuotaCooldownEntries(): QuotaCooldownEntry[] {
+  return loadQuotaPaused().entries.map((entry) => ({ ...entry }));
+}
+
 function saveQuotaPaused(data: QuotaPausedFile): void {
   const filePath = getQuotaPausedPath();
   if (data.entries.length === 0) {
@@ -221,32 +252,36 @@ export function warnCrossProviderDuplicates(provider: CLIProxyProvider): boolean
   const duplicates = detectCrossProviderDuplicates();
   if (duplicates.size === 0) return false;
 
-  console.error('');
-  console.error(warn('Account safety: cross-provider duplicate detected'));
-  console.error(
-    '    Same Google account across "ccs gemini" + "ccs agy" is a known suspension/ban risk (ref: #509).'
+  process.stderr.write('\n');
+  process.stderr.write(String(warn('Account safety: cross-provider duplicate detected')) + '\n');
+  process.stderr.write(
+    '    Same Google account across "ccs gemini" + "ccs agy" is a known suspension/ban risk (ref: #509).\n'
   );
-  console.error('    This risk applies to both CLI sessions and accounts added from "ccs config".');
-  console.error(
-    '    If provider requests start returning 403/Forbidden, treat it as a possible account disable/ban.'
+  process.stderr.write(
+    '    This risk applies to both CLI sessions and accounts added from "ccs config".\n'
   );
-  console.error(
-    '    If you want to keep Google AI access on this account, do not continue this shared-account setup.'
+  process.stderr.write(
+    '    If provider requests start returning 403/Forbidden, treat it as a possible account disable/ban.\n'
   );
-  console.error(
-    '    CCS is provided as-is and cannot take responsibility for suspension/ban/access-loss decisions.'
+  process.stderr.write(
+    '    If you want to keep Google AI access on this account, do not continue this shared-account setup.\n'
   );
-  console.error(`    Details: ${ISSUE_509_URL}`);
-  console.error('');
+  process.stderr.write(
+    '    CCS is provided as-is and cannot take responsibility for suspension/ban/access-loss decisions.\n'
+  );
+  process.stderr.write(`    Details: ${ISSUE_509_URL}\n`);
+  process.stderr.write('\n');
 
   for (const [email, providers] of duplicates) {
-    console.error(`    ${maskEmail(email)} -> ${providers.join(', ')}`);
+    process.stderr.write(`    ${maskEmail(email)} -> ${providers.join(', ')}\n`);
   }
 
-  console.error('');
-  console.error('    Immediate action: pause duplicate account and use separate Google accounts.');
-  console.error('    Fix command: "ccs cliproxy pause <account> --provider <provider>"');
-  console.error('');
+  process.stderr.write('\n');
+  process.stderr.write(
+    '    Immediate action: pause duplicate account and use separate Google accounts.\n'
+  );
+  process.stderr.write('    Fix command: "ccs cliproxy pause <account> --provider <provider>"\n');
+  process.stderr.write('\n');
 
   return true;
 }
@@ -258,27 +293,31 @@ export function warnNewAccountConflict(
   email: string,
   conflictingProviders: CLIProxyProvider[]
 ): void {
-  console.error('');
-  console.error(warn('Account safety: this email is used by another provider'));
-  console.error(
-    `    ${maskEmail(email)} is also registered under: ${conflictingProviders.join(', ')}`
+  process.stderr.write('\n');
+  process.stderr.write(
+    String(warn('Account safety: this email is used by another provider')) + '\n'
   );
-  console.error(
-    '    Reusing one Google account between "ccs gemini" and "ccs agy" can trigger bans.'
+  process.stderr.write(
+    `    ${maskEmail(email)} is also registered under: ${conflictingProviders.join(', ')}\n`
   );
-  console.error(
-    '    This applies to both CLI auth and "ccs config" dashboard auth for these providers.'
+  process.stderr.write(
+    '    Reusing one Google account between "ccs gemini" and "ccs agy" can trigger bans.\n'
   );
-  console.error('    403/Forbidden responses can be an early sign of account disablement.');
-  console.error(
-    '    If you want to keep Google AI access, do not continue with this shared-account setup.'
+  process.stderr.write(
+    '    This applies to both CLI auth and "ccs config" dashboard auth for these providers.\n'
   );
-  console.error(
-    '    CCS is provided as-is and cannot take responsibility for suspension/ban/access-loss decisions.'
+  process.stderr.write(
+    '    403/Forbidden responses can be an early sign of account disablement.\n'
   );
-  console.error('    Consider pausing the duplicate or using a different account.');
-  console.error(`    Details: ${ISSUE_509_URL}`);
-  console.error('');
+  process.stderr.write(
+    '    If you want to keep Google AI access, do not continue with this shared-account setup.\n'
+  );
+  process.stderr.write(
+    '    CCS is provided as-is and cannot take responsibility for suspension/ban/access-loss decisions.\n'
+  );
+  process.stderr.write('    Consider pausing the duplicate or using a different account.\n');
+  process.stderr.write(`    Details: ${ISSUE_509_URL}\n`);
+  process.stderr.write('\n');
 }
 
 function isBanWarningProvider(provider: CLIProxyProvider): boolean {
@@ -293,27 +332,29 @@ export function warnOAuthBanRisk(provider: CLIProxyProvider): void {
 
   shownBanWarnings.add(provider);
   const isAgy = provider === 'agy';
-  console.error('');
-  console.error(warn('Account safety warning (#509 - read before continuing)'));
-  console.error(
-    '    Known risk: one Google account shared by "ccs gemini" + "ccs agy" can be disabled/banned.'
+  process.stderr.write('\n');
+  process.stderr.write(
+    String(warn('Account safety warning (#509 - read before continuing)')) + '\n'
+  );
+  process.stderr.write(
+    '    Known risk: one Google account shared by "ccs gemini" + "ccs agy" can be disabled/banned.\n'
   );
   if (isAgy) {
-    console.error(
-      '    Antigravity-specific warning: OAuth usage can still trigger suspension/ban patterns.'
+    process.stderr.write(
+      '    Antigravity-specific warning: OAuth usage can still trigger suspension/ban patterns.\n'
     );
   }
-  console.error(
-    '    This risk applies whether auth was done from CLI or from "ccs config" dashboard.'
+  process.stderr.write(
+    '    This risk applies whether auth was done from CLI or from "ccs config" dashboard.\n'
   );
-  console.error(
-    '    If you want to keep Google AI access, do not continue with this shared-account setup.'
+  process.stderr.write(
+    '    If you want to keep Google AI access, do not continue with this shared-account setup.\n'
   );
-  console.error(
-    '    CCS is provided as-is and cannot take responsibility for suspension/ban/access-loss decisions.'
+  process.stderr.write(
+    '    CCS is provided as-is and cannot take responsibility for suspension/ban/access-loss decisions.\n'
   );
-  console.error(`    Details: ${ISSUE_509_URL}`);
-  console.error('');
+  process.stderr.write(`    Details: ${ISSUE_509_URL}\n`);
+  process.stderr.write('\n');
 }
 
 /**
@@ -333,20 +374,22 @@ export function warnPossible403Ban(provider: CLIProxyProvider, errorMessage: str
     return false;
   }
 
-  console.error('');
-  console.error(warn(`Account safety: ${provider} returned 403/Forbidden (possible disable/ban)`));
-  console.error(
-    '    For gemini/agy flows this often means Google blocked or disabled the account.'
+  process.stderr.write('\n');
+  process.stderr.write(
+    String(warn(`Account safety: ${provider} returned 403/Forbidden (possible disable/ban)`)) + '\n'
   );
-  console.error(
-    '    If you want to keep Google AI access, stop using this account/provider pairing immediately.'
+  process.stderr.write(
+    '    For gemini/agy flows this often means Google blocked or disabled the account.\n'
   );
-  console.error(
-    '    CCS is provided as-is and cannot take responsibility for suspension/ban/access-loss decisions.'
+  process.stderr.write(
+    '    If you want to keep Google AI access, stop using this account/provider pairing immediately.\n'
   );
-  console.error(`    Details: ${ISSUE_509_URL}`);
-  console.error(`    Error: "${truncate(errorMessage, 160)}"`);
-  console.error('');
+  process.stderr.write(
+    '    CCS is provided as-is and cannot take responsibility for suspension/ban/access-loss decisions.\n'
+  );
+  process.stderr.write(`    Details: ${ISSUE_509_URL}\n`);
+  process.stderr.write(`    Error: "${truncate(errorMessage, 160)}"\n`);
+  process.stderr.write('\n');
   return true;
 }
 
@@ -371,10 +414,12 @@ export function cleanupStaleAutoPauses(): void {
     for (const { provider, accountId } of session.accounts) {
       resumeAccount(provider, accountId);
     }
-    console.error(
-      info(
-        `Restored ${session.accounts.length} auto-paused account(s) from crashed ${session.initiator} session`
-      )
+    process.stderr.write(
+      String(
+        info(
+          `Restored ${session.accounts.length} auto-paused account(s) from crashed ${session.initiator} session`
+        )
+      ) + '\n'
     );
   }
 
@@ -530,15 +575,17 @@ export function enforceProviderIsolation(provider: CLIProxyProvider): number {
   });
   saveAutoPaused(freshData);
 
-  console.error('');
-  console.error(info(`Account safety: auto-paused ${toPause.length} conflicting account(s)`));
+  process.stderr.write('\n');
+  process.stderr.write(
+    String(info(`Account safety: auto-paused ${toPause.length} conflicting account(s)`)) + '\n'
+  );
   for (const { provider: p, accountId } of toPause) {
     const acct = registry.providers[p]?.accounts[accountId];
     const display = acct?.email ? maskEmail(acct.email) : accountId;
-    console.error(`    ${display} (${p})`);
+    process.stderr.write(`    ${display} (${p})\n`);
   }
-  console.error('    Will restore on session exit.');
-  console.error('');
+  process.stderr.write('    Will restore on session exit.\n');
+  process.stderr.write('\n');
 
   return toPause.length;
 }
@@ -568,8 +615,9 @@ export function restoreAutoPausedAccounts(provider: CLIProxyProvider): void {
   saveAutoPaused(data);
 }
 
-// Error patterns that indicate Google has disabled/banned an account
-const BAN_PATTERNS = [
+// Error patterns that indicate a provider has disabled/banned an account.
+// Shared patterns apply to all providers (Google and Anthropic OAuth flows).
+const SHARED_BAN_PATTERNS = [
   'disabled in this account',
   'violation of terms of service',
   'account has been disabled',
@@ -578,12 +626,28 @@ const BAN_PATTERNS = [
   'account has been banned',
 ];
 
+// Anthropic-specific disable patterns.  Only applied when provider === 'claude'
+// to avoid false-positive auto-pause on Google/Codex errors that may reference
+// "policy" in rate-limit or scope messages.
+const ANTHROPIC_BAN_PATTERNS = ['your account has been blocked', 'account is blocked'];
+
 /**
  * Check if an error message indicates an account ban/disable.
+ * Pass the provider so Anthropic-only patterns cannot trip Google providers.
  */
-export function isBanResponse(errorMessage: string): boolean {
+export function isBanResponse(errorMessage: string, provider?: CLIProxyProvider): boolean {
   const lower = errorMessage.toLowerCase();
-  return BAN_PATTERNS.some((pattern) => lower.includes(pattern));
+  if (SHARED_BAN_PATTERNS.some((pattern) => lower.includes(pattern))) return true;
+  if (provider === 'claude' && ANTHROPIC_BAN_PATTERNS.some((pattern) => lower.includes(pattern))) {
+    return true;
+  }
+  return false;
+}
+
+/** Return the actor name (Google, Anthropic, etc.) for ban copy. */
+function banActor(provider: CLIProxyProvider): string {
+  if (provider === 'claude') return 'Anthropic';
+  return 'Google';
 }
 
 /**
@@ -595,16 +659,17 @@ export function handleBanDetection(
   accountId: string,
   errorMessage: string
 ): boolean {
-  if (!isBanResponse(errorMessage)) return false;
+  if (!isBanResponse(errorMessage, provider)) return false;
 
-  console.error('');
-  console.error(warn('Account safety: account appears disabled by Google'));
-  console.error(`    Account "${maskEmail(accountId)}" (${provider}) returned:`);
-  console.error(`    "${truncate(errorMessage, 120)}"`);
-  console.error('');
-  console.error(info('Auto-pausing this account to prevent further issues.'));
-  console.error(`    Resume later: ccs ${provider} --resume ${accountId}`);
-  console.error('');
+  const actor = banActor(provider);
+  process.stderr.write('\n');
+  process.stderr.write(String(warn(`Account safety: account appears disabled by ${actor}`)) + '\n');
+  process.stderr.write(`    Account "${maskEmail(accountId)}" (${provider}) returned:\n`);
+  process.stderr.write(`    "${truncate(errorMessage, 120)}"\n`);
+  process.stderr.write('\n');
+  process.stderr.write(String(info('Auto-pausing this account to prevent further issues.')) + '\n');
+  process.stderr.write(`    Resume later: ccs ${provider} --resume ${accountId}\n`);
+  process.stderr.write('\n');
 
   return pauseAccount(provider, accountId);
 }

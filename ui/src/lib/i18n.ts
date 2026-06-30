@@ -1636,6 +1636,11 @@ const resources = {
       githubLink: {
         title: 'Report an issue on GitHub',
       },
+      ccsBarButton: {
+        title: 'Open CCS Bar docs',
+        label: 'CCS Bar',
+        tooltip: 'Native macOS menu-bar quota, cost, and account controls',
+      },
       globalEnvIndicator: {
         injectedCount_one: '{{count}} global env var will be injected at runtime',
         injectedCount_other: '{{count}} global env vars will be injected at runtime',
@@ -1917,6 +1922,20 @@ const resources = {
         roundRobin: 'Round robin spreads usage.',
         fillFirst: 'Fill first keeps backup accounts cold until they are needed.',
         routingStrategy: 'Routing strategy',
+        poolRouting: 'Pool routing',
+        poolRoutingOn: 'On',
+        poolRoutingOff: 'Off',
+        poolRoutingManaged:
+          'Pool routing is on: CCS manages strategy (fill-first), session affinity, and cooling for the whole proxy.',
+        poolRoutingOffHint:
+          'Pool routing is off. Enable it from the CLI (ccs cliproxy pool --enable) for fill-first drain with cooldown.',
+        poolRoutingApplyWarning:
+          'Pool routing is on. Strategy and session affinity changes will not take effect until you disable it: ccs cliproxy pool --disable',
+        poolRoutingLocalOnly:
+          'Pool routing is managed locally; this remote proxy may not reflect it.',
+        poolMaxRetry: 'Max retry {{count}}',
+        drainOrderHint:
+          'Per-account drain order and cooldown state: run ccs cliproxy quota or ccs cliproxy accounts order <provider>.',
         optionalRouting: 'Optional routing',
         sessionAffinity: 'Session affinity',
         sessionAffinityOn: 'On',
@@ -4261,6 +4280,11 @@ const resources = {
       githubLink: {
         title: '在 GitHub 上报告问题',
       },
+      ccsBarButton: {
+        title: '打开 CCS Bar 文档',
+        label: 'CCS Bar',
+        tooltip: '原生 macOS 菜单栏配额、成本和账号控制',
+      },
       globalEnvIndicator: {
         injectedCount_one: '{{count}} 个全局环境变量将在运行时注入',
         injectedCount_other: '{{count}} 个全局环境变量将在运行时注入',
@@ -4531,6 +4555,19 @@ const resources = {
         roundRobin: '轮询模式均匀分配用量。',
         fillFirst: '优先填满模式让备用账号保持冷启动直到需要时。',
         routingStrategy: '路由策略',
+        poolRouting: '账号池路由',
+        poolRoutingOn: '开启',
+        poolRoutingOff: '关闭',
+        poolRoutingManaged:
+          '账号池路由已开启：CCS 为整个代理统一管理策略（优先填满）、会话粘性和冷却。',
+        poolRoutingOffHint:
+          '账号池路由已关闭。可在命令行启用（ccs cliproxy pool --enable）以使用带冷却的优先填满。',
+        poolRoutingApplyWarning:
+          '账号池路由已开启。在禁用之前，策略和会话粘性的更改不会生效：ccs cliproxy pool --disable',
+        poolRoutingLocalOnly: '账号池路由仅在本地管理；此远程代理可能不会反映该设置。',
+        poolMaxRetry: '最大重试 {{count}}',
+        drainOrderHint:
+          '查看每个账号的排空顺序和冷却状态：运行 ccs cliproxy quota 或 ccs cliproxy accounts order <provider>。',
         optionalRouting: '可选路由',
         sessionAffinity: '会话粘性',
         sessionAffinityOn: '开启',
@@ -6946,6 +6983,11 @@ const resources = {
       githubLink: {
         title: 'Báo cáo vấn đề trên GitHub',
       },
+      ccsBarButton: {
+        title: 'Mở tài liệu CCS Bar',
+        label: 'CCS Bar',
+        tooltip: 'Điều khiển hạn mức, chi phí và tài khoản trên thanh menu macOS',
+      },
       globalEnvIndicator: {
         injectedCount_one: '{{count}} biến env toàn cục sẽ được áp dụng khi chạy',
         injectedCount_other: '{{count}} biến env toàn cục sẽ được áp dụng khi chạy',
@@ -7219,6 +7261,20 @@ const resources = {
         roundRobin: 'Round-robin phân bổ đều lượt dùng.',
         fillFirst: 'Fill-first giữ tài khoản dự phòng cho đến khi cần thiết.',
         routingStrategy: 'Chiến lược định tuyến',
+        poolRouting: 'Định tuyến nhóm',
+        poolRoutingOn: 'Bật',
+        poolRoutingOff: 'Tắt',
+        poolRoutingManaged:
+          'Định tuyến nhóm đang bật: CCS quản lý chiến lược (fill-first), ghim phiên và làm nguội cho toàn bộ proxy.',
+        poolRoutingOffHint:
+          'Định tuyến nhóm đang tắt. Bật từ CLI (ccs cliproxy pool --enable) để dùng fill-first kèm làm nguội.',
+        poolRoutingApplyWarning:
+          'Định tuyến nhóm đang bật. Thay đổi chiến lược và ghim phiên sẽ không có hiệu lực cho đến khi bạn tắt nó: ccs cliproxy pool --disable',
+        poolRoutingLocalOnly:
+          'Định tuyến nhóm chỉ được quản lý cục bộ; proxy từ xa này có thể không phản ánh điều đó.',
+        poolMaxRetry: 'Thử lại tối đa {{count}}',
+        drainOrderHint:
+          'Thứ tự rút và trạng thái làm nguội từng tài khoản: chạy ccs cliproxy quota hoặc ccs cliproxy accounts order <provider>.',
         optionalRouting: 'Định tuyến tùy chọn',
         sessionAffinity: 'Ghim phiên',
         sessionAffinityOn: 'Bật',
@@ -10384,6 +10440,20 @@ const resources = {
         roundRobin: 'ラウンドロビンで利用を分散します。',
         fillFirst: 'Fill first は、バックアップアカウントが必要になるまで待機させます。',
         routingStrategy: 'ルーティング戦略',
+        poolRouting: 'プールルーティング',
+        poolRoutingOn: 'オン',
+        poolRoutingOff: 'オフ',
+        poolRoutingManaged:
+          'プールルーティングが有効です。CCS がプロキシ全体の戦略（fill-first）、セッション固定、クールダウンを管理します。',
+        poolRoutingOffHint:
+          'プールルーティングは無効です。CLI（ccs cliproxy pool --enable）で有効にすると、クールダウン付きの fill-first を利用できます。',
+        poolRoutingApplyWarning:
+          'プールルーティングが有効です。無効化するまで、戦略とセッション固定の変更は反映されません：ccs cliproxy pool --disable',
+        poolRoutingLocalOnly:
+          'プールルーティングはローカルで管理されます。このリモートプロキシには反映されない場合があります。',
+        poolMaxRetry: '最大リトライ {{count}}',
+        drainOrderHint:
+          'アカウントごとのドレイン順序とクールダウン状態は、ccs cliproxy quota または ccs cliproxy accounts order <provider> を実行してください。',
         optionalRouting: 'オプションのルーティング',
         sessionAffinity: 'セッション固定',
         sessionAffinityOn: 'オン',
@@ -10598,6 +10668,11 @@ const resources = {
       sponsorButton: {
         title: 'GitHub でこのプロジェクトをスポンサー',
         sponsor: 'スポンサー',
+      },
+      ccsBarButton: {
+        title: 'CCS Bar ドキュメントを開く',
+        label: 'CCS Bar',
+        tooltip: 'macOS メニューバーでクォータ、コスト、アカウントを確認',
       },
       supportEntryCard: {
         actionRequired: '対応が必要',
@@ -12365,6 +12440,11 @@ const resources = {
       githubLink: {
         title: 'GitHub에서 이슈 보고',
       },
+      ccsBarButton: {
+        title: 'CCS Bar 문서 열기',
+        label: 'CCS Bar',
+        tooltip: 'macOS 메뉴 막대에서 할당량, 비용, 계정 제어 확인',
+      },
       globalEnvIndicator: {
         injectedCount_one: '런타임에 글로벌 환경 변수 {{count}}개가 주입됩니다',
         injectedCount_other: '런타임에 글로벌 환경 변수 {{count}}개가 주입됩니다',
@@ -12646,6 +12726,20 @@ const resources = {
         roundRobin: '라운드 로빈은 사용량을 분산합니다.',
         fillFirst: '먼저 채우기는 필요할 때까지 백업 계정을 차갑게 유지합니다.',
         routingStrategy: '라우팅 전략',
+        poolRouting: '풀 라우팅',
+        poolRoutingOn: '켜짐',
+        poolRoutingOff: '꺼짐',
+        poolRoutingManaged:
+          '풀 라우팅이 켜져 있습니다. CCS가 프록시 전체의 전략(fill-first), 세션 어피니티, 쿨다운을 관리합니다.',
+        poolRoutingOffHint:
+          '풀 라우팅이 꺼져 있습니다. CLI(ccs cliproxy pool --enable)에서 켜면 쿨다운이 있는 fill-first를 사용할 수 있습니다.',
+        poolRoutingApplyWarning:
+          '풀 라우팅이 켜져 있습니다. 비활성화하기 전에는 전략과 세션 어피니티 변경이 적용되지 않습니다: ccs cliproxy pool --disable',
+        poolRoutingLocalOnly:
+          '풀 라우팅은 로컬에서 관리됩니다. 이 원격 프록시에는 반영되지 않을 수 있습니다.',
+        poolMaxRetry: '최대 재시도 {{count}}',
+        drainOrderHint:
+          '계정별 드레인 순서와 쿨다운 상태는 ccs cliproxy quota 또는 ccs cliproxy accounts order <provider>를 실행하세요.',
         optionalRouting: '선택적 라우팅',
         sessionAffinity: '세션 어피니티',
         sessionAffinityOn: '켜짐',

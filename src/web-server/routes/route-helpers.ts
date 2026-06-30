@@ -19,8 +19,11 @@ import type { CLIProxyProvider } from '../../cliproxy/types';
 import type { Config, Settings } from '../../types/config';
 import type { TargetType } from '../../targets/target-adapter';
 import { isPersistedTargetType } from '../../targets/target-metadata';
-import { ValidationError } from '../../errors/error-types';
+import { ConfigError, ValidationError } from '../../errors/error-types';
 import { getCcsDir, loadConfigSafe, loadSettings } from '../../config/config-loader-facade';
+import { createLogger } from '../../services/logging';
+
+const logger = createLogger('web-server:routes:helpers');
 
 /** Model mapping for API profiles */
 export interface ModelMapping {
@@ -229,7 +232,7 @@ export function updateSettingsFile(
   const settingsPath = path.join(getCcsDir(), `${name}.settings.json`);
 
   if (!fs.existsSync(settingsPath)) {
-    throw new Error('Settings file not found');
+    throw new ConfigError('Settings file not found', settingsPath);
   }
 
   const settings = loadSettings(settingsPath);
@@ -437,6 +440,18 @@ export function validateFilePath(filePath: string): {
     if (pathSegments.includes('.git') || pathSegments.includes('node_modules')) {
       return { valid: false, readonly: false, error: 'Access to this path is not allowed' };
     }
+
+    // launch.json is an executable descriptor consumed by the native macOS bar.
+    // It must only be written by trusted bar install/launch code paths, not the
+    // generic dashboard file API.
+    if (
+      pathSegments.length === 2 &&
+      pathSegments[0] === 'bar' &&
+      pathSegments[1] === 'launch.json'
+    ) {
+      return { valid: false, readonly: false, error: 'Access to this path is not allowed' };
+    }
+
     return { valid: true, readonly: false };
   }
 
@@ -486,11 +501,14 @@ export function createRouteErrorHelpers(prefix: string): {
   ) => void;
 } {
   function logRouteError(context: string, error: unknown): void {
-    if (error instanceof Error) {
-      console.error(`[${prefix}] ${context}: ${error.message}`);
-      return;
-    }
-    console.error(`[${prefix}] ${context}: unknown error`);
+    logger.error('route.error', `${prefix}: ${context}`, {
+      prefix,
+      context,
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
   }
 
   function respondInternalError(

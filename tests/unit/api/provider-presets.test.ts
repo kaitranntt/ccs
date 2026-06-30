@@ -29,6 +29,14 @@ describe('provider-presets', () => {
     expect(preset?.id).toBe('km');
   });
 
+  it('tracks current provider default model updates', () => {
+    expect(getPresetById('glm')?.defaultModel).toBe('glm-5.2');
+    expect(getPresetById('glmt')?.defaultModel).toBe('glm-5.2');
+    expect(getPresetById('km')?.defaultModel).toBe('kimi-for-coding');
+    expect(getPresetById('kimi')?.defaultModel).toBe('kimi-for-coding');
+    expect(getPresetById('mm')?.defaultModel).toBe('MiniMax-M3');
+  });
+
   it('resolves llama.cpp preset with local-provider sentinel token', () => {
     const preset = getPresetById('llamacpp');
     expect(preset?.id).toBe('llamacpp');
@@ -92,6 +100,19 @@ describe('provider-presets', () => {
     expect(isValidPresetId('hf')).toBe(true);
   });
 
+  it('resolves Tuning Engines preset metadata and aliases', () => {
+    const preset = getPresetById('tuningengines');
+    expect(preset?.id).toBe('tuningengines');
+    expect(preset?.baseUrl).toBe('https://api.tuningengines.com/v1');
+    expect(preset?.defaultProfileName).toBe('te');
+    expect(preset?.defaultModel).toBe('gpt-4o');
+    expect(preset?.defaultTarget).toBe('droid');
+    expect(preset?.apiKeyPlaceholder).toBe('sk-te-...');
+    expect(getPresetById('te')?.id).toBe('tuningengines');
+    expect(getPresetById('tuning')?.id).toBe('tuningengines');
+    expect(isValidPresetId('te')).toBe(true);
+  });
+
   it('uses OpenRouter v1 as the OpenAI-compatible API root', () => {
     const preset = getPresetById('openrouter');
     expect(preset?.baseUrl).toBe('https://openrouter.ai/api/v1');
@@ -110,7 +131,11 @@ describe('provider-presets', () => {
     for (const preset of PROVIDER_PRESETS) {
       if (!preset.icon) continue;
 
-      const iconPath = resolve(import.meta.dir, '../../../ui/public', preset.icon.replace(/^\/+/, ''));
+      const iconPath = resolve(
+        import.meta.dir,
+        '../../../ui/public',
+        preset.icon.replace(/^\/+/, '')
+      );
       expect(existsSync(iconPath)).toBe(true);
     }
   });

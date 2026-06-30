@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   getBrowserConfig,
+  hasExplicitClaudeBrowserDevtoolsPort,
   mutateUnifiedConfig,
   saveUnifiedConfig,
 } from '../../../../src/config/unified-config-loader';
@@ -168,11 +169,11 @@ describe('browser status', () => {
       };
     });
 
-    const runtimeSpy = spyOn(chromeReuse, 'resolveBrowserRuntimeEnv').mockRejectedValue(
-      new Error(
+    const runtimeSpy = spyOn(chromeReuse, 'resolveBrowserRuntimeEnv').mockImplementation(() => {
+      throw new Error(
         `Chrome reuse metadata not found: ${join(tempHome, '.ccs', 'browser', 'chrome-user-data', 'DevToolsActivePort')}`
-      )
-    );
+      );
+    });
     const codexSpy = spyOn(codexDetector, 'getCodexBinaryInfo').mockReturnValue({
       path: '/usr/local/bin/codex',
       needsShell: false,
@@ -422,7 +423,51 @@ describe('browser status', () => {
     }
   });
 
-  it('always forwards an explicit port for config-backed browser attach sessions', async () => {
+  it('preserves profile-bound port discovery when config omits DevTools port', async () => {
+    const config = createEmptyUnifiedConfig();
+    config.browser = {
+      claude: {
+        enabled: true,
+        policy: 'auto',
+        user_data_dir: '/tmp/config-browser',
+      } as typeof config.browser.claude,
+      codex: {
+        enabled: true,
+        policy: 'auto',
+      } as typeof config.browser.codex,
+    };
+    saveUnifiedConfig(config);
+
+    expect(hasExplicitClaudeBrowserDevtoolsPort()).toBe(false);
+
+    const runtimeSpy = spyOn(chromeReuse, 'resolveBrowserRuntimeEnv').mockResolvedValue({
+      CCS_BROWSER_USER_DATA_DIR: '/tmp/config-browser',
+      CCS_BROWSER_DEVTOOLS_HOST: '127.0.0.1',
+      CCS_BROWSER_DEVTOOLS_PORT: '9333',
+      CCS_BROWSER_DEVTOOLS_HTTP_URL: 'http://127.0.0.1:9333',
+      CCS_BROWSER_DEVTOOLS_WS_URL: 'ws://127.0.0.1/devtools/browser/config',
+    });
+    const codexSpy = spyOn(codexDetector, 'getCodexBinaryInfo').mockReturnValue({
+      path: '/usr/local/bin/codex',
+      needsShell: false,
+      version: 'codex-cli 0.120.0',
+      features: ['config-overrides'],
+    });
+
+    try {
+      await getBrowserStatus();
+
+      expect(runtimeSpy.mock.calls[0]?.[0]).toEqual({
+        profileDir: '/tmp/config-browser',
+        devtoolsPort: undefined,
+      });
+    } finally {
+      runtimeSpy.mockRestore();
+      codexSpy.mockRestore();
+    }
+  });
+
+  it('forwards an explicit port for config-backed browser attach sessions', async () => {
     mutateUnifiedConfig((config) => {
       config.browser = {
         claude: {
@@ -437,6 +482,8 @@ describe('browser status', () => {
         },
       };
     });
+
+    expect(hasExplicitClaudeBrowserDevtoolsPort()).toBe(true);
 
     const runtimeSpy = spyOn(chromeReuse, 'resolveBrowserRuntimeEnv').mockResolvedValue({
       CCS_BROWSER_USER_DATA_DIR: '/tmp/config-browser',

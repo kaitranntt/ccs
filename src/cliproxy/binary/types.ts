@@ -7,6 +7,7 @@
 export interface VersionCache {
   latestVersion: string;
   checkedAt: number;
+  repo: string;
 }
 
 /** Update check result */
@@ -39,9 +40,14 @@ export const GITHUB_REPOS = {
   plus: 'kaitranntt/CLIProxyAPIPlus',
 } as const;
 
+/** Get GitHub repository for specific backend */
+export function getGitHubRepo(backend: 'original' | 'plus'): string {
+  return GITHUB_REPOS[backend];
+}
+
 /** Get GitHub API URLs for specific backend */
 export function getGitHubApiUrls(backend: 'original' | 'plus') {
-  const repo = GITHUB_REPOS[backend];
+  const repo = getGitHubRepo(backend);
   return {
     latestRelease: `https://api.github.com/repos/${repo}/releases/latest`,
     allReleases: `https://api.github.com/repos/${repo}/releases`,

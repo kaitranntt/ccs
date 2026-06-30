@@ -8,11 +8,18 @@ import {
   type ProxyOpenAIRequest,
 } from '../transformers/request-transformer';
 import { ProxySseStreamTransformer } from '../transformers/sse-stream-transformer';
-import { resolveOpenAIChatCompletionsUrl } from '../upstream-url';
+import { isAnthropicPassthroughProfile, resolveOpenAIChatCompletionsUrl } from '../upstream-url';
 import { createLogger } from '../../services/logging';
-import { pipeWebResponseToNode, readJsonBody, writeJson } from './http-helpers';
+import {
+  createGlobalFetchProxyDispatcher,
+  type UpstreamAgentTimeoutOptions,
+} from '../../utils/fetch-proxy-setup';
+import { pipeWebResponseToNode, readRawBody, writeJson } from './http-helpers';
 
 const REQUEST_TIMEOUT_MS = 600_000;
+// Keep undici's per-phase timeouts above the explicit request timeout so the
+// AbortController is the single authority on when an upstream request dies.
+const UPSTREAM_TIMEOUT_GRACE_MS = 30_000;
 const DIRECT_OPENAI_REASONING_CHAT_MODEL = /^(?:gpt-5|o[134])(?:[-.]|$)/;
 const logger = createLogger('proxy:openai-compat:messages');
 
@@ -23,12 +30,46 @@ class ProxyInputError extends Error {
   }
 }
 
-function buildUpstreamHeaders(profile: OpenAICompatProfileConfig): Record<string, string> {
-  return {
+/**
+ * Build the upstream request headers. Preserves the original User-Agent from
+ * the incoming request when available, since some providers (e.g. Kimi)
+ * reject requests from unknown User-Agents. Falls back to a stable
+ * `CCS-OpenAI-Compat-Proxy/<version>` User-Agent when the client did not
+ * provide one.
+ */
+function buildUpstreamHeaders(
+  profile: OpenAICompatProfileConfig,
+  incomingHeaders: http.IncomingHttpHeaders,
+  options: { preserveUserAgent?: boolean } = {}
+): Record<string, string> {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${profile.apiKey}`,
     'User-Agent': 'CCS-OpenAI-Compat-Proxy/1.0',
   };
+
+  if (options.preserveUserAgent) {
+    // Preserve the original User-Agent (or x-stainless-user-agent fallback) so
+    // providers that require a recognized coding-agent identifier accept the
+    // passthrough request.
+    const rawUserAgent = pickHeaderValue(incomingHeaders, ['user-agent', 'x-stainless-user-agent']);
+    headers['User-Agent'] = rawUserAgent?.trim() || headers['User-Agent'];
+  }
+
+  return headers;
+}
+
+function pickHeaderValue(headers: http.IncomingHttpHeaders, names: string[]): string | undefined {
+  for (const name of names) {
+    const value = headers[name];
+    if (typeof value === 'string' && value.length > 0) {
+      return value;
+    }
+    if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string') {
+      return value[0];
+    }
+  }
+  return undefined;
 }
 
 function isKnownOpenAIReasoningChatModel(model: string | undefined): boolean {
@@ -152,8 +193,29 @@ function shapeUpstreamChatPayload(
 
 function buildUpstreamRequest(
   profile: OpenAICompatProfileConfig,
-  rawBody: unknown
+  rawBody: unknown,
+  options: {
+    passthrough?: boolean;
+    rawBodyText?: string;
+    route?: ReturnType<typeof resolveProxyRequestRoute>;
+  } = {}
 ): { body: string; route: ReturnType<typeof resolveProxyRequestRoute> } {
+  // In passthrough mode we forward the incoming Anthropic body verbatim to
+  // the upstream provider, skipping both the Anthropic→OpenAI translation
+  // and the per-provider payload shaping. The body is still serialized as
+  // a string so we can stream it on the wire.
+  if (options.passthrough) {
+    if (rawBody === undefined || rawBody === null) {
+      throw new ProxyInputError('Missing request body');
+    }
+    const body = options.rawBodyText ?? JSON.stringify(rawBody);
+    if (!body.trim()) {
+      throw new ProxyInputError('Missing request body');
+    }
+    const route = options.route ?? resolveProxyRequestRoute(profile, buildRoutingRequest(rawBody));
+    return { body, route };
+  }
+
   let transformed: ProxyOpenAIRequest;
   try {
     const transformer = new ProxyRequestTransformer();
@@ -172,6 +234,118 @@ function buildUpstreamRequest(
     route.profile
   );
   return { body: JSON.stringify(body), route };
+}
+
+function parseJsonBodyText(rawBodyText: string): unknown {
+  const raw = rawBodyText.trim();
+  if (!raw) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new ProxyInputError('Invalid JSON in request body');
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function routingTextContent(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  return content
+    .map((part) => {
+      const parsed = asRecord(part);
+      if (!parsed) {
+        return '';
+      }
+      if (parsed.type === 'text' && typeof parsed.text === 'string') {
+        return parsed.text;
+      }
+      if (parsed.type === 'image') {
+        return '[image]';
+      }
+      return '';
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+function routingMessages(messages: unknown): ProxyOpenAIRequest['messages'] {
+  if (!Array.isArray(messages)) {
+    return [];
+  }
+
+  return messages.flatMap((message): ProxyOpenAIRequest['messages'] => {
+    const parsed = asRecord(message);
+    const role = parsed?.role;
+    if (role !== 'system' && role !== 'user' && role !== 'assistant' && role !== 'tool') {
+      return [];
+    }
+
+    return [
+      {
+        role,
+        content: routingTextContent(parsed?.content),
+      },
+    ];
+  });
+}
+
+function routingTools(tools: unknown): ProxyOpenAIRequest['tools'] | undefined {
+  if (!Array.isArray(tools)) {
+    return undefined;
+  }
+
+  const normalized = tools.flatMap((tool): NonNullable<ProxyOpenAIRequest['tools']> => {
+    const parsed = asRecord(tool);
+    const fn = asRecord(parsed?.function);
+    if (parsed?.type !== 'function' || typeof fn?.name !== 'string') {
+      return [];
+    }
+    return [
+      {
+        type: 'function',
+        function: {
+          name: fn.name,
+          description: typeof fn.description === 'string' ? fn.description : undefined,
+          parameters: asRecord(fn.parameters) ?? {},
+        },
+      },
+    ];
+  });
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function buildRoutingRequest(rawBody: unknown): ProxyOpenAIRequest {
+  const parsed = asRecord(rawBody);
+  const model = typeof parsed?.model === 'string' ? parsed.model : undefined;
+  const thinking = asRecord(parsed?.thinking);
+  const thinkingEnabled = thinking?.type === 'enabled' || thinking?.type === 'adaptive';
+
+  return {
+    model,
+    stream: parsed?.stream === true,
+    messages: routingMessages(parsed?.messages),
+    tools: routingTools(parsed?.tools),
+    reasoning: thinkingEnabled
+      ? {
+          enabled: true,
+          effort: 'high',
+        }
+      : undefined,
+  };
 }
 
 export function extractIncomingProxyToken(headers: http.IncomingHttpHeaders): string | null {
@@ -206,17 +380,19 @@ function buildFetchInit(
   profile: OpenAICompatProfileConfig,
   body: string,
   signal: AbortSignal,
-  insecureDispatcher?: Dispatcher
+  incomingHeaders: http.IncomingHttpHeaders,
+  preserveUserAgent: boolean,
+  dispatcher?: Dispatcher
 ): RequestInit {
   const init: RequestInit = {
     method: 'POST',
-    headers: buildUpstreamHeaders(profile),
+    headers: buildUpstreamHeaders(profile, incomingHeaders, { preserveUserAgent }),
     body,
     signal,
   };
 
-  if (insecureDispatcher) {
-    (init as Record<string, unknown>).dispatcher = insecureDispatcher;
+  if (dispatcher) {
+    (init as Record<string, unknown>).dispatcher = dispatcher;
   }
 
   return init;
@@ -230,6 +406,30 @@ function getRequestTimeoutMs(): number {
 
   const parsed = Number.parseInt(rawValue, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : REQUEST_TIMEOUT_MS;
+}
+
+/**
+ * undici defaults `headersTimeout`/`bodyTimeout` to 300s, which silently
+ * undercuts {@link REQUEST_TIMEOUT_MS} (600s) and the
+ * `CCS_OPENAI_PROXY_REQUEST_TIMEOUT_MS` override: slow upstreams (self-hosted
+ * LLMs with long queue + prefill phases) get their socket closed at 300s with
+ * a generic connection error instead of the proxy's timeout response. Every
+ * dispatcher used for upstream fetches must carry these options.
+ */
+export function buildUpstreamAgentTimeouts(): UpstreamAgentTimeoutOptions {
+  const ceiling = getRequestTimeoutMs() + UPSTREAM_TIMEOUT_GRACE_MS;
+  return { headersTimeout: ceiling, bodyTimeout: ceiling };
+}
+
+let defaultUpstreamDispatcher: Dispatcher | null = null;
+
+function getDefaultUpstreamDispatcher(): Dispatcher {
+  if (!defaultUpstreamDispatcher) {
+    const timeouts = buildUpstreamAgentTimeouts();
+    // Honor HTTP(S)_PROXY routing when configured; otherwise a plain Agent.
+    defaultUpstreamDispatcher = createGlobalFetchProxyDispatcher(timeouts) ?? new Agent(timeouts);
+  }
+  return defaultUpstreamDispatcher;
 }
 
 function formatTimeoutDuration(timeoutMs: number): string {
@@ -320,9 +520,20 @@ export async function handleProxyMessagesRequest(
 
   let timeoutMs = REQUEST_TIMEOUT_MS;
   try {
-    const rawBody = await readJsonBody(req);
-    logger.stage('transform', 'request.transform.start', 'Transforming inbound proxy body');
-    const upstream = buildUpstreamRequest(profile, rawBody);
+    const rawBodyText = await readRawBody(req);
+    const rawBody = parseJsonBodyText(rawBodyText);
+    const initialRoute = resolveProxyRequestRoute(profile, buildRoutingRequest(rawBody));
+    const passthrough = isAnthropicPassthroughProfile(initialRoute.profile.baseUrl, {
+      forcePassthrough: initialRoute.profile.passthrough === true,
+    });
+    logger.stage('transform', 'request.transform.start', 'Transforming inbound proxy body', {
+      passthrough,
+    });
+    const upstream = buildUpstreamRequest(profile, rawBody, {
+      passthrough,
+      rawBodyText,
+      route: passthrough ? initialRoute : undefined,
+    });
     logger.stage('route', 'request.routed', 'Resolved proxy upstream route', {
       profileName: upstream.route.profile.profileName,
       provider: upstream.route.profile.provider,
@@ -358,30 +569,48 @@ export async function handleProxyMessagesRequest(
     const useProfileInsecureTls = upstream.route.profile.insecure === true;
     const ephemeralInsecureDispatcher =
       useProfileInsecureTls && !useSharedInsecureDispatcher
-        ? new Agent({ connect: { rejectUnauthorized: false } })
+        ? new Agent({ connect: { rejectUnauthorized: false }, ...buildUpstreamAgentTimeouts() })
         : undefined;
+    const insecureTls = useSharedInsecureDispatcher || useProfileInsecureTls;
     const dispatcher = useSharedInsecureDispatcher
       ? insecureDispatcher
       : useProfileInsecureTls
         ? ephemeralInsecureDispatcher
-        : undefined;
+        : getDefaultUpstreamDispatcher();
 
     try {
       logger.stage('dispatch', 'upstream.dispatch', 'Dispatching upstream fetch', {
         profileName: profile.profileName,
         routedProfileName: upstream.route.profile.profileName,
-        insecureTls: dispatcher !== undefined,
+        insecureTls,
+        passthrough,
+      });
+      const upstreamUrl = resolveOpenAIChatCompletionsUrl(upstream.route.profile.baseUrl, {
+        passthrough,
       });
       const upstreamResponse = await fetch(
-        resolveOpenAIChatCompletionsUrl(upstream.route.profile.baseUrl),
-        buildFetchInit(upstream.route.profile, upstream.body, controller.signal, dispatcher)
+        upstreamUrl,
+        buildFetchInit(
+          upstream.route.profile,
+          upstream.body,
+          controller.signal,
+          req.headers,
+          passthrough,
+          dispatcher
+        )
       );
       logger.stage('upstream', 'upstream.response', 'Received upstream response', {
         profileName: profile.profileName,
         routedProfileName: upstream.route.profile.profileName,
         status: upstreamResponse.status,
       });
-      const response = await transformer.transform(upstreamResponse);
+      // In passthrough mode the upstream already returns Anthropic-format
+      // bytes, so we just pipe the response through unchanged. The SSE
+      // transformer is only used for OpenAI-mode responses that need to
+      // be re-encoded as Anthropic SSE.
+      const response = passthrough
+        ? upstreamResponse
+        : await transformer.transform(upstreamResponse);
       await pipeWebResponseToNode(response, res);
       logger.stage('respond', 'request.respond', 'Proxy response written', undefined, {
         latencyMs: Date.now() - startedAt,

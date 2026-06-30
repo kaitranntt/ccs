@@ -149,8 +149,11 @@ export function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push('# Brave requires BRAVE_API_KEY in your environment.');
     lines.push('# DuckDuckGo works with zero extra setup and is enabled by default.');
     lines.push('#');
-    lines.push('# Legacy LLM fallbacks remain optional if you still want them:');
-    lines.push('#   gemini: npm i -g @google/gemini-cli');
+    lines.push('# Optional LLM CLI fallbacks:');
+    lines.push(
+      '#   agy (recommended): curl -fsSL https://antigravity.google/cli/install.sh | bash'
+    );
+    lines.push('#   gemini (deprecated, retired upstream 2026-06-18): use agy instead');
     lines.push('#   opencode: curl -fsSL https://opencode.ai/install | bash');
     lines.push('#   grok: npm i -g @vibe-kit/grok-cli');
     lines.push('# ----------------------------------------------------------------------------');
@@ -268,6 +271,22 @@ export function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push('');
   }
 
+  // Runtime section (opt-in spawned-CLI launch knobs, e.g. output limits)
+  if (config.runtime) {
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push('# Runtime: opt-in knobs for how CCS launches the downstream CLI');
+    lines.push('# outputLimits raises the spawned CLI output caps via env vars (issue #231):');
+    lines.push('#   maxMcpOutputTokens  -> MAX_MCP_OUTPUT_TOKENS');
+    lines.push('#   bashMaxOutputLength -> BASH_MAX_OUTPUT_LENGTH');
+    lines.push('# Each field is optional; when unset CCS injects nothing and the downstream');
+    lines.push('# CLI keeps its own default caps.');
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push(
+      yaml.dump({ runtime: config.runtime }, { indent: 2, lineWidth: -1, quotingType: '"' }).trim()
+    );
+    lines.push('');
+  }
+
   // Official Channels section
   if (config.channels) {
     lines.push('# ----------------------------------------------------------------------------');
@@ -344,6 +363,25 @@ export function generateYamlWithComments(config: UnifiedConfig): string {
       yaml
         .dump(
           { image_analysis: config.image_analysis },
+          { indent: 2, lineWidth: -1, quotingType: '"' }
+        )
+        .trim()
+    );
+    lines.push('');
+  }
+
+  // Quota management section (hybrid auto+manual account selection)
+  if (config.quota_management) {
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push('# Quota Management: Hybrid auto+manual account selection for multi-account setups');
+    lines.push('# mode: auto | manual | hybrid (default: hybrid)');
+    lines.push('# manual.tier_lock: per-provider tier lock map (e.g. { agy: "ultra" })');
+    lines.push('# Configure via: POST /api/accounts/tier-lock');
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push(
+      yaml
+        .dump(
+          { quota_management: config.quota_management },
           { indent: 2, lineWidth: -1, quotingType: '"' }
         )
         .trim()

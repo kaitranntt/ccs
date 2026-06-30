@@ -40,19 +40,14 @@ export class ProfilesChecker implements IHealthChecker {
         return;
       } catch (e) {
         spinner.fail();
-        console.log(
-          `  ${fail('Profiles'.padEnd(22))}  Invalid config.yaml: ${(e as Error).message}`
-        );
-        results.addCheck(
-          'Profiles',
-          'error',
-          `Invalid config.yaml: ${(e as Error).message}`,
-          undefined,
-          {
-            status: 'ERROR',
-            info: (e as Error).message,
-          }
-        );
+        // First line only: a YAML parse error embeds a multi-line snippet (already
+        // printed by the loader) that otherwise leaks into the summary table cell.
+        const reason = (e as Error).message.split('\n')[0].trim();
+        console.log(`  ${fail('Profiles'.padEnd(22))}  Invalid config.yaml: ${reason}`);
+        results.addCheck('Profiles', 'error', `Invalid config.yaml: ${reason}`, undefined, {
+          status: 'ERROR',
+          info: reason,
+        });
         return;
       }
     }
@@ -65,19 +60,12 @@ export class ProfilesChecker implements IHealthChecker {
         return;
       } catch (e) {
         spinner.fail();
-        console.log(
-          `  ${fail('Profiles'.padEnd(22))}  Invalid config.json: ${(e as Error).message}`
-        );
-        results.addCheck(
-          'Profiles',
-          'error',
-          `Invalid config.json: ${(e as Error).message}`,
-          undefined,
-          {
-            status: 'ERROR',
-            info: (e as Error).message,
-          }
-        );
+        const reason = (e as Error).message.split('\n')[0].trim();
+        console.log(`  ${fail('Profiles'.padEnd(22))}  Invalid config.json: ${reason}`);
+        results.addCheck('Profiles', 'error', `Invalid config.json: ${reason}`, undefined, {
+          status: 'ERROR',
+          info: reason,
+        });
         return;
       }
     }

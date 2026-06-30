@@ -92,7 +92,7 @@ export function showConfigCommandHelp(): void {
   console.log('    --enable         Legacy alias: add Discord');
   console.log('    --disable        Legacy alias: remove Discord');
   console.log('    --unattended     Also add --dangerously-skip-permissions at runtime');
-  console.log('    --set-token <s>  Save channel token (telegram=<t> or discord=<t>)');
+  console.log('    --set-token <c>  Save channel token from channel env var');
   console.log('    --clear-token    Remove all saved channel tokens');
   console.log('    --clear-token <c> Remove one saved channel token');
   console.log(`                     ${getOfficialChannelsSupportMessage()}`);
@@ -121,6 +121,15 @@ export function showConfigCommandHelp(): void {
   console.log('    --provider-override <p> <t> <l> Set provider tier override');
   console.log('    --clear-provider-override <p> [t] Remove provider override');
   console.log('');
+  console.log('  Output limits (opt-in)');
+  console.log('    Raise the spawned CLI output caps without hand-editing its settings.');
+  console.log('    Edit ~/.ccs/config.yaml and add (both fields optional):');
+  console.log('      runtime:');
+  console.log('        outputLimits:');
+  console.log('          maxMcpOutputTokens: 100000   # -> MAX_MCP_OUTPUT_TOKENS');
+  console.log('          bashMaxOutputLength: 200000  # -> BASH_MAX_OUTPUT_LENGTH');
+  console.log('    When unset, the spawned CLI keeps its own default caps.');
+  console.log('');
   console.log('Options:');
   console.log('  --port, -p PORT    Specify server port (default: auto-detect)');
   console.log('  --host, -H HOST    Bind dashboard server host (default: localhost)');
@@ -136,7 +145,7 @@ export function showConfigCommandHelp(): void {
   console.log('  ccs config auth setup            Configure dashboard login');
   console.log('  ccs config channels              Show Official Channels status');
   console.log('  ccs config channels --set telegram,discord Enable Telegram + Discord');
-  console.log('  ccs config channels --set-token telegram=xxx Save TELEGRAM_BOT_TOKEN');
+  console.log('  TELEGRAM_BOT_TOKEN=xxx ccs config channels --set-token telegram Save token');
   console.log('  ccs config image-analysis        Show image settings');
   console.log('  ccs config image-analysis --enable Enable feature');
   console.log('  ccs config thinking              Show thinking settings');

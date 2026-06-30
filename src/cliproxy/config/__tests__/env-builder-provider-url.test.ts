@@ -3,6 +3,8 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { ensureProviderSettings, getEffectiveEnvVars } from '../env-builder';
+import { invalidateConfigCache } from '../../../config/config-loader-facade';
+import { clearConfigCache } from '../base-config-loader';
 
 interface EnvSettings {
   ANTHROPIC_BASE_URL: string;
@@ -30,14 +32,35 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
     originalCcsHome = process.env.CCS_HOME;
     tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-env-url-'));
     settingsPath = path.join(tempHome, 'codex.settings.json');
+    process.env.CCS_HOME = tempHome;
+    invalidateConfigCache();
+    clearConfigCache();
   });
 
   afterEach(() => {
-    process.env.CCS_HOME = originalCcsHome;
+    if (originalCcsHome !== undefined) {
+      process.env.CCS_HOME = originalCcsHome;
+    } else {
+      delete process.env.CCS_HOME;
+    }
+    invalidateConfigCache();
+    clearConfigCache();
     fs.rmSync(tempHome, { recursive: true, force: true });
   });
 
-  it('rewrites local root URL to provider endpoint without stripping codex effort suffixes', () => {
+  function writeBackendConfig(backend: 'original' | 'plus'): void {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(ccsDir, 'config.yaml'),
+      ['version: 1', 'cliproxy:', `  backend: ${backend}`, ''].join('\n'),
+      'utf8'
+    );
+    invalidateConfigCache();
+    clearConfigCache();
+  }
+
+  it('keeps local root URL for the original backend without stripping codex effort suffixes', () => {
     writeSettings(settingsPath, {
       ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317',
       ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
@@ -48,7 +71,7 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
     });
 
     const env = getEffectiveEnvVars('codex', 8317, settingsPath);
-    expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317/api/provider/codex');
+    expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317');
     expect(env.ANTHROPIC_MODEL).toBe('gpt-5.3-codex-xhigh');
     expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.3-codex-xhigh');
     expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-5.3-codex-high');
@@ -63,7 +86,37 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
     expect(persisted.env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('gpt-5.4-mini-medium');
   });
 
-  it('rewrites wrong local provider path to the requested provider', () => {
+  it('rewrites local root URL to provider endpoint for the plus backend', () => {
+    writeBackendConfig('plus');
+    writeSettings(settingsPath, {
+      ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317',
+      ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
+      ANTHROPIC_MODEL: 'gpt-5.3-codex-xhigh',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'gpt-5.3-codex-xhigh',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-5.3-codex-high',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gpt-5.4-mini-medium',
+    });
+
+    const env = getEffectiveEnvVars('codex', 8317, settingsPath);
+    expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317/api/provider/codex');
+  });
+
+  it('rewrites wrong local provider path to root for the original backend', () => {
+    writeSettings(settingsPath, {
+      ANTHROPIC_BASE_URL: 'http://localhost:8317/api/provider/my-codex-variant?debug=1',
+      ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
+      ANTHROPIC_MODEL: 'gpt-5.3-codex-xhigh',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'gpt-5.3-codex-xhigh',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-5.3-codex-high',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gpt-5.4-mini-medium',
+    });
+
+    const env = getEffectiveEnvVars('codex', 8317, settingsPath);
+    expect(env.ANTHROPIC_BASE_URL).toBe('http://localhost:8317');
+  });
+
+  it('rewrites wrong local provider path to the requested provider for the plus backend', () => {
+    writeBackendConfig('plus');
     writeSettings(settingsPath, {
       ANTHROPIC_BASE_URL: 'http://localhost:8317/api/provider/my-codex-variant?debug=1',
       ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
@@ -285,7 +338,6 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
   });
 
   it('repairs existing provider settings files that are missing env keys', () => {
-    process.env.CCS_HOME = tempHome;
     const agySettingsPath = path.join(tempHome, '.ccs', 'agy.settings.json');
     fs.mkdirSync(path.dirname(agySettingsPath), { recursive: true });
     fs.writeFileSync(
@@ -308,7 +360,7 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
       hooks?: Record<string, unknown>;
     };
     expect(repaired.hooks?.PreToolUse).toBeDefined();
-    expect(repaired.env?.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317/api/provider/agy');
+    expect(repaired.env?.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317');
     expect(repaired.env?.ANTHROPIC_MODEL).toBeDefined();
     expect(repaired.env?.ANTHROPIC_DEFAULT_OPUS_MODEL).toBeDefined();
     expect(repaired.env?.ANTHROPIC_DEFAULT_SONNET_MODEL).toBeDefined();
@@ -316,7 +368,7 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
   });
 
   it('imports legacy cursor settings into the dedicated provider path without reusing legacy transport auth', () => {
-    process.env.CCS_HOME = tempHome;
+    writeBackendConfig('plus');
     const legacySettingsPath = path.join(tempHome, '.ccs', 'cursor.settings.json');
     const providerSettingsPath = path.join(
       tempHome,
@@ -375,7 +427,6 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
   });
 
   it('migrates deprecated agy sonnet 4.6 thinking IDs during ensureProviderSettings', () => {
-    process.env.CCS_HOME = tempHome;
     const agySettingsPath = path.join(tempHome, '.ccs', 'agy.settings.json');
     fs.mkdirSync(path.dirname(agySettingsPath), { recursive: true });
     fs.writeFileSync(
@@ -422,7 +473,6 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
   });
 
   it('preserves codex effort-suffixed IDs during ensureProviderSettings', () => {
-    process.env.CCS_HOME = tempHome;
     const codexSettingsPath = path.join(tempHome, '.ccs', 'codex.settings.json');
     fs.mkdirSync(path.dirname(codexSettingsPath), { recursive: true });
     fs.writeFileSync(
@@ -458,6 +508,7 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
       env?: Record<string, string>;
       presets?: Array<Record<string, string>>;
     };
+    expect(repaired.env?.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317');
     expect(repaired.env?.ANTHROPIC_MODEL).toBe('gpt-5.3-codex-xhigh');
     expect(repaired.env?.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.3-codex-xhigh');
     expect(repaired.env?.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-5.3-codex-high');
@@ -469,7 +520,6 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
   });
 
   it('recovers malformed provider settings files by writing defaults and backup copy', () => {
-    process.env.CCS_HOME = tempHome;
     const agySettingsPath = path.join(tempHome, '.ccs', 'agy.settings.json');
     fs.mkdirSync(path.dirname(agySettingsPath), { recursive: true });
     fs.writeFileSync(agySettingsPath, '{"env": {"ANTHROPIC_MODEL": "claude-sonnet-4-6-thinking",}');

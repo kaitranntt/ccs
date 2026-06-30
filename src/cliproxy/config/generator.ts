@@ -44,8 +44,9 @@ export const CCS_CONTROL_PANEL_SECRET = 'ccs';
  * v17: Persist routing.strategy from CCS unified config
  * v18: Persist routing.session-affinity and routing.session-affinity-ttl from CCS unified config
  * v19: Persist backend-aware management panel repository from CCS unified config
+ * v20: Pool-gated cooling/routing/retry-cap block; disable-cooling flips to false for pool users
  */
-export const CLIPROXY_CONFIG_VERSION = 19;
+export const CLIPROXY_CONFIG_VERSION = 20;
 
 export const ORIGINAL_MANAGEMENT_PANEL_REPOSITORY =
   'https://github.com/router-for-me/Cli-Proxy-API-Management-Center';
@@ -136,6 +137,45 @@ function getLoggingSettings(): { loggingToFile: boolean; requestLog: boolean } {
     loggingToFile: config.cliproxy.logging?.enabled ?? false,
     requestLog: config.cliproxy.logging?.request_log ?? false,
   };
+}
+
+/**
+ * Check whether pool routing is enabled in the CCS unified config.
+ *
+ * Cooling archaeology (CCS v5, commit fb77d72a, Jan 26 2026):
+ * disable-cooling: true was added for stability because single-account users
+ * hit a blackout cliff when their only credential entered cooldown.  Two upstream
+ * bugs compounded the issue:
+ *   1. Transient-error blackout (fixed upstream Jan 21 2026, commit 30a59168)
+ *   2. 401/402/403/404 ignoring the disable-cooling flag entirely
+ *      (fixed upstream Apr 7 2026, commit 0ea76801)
+ *
+ * The concern no longer applies on current CLIProxy versions (fallback 6.9.45,
+ * which postdates both fixes).  For pool users (2+ accounts per provider)
+ * cooling-ON is the correct behavior: a suspended credential rotates out and
+ * a healthy one takes over, which is the pool-routing value proposition.
+ * For single-account users the original stability concern still holds, so
+ * disable-cooling: true is preserved when pool routing is disabled.
+ *
+ * Per-auth metadata override cannot be used to enable cooling — the upstream
+ * override is "true-only" (types.go:384-404): a false per-auth value falls back
+ * to the global flag.  The flip must be at the top-level config key.
+ *
+ * Retry-cap note: max-retry-credentials is ONLY valid with cooling ON.
+ * Without cooling, a just-exhausted credential is still "available" on the
+ * next request; retry-cap would not prevent re-targeting it.
+ */
+function isPoolRoutingEnabled(): boolean {
+  return loadOrCreateUnifiedConfig().cliproxy?.pool_routing?.enabled === true;
+}
+
+/**
+ * Get max-retry-credentials for pool routing config.
+ * Only consulted when pool routing is enabled.
+ * Defaults to 3 (try up to 3 credentials before returning 429 to caller).
+ */
+function getPoolMaxRetryCredentials(): number {
+  return loadOrCreateUnifiedConfig().cliproxy?.pool_routing?.max_retry_credentials ?? 3;
 }
 
 function getRoutingStrategy(): 'round-robin' | 'fill-first' {
@@ -615,6 +655,7 @@ function generateUnifiedConfigContent(
 
   // Get logging settings from user config (disabled by default)
   const { loggingToFile, requestLog } = getLoggingSettings();
+  const poolEnabled = isPoolRoutingEnabled();
   const routingStrategy = getRoutingStrategy();
   const sessionAffinityEnabled = getSessionAffinityEnabled();
   const sessionAffinityTtl = getSessionAffinityTtl();
@@ -631,6 +672,29 @@ function generateUnifiedConfigContent(
     new Set([effectiveApiKey, ...getActiveDockerLegacyApiKeys(), ...userApiKeys])
   );
   const apiKeysYaml = allApiKeys.map((key) => `  - "${key}"`).join('\n');
+
+  // Pool routing block: emitted only when pool routing is enabled.
+  // When pool routing is off, disable-cooling stays true (v5 stability default).
+  // See isPoolRoutingEnabled() and the cooling archaeology comment above it.
+  //
+  // Hot-reload note: CLIProxy watches config for changes and hot-reloads it
+  // (server.go calls auth.SetQuotaCooldownDisabled on config update).
+  // Changing pool routing state writes a new config; CLIProxy will pick it up
+  // live and evict all SessionAffinity pins on the next request (one recompute
+  // per conversation). A restart is not required.
+  const poolMaxRetry = poolEnabled ? getPoolMaxRetryCredentials() : null;
+  const disableCoolingValue = poolEnabled ? 'false' : 'true';
+  const coolingComment = poolEnabled
+    ? '# Pool routing enabled: cooling ON so exhausted accounts enter backoff and rotate out.\n# First 429 gets a 1s backoff (exponential to 30m cap); Retry-After header is honored.\n# Retry-cap below stops burn loops from retrying already-known-bad credentials.'
+    : '# Disable quota cooldown scheduling for stability.\n# Pool routing is off: cooling stays disabled to prevent single-account blackouts.\n# Re-enabled automatically when pool routing is turned on (ccs cliproxy pool --enable).';
+  const poolRoutingBlock = poolEnabled
+    ? `\n# Max credentials to try per request before returning 429 to caller.\n# ONLY valid with cooling on (above). Without cooling a just-exhausted credential\n# remains "available" and retry-cap would not prevent re-targeting it.\nmax-retry-credentials: ${poolMaxRetry}\n`
+    : '';
+  const routingBlock = `# Credential selection strategy when multiple matching accounts are available
+routing:
+  strategy: ${poolEnabled ? 'fill-first' : routingStrategy}
+  session-affinity: ${poolEnabled ? 'true' : sessionAffinityEnabled}
+  session-affinity-ttl: "${poolEnabled ? '1h' : sessionAffinityTtl}"`;
 
   // Unified config with enhanced CLIProxyAPI features
   const config = `# CLIProxyAPI config generated by CCS v${CLIPROXY_CONFIG_VERSION}
@@ -683,24 +747,20 @@ remote-management:
 # Reliability & Quota Management
 # =============================================================================
 
-# Disable quota cooldown scheduling for stability
-disable-cooling: true
+${coolingComment}
+disable-cooling: ${disableCoolingValue}
 
 # Auto-retry on transient errors (403, 408, 500, 502, 503, 504)
 request-retry: 0
 max-retry-interval: 0
-
+${poolRoutingBlock}
 # Auto-switch accounts on quota exceeded (429)
 # This enables seamless multi-account rotation when rate limited
 quota-exceeded:
   switch-project: true
   switch-preview-model: true
 
-# Credential selection strategy when multiple matching accounts are available
-routing:
-  strategy: ${routingStrategy}
-  session-affinity: ${sessionAffinityEnabled}
-  session-affinity-ttl: "${sessionAffinityTtl}"
+${routingBlock}
 
 # =============================================================================
 # Authentication

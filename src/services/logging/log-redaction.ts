@@ -1,3 +1,5 @@
+import type { LogErrorInfo } from './log-types';
+
 /**
  * Sensitive log key matcher (single source of truth).
  *
@@ -31,6 +33,29 @@ function maskAuthSchemeValue(value: string): string {
   return `${match[1]} [redacted]`;
 }
 
+/**
+ * Known credential token shapes that may appear anywhere in a string value
+ * (error messages, URLs, free-text). Applied IN ADDITION to sensitive-key
+ * redaction so a token routed through a non-sensitive field (e.g. an Error
+ * captured under `err`) is still scrubbed. Each branch requires a distinctive
+ * prefix plus an ample body to minimise false positives on ordinary prose.
+ */
+const SECRET_TOKEN_PATTERN =
+  /(?:Bearer|Basic|Token)\s+\S{8,}|sk-ant-[A-Za-z0-9_-]{16,}|sk-[A-Za-z0-9_-]{32,}|xox[bpoa]-[A-Za-z0-9-]{10,}|gh[opsu]_[A-Za-z0-9]{36,}|glpat-[A-Za-z0-9_-]{18,}|AIza[0-9A-Za-z_-]{35}|eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*|(?:api[_-]?key|access[_-]?token|refresh[_-]?token|secret)(?:=|%3D)[A-Za-z0-9._~+/=-]{8,}/g;
+
+/**
+ * Scrub known credential shapes from an arbitrary string. Preserves the
+ * Bearer/Basic/Token scheme prefix when present so the entry stays readable.
+ * Exported so the logger can also scrub the human-authored message string
+ * (defense-in-depth for the hotpath console.error sweep).
+ */
+export function maskSecretTokens(value: string): string {
+  return value.replace(SECRET_TOKEN_PATTERN, (match) => {
+    const scheme = /^(Bearer|Basic|Token)\s+/.exec(match);
+    return scheme ? `${scheme[1]} [redacted]` : '[redacted]';
+  });
+}
+
 function sanitizeValue(value: unknown, depth: number): unknown {
   if (value === null || value === undefined) {
     return value;
@@ -41,7 +66,7 @@ function sanitizeValue(value: unknown, depth: number): unknown {
   }
 
   if (typeof value === 'string') {
-    return truncateString(maskAuthSchemeValue(value));
+    return truncateString(maskSecretTokens(maskAuthSchemeValue(value)));
   }
 
   if (typeof value === 'number' || typeof value === 'boolean') {
@@ -51,7 +76,7 @@ function sanitizeValue(value: unknown, depth: number): unknown {
   if (value instanceof Error) {
     return {
       name: value.name,
-      message: truncateString(value.message),
+      message: truncateString(maskSecretTokens(value.message)),
     };
   }
 
@@ -80,6 +105,14 @@ export function redactContext(
   }
 
   return sanitizeValue(context, 0) as Record<string, unknown>;
+}
+
+export function redactErrorInfo(error: LogErrorInfo | undefined): LogErrorInfo | undefined {
+  if (!error) {
+    return undefined;
+  }
+
+  return sanitizeValue(error, 0) as LogErrorInfo;
 }
 
 /**

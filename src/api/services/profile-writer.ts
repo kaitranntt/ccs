@@ -37,6 +37,7 @@ import {
   loadConfigSafe,
   mutateConfig,
 } from '../../config/config-loader-facade';
+import { ProfileError } from '../../errors/error-types';
 
 /** Check if URL is an OpenRouter endpoint */
 function isOpenRouterUrl(baseUrl: string): boolean {
@@ -109,6 +110,15 @@ function createSettingsFile(
   });
 
   const isNative = isAnthropicDirect(baseUrl, apiKey);
+  // Model-neutral providers (e.g. claude built-in) pass empty strings to signal
+  // "omit this key".  Filter them out so the written settings file does not
+  // contain ANTHROPIC_MODEL:'' which could be treated as an unintended override.
+  const modelEnv = {
+    ...(models.default.trim() ? { ANTHROPIC_MODEL: models.default } : {}),
+    ...(models.opus.trim() ? { ANTHROPIC_DEFAULT_OPUS_MODEL: models.opus } : {}),
+    ...(models.sonnet.trim() ? { ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnet } : {}),
+    ...(models.haiku.trim() ? { ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haiku } : {}),
+  };
   const settings = {
     env: {
       // Native mode: ANTHROPIC_API_KEY only, no BASE_URL/AUTH_TOKEN
@@ -120,10 +130,7 @@ function createSettingsFile(
             ANTHROPIC_AUTH_TOKEN: apiKey,
             ...(isOpenRouterUrl(baseUrl) && { ANTHROPIC_API_KEY: '' }),
           }),
-      ANTHROPIC_MODEL: models.default,
-      ANTHROPIC_DEFAULT_OPUS_MODEL: models.opus,
-      ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnet,
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haiku,
+      ...modelEnv,
       ...(extraModels && extraModels.length > 0
         ? { ANTHROPIC_EXTRA_MODELS: extraModels.join(',') }
         : {}),
@@ -202,6 +209,13 @@ function createApiProfileUnified(
   });
 
   const isNative = isAnthropicDirect(baseUrl, apiKey);
+  // Model-neutral providers pass empty strings; omit those keys.
+  const modelEnvUnified = {
+    ...(models.default.trim() ? { ANTHROPIC_MODEL: models.default } : {}),
+    ...(models.opus.trim() ? { ANTHROPIC_DEFAULT_OPUS_MODEL: models.opus } : {}),
+    ...(models.sonnet.trim() ? { ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnet } : {}),
+    ...(models.haiku.trim() ? { ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haiku } : {}),
+  };
   const settings = {
     env: {
       ...(isNative
@@ -211,10 +225,7 @@ function createApiProfileUnified(
             ANTHROPIC_AUTH_TOKEN: apiKey,
             ...(isOpenRouterUrl(baseUrl) && { ANTHROPIC_API_KEY: '' }),
           }),
-      ANTHROPIC_MODEL: models.default,
-      ANTHROPIC_DEFAULT_OPUS_MODEL: models.opus,
-      ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnet,
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haiku,
+      ...modelEnvUnified,
       ...(extraModels && extraModels.length > 0
         ? { ANTHROPIC_EXTRA_MODELS: extraModels.join(',') }
         : {}),
@@ -323,19 +334,27 @@ export function createCliproxyBridgeProfile(
     resolved.target,
     provider
   );
+  const detectedBridge = resolveCliproxyBridgeMetadata({
+    env: {
+      ANTHROPIC_BASE_URL: resolved.baseUrl,
+      ANTHROPIC_AUTH_TOKEN: resolved.apiKey,
+    },
+  });
 
   return {
     ...result,
     name: resolved.name,
     provider,
     target: resolved.target,
-    cliproxyBridge:
-      resolveCliproxyBridgeMetadata({
-        env: {
-          ANTHROPIC_BASE_URL: resolved.baseUrl,
-          ANTHROPIC_AUTH_TOKEN: resolved.apiKey,
-        },
-      }) ?? null,
+    cliproxyBridge: detectedBridge ?? {
+      provider,
+      providerDisplayName: resolved.providerDisplayName,
+      routePath: resolved.routePath,
+      currentBaseUrl: resolved.baseUrl,
+      source: resolved.source,
+      usesCurrentTarget: true,
+      usesCurrentAuthToken: true,
+    },
   };
 }
 
@@ -351,7 +370,7 @@ export function updateApiProfileTarget(
     if (isUnifiedMode()) {
       mutateConfig((config) => {
         if (!config.profiles[name]) {
-          throw new Error(`API profile not found: ${name}`);
+          throw new ProfileError(`API profile not found: ${name}`, name);
         }
 
         if (target === 'claude') {
@@ -402,7 +421,7 @@ function removeApiProfileUnified(name: string): void {
     const profile = config.profiles[name];
 
     if (!profile) {
-      throw new Error(`API profile not found: ${name}`);
+      throw new ProfileError(`API profile not found: ${name}`, name);
     }
 
     if (profile.settings) {

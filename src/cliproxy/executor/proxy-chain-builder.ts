@@ -33,6 +33,7 @@ import {
 import { shouldDisableCodexReasoning } from './thinking-override-resolver';
 import type { CLIProxyProvider, ExecutorConfig, ResolvedProxyConfig } from '../types';
 import type { ThinkingConfig } from '../../config/unified-config-types';
+import { buildCliproxyProviderPath } from '../config/provider-route';
 
 // ── Proxy constructor types (for dependency injection in tests) ───────────────
 
@@ -162,9 +163,10 @@ export async function buildProxyChain(context: ProxyChainContext): Promise<Proxy
           stripPathPrefix,
         });
         codexReasoningPort = await codexReasoningProxy.start();
-        log(
-          `Codex reasoning proxy active: http://127.0.0.1:${codexReasoningPort}/api/provider/codex`
-        );
+        const providerPath = useRemoteProxy
+          ? '/api/provider/codex'
+          : buildCliproxyProviderPath('codex');
+        log(`Codex reasoning proxy active: http://127.0.0.1:${codexReasoningPort}${providerPath}`);
       } catch (error) {
         const err = error as Error;
         codexReasoningProxy = null;

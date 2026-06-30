@@ -25,6 +25,12 @@ import {
 import type { UnifiedConfig } from './unified-config-types';
 import { isUnifiedConfigEnabled } from './feature-flags';
 
+// loadUnifiedConfig() runs several times per invocation (startup migration check,
+// first-time-install check, command handler, doctor checks). A corrupt config.yaml
+// must report its parse error ONCE, not once per call. Track paths already warned
+// so repeated loads in the same process stay quiet.
+const warnedCorruptConfigPaths = new Set<string>();
+
 // ---------------------------------------------------------------------------
 // Phase 1 re-exports: io-locks
 // ---------------------------------------------------------------------------
@@ -94,6 +100,7 @@ export type { GeminiWebSearchInfo } from './loader/config-getters';
 export {
   getWebSearchConfig,
   getGlobalEnvConfig,
+  getOutputLimitsEnv,
   getContinuityInheritanceMap,
   getCliproxySafetyConfig,
   getThinkingConfig,
@@ -101,6 +108,7 @@ export {
   isDashboardAuthEnabled,
   getDashboardAuthConfig,
   getBrowserConfig,
+  hasExplicitClaudeBrowserDevtoolsPort,
   getImageAnalysisConfig,
   getLoggingConfig,
   getCursorConfig,
@@ -165,22 +173,27 @@ export function loadUnifiedConfig(): UnifiedConfig | null {
 
     return parsed;
   } catch (err) {
-    // U3: Provide better context for YAML syntax errors
-    if (err instanceof yaml.YAMLException) {
-      const mark = err.mark;
-      console.error(`[X] YAML syntax error in ${yamlPath}:`);
-      console.error(
-        `    Line ${(mark?.line ?? 0) + 1}, Column ${(mark?.column ?? 0) + 1}: ${err.reason || 'Invalid syntax'}`
-      );
-      if (mark?.snippet) {
-        console.error(`    ${mark.snippet}`);
+    // U3: Provide better context for YAML syntax errors. Print at most once per
+    // path per process so repeated loads of a corrupt file do not spam the error.
+    const alreadyWarned = warnedCorruptConfigPaths.has(yamlPath);
+    if (!alreadyWarned) {
+      warnedCorruptConfigPaths.add(yamlPath);
+      if (err instanceof yaml.YAMLException) {
+        const mark = err.mark;
+        console.error(`[X] YAML syntax error in ${yamlPath}:`);
+        console.error(
+          `    Line ${(mark?.line ?? 0) + 1}, Column ${(mark?.column ?? 0) + 1}: ${err.reason || 'Invalid syntax'}`
+        );
+        if (mark?.snippet) {
+          console.error(`    ${mark.snippet}`);
+        }
+        console.error(
+          `    Tip: Check for missing colons, incorrect indentation, or unquoted special characters.`
+        );
+      } else {
+        const error = err instanceof Error ? err.message : 'Unknown error';
+        console.error(`[X] Failed to load config: ${error}`);
       }
-      console.error(
-        `    Tip: Check for missing colons, incorrect indentation, or unquoted special characters.`
-      );
-    } else {
-      const error = err instanceof Error ? err.message : 'Unknown error';
-      console.error(`[X] Failed to load config: ${error}`);
     }
     throw err;
   }
@@ -191,6 +204,9 @@ export function loadUnifiedConfig(): UnifiedConfig | null {
  * Merges with defaults to ensure all sections exist.
  */
 export function loadOrCreateUnifiedConfig(): UnifiedConfig {
+  // Read-only: "create" means an in-memory default object when config.yaml is
+  // absent. This never writes to disk, so callers on legacy installs can use
+  // it for read paths without implicitly creating config.yaml.
   const existing = loadUnifiedConfig();
   if (existing) {
     const merged = mergeWithDefaults(existing);

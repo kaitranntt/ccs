@@ -225,12 +225,13 @@ export function getBrowserAttachOverride(env: NodeJS.ProcessEnv = process.env): 
 
 export function getEffectiveClaudeBrowserAttachConfig(
   config: BrowserConfig,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  options: { hasExplicitDevtoolsPort?: boolean } = {}
 ): EffectiveClaudeBrowserAttachConfig {
   const override = getBrowserAttachOverride(env);
   const configUserDataDir =
     resolveBrowserUserDataDir(config.claude.user_data_dir) ?? getRecommendedBrowserUserDataDir();
-  const configHasExplicitPort = config.claude.devtools_port !== undefined;
+  const configHasExplicitPort = options.hasExplicitDevtoolsPort ?? true;
   const configPort = normalizeDevtoolsPort(config.claude.devtools_port);
   const configEvalMode = config.claude.eval_mode ?? 'readonly';
   const envEvalMode = parseBrowserEvalMode(env.CCS_BROWSER_EVAL_MODE);

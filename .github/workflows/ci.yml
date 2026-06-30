@@ -163,7 +163,7 @@ jobs:
 
   # Single always-reporting status that branch protection requires.
   #
-  # The validate/build/test jobs are gated to trusted author associations so
+  # The validate/build/test/compose-parity jobs are gated to trusted author associations so
   # untrusted fork code never executes on the self-hosted runners. A job skipped
   # by a job-level `if` reports no status, so requiring those job names directly
   # leaves fork PRs stuck on "Expected - waiting for status to be reported"
@@ -176,7 +176,7 @@ jobs:
   # third-party code and is safe on the self-hosted runner.
   ci-gate:
     if: always()
-    needs: [validate, build, test]
+    needs: [validate, build, test, compose-parity]
     runs-on: [self-hosted, linux, x64]
     name: CI Gate
     steps:
@@ -185,9 +185,10 @@ jobs:
           VALIDATE: ${{ needs.validate.result }}
           BUILD: ${{ needs.build.result }}
           TEST: ${{ needs.test.result }}
+          COMPOSE_PARITY: ${{ needs.compose-parity.result }}
         run: |
-          echo "validate=$VALIDATE build=$BUILD test=$TEST"
-          for result in "$VALIDATE" "$BUILD" "$TEST"; do
+          echo "validate=$VALIDATE build=$BUILD test=$TEST compose-parity=$COMPOSE_PARITY"
+          for result in "$VALIDATE" "$BUILD" "$TEST" "$COMPOSE_PARITY"; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               echo "[X] A required CI job did not pass (result: $result)"
               exit 1

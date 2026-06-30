@@ -93,7 +93,7 @@ async function askYesNoStep(rl: Interface, step: string, message: string): Promi
     const normalized = answer.toUpperCase();
     if (normalized === 'YES') return true;
     if (normalized === 'NO' || normalized === 'N' || normalized === '') return false;
-    console.error(warn('Please type YES or NO.'));
+    process.stderr.write(String(warn('Please type YES or NO.')) + '\n');
   }
 }
 
@@ -108,7 +108,7 @@ async function askResponsibilityPhrase(rl: Interface): Promise<boolean> {
     if (normalizePhrase(answer) === ANTIGRAVITY_ACK_PHRASE) {
       return true;
     }
-    console.error(warn('Phrase mismatch. Try again.'));
+    process.stderr.write(String(warn('Phrase mismatch. Try again.')) + '\n');
   }
   return false;
 }
@@ -119,14 +119,22 @@ function printResponsibilityHeader(context: AgyRiskContext): void {
       ? 'You are starting Antigravity OAuth account authorization.'
       : 'You are starting a live Antigravity CLI session (ccs agy).';
 
-  console.error('');
-  console.error('╔══════════════════════════════════════════════════════════════════════╗');
-  console.error('║ Antigravity Responsibility Confirmation (Mandatory)                  ║');
-  console.error('╚══════════════════════════════════════════════════════════════════════╝');
-  console.error(`    ${contextLine}`);
-  console.error('    Antigravity has active ban/suspension patterns for risky OAuth usage.');
-  console.error(`    Policy issue: ${ANTIGRAVITY_RISK_ISSUE_URL}`);
-  console.error('');
+  process.stderr.write('' + '\n');
+  process.stderr.write(
+    '╔══════════════════════════════════════════════════════════════════════╗' + '\n'
+  );
+  process.stderr.write(
+    '║ Antigravity Responsibility Confirmation (Mandatory)                  ║' + '\n'
+  );
+  process.stderr.write(
+    '╚══════════════════════════════════════════════════════════════════════╝' + '\n'
+  );
+  process.stderr.write(`    ${contextLine}` + '\n');
+  process.stderr.write(
+    '    Antigravity has active ban/suspension patterns for risky OAuth usage.' + '\n'
+  );
+  process.stderr.write(`    Policy issue: ${ANTIGRAVITY_RISK_ISSUE_URL}` + '\n');
+  process.stderr.write('' + '\n');
 }
 
 export function hasAntigravityRiskAcceptanceFlag(args: string[]): boolean {
@@ -178,9 +186,11 @@ export async function ensureCliAntigravityResponsibility(
   }
 
   if (!process.stdin.isTTY || !process.stderr.isTTY) {
-    console.error(fail('Antigravity responsibility acknowledgement required.'));
-    console.error('    Re-run interactively and complete the 4-step confirmation.');
-    console.error('    Non-interactive override: --accept-agr-risk');
+    process.stderr.write(
+      String(fail('Antigravity responsibility acknowledgement required.')) + '\n'
+    );
+    process.stderr.write('    Re-run interactively and complete the 4-step confirmation.' + '\n');
+    process.stderr.write('    Non-interactive override: --accept-agr-risk' + '\n');
     return false;
   }
 
@@ -216,8 +226,10 @@ export async function ensureCliAntigravityResponsibility(
     const step4 = await askResponsibilityPhrase(rl);
     if (!step4) return false;
 
-    console.error(ok('Antigravity responsibility acknowledgement accepted for this command.'));
-    console.error(info('Proceeding with Antigravity flow...'));
+    process.stderr.write(
+      String(ok('Antigravity responsibility acknowledgement accepted for this command.')) + '\n'
+    );
+    process.stderr.write(String(info('Proceeding with Antigravity flow...')) + '\n');
     return true;
   } finally {
     rl.close();

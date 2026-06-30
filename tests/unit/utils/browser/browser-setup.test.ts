@@ -1,9 +1,12 @@
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { UnifiedConfig } from '../../../../src/config/unified-config-types';
-import { runBrowserSetup, type BrowserSetupDeps } from '../../../../src/utils/browser/browser-setup';
+import {
+  runBrowserSetup,
+  type BrowserSetupDeps,
+} from '../../../../src/utils/browser/browser-setup';
 
 function createUnifiedConfig(userDataDir: string): UnifiedConfig {
   return {
@@ -96,8 +99,36 @@ function createUnifiedConfig(userDataDir: string): UnifiedConfig {
 
 describe('browser setup', () => {
   let tempDir = '';
+  let originalBrowserUserDataDir: string | undefined;
+  let originalBrowserProfileDir: string | undefined;
+  let originalBrowserDevtoolsPort: string | undefined;
+
+  beforeEach(() => {
+    originalBrowserUserDataDir = process.env.CCS_BROWSER_USER_DATA_DIR;
+    originalBrowserProfileDir = process.env.CCS_BROWSER_PROFILE_DIR;
+    originalBrowserDevtoolsPort = process.env.CCS_BROWSER_DEVTOOLS_PORT;
+    delete process.env.CCS_BROWSER_USER_DATA_DIR;
+    delete process.env.CCS_BROWSER_PROFILE_DIR;
+    delete process.env.CCS_BROWSER_DEVTOOLS_PORT;
+  });
 
   afterEach(() => {
+    if (originalBrowserUserDataDir !== undefined) {
+      process.env.CCS_BROWSER_USER_DATA_DIR = originalBrowserUserDataDir;
+    } else {
+      delete process.env.CCS_BROWSER_USER_DATA_DIR;
+    }
+    if (originalBrowserProfileDir !== undefined) {
+      process.env.CCS_BROWSER_PROFILE_DIR = originalBrowserProfileDir;
+    } else {
+      delete process.env.CCS_BROWSER_PROFILE_DIR;
+    }
+    if (originalBrowserDevtoolsPort !== undefined) {
+      process.env.CCS_BROWSER_DEVTOOLS_PORT = originalBrowserDevtoolsPort;
+    } else {
+      delete process.env.CCS_BROWSER_DEVTOOLS_PORT;
+    }
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true });
       tempDir = '';

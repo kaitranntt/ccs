@@ -18,6 +18,7 @@ import {
 } from '../utils/shell-executor';
 import { ErrorManager } from '../utils/error-manager';
 import { getWebSearchHookEnv } from '../utils/websearch-manager';
+import { getOutputLimitsEnv } from '../config/config-loader-facade';
 import { appendBrowserToolArgs } from '../utils/browser';
 import { wireChildProcessSignals } from '../utils/signal-forwarder';
 import { runCleanup } from '../errors';
@@ -76,6 +77,11 @@ export class ClaudeAdapter implements TargetAdapter {
     if (creds.baseUrl) env['ANTHROPIC_BASE_URL'] = creds.baseUrl;
     if (creds.apiKey) env['ANTHROPIC_AUTH_TOKEN'] = creds.apiKey;
     if (creds.model) env['ANTHROPIC_MODEL'] = creds.model;
+
+    // Opt-in output limits (issue #231): inject only the env vars the user has
+    // explicitly configured under config.runtime.outputLimits. When unset, this
+    // is {} and nothing is injected, so Claude Code keeps its own default caps.
+    Object.assign(env, getOutputLimitsEnv());
 
     return stripClaudeCodeEnv(env);
   }

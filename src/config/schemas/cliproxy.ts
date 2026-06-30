@@ -123,6 +123,42 @@ export interface CLIProxyRoutingConfig {
 }
 
 /**
+ * Pool routing configuration for multi-account CLIProxy rotation.
+ *
+ * Pool routing is opt-in at the 1->2 account-add transition.
+ * When enabled: fill-first strategy, session affinity (1h TTL), cooling ON,
+ * and max-retry-credentials: 3 are written to the generated CLIProxy config.
+ *
+ * Cooling note: disable-cooling flips to false when pool routing is enabled.
+ * This is intentional — cooling is required for retry-cap to function correctly.
+ * See archaeology comment in generator.ts (CCS v5 commit fb77d72a).
+ */
+export interface CLIProxyPoolRoutingConfig {
+  /**
+   * Whether pool routing is active for this provider.
+   * Written by enablePoolRouting(); cleared by disablePoolRouting().
+   */
+  enabled?: boolean;
+  /**
+   * Max credentials to try per request before returning 429 to the caller.
+   * Effective only when pool routing (and therefore cooling) is enabled.
+   * Defaults to 3 when pool routing is enabled.
+   */
+  max_retry_credentials?: number;
+  /**
+   * Whether the user has dismissed the pool routing opt-in prompt.
+   * Prevents re-prompting after an explicit decline.
+   */
+  prompt_dismissed?: boolean;
+  /**
+   * Whether the user has dismissed the pool onboarding hint.
+   * Fires once when >= 2 native Claude profiles exist and no pool is enabled.
+   * Shares the pool_routing key family - one schema home, no duplicate plumbing.
+   */
+  onboarding_hint_dismissed?: boolean;
+}
+
+/**
  * CLIProxy configuration section.
  */
 export interface CLIProxyConfig {
@@ -150,4 +186,6 @@ export interface CLIProxyConfig {
   auto_sync?: boolean;
   /** Routing strategy for multi-account CLIProxy selection */
   routing?: CLIProxyRoutingConfig;
+  /** Pool routing opt-in state and configuration */
+  pool_routing?: CLIProxyPoolRoutingConfig;
 }

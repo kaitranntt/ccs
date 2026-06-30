@@ -58,6 +58,50 @@ export function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
   });
 }
 
+/**
+ * Read the raw request body as a UTF-8 string, suitable for forwarding
+ * verbatim in passthrough mode. Rejects bodies larger than 10MB.
+ */
+export function readRawBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let settled = false;
+
+    const resolveOnce = (payload: string) => {
+      if (!settled) {
+        settled = true;
+        resolve(payload);
+      }
+    };
+
+    const rejectOnce = (error: Error) => {
+      if (!settled) {
+        settled = true;
+        reject(error);
+      }
+    };
+
+    req.on('data', (chunk: Buffer) => {
+      total += chunk.length;
+      if (total > MAX_BODY_SIZE) {
+        req.pause();
+        rejectOnce(new Error('Request body too large (max 10MB)'));
+        return;
+      }
+      chunks.push(chunk);
+    });
+
+    req.on('end', () => {
+      resolveOnce(Buffer.concat(chunks).toString('utf8'));
+    });
+
+    req.on('error', (error) => {
+      rejectOnce(error instanceof Error ? error : new Error(String(error)));
+    });
+  });
+}
+
 export async function pipeWebResponseToNode(
   response: Response,
   res: http.ServerResponse

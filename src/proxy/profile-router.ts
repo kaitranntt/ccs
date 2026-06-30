@@ -12,6 +12,13 @@ export interface OpenAICompatProfileConfig {
   provider: DroidProvider;
   insecure?: boolean;
   forceOpenAIReasoningModel?: boolean;
+  /**
+   * When true, forward Anthropic-format requests to the upstream
+   * `/v1/messages` endpoint instead of translating to OpenAI chat
+   * completions. Required for providers that reject OpenAI-format
+   * requests (e.g. Kimi, Anthropic-API mirrors).
+   */
+  passthrough?: boolean;
   model?: string;
   opusModel?: string;
   sonnetModel?: string;
@@ -30,6 +37,13 @@ export interface OpenAICompatProfileEnv {
   CCS_DROID_PROVIDER?: string;
   CCS_OPENAI_PROXY_INSECURE?: string;
   CCS_OPENAI_REASONING_MODEL?: string;
+  /**
+   * Force Anthropic passthrough for this profile. When set, the
+   * proxy forwards incoming `/v1/messages` requests to the
+   * upstream `/v1/messages` endpoint without translating to
+   * OpenAI format.
+   */
+  CCS_OPENAI_PROXY_PASSTHROUGH?: string;
 }
 
 export function isOpenAICompatProvider(provider: DroidProvider | null): provider is DroidProvider {
@@ -72,6 +86,7 @@ export function resolveOpenAICompatProfileConfig(
     provider,
     insecure: isTruthyEnv(env.CCS_OPENAI_PROXY_INSECURE),
     forceOpenAIReasoningModel: isTruthyEnv(env.CCS_OPENAI_REASONING_MODEL),
+    passthrough: isTruthyEnv(env.CCS_OPENAI_PROXY_PASSTHROUGH),
     model: env.ANTHROPIC_MODEL?.trim() || undefined,
     opusModel: env.ANTHROPIC_DEFAULT_OPUS_MODEL?.trim() || undefined,
     sonnetModel: env.ANTHROPIC_DEFAULT_SONNET_MODEL?.trim() || undefined,

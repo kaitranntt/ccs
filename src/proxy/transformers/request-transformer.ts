@@ -101,6 +101,9 @@ interface OpenAIMessage {
 export interface ProxyOpenAIRequest {
   model?: string;
   stream: boolean;
+  stream_options?: {
+    include_usage: boolean;
+  };
   reasoning_effort?: string;
   reasoning?: {
     enabled: boolean;
@@ -728,6 +731,16 @@ export class ProxyRequestTransformer {
           ? source.model.trim()
           : undefined,
       stream: source.stream === true,
+      // Ask the upstream provider to emit a final SSE chunk with token usage.
+      // OpenAI-compatible endpoints (and most proxies that follow the spec,
+      // including LiteLLM) only include `usage` in the streamed response when
+      // `stream_options.include_usage` is set on the request. Without this
+      // flag the proxy's stream parser still writes Anthropic-shaped events
+      // with `usage: { input_tokens: 0, output_tokens: 0 }`, so Claude Code's
+      // status line and the session log show 0 tokens even though the call
+      // was billed. See:
+      // https://platform.openai.com/docs/api-reference/chat-streaming
+      ...(source.stream === true ? { stream_options: { include_usage: true } } : {}),
       messages: coalesceMessages(allMessages),
       max_tokens: asNumber(source.max_tokens),
       temperature: asNumber(source.temperature),

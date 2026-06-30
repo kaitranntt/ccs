@@ -27,7 +27,7 @@ function makeBrowserConfig(enabled = false, policy: 'auto' | 'always' | 'never' 
 
 describe('resolveBrowserLaunchFlags — no browser flags', () => {
   it('returns undefined override and passes args through unchanged', async () => {
-    mock.module('../../utils/browser', () => ({
+    mock.module('../../../utils/browser', () => ({
       appendBrowserToolArgs: (a: string[]) => a,
       resolveBrowserLaunchFlagResolution: (_args: string[]) => ({
         override: undefined,
@@ -40,8 +40,9 @@ describe('resolveBrowserLaunchFlags — no browser flags', () => {
       resolveOptionalBrowserAttachRuntime: async () => ({ runtimeEnv: undefined }),
       syncBrowserMcpToConfigDir: () => true,
     }));
-    mock.module('../../../config/unified-config-loader', () => ({
+    mock.module('../../../config/config-loader-facade', () => ({
       getBrowserConfig: () => makeBrowserConfig(false),
+      hasExplicitClaudeBrowserDevtoolsPort: () => false,
       loadOrCreateUnifiedConfig: () => ({}),
       getThinkingConfig: () => ({}),
     }));
@@ -58,7 +59,7 @@ describe('resolveBrowserLaunchFlags — no browser flags', () => {
 
 describe('resolveBrowserLaunchFlags — with browser-launch override', () => {
   it('returns override and strips the browser flag from args', async () => {
-    mock.module('../../utils/browser', () => ({
+    mock.module('../../../utils/browser', () => ({
       appendBrowserToolArgs: (a: string[]) => a,
       resolveBrowserLaunchFlagResolution: (_args: string[]) => ({
         override: 'force-enable' as const,
@@ -71,8 +72,9 @@ describe('resolveBrowserLaunchFlags — with browser-launch override', () => {
       resolveOptionalBrowserAttachRuntime: async () => ({ runtimeEnv: undefined }),
       syncBrowserMcpToConfigDir: () => true,
     }));
-    mock.module('../../../config/unified-config-loader', () => ({
+    mock.module('../../../config/config-loader-facade', () => ({
       getBrowserConfig: () => makeBrowserConfig(true, 'auto'),
+      hasExplicitClaudeBrowserDevtoolsPort: () => false,
       loadOrCreateUnifiedConfig: () => ({}),
       getThinkingConfig: () => ({}),
     }));
@@ -98,7 +100,7 @@ describe('resolveBrowserLaunchFlags — blocked override warning', () => {
   });
 
   it('emits warn() when getBlockedBrowserOverrideWarning returns a message', async () => {
-    mock.module('../../utils/browser', () => ({
+    mock.module('../../../utils/browser', () => ({
       appendBrowserToolArgs: (a: string[]) => a,
       resolveBrowserLaunchFlagResolution: (args: string[]) => ({
         override: 'force-enable' as const,
@@ -111,8 +113,9 @@ describe('resolveBrowserLaunchFlags — blocked override warning', () => {
       resolveOptionalBrowserAttachRuntime: async () => ({ runtimeEnv: undefined }),
       syncBrowserMcpToConfigDir: () => true,
     }));
-    mock.module('../../../config/unified-config-loader', () => ({
+    mock.module('../../../config/config-loader-facade', () => ({
       getBrowserConfig: () => makeBrowserConfig(false, 'never'),
+      hasExplicitClaudeBrowserDevtoolsPort: () => false,
       loadOrCreateUnifiedConfig: () => ({}),
       getThinkingConfig: () => ({}),
     }));
@@ -128,7 +131,7 @@ describe('resolveBrowserLaunchFlags — blocked override warning', () => {
 
 describe('resolveBrowserRuntime — attach disabled', () => {
   it('returns undefined browserRuntimeEnv when browser attach is disabled', async () => {
-    mock.module('../../utils/browser', () => ({
+    mock.module('../../../utils/browser', () => ({
       appendBrowserToolArgs: (a: string[]) => a,
       resolveBrowserLaunchFlagResolution: (a: string[]) => ({
         override: undefined,
@@ -141,8 +144,9 @@ describe('resolveBrowserRuntime — attach disabled', () => {
       resolveOptionalBrowserAttachRuntime: async () => ({ runtimeEnv: undefined }),
       syncBrowserMcpToConfigDir: () => true,
     }));
-    mock.module('../../../config/unified-config-loader', () => ({
+    mock.module('../../../config/config-loader-facade', () => ({
       getBrowserConfig: () => makeBrowserConfig(false),
+      hasExplicitClaudeBrowserDevtoolsPort: () => false,
       loadOrCreateUnifiedConfig: () => ({}),
       getThinkingConfig: () => ({}),
     }));
@@ -158,7 +162,7 @@ describe('resolveBrowserRuntime — attach disabled', () => {
 describe('resolveBrowserRuntime — active runtime env', () => {
   it('returns runtimeEnv when browser attach resolves successfully', async () => {
     const fakeRuntimeEnv = { CCS_BROWSER_DEVTOOLS_WS_URL: 'ws://127.0.0.1:9222/json' };
-    mock.module('../../utils/browser', () => ({
+    mock.module('../../../utils/browser', () => ({
       appendBrowserToolArgs: (a: string[]) => a,
       resolveBrowserLaunchFlagResolution: (a: string[]) => ({
         override: 'force-enable' as const,
@@ -171,8 +175,9 @@ describe('resolveBrowserRuntime — active runtime env', () => {
       resolveOptionalBrowserAttachRuntime: async () => ({ runtimeEnv: fakeRuntimeEnv }),
       syncBrowserMcpToConfigDir: () => true,
     }));
-    mock.module('../../../config/unified-config-loader', () => ({
+    mock.module('../../../config/config-loader-facade', () => ({
       getBrowserConfig: () => makeBrowserConfig(true, 'always'),
+      hasExplicitClaudeBrowserDevtoolsPort: () => false,
       loadOrCreateUnifiedConfig: () => ({}),
       getThinkingConfig: () => ({}),
     }));

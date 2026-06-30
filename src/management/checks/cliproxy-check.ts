@@ -108,7 +108,26 @@ export class CLIProxyAuthChecker implements IHealthChecker {
   name = 'CLIProxy Auth';
 
   run(results: HealthCheck): void {
-    const authStatuses = getAllAuthStatus();
+    // Reading auth status touches ~/.ccs; a permission error (EACCES) must not
+    // crash doctor before the ERRORS section renders. Surface it as a recoverable
+    // check instead of throwing.
+    let authStatuses;
+    try {
+      authStatuses = getAllAuthStatus();
+    } catch (err) {
+      const spinner = ora('Checking CLIProxy auth').start();
+      spinner.fail();
+      const message = err instanceof Error ? err.message : String(err);
+      console.log(`  ${warn('CLIProxy Auth'.padEnd(22))}  Unable to read auth status`);
+      results.addCheck(
+        'CLIProxy Auth',
+        'error',
+        `Unable to read CLIProxy auth status: ${message}`,
+        'sudo chown -R $USER ~/.ccs ~/.claude && chmod -R u+rwX ~/.ccs ~/.claude',
+        { status: 'ERROR', info: 'Auth status unavailable (permission or read error)' }
+      );
+      return;
+    }
     for (const status of authStatuses) {
       const spinner = ora(`Checking ${status.provider} auth`).start();
       const providerName = status.provider.charAt(0).toUpperCase() + status.provider.slice(1);

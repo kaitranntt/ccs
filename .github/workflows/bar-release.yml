@@ -1,0 +1,82 @@
+name: Bar Release
+
+# Build and publish the macOS CCS Bar app to the floating `ccs-bar-latest`
+# release asset (what `ccs bar install` downloads).
+#
+# Scoped deliberately so it NEVER burdens other PRs or CI:
+#   - Triggers ONLY on push to `main` that changes `macos-bar/**`, or a manual
+#     run from `main`. Regular PRs, dev pushes, and non-bar changes do not start it.
+#   - Runs ONLY on the dedicated self-hosted macOS runner (label `ccs-bar` on
+#     kai-minim4). The Linux CI runners never match this job, and this job never
+#     competes for them.
+#
+# Version source: `macos-bar/VERSION` (single line semver). Bump it in the same
+# PR when you want a new number; the asset is always "latest" regardless.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'macos-bar/**'
+  workflow_dispatch:
+
+# Least privilege: only the release-asset write the publish step needs.
+permissions:
+  contents: write
+
+# One release at a time; never cancel a publish midway.
+concurrency:
+  group: bar-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish CCS Bar
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, macos, ccs-bar]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Read bar version
+        id: ver
+        run: |
+          version="$(tr -d '[:space:]' < macos-bar/VERSION)"
+          if [ -z "$version" ]; then
+            echo "::error file=macos-bar/VERSION::macos-bar/VERSION is empty"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "[i] CCS Bar version: $version"
+
+      - name: Build and package CCS Bar.app
+        working-directory: macos-bar
+        run: ./Scripts/package_app.sh "${{ steps.ver.outputs.version }}"
+
+      - name: Publish to ccs-bar-latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          # gh lives in Homebrew on the self-hosted runner; ensure it is on PATH.
+          export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+          gh release upload ccs-bar-latest macos-bar/dist/CCS-Bar.app.zip --clobber
+          printf '%s\n' "${VERSION}" > version.txt
+          gh release upload ccs-bar-latest version.txt --clobber
+          echo "[OK] Published version.txt (${VERSION}) to ccs-bar-latest"
+          rm -f version.txt
+          notes="$(mktemp)"
+          cat > "$notes" <<NOTES
+          CCS Bar v${VERSION}
+
+          Install or update: ccs bar install
+          Ad-hoc signed: first launch may need right-click then Open.
+
+          Built automatically from main when macos-bar changes.
+          NOTES
+          gh release edit ccs-bar-latest --target "$GITHUB_SHA" --title "CCS Bar v${VERSION}" --notes-file "$notes"
+          rm -f "$notes"
+          echo "[OK] Published CCS Bar v${VERSION} to ccs-bar-latest"

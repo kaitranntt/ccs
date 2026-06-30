@@ -10,7 +10,8 @@ import {
   startOpenAICompatProxy,
   stopOpenAICompatProxy,
 } from '../proxy';
-import { loadSettings } from '../config/config-loader-facade';
+import { loadConfigSafe, loadSettings } from '../config/config-loader-facade';
+import { ProfileError } from '../errors';
 
 function parseOptionValue(args: string[], key: string): string | undefined {
   const exactIndex = args.findIndex((arg) => arg === key);
@@ -82,11 +83,22 @@ function showHelp(): number {
 }
 
 function resolveProfile(profileName: string) {
+  // Pre-check profile in config to avoid the generic error() + npm-install hint from getSettingsPath.
+  const config = loadConfigSafe();
+  if (!config.profiles[profileName]) {
+    throw new ProfileError(
+      `Profile "${profileName}" is not configured for an OpenAI-compatible endpoint`,
+      profileName
+    );
+  }
   const settingsPath = expandPath(getSettingsPath(profileName));
   const settings = loadSettings(settingsPath);
   const profile = resolveOpenAICompatProfileConfig(profileName, settingsPath, settings.env || {});
   if (!profile) {
-    throw new Error(`Profile "${profileName}" is not configured for an OpenAI-compatible endpoint`);
+    throw new ProfileError(
+      `Profile "${profileName}" is not configured for an OpenAI-compatible endpoint`,
+      profileName
+    );
   }
   return profile;
 }

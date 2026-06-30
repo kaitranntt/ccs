@@ -236,7 +236,9 @@ router.post('/daemon/start', async (_req: Request, res: Response): Promise<void>
       ghost_mode: cursorConfig.ghost_mode,
       daemon_token: getCursorDaemonToken(),
     });
-    res.json(result);
+    const { daemonToken: _redactedDaemonToken, ...publicResult } = result;
+    void _redactedDaemonToken;
+    res.json(publicResult);
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

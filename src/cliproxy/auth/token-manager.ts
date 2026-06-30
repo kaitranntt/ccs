@@ -497,9 +497,10 @@ export function displayAuthStatus(): void {
  *
  * Refresh responsibility:
  * - gemini: CCS refreshes directly via Google OAuth
- * - codex, agy, kiro, ghcp, qwen, iflow: CLIProxyAPIPlus handles refresh
+ * - codex, agy, kiro, ghcp, iflow: CLIProxyAPIPlus handles refresh
  *   automatically in background (e.g. kiro refreshes every 1 min).
  *   CCS only checks if token file exists (authentication state).
+ * - qwen: account linking is unsupported by the bundled CLIProxy runtime
  * - claude: not yet implemented
  *
  * @param provider The CLIProxy provider

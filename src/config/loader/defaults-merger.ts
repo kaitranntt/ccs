@@ -160,6 +160,11 @@ export function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfi
           enabled: partial.websearch?.providers?.duckduckgo?.enabled ?? true,
           max_results: partial.websearch?.providers?.duckduckgo?.max_results ?? 5,
         },
+        agy: {
+          enabled: partial.websearch?.providers?.agy?.enabled ?? false,
+          model: partial.websearch?.providers?.agy?.model ?? 'gemini-2.5-flash',
+          timeout: partial.websearch?.providers?.agy?.timeout ?? 90,
+        },
         gemini: {
           enabled:
             partial.websearch?.providers?.gemini?.enabled ??
@@ -331,5 +336,9 @@ export function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfi
       profile_backends:
         partial.image_analysis?.profile_backends ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.profile_backends,
     }),
+    // Runtime config (issue #231) - optional, opt-in spawned-CLI knobs.
+    // Passed through only when present so an absent section stays absent and
+    // no output-limit env is injected (downstream defaults preserved).
+    runtime: partial.runtime,
   };
 }

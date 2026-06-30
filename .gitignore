@@ -62,3 +62,7 @@ tests/mocks/fixtures/*.js
 tests/mocks/fixtures/*.d.ts
 tests/mocks/fixtures/*.js.map
 tests/mocks/fixtures/*.d.ts.map
+
+# Bar demo scaffolding (local dev only)
+_serve*.ts
+_serve*.log

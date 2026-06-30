@@ -168,6 +168,19 @@ describe('Model Catalog', () => {
       assert.strictEqual(opus48.extendedContext, true);
     });
 
+    it('includes Claude Fable 5 with adaptive levels and extended context', () => {
+      const { MODEL_CATALOG } = modelCatalog;
+      const fable5 = MODEL_CATALOG.claude.models.find((m) => m.id === 'claude-fable-5');
+      assert(fable5, 'Should include Claude Fable 5');
+      assert.strictEqual(fable5.name, 'Claude Fable 5');
+      // New top tier above Opus; same adaptive thinking surface as Opus 4.8:
+      // Anthropic only accepts effort levels, budget_tokens is rejected with 400.
+      assert.strictEqual(fable5.thinking.type, 'levels');
+      assert.deepStrictEqual(fable5.thinking.levels, ['low', 'medium', 'high', 'xhigh', 'max']);
+      assert.strictEqual(fable5.thinking.maxLevel, 'max');
+      assert.strictEqual(fable5.extendedContext, true);
+    });
+
     it('retains previous 4.5 snapshot models for explicit selection', () => {
       const { MODEL_CATALOG } = modelCatalog;
       const ids = MODEL_CATALOG.claude.models.map((m) => m.id);

@@ -2,9 +2,9 @@
   "env": {
     "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
     "ANTHROPIC_AUTH_TOKEN": "YOUR_KIMI_API_KEY_HERE",
-    "ANTHROPIC_MODEL": "kimi-k2-thinking-turbo",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "kimi-k2-thinking-turbo",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-k2-thinking-turbo",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-k2-thinking-turbo"
+    "ANTHROPIC_MODEL": "kimi-for-coding",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "kimi-for-coding",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-for-coding",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "kimi-for-coding"
   }
 }

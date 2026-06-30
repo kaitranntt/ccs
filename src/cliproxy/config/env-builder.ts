@@ -31,7 +31,15 @@ import {
   normalizeIFlowLegacyModelAliases,
   normalizeModelIdForProvider,
 } from '../ai-providers/model-id-normalizer';
-import { getGlobalEnvConfig } from '../../config/config-loader-facade';
+import {
+  getGlobalEnvConfig,
+  getOutputLimitsEnv,
+  getCcsDir,
+} from '../../config/config-loader-facade';
+import { buildCliproxyProviderPath, buildLocalProviderBaseUrl } from './provider-route';
+import { ConfigError } from '../../errors/error-types';
+
+export { buildCliproxyProviderPath, buildLocalProviderBaseUrl } from './provider-route';
 
 /** Settings file structure for user overrides */
 interface ProviderSettings {
@@ -52,6 +60,9 @@ const REQUIRED_PROVIDER_ENV_KEYS = [
   'ANTHROPIC_DEFAULT_SONNET_MODEL',
   'ANTHROPIC_DEFAULT_HAIKU_MODEL',
 ] as const;
+
+/** Minimum required env vars for the claude built-in provider (model-neutral). */
+const REQUIRED_CLAUDE_ENV_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const;
 const CURSOR_LEGACY_ENV_OVERRIDE_KEYS = new Set([
   'ANTHROPIC_BASE_URL',
   'ANTHROPIC_AUTH_TOKEN',
@@ -198,30 +209,24 @@ export function getModelMapping(provider: CLIProxyProvider): ProviderModelMappin
 
 /**
  * Get environment variables for Claude CLI (bundled defaults)
- * Uses provider-specific endpoint (e.g., /api/provider/gemini) for explicit routing.
- * This enables concurrent gemini/codex usage - each session routes to its provider via URL path.
+ * Uses the backend-aware route path for the selected provider.
+ *
+ * Root-URL rule: the original CLIProxy backend uses the root endpoint
+ * (http://127.0.0.1:<port>) and routes by model. The /api/provider/<x> prefix is
+ * only used for Plus-backend non-Claude providers. buildCliproxyProviderPath()
+ * encodes this rule and is reused by the api-create bridge path.
+ *
+ * For the claude built-in provider the model env vars are intentionally omitted so that
+ * the user's own Claude Code /model selection is honored end-to-end (model-neutral passthrough).
  */
 export function getClaudeEnvVars(
   provider: CLIProxyProvider,
   port: number = CLIPROXY_DEFAULT_PORT
 ): NodeJS.ProcessEnv {
-  const models = getModelMapping(provider);
-
   // Base env vars from config file (includes ANTHROPIC_MAX_TOKENS, etc.)
   const baseEnvVars = getEnvVarsFromConfig(provider);
 
-  // Core env vars that we always set dynamically
-  const coreEnvVars = {
-    // Provider-specific endpoint - routes to correct provider via URL path
-    ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}/api/provider/${provider}`,
-    ANTHROPIC_AUTH_TOKEN: getEffectiveApiKey(),
-    ANTHROPIC_MODEL: models.claudeModel,
-    ANTHROPIC_DEFAULT_OPUS_MODEL: models.opusModel || models.claudeModel,
-    ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnetModel || models.claudeModel,
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haikuModel || models.claudeModel,
-  };
-
-  // Filter out core env vars from base config to avoid conflicts
+  // Filter out model pins and URL/auth from base config (we set them dynamically)
   const {
     ANTHROPIC_BASE_URL: _baseUrl,
     ANTHROPIC_AUTH_TOKEN: _authToken,
@@ -231,6 +236,22 @@ export function getClaudeEnvVars(
     ANTHROPIC_DEFAULT_HAIKU_MODEL: _haikuModel,
     ...additionalEnvVars
   } = baseEnvVars;
+
+  // Core transport env vars set dynamically for all providers
+  const coreEnvVars: NodeJS.ProcessEnv = {
+    ANTHROPIC_BASE_URL: buildLocalProviderBaseUrl(provider, port),
+    ANTHROPIC_AUTH_TOKEN: getEffectiveApiKey(),
+  };
+
+  // Model pins: omitted for claude provider (model-neutral passthrough).
+  // For all other providers, set model vars from the base config model mapping.
+  if (provider !== 'claude') {
+    const models = getModelMapping(provider);
+    coreEnvVars.ANTHROPIC_MODEL = models.claudeModel;
+    coreEnvVars.ANTHROPIC_DEFAULT_OPUS_MODEL = models.opusModel || models.claudeModel;
+    coreEnvVars.ANTHROPIC_DEFAULT_SONNET_MODEL = models.sonnetModel || models.claudeModel;
+    coreEnvVars.ANTHROPIC_DEFAULT_HAIKU_MODEL = models.haikuModel || models.claudeModel;
+  }
 
   // Merge core env vars with additional env vars from base config
   const mergedEnv = {
@@ -301,13 +322,21 @@ export function resolveProviderSettingsPath(provider: CLIProxyProvider): string 
 /**
  * Get global env vars to inject into all third-party profiles.
  * Returns empty object if disabled.
+ *
+ * Opt-in output limits (issue #231) are merged in on top of the global env so
+ * they reach every cliproxy launch path (local, remote, composite). When unset,
+ * getOutputLimitsEnv() returns {} and nothing is injected, preserving the
+ * downstream CLI's own default caps. Output limits are independent of the
+ * global_env enable flag: a user can opt into limits without enabling global
+ * telemetry-disable env.
  */
 function getGlobalEnvVars(): Record<string, string> {
+  const outputLimitsEnv = getOutputLimitsEnv();
   const globalEnvConfig = getGlobalEnvConfig();
   if (!globalEnvConfig.enabled) {
-    return {};
+    return { ...outputLimitsEnv };
   }
-  return globalEnvConfig.env;
+  return { ...globalEnvConfig.env, ...outputLimitsEnv };
 }
 
 /**
@@ -369,7 +398,11 @@ function normalizeLocalProviderBaseUrl(
         : 80;
     if (!Number.isFinite(effectivePort) || effectivePort !== port) return baseUrl;
 
-    const expectedPath = `/api/provider/${provider}`;
+    const expectedPath = buildCliproxyProviderPath(provider);
+    if (expectedPath === '') {
+      return parsed.origin;
+    }
+
     if (parsed.pathname === expectedPath && !parsed.search && !parsed.hash) return baseUrl;
 
     parsed.pathname = expectedPath;
@@ -387,7 +420,6 @@ function normalizeLocalProviderBaseUrl(
  */
 function rewriteLocalhostUrls(
   envVars: NodeJS.ProcessEnv,
-  provider: CLIProxyProvider,
   remoteConfig: RemoteProxyRewriteConfig
 ): NodeJS.ProcessEnv {
   const result = { ...envVars };
@@ -407,9 +439,8 @@ function rewriteLocalhostUrls(
   // Omit port suffix for standard web ports (80/443) for cleaner URLs
   const standardWebPort = normalizedProtocol === 'https' ? 443 : 80;
   const portSuffix = effectivePort === standardWebPort ? '' : `:${effectivePort}`;
-  const remoteBaseUrl = `${normalizedProtocol}://${remoteConfig.host}${portSuffix}/api/provider/${provider}`;
-
-  result.ANTHROPIC_BASE_URL = remoteBaseUrl;
+  const remoteRootUrl = `${normalizedProtocol}://${remoteConfig.host}${portSuffix}`;
+  result.ANTHROPIC_BASE_URL = remoteRootUrl;
 
   // Update auth token if provided
   if (remoteConfig.authToken) {
@@ -456,13 +487,16 @@ export function getEffectiveEnvVars(
           migrateDeprecatedModelNames(expandedPath, provider, settings);
           // Migrate legacy iFlow placeholders to supported model IDs
           migrateIFlowPlaceholderModel(expandedPath, provider, settings);
-          // Custom variant settings found - merge with global env
+          // Custom variant settings found - merge with global env.
+          // settings.env is spread AFTER globalEnv, so an explicit per-variant
+          // value (e.g. MAX_MCP_OUTPUT_TOKENS) intentionally overrides the
+          // config.runtime.outputLimits value carried in globalEnv.
           envVars = { ...globalEnv, ...settings.env };
           // Ensure required vars are present (fall back to defaults if missing)
           envVars = ensureRequiredEnvVars(envVars, provider, port);
           // Apply remote rewrite if configured
           if (remoteRewriteConfig) {
-            envVars = rewriteLocalhostUrls(envVars, provider, remoteRewriteConfig);
+            envVars = rewriteLocalhostUrls(envVars, remoteRewriteConfig);
           }
           return envVars;
         }
@@ -489,13 +523,16 @@ export function getEffectiveEnvVars(
         migrateDeprecatedModelNames(settingsPath, provider, settings);
         // Migrate legacy iFlow placeholders to supported model IDs
         migrateIFlowPlaceholderModel(settingsPath, provider, settings);
-        // User override found - merge with global env
+        // User override found - merge with global env.
+        // settings.env is spread AFTER globalEnv, so an explicit per-variant
+        // value (e.g. MAX_MCP_OUTPUT_TOKENS) intentionally overrides the
+        // config.runtime.outputLimits value carried in globalEnv.
         envVars = { ...globalEnv, ...settings.env };
         // Ensure required vars are present (fall back to defaults if missing)
         envVars = ensureRequiredEnvVars(envVars, provider, port);
         // Apply remote rewrite if configured
         if (remoteRewriteConfig) {
-          envVars = rewriteLocalhostUrls(envVars, provider, remoteRewriteConfig);
+          envVars = rewriteLocalhostUrls(envVars, remoteRewriteConfig);
         }
         return envVars;
       }
@@ -507,6 +544,98 @@ export function getEffectiveEnvVars(
 
   // No override or invalid - use bundled defaults merged with global env
   return { ...globalEnv, ...getClaudeEnvVars(provider, port) };
+}
+
+/**
+ * All historically-shipped default model pins that CCS auto-wrote into
+ * claude.settings.json before the model-neutral passthrough change.
+ * A key is removed only when the stored value exactly matches one of the values
+ * in that key's set, so user-customised values are always preserved.
+ */
+const CLAUDE_STALE_MODEL_DEFAULTS: Record<string, Set<string>> = {
+  ANTHROPIC_MODEL: new Set([
+    'claude-sonnet-4-20250514',
+    'claude-sonnet-4-5-20250929',
+    'claude-sonnet-4-6',
+  ]),
+  ANTHROPIC_DEFAULT_OPUS_MODEL: new Set([
+    'claude-opus-4-20250514',
+    'claude-opus-4-5-20251101',
+    'claude-opus-4-6',
+    'claude-opus-4-7',
+  ]),
+  ANTHROPIC_DEFAULT_SONNET_MODEL: new Set([
+    'claude-sonnet-4-20250514',
+    'claude-sonnet-4-5-20250929',
+    'claude-sonnet-4-6',
+  ]),
+  ANTHROPIC_DEFAULT_HAIKU_MODEL: new Set([
+    'claude-haiku-3-5-20241022',
+    'claude-haiku-4-5-20251001',
+  ]),
+};
+
+/** Marker file that records when the one-time stale-pin migration has run. */
+const CLAUDE_MODEL_MIGRATED_MARKER = '.claude-model-migrated';
+
+/** Return true if the one-time stale-pin migration has already been applied. */
+function claudeModelMigrationDone(): boolean {
+  try {
+    return fs.existsSync(path.join(getCcsDir(), 'cliproxy', CLAUDE_MODEL_MIGRATED_MARKER));
+  } catch {
+    return true; // Cannot read — treat as done to avoid repeated rewrites.
+  }
+}
+
+/** Record that the one-time stale-pin migration has been applied. */
+function markClaudeModelMigrationDone(): void {
+  try {
+    const dir = path.join(getCcsDir(), 'cliproxy');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, CLAUDE_MODEL_MIGRATED_MARKER), new Date().toISOString(), {
+      encoding: 'utf8',
+      flag: 'w',
+    });
+  } catch {
+    // Best-effort — failure to persist is not fatal.
+  }
+}
+
+/**
+ * Remove stale model pins from an existing claude.settings.json env block.
+ * Only removes keys whose values appear in the set of historically-shipped
+ * defaults for that key, preserving user-customised values.
+ * Returns true when at least one key was removed (signals file needs rewriting).
+ */
+function migrateClaudeStaleModelPins(env: Record<string, string>): boolean {
+  let mutated = false;
+  for (const [key, staleValues] of Object.entries(CLAUDE_STALE_MODEL_DEFAULTS)) {
+    if (staleValues.has(env[key])) {
+      delete env[key];
+      mutated = true;
+    }
+  }
+  return mutated;
+}
+
+/**
+ * Read-level equivalent of the stale-pin migration for paths that must not
+ * mutate the settings file (e.g. the remote env builder).  Returns a copy of
+ * the env with any value equal to a historical default dropped per-key, while
+ * user-custom pins are preserved.  Same per-key Sets as the local migration, so
+ * local / --config / remote read paths agree on which pins are stale.
+ *
+ * No marker is consulted or written: this is purely a read-time filter, so it
+ * is idempotent across launches without a one-shot guard.
+ */
+function filterClaudeStaleModelPins(env: Record<string, string>): Record<string, string> {
+  const result = { ...env };
+  for (const [key, staleValues] of Object.entries(CLAUDE_STALE_MODEL_DEFAULTS)) {
+    if (staleValues.has(result[key])) {
+      delete result[key];
+    }
+  }
+  return result;
 }
 
 /**
@@ -525,8 +654,13 @@ export function ensureProviderSettings(provider: CLIProxyProvider): void {
   };
 
   // Create initial file when missing.
+  // A freshly created file has no stale pins by construction, so mark migration
+  // done immediately to prevent the one-time strip from running unnecessarily.
   if (!fs.existsSync(settingsPath)) {
     writeSettings({ env: defaultEnv });
+    if (provider === 'claude') {
+      markClaudeModelMigrationDone();
+    }
     return;
   }
 
@@ -541,10 +675,11 @@ export function ensureProviderSettings(provider: CLIProxyProvider): void {
   let parsed: Record<string, unknown>;
   try {
     const value = JSON.parse(rawContent) as unknown;
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      throw new Error('settings root must be an object');
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      parsed = value as Record<string, unknown>;
+    } else {
+      throw new SyntaxError('settings root must be an object');
     }
-    parsed = value as Record<string, unknown>;
   } catch {
     // Preserve corrupt payload for manual inspection, then recover with defaults.
     const backupPath = `${settingsPath}.corrupt-${Date.now()}`;
@@ -564,10 +699,39 @@ export function ensureProviderSettings(provider: CLIProxyProvider): void {
       : {};
 
   let mutated = !(envCandidate && typeof envCandidate === 'object' && !Array.isArray(envCandidate));
-  for (const key of REQUIRED_PROVIDER_ENV_KEYS) {
+
+  // One-time migration: strip stale model pins written by older CCS versions into
+  // claude.settings.json.  Guarded by a marker file so a user-re-pin that happens
+  // to equal a stale default value is not silently stripped on every subsequent launch.
+  if (provider === 'claude' && !claudeModelMigrationDone()) {
+    if (migrateClaudeStaleModelPins(mergedEnv)) {
+      mutated = true;
+    }
+    markClaudeModelMigrationDone();
+  }
+
+  // claude is model-neutral: only transport keys (URL + auth) are required; model pins are omitted.
+  const requiredKeys =
+    provider === 'claude' ? REQUIRED_CLAUDE_ENV_KEYS : REQUIRED_PROVIDER_ENV_KEYS;
+  for (const key of requiredKeys) {
     const current = mergedEnv[key];
     if (typeof current !== 'string' || current.trim().length === 0) {
-      mergedEnv[key] = defaultEnv[key] || '';
+      const fallback = defaultEnv[key];
+      if (fallback) {
+        mergedEnv[key] = fallback;
+        mutated = true;
+      }
+    }
+  }
+
+  if (typeof mergedEnv.ANTHROPIC_BASE_URL === 'string') {
+    const normalizedBaseUrl = normalizeLocalProviderBaseUrl(
+      mergedEnv.ANTHROPIC_BASE_URL,
+      provider,
+      CLIPROXY_DEFAULT_PORT
+    );
+    if (normalizedBaseUrl !== mergedEnv.ANTHROPIC_BASE_URL) {
+      mergedEnv.ANTHROPIC_BASE_URL = normalizedBaseUrl;
       mutated = true;
     }
   }
@@ -680,6 +844,21 @@ export function getRemoteEnvVars(
           migrateDeprecatedModelNames(settingsPath, provider, settings);
           migrateIFlowPlaceholderModel(settingsPath, provider, settings);
           userEnvVars = settings.env as Record<string, string>;
+          // claude is model-neutral. The local launch path runs the one-time
+          // stale-pin migration (ensureProviderSettings), but the remote path
+          // never rewrites the file, so a remote-only user whose settings still
+          // carry an old auto-written default would stay pinned. Filter stale
+          // defaults at read level so values equal to a historical default are
+          // dropped while user-custom pins survive. Once the migration marker
+          // exists the file has already been cleaned, so any pin present after
+          // that is user-intentional (e.g. an explicit `ccs claude --config`
+          // pick that happens to equal a historical default) and must NOT be
+          // filtered. Priority 1 (explicit custom settings path) is
+          // intentionally left untouched: an explicitly passed settings file
+          // is the user's deliberate choice.
+          if (provider === 'claude' && !claudeModelMigrationDone()) {
+            userEnvVars = filterClaudeStaleModelPins(userEnvVars);
+          }
         }
       } catch {
         // Invalid JSON - fall through to base config
@@ -689,7 +868,6 @@ export function getRemoteEnvVars(
 
   // Priority 3: Base config defaults
   if (Object.keys(userEnvVars).length === 0) {
-    const models = getModelMapping(provider);
     const baseEnvVars = getEnvVarsFromConfig(provider);
     // Filter out URL/auth from base config (we'll set those from remote config)
     const {
@@ -697,13 +875,25 @@ export function getRemoteEnvVars(
       ANTHROPIC_AUTH_TOKEN: _authToken,
       ...additionalEnvVars
     } = baseEnvVars;
-    userEnvVars = {
-      ...additionalEnvVars,
-      ANTHROPIC_MODEL: models.claudeModel,
-      ANTHROPIC_DEFAULT_OPUS_MODEL: models.opusModel || models.claudeModel,
-      ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnetModel || models.claudeModel,
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haikuModel || models.claudeModel,
-    };
+    // claude is model-neutral: omit model pins so Claude Code's own /model
+    // selection is respected on remote launches too.
+    if (provider === 'claude') {
+      // Filter out undefined values coming from NodeJS.ProcessEnv spread.
+      userEnvVars = Object.fromEntries(
+        Object.entries(additionalEnvVars).filter(
+          (entry): entry is [string, string] => typeof entry[1] === 'string'
+        )
+      );
+    } else {
+      const models = getModelMapping(provider);
+      userEnvVars = {
+        ...additionalEnvVars,
+        ANTHROPIC_MODEL: models.claudeModel,
+        ANTHROPIC_DEFAULT_OPUS_MODEL: models.opusModel || models.claudeModel,
+        ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnetModel || models.claudeModel,
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haikuModel || models.claudeModel,
+      };
+    }
   }
 
   // Build final env: global + user settings + remote URL/auth override
@@ -792,7 +982,7 @@ export function getCompositeEnvVars(
 
   // If default tier is missing, we cannot proceed meaningfully
   if (!defaultModel) {
-    throw new Error(`Missing model for default tier '${defaultTier}'`);
+    throw new ConfigError(`Missing model for default tier '${defaultTier}'`);
   }
 
   // Determine base URL and auth token based on remote vs local mode

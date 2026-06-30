@@ -344,7 +344,9 @@ async function fetchManagementJson<T>(
   }
 }
 
-async function fetchCliproxyAuthFiles(port?: number): Promise<CliproxyManagementAuthFile[] | null> {
+export async function fetchCliproxyAuthFiles(
+  port?: number
+): Promise<CliproxyManagementAuthFile[] | null> {
   try {
     const result = await fetchManagementJson<{ files?: CliproxyManagementAuthFile[] }>(
       '/v0/management/auth-files',
@@ -366,6 +368,29 @@ export const __testExports = {
     cachedUsageQueueResponses.clear();
   },
 };
+
+/**
+ * Build an auth_index → account email/id map from CLIProxy auth file metadata.
+ *
+ * Keys are stored as strings (String(auth_index)) so both numeric and string
+ * auth_index values resolve consistently via `map.get(String(auth_index))`.
+ *
+ * Entries missing either `auth_index` or `email` are silently skipped.
+ *
+ * @param authFiles Auth file records from /v0/management/auth-files
+ * @returns Map from String(auth_index) → email
+ */
+export function buildAuthIndexToAccountMap(
+  authFiles: CliproxyManagementAuthFile[]
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const file of authFiles) {
+    if (file.auth_index === undefined || file.auth_index === null) continue;
+    if (!file.email || file.email.trim().length === 0) continue;
+    map.set(String(file.auth_index), file.email.trim());
+  }
+  return map;
+}
 
 /** OpenAI-compatible model object from /v1/models endpoint */
 export interface CliproxyModel {

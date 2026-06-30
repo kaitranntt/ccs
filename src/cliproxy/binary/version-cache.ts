@@ -11,6 +11,7 @@ import {
   VERSION_CACHE_DURATION_MS,
   VERSION_PIN_FILE,
   VersionListCache,
+  getGitHubRepo,
 } from './types';
 import { DEFAULT_BACKEND } from '../binary/platform-detector';
 import type { CLIProxyBackend } from '../types';
@@ -59,6 +60,10 @@ function readVersionCacheInternal(
     const content = fs.readFileSync(cachePath, 'utf8');
     const cache: VersionCache = JSON.parse(content);
 
+    if (cache.repo !== getGitHubRepo(backend)) {
+      return null;
+    }
+
     // Check if cache is still valid, unless caller explicitly allows stale fallback.
     if (allowExpired || Date.now() - cache.checkedAt < VERSION_CACHE_DURATION_MS) {
       return cache;
@@ -82,6 +87,7 @@ export function writeVersionCache(
   const cache: VersionCache = {
     latestVersion: version,
     checkedAt: Date.now(),
+    repo: getGitHubRepo(backend),
   };
 
   try {

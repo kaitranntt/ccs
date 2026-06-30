@@ -87,4 +87,109 @@ describe('RoutingGuidanceCard', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /session affinity unavailable/i })).toBeDisabled();
   });
+
+  it('compact: pool ON shows the drain-order pointer and an inline override warning', () => {
+    render(
+      <RoutingGuidanceCard
+        compact
+        state={{
+          strategy: 'fill-first',
+          source: 'live',
+          target: 'local',
+          reachable: true,
+          poolRouting: { enabled: true, maxRetryCredentials: 3 },
+        }}
+        sessionAffinityState={{
+          enabled: true,
+          ttl: '1h',
+          source: 'config',
+          target: 'local',
+          reachable: true,
+          manageable: true,
+        }}
+        isLoading={false}
+        isSaving={false}
+        onApply={() => undefined}
+        onApplyAffinity={() => undefined}
+      />
+    );
+
+    // Drain-order CLI pointer is visible (not hidden behind a hover tooltip).
+    expect(
+      screen.getByText(/ccs cliproxy quota or ccs cliproxy accounts order/i)
+    ).toBeInTheDocument();
+    // Max retry stays visible in the badge.
+    expect(screen.getByText(/On · Max retry 3/i)).toBeInTheDocument();
+    // Static override warning is rendered before the user clicks anything.
+    expect(
+      screen.getByText(/will not take effect until you disable it: ccs cliproxy pool --disable/i)
+    ).toBeInTheDocument();
+  });
+
+  it('compact: pool OFF surfaces the how-to-enable command as visible text', () => {
+    render(
+      <RoutingGuidanceCard
+        compact
+        state={{
+          strategy: 'round-robin',
+          source: 'live',
+          target: 'local',
+          reachable: true,
+          poolRouting: { enabled: false },
+        }}
+        sessionAffinityState={{
+          enabled: false,
+          ttl: '1h',
+          source: 'config',
+          target: 'local',
+          reachable: true,
+          manageable: true,
+        }}
+        isLoading={false}
+        isSaving={false}
+        onApply={() => undefined}
+        onApplyAffinity={() => undefined}
+      />
+    );
+
+    // The enable command is visible, not buried in a hover-only tooltip.
+    expect(screen.getByText(/ccs cliproxy pool --enable/i)).toBeInTheDocument();
+    // No override warning when pool is off.
+    expect(screen.queryByText(/ccs cliproxy pool --disable/i)).not.toBeInTheDocument();
+  });
+
+  it('compact: remote pool (manageable false) shows a local-only note, not a confident On/Off', () => {
+    render(
+      <RoutingGuidanceCard
+        compact
+        state={{
+          strategy: 'round-robin',
+          source: 'live',
+          target: 'remote',
+          reachable: true,
+          poolRouting: {
+            enabled: true,
+            manageable: false,
+            message: 'Pool routing is managed locally; this remote proxy may not reflect it.',
+          },
+        }}
+        sessionAffinityState={{
+          source: 'unsupported',
+          target: 'remote',
+          reachable: true,
+          manageable: false,
+        }}
+        isLoading={false}
+        isSaving={false}
+        onApply={() => undefined}
+        onApplyAffinity={() => undefined}
+      />
+    );
+
+    expect(
+      screen.getByText('Pool routing is managed locally; this remote proxy may not reflect it.')
+    ).toBeInTheDocument();
+    // No override warning for a remote proxy the local flag does not manage.
+    expect(screen.queryByText(/ccs cliproxy pool --disable/i)).not.toBeInTheDocument();
+  });
 });

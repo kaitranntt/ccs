@@ -5,8 +5,15 @@
  */
 
 import * as http from 'http';
+import { randomUUID } from 'crypto';
 import { Readable } from 'stream';
 import { CursorExecutor } from './cursor-executor';
+import {
+  REQUEST_ID_HEADER,
+  REQUEST_ID_PATTERN,
+  runWithRequestId,
+  withRequestContext,
+} from '../services/logging';
 import {
   createAnthropicErrorResponse,
   createAnthropicProxyResponse,
@@ -166,6 +173,35 @@ function hasValidDaemonToken(req: http.IncomingMessage): boolean {
     authorizationMatchesToken(req.headers.authorization, expectedToken)
   );
 }
+
+function resolveInboundRequestId(req: http.IncomingMessage): string | undefined {
+  const raw = req.headers[REQUEST_ID_HEADER];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const requestId = value.trim();
+  return REQUEST_ID_PATTERN.test(requestId) ? requestId : undefined;
+}
+
+function withCursorDaemonRequestContext<T>(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  fn: () => T
+): T {
+  const requestId = resolveInboundRequestId(req) ?? randomUUID();
+  res.setHeader(REQUEST_ID_HEADER, requestId);
+  return withRequestContext(
+    {
+      requestId,
+      method: req.method || 'GET',
+      path: req.url || '/',
+    },
+    fn
+  );
+}
+
 function normalizeMessages(raw: unknown): NormalizedOpenAIMessage[] {
   if (!Array.isArray(raw)) {
     throw new Error('messages must be an array');
@@ -252,202 +288,209 @@ function parseArgs(argv: string[]): DaemonRuntimeOptions {
 export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Server {
   const executor = new CursorExecutor();
 
-  const server = http.createServer(async (req, res) => {
-    const method = req.method || 'GET';
-    const requestUrl = req.url || '/';
-    const isOpenAiRoute = method === 'POST' && requestUrl === '/v1/chat/completions';
-    const isAnthropicRoute = method === 'POST' && requestUrl === '/v1/messages';
+  const server = http.createServer((req, res) =>
+    withCursorDaemonRequestContext(req, res, async () => {
+      const method = req.method || 'GET';
+      const requestUrl = req.url || '/';
+      const isOpenAiRoute = method === 'POST' && requestUrl === '/v1/chat/completions';
+      const isAnthropicRoute = method === 'POST' && requestUrl === '/v1/messages';
 
-    try {
-      if (method === 'GET' && requestUrl === '/health') {
+      try {
+        if (method === 'GET' && requestUrl === '/health') {
+          if (!hasValidDaemonToken(req)) {
+            writeJson(res, 401, { error: 'Unauthorized' });
+            return;
+          }
+          writeJson(res, 200, { ok: true, service: 'cursor-daemon' });
+          return;
+        }
+
+        if (method === 'GET' && requestUrl === '/v1/models') {
+          const authStatus = checkAuthStatus();
+          const models = await getModelsForDaemon({
+            credentials:
+              authStatus.authenticated && !authStatus.expired && authStatus.credentials
+                ? {
+                    accessToken: authStatus.credentials.accessToken,
+                    machineId: authStatus.credentials.machineId,
+                    ghostMode: options.ghostMode,
+                  }
+                : null,
+          });
+
+          const data = models.map((model) => ({
+            id: model.id,
+            object: 'model',
+            created: 0,
+            owned_by: model.provider,
+          }));
+          writeJson(res, 200, { object: 'list', data });
+          return;
+        }
+
+        if (!isOpenAiRoute && !isAnthropicRoute) {
+          writeJson(res, 404, { error: 'Not found' });
+          return;
+        }
+
         if (!hasValidDaemonToken(req)) {
           writeJson(res, 401, { error: 'Unauthorized' });
           return;
         }
-        writeJson(res, 200, { ok: true, service: 'cursor-daemon' });
-        return;
-      }
 
-      if (method === 'GET' && requestUrl === '/v1/models') {
+        const rawBody = await readJsonBody(req);
+        const anthropicBody = isAnthropicRoute ? translateAnthropicRequest(rawBody) : undefined;
+        const parsedBody = anthropicBody ?? ((rawBody as OpenAIChatRequest) || {});
+        const messages = anthropicBody
+          ? anthropicBody.messages
+          : normalizeMessages(parsedBody.messages);
+        const requestedModel =
+          typeof parsedBody.model === 'string' && parsedBody.model.trim().length > 0
+            ? parsedBody.model.trim()
+            : undefined;
+        const stream = parsedBody.stream === true;
+
         const authStatus = checkAuthStatus();
-        const models = await getModelsForDaemon({
-          credentials:
-            authStatus.authenticated && !authStatus.expired && authStatus.credentials
-              ? {
-                  accessToken: authStatus.credentials.accessToken,
-                  machineId: authStatus.credentials.machineId,
-                  ghostMode: options.ghostMode,
-                }
-              : null,
-        });
-
-        const data = models.map((model) => ({
-          id: model.id,
-          object: 'model',
-          created: 0,
-          owned_by: model.provider,
-        }));
-        writeJson(res, 200, { object: 'list', data });
-        return;
-      }
-
-      if (!isOpenAiRoute && !isAnthropicRoute) {
-        writeJson(res, 404, { error: 'Not found' });
-        return;
-      }
-
-      if (!hasValidDaemonToken(req)) {
-        writeJson(res, 401, { error: 'Unauthorized' });
-        return;
-      }
-
-      const rawBody = await readJsonBody(req);
-      const anthropicBody = isAnthropicRoute ? translateAnthropicRequest(rawBody) : undefined;
-      const parsedBody = anthropicBody ?? ((rawBody as OpenAIChatRequest) || {});
-      const messages = anthropicBody
-        ? anthropicBody.messages
-        : normalizeMessages(parsedBody.messages);
-      const requestedModel =
-        typeof parsedBody.model === 'string' && parsedBody.model.trim().length > 0
-          ? parsedBody.model.trim()
-          : undefined;
-      const stream = parsedBody.stream === true;
-
-      const authStatus = checkAuthStatus();
-      if (!authStatus.authenticated || !authStatus.credentials) {
-        const message = 'Cursor credentials not found. Run `ccs legacy cursor auth` first.';
-        if (isAnthropicRoute) {
-          await pipeWebResponseToNode(
-            createAnthropicErrorResponse(401, 'authentication_error', message),
-            res
-          );
-        } else {
-          writeJson(res, 401, {
-            error: {
-              type: 'authentication_error',
-              message,
-            },
-          });
-        }
-        return;
-      }
-
-      if (authStatus.expired) {
-        const message = 'Cursor credentials expired. Run `ccs legacy cursor auth` again.';
-        if (isAnthropicRoute) {
-          await pipeWebResponseToNode(
-            createAnthropicErrorResponse(401, 'authentication_error', message),
-            res
-          );
-        } else {
-          writeJson(res, 401, {
-            error: {
-              type: 'authentication_error',
-              message,
-            },
-          });
-        }
-        return;
-      }
-
-      if (isAnthropicRoute) {
-        const expectedToken = (process.env.ANTHROPIC_AUTH_TOKEN || 'cursor-managed').trim();
-        const requestToken = getAnthropicRequestToken(req.headers);
-        if (!expectedToken || requestToken !== expectedToken) {
-          await pipeWebResponseToNode(
-            createAnthropicErrorResponse(
-              401,
-              'authentication_error',
-              'Invalid Anthropic auth token. Set ANTHROPIC_AUTH_TOKEN and send it via x-api-key or Authorization Bearer.'
-            ),
-            res
-          );
+        if (!authStatus.authenticated || !authStatus.credentials) {
+          const message = 'Cursor credentials not found. Run `ccs legacy cursor auth` first.';
+          if (isAnthropicRoute) {
+            await pipeWebResponseToNode(
+              createAnthropicErrorResponse(401, 'authentication_error', message),
+              res
+            );
+          } else {
+            writeJson(res, 401, {
+              error: {
+                type: 'authentication_error',
+                message,
+              },
+            });
+          }
           return;
         }
-      }
 
-      const daemonCredentials = {
-        accessToken: authStatus.credentials.accessToken,
-        machineId: authStatus.credentials.machineId,
-        ghostMode: options.ghostMode,
-      };
-      const availableModels = await getModelsForDaemon({
-        credentials: daemonCredentials,
-      });
-      const model = resolveCursorRequestModel(requestedModel, availableModels);
-      if (
-        requestedModel &&
-        requestedModel !== model &&
-        (process.env.CCS_DEBUG === '1' || process.env.CCS_DEBUG === 'true')
-      ) {
-        console.error(
-          `[cursor] Requested model "${requestedModel}" is unavailable; falling back to "${model}".`
-        );
-      }
-
-      const abortController = new AbortController();
-      const abortOnDisconnect = () => {
-        if (!abortController.signal.aborted && !res.writableEnded) {
-          abortController.abort();
+        if (authStatus.expired) {
+          const message = 'Cursor credentials expired. Run `ccs legacy cursor auth` again.';
+          if (isAnthropicRoute) {
+            await pipeWebResponseToNode(
+              createAnthropicErrorResponse(401, 'authentication_error', message),
+              res
+            );
+          } else {
+            writeJson(res, 401, {
+              error: {
+                type: 'authentication_error',
+                message,
+              },
+            });
+          }
+          return;
         }
-      };
 
-      req.on('aborted', abortOnDisconnect);
-      req.on('close', abortOnDisconnect);
-      res.on('close', abortOnDisconnect);
+        if (isAnthropicRoute) {
+          const expectedToken = (process.env.ANTHROPIC_AUTH_TOKEN || 'cursor-managed').trim();
+          const requestToken = getAnthropicRequestToken(req.headers);
+          if (!expectedToken || requestToken !== expectedToken) {
+            await pipeWebResponseToNode(
+              createAnthropicErrorResponse(
+                401,
+                'authentication_error',
+                'Invalid Anthropic auth token. Set ANTHROPIC_AUTH_TOKEN and send it via x-api-key or Authorization Bearer.'
+              ),
+              res
+            );
+            return;
+          }
+        }
 
-      const result = await executor.execute({
-        model,
-        stream,
-        signal: abortController.signal,
-        credentials: daemonCredentials,
-        body: {
-          messages,
-          tools: Array.isArray(parsedBody.tools) ? parsedBody.tools : undefined,
-          reasoning_effort:
-            typeof parsedBody.reasoning_effort === 'string'
-              ? parsedBody.reasoning_effort
-              : undefined,
-        },
-      });
+        const daemonCredentials = {
+          accessToken: authStatus.credentials.accessToken,
+          machineId: authStatus.credentials.machineId,
+          ghostMode: options.ghostMode,
+        };
+        const availableModels = await getModelsForDaemon({
+          credentials: daemonCredentials,
+        });
+        const model = resolveCursorRequestModel(requestedModel, availableModels);
+        if (
+          requestedModel &&
+          requestedModel !== model &&
+          (process.env.CCS_DEBUG === '1' || process.env.CCS_DEBUG === 'true')
+        ) {
+          console.error(
+            `[cursor] Requested model "${requestedModel}" is unavailable; falling back to "${model}".`
+          );
+        }
 
-      const outgoingResponse = isAnthropicRoute
-        ? await createAnthropicProxyResponse(result.response)
-        : result.response;
+        const abortController = new AbortController();
+        const abortOnDisconnect = () => {
+          if (!abortController.signal.aborted && !res.writableEnded) {
+            abortController.abort();
+          }
+        };
 
-      await pipeWebResponseToNode(outgoingResponse, res);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      const isPayloadTooLarge = message.includes('Request body too large');
-      const status = isPayloadTooLarge ? 413 : 400;
-      if (isAnthropicRoute) {
-        await pipeWebResponseToNode(
-          createAnthropicErrorResponse(status, 'invalid_request_error', message),
-          res
-        );
-      } else {
-        writeJson(res, status, {
-          error: {
-            type: 'invalid_request_error',
-            message,
+        req.on('aborted', abortOnDisconnect);
+        req.on('close', abortOnDisconnect);
+        res.on('close', abortOnDisconnect);
+
+        const result = await executor.execute({
+          model,
+          stream,
+          signal: abortController.signal,
+          credentials: daemonCredentials,
+          body: {
+            messages,
+            tools: Array.isArray(parsedBody.tools) ? parsedBody.tools : undefined,
+            reasoning_effort:
+              typeof parsedBody.reasoning_effort === 'string'
+                ? parsedBody.reasoning_effort
+                : undefined,
           },
         });
+
+        const outgoingResponse = isAnthropicRoute
+          ? await createAnthropicProxyResponse(result.response)
+          : result.response;
+
+        await pipeWebResponseToNode(outgoingResponse, res);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        const isPayloadTooLarge = message.includes('Request body too large');
+        const status = isPayloadTooLarge ? 413 : 400;
+        if (isAnthropicRoute) {
+          await pipeWebResponseToNode(
+            createAnthropicErrorResponse(status, 'invalid_request_error', message),
+            res
+          );
+        } else {
+          writeJson(res, status, {
+            error: {
+              type: 'invalid_request_error',
+              message,
+            },
+          });
+        }
       }
-    }
-  });
+    })
+  );
 
   server.listen(options.port, '127.0.0.1');
   return server;
 }
 
 if (require.main === module) {
-  const options = parseArgs(process.argv.slice(2));
-  const server = startCursorDaemonServer(options);
+  // Re-anchor to a requestId forwarded by the spawning CLI (CCS_REQUEST_ID env)
+  // so daemon startup logs correlate with the parent invocation. AsyncLocalStorage
+  // does not cross the spawn boundary, so the env bridge is mandatory here.
+  runWithRequestId(() => {
+    const options = parseArgs(process.argv.slice(2));
+    const server = startCursorDaemonServer(options);
 
-  const shutdown = () => {
-    server.close();
-  };
+    const shutdown = () => {
+      server.close();
+    };
 
-  process.on('SIGTERM', shutdown);
-  process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
+  });
 }

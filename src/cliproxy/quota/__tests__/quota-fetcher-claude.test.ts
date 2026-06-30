@@ -622,6 +622,34 @@ describe('Claude Quota Fetcher', () => {
       expect(result.coreUsage?.fiveHour?.remainingPercent).toBe(60);
     });
 
+    it('does NOT inner-retry on 429; returns retryable single-attempt result honoring Retry-After', async () => {
+      // Safety intent: 429 must NOT trigger an immediate, delay-free inner retry.
+      // The outer 10-min cache + circuit breaker honor Retry-After and bound total
+      // volume, so a single attempt is made and the retryable signal is surfaced.
+      createClaudeAccount('claude-429@example.com', {
+        access_token: 'rate-limited-token',
+        expired: '2099-01-01T00:00:00.000Z',
+        type: 'claude',
+      });
+
+      let attempt = 0;
+      global.fetch = mock(() => {
+        attempt += 1;
+        return Promise.resolve(
+          new Response('', { status: 429, headers: { 'Retry-After': '120' } })
+        );
+      }) as typeof fetch;
+
+      const result = await fetchClaudeQuota('claude-429@example.com');
+
+      expect(result.success).toBe(false);
+      // Single attempt — no inner retry burned on the 429.
+      expect(attempt).toBe(1);
+      expect(result.httpStatus).toBe(429);
+      expect(result.retryable).toBe(true);
+      expect(result.errorDetail).toBe('retry-after:120');
+    });
+
     it('clears the request timeout before retrying a retryable HTTP error', async () => {
       createClaudeAccount('claude-retry-timeout@example.com', {
         access_token: 'retry-timeout-token',

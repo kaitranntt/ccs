@@ -3,6 +3,7 @@
  */
 
 export { CcsLogo } from './ccs-logo';
+export { CcsBarButton } from './ccs-bar-button';
 export { ClaudeKitBadge } from './claudekit-badge';
 export { CodeEditor } from './code-editor';
 export { CommandBuilder } from './command-builder';

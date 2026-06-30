@@ -5,7 +5,7 @@
  * silent for healthy ones, covering both simple and composite providers.
  */
 
-import { afterEach, beforeEach, describe, expect, it, jest } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, jest, mock } from 'bun:test';
 
 // ── Stubs ─────────────────────────────────────────────────────────────────────
 
@@ -23,25 +23,20 @@ const mockGetSuggestedReplacementModel = jest
   .fn<string | undefined, [string, string]>()
   .mockReturnValue(undefined);
 
-jest.mock('../model-warnings', () => {
-  // We test the real implementation — only mock its dependencies
-  return jest.requireActual('../model-warnings');
-});
-
-jest.mock('../../config/model-config', () => ({
+mock.module('../../config/model-config', () => ({
   getCurrentModel: mockGetCurrentModel,
 }));
 
-jest.mock('../../cliproxy/model-catalog', () => ({
+mock.module('../../model-catalog', () => ({
   isModelBroken: mockIsModelBroken,
   getModelIssueUrl: mockGetModelIssueUrl,
   findModel: mockFindModel,
   getSuggestedReplacementModel: mockGetSuggestedReplacementModel,
 }));
 
-// We import from real path after jest.mock so actual module is used
-import { warnBrokenModels } from '../model-warnings';
 import type { ExecutorConfig } from '../../types';
+
+const { warnBrokenModels } = await import('../model-warnings');
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -62,7 +57,7 @@ describe('warnBrokenModels', () => {
   let errorSpy: ReturnType<typeof jest.spyOn>;
 
   beforeEach(() => {
-    errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    errorSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
     mockGetCurrentModel.mockReset();
     mockIsModelBroken.mockReturnValue(false);
     mockGetModelIssueUrl.mockReturnValue(undefined);

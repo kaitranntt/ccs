@@ -35,7 +35,7 @@ import {
   resolveImageAnalysisRuntimeStatus,
 } from '../utils/hooks';
 import { stripClaudeCodeEnv } from '../utils/shell-executor';
-import { createLogger } from '../services/logging';
+import { createLogger, forwardRequestIdEnv } from '../services/logging';
 import { getGlobalEnvConfig } from '../config/config-loader-facade';
 
 const logger = createLogger('copilot:executor');
@@ -207,20 +207,20 @@ export async function executeCopilotProfile(
   try {
     await ensureCopilotApi();
   } catch (error) {
-    console.error(fail('Failed to install copilot-api.'));
-    console.error('');
-    console.error(`Error: ${(error as Error).message}`);
-    console.error('');
-    console.error('Try installing manually:');
-    console.error('  npm install -g copilot-api');
+    process.stderr.write(String(fail('Failed to install copilot-api.')) + '\n');
+    process.stderr.write('\n');
+    process.stderr.write(String(`Error: ${(error as Error).message}`) + '\n');
+    process.stderr.write('\n');
+    process.stderr.write('Try installing manually:\n');
+    process.stderr.write('  npm install -g copilot-api\n');
     return 1;
   }
 
   // Check if copilot-api is installed (should be after ensureCopilotApi)
   if (!isCopilotApiInstalled()) {
-    console.error(fail('copilot-api is not installed.'));
-    console.error('');
-    console.error('Install/repair by running: ccs copilot start');
+    process.stderr.write(String(fail('copilot-api is not installed.')) + '\n');
+    process.stderr.write('\n');
+    process.stderr.write('Install/repair by running: ccs copilot start\n');
     return 1;
   }
 
@@ -231,10 +231,10 @@ export async function executeCopilotProfile(
     authenticated: authStatus.authenticated,
   });
   if (!authStatus.authenticated) {
-    console.error(fail('Not authenticated with GitHub.'));
-    console.error('');
-    console.error('Run: npx copilot-api auth');
-    console.error('Or:  ccs copilot auth');
+    process.stderr.write(String(fail('Not authenticated with GitHub.')) + '\n');
+    process.stderr.write('\n');
+    process.stderr.write('Run: npx copilot-api auth\n');
+    process.stderr.write('Or:  ccs copilot auth\n');
     return 1;
   }
 
@@ -246,21 +246,21 @@ export async function executeCopilotProfile(
       console.log(info('Starting copilot-api daemon...'));
       const result = await startDaemon(normalizedConfig);
       if (!result.success) {
-        console.error(fail(`Failed to start daemon: ${result.error}`));
+        process.stderr.write(String(fail(`Failed to start daemon: ${result.error}`)) + '\n');
         return 1;
       }
       console.log(ok(`Daemon started on port ${normalizedConfig.port}`));
       daemonRunning = true;
     } else {
-      console.error(fail('copilot-api daemon is not running.'));
-      console.error('');
-      console.error('Start the daemon:');
-      console.error('  ccs copilot start');
-      console.error('Fallback manual command:');
-      console.error(`  npx copilot-api start --port ${normalizedConfig.port}`);
-      console.error('');
-      console.error('Or enable auto_start in config:');
-      console.error('  ccs config  (then enable auto_start in Copilot section)');
+      process.stderr.write(String(fail('copilot-api daemon is not running.')) + '\n');
+      process.stderr.write('\n');
+      process.stderr.write('Start the daemon:\n');
+      process.stderr.write('  ccs copilot start\n');
+      process.stderr.write('Fallback manual command:\n');
+      process.stderr.write(`  npx copilot-api start --port ${normalizedConfig.port}\n`);
+      process.stderr.write('\n');
+      process.stderr.write('Or enable auto_start in config:\n');
+      process.stderr.write('  ccs config  (then enable auto_start in Copilot section)\n');
       return 1;
     }
   }
@@ -324,7 +324,7 @@ export async function executeCopilotProfile(
 
     const proc = spawn(claudeCliPath, launchArgs, {
       stdio: 'inherit',
-      env: { ...env, ...traceEnv },
+      env: { ...env, ...traceEnv, ...forwardRequestIdEnv() },
       shell: process.platform === 'win32',
     });
 
@@ -351,7 +351,7 @@ export async function executeCopilotProfile(
           error: { name: err.name, message: err.message },
         }
       );
-      console.error(fail(`Failed to start Claude: ${err.message}`));
+      process.stderr.write(String(fail(`Failed to start Claude: ${err.message}`)) + '\n');
       resolve(1);
     });
   });

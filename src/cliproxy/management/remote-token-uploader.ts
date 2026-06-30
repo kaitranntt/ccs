@@ -38,7 +38,7 @@ export async function uploadTokenToRemote(
 
   if (!target.isRemote) {
     if (verbose) {
-      console.error('[upload] Remote mode not enabled, skipping upload');
+      process.stderr.write('[upload] Remote mode not enabled, skipping upload\n');
     }
     return false;
   }
@@ -48,7 +48,9 @@ export async function uploadTokenToRemote(
   try {
     tokenContent = fs.readFileSync(tokenFilePath, 'utf-8');
   } catch (error) {
-    console.error(fail(`Failed to read token file: ${(error as Error).message}`));
+    process.stderr.write(
+      String(fail(`Failed to read token file: ${(error as Error).message}`)) + '\n'
+    );
     return false;
   }
 
@@ -56,7 +58,7 @@ export async function uploadTokenToRemote(
   try {
     JSON.parse(tokenContent);
   } catch {
-    console.error(fail('Invalid token file: not valid JSON'));
+    process.stderr.write(String(fail('Invalid token file: not valid JSON')) + '\n');
     return false;
   }
 
@@ -67,7 +69,7 @@ export async function uploadTokenToRemote(
   const authKey = target.managementKey ?? target.authToken;
 
   if (verbose) {
-    console.error(`[upload] Uploading ${fileName} to ${target.host}`);
+    process.stderr.write(`[upload] Uploading ${fileName} to ${target.host}\n`);
   }
 
   const controller = new AbortController();
@@ -95,7 +97,7 @@ export async function uploadTokenToRemote(
 
     if (!response.ok) {
       const text = await response.text();
-      console.error(fail(`Upload failed: ${response.status} ${text}`));
+      process.stderr.write(String(fail(`Upload failed: ${response.status} ${text}`)) + '\n');
       return false;
     }
 
@@ -105,16 +107,18 @@ export async function uploadTokenToRemote(
       console.log(ok(`Token uploaded to remote server: ${fileName}`));
       return true;
     } else {
-      console.error(fail(`Upload failed: ${result.error || result.message || 'Unknown error'}`));
+      process.stderr.write(
+        String(fail(`Upload failed: ${result.error || result.message || 'Unknown error'}`)) + '\n'
+      );
       return false;
     }
   } catch (error) {
     clearTimeout(timeoutId);
 
     if (error instanceof Error && error.name === 'AbortError') {
-      console.error(fail('Upload timed out'));
+      process.stderr.write(String(fail('Upload timed out')) + '\n');
     } else {
-      console.error(fail(`Upload failed: ${(error as Error).message}`));
+      process.stderr.write(String(fail(`Upload failed: ${(error as Error).message}`)) + '\n');
     }
     return false;
   }
@@ -132,14 +136,14 @@ export async function uploadAllTokensToRemote(tokenDir: string, verbose = false)
 
   if (!target.isRemote) {
     if (verbose) {
-      console.error('[upload] Remote mode not enabled, skipping upload');
+      process.stderr.write('[upload] Remote mode not enabled, skipping upload\n');
     }
     return 0;
   }
 
   if (!fs.existsSync(tokenDir)) {
     if (verbose) {
-      console.error(`[upload] Token directory does not exist: ${tokenDir}`);
+      process.stderr.write(`[upload] Token directory does not exist: ${tokenDir}\n`);
     }
     return 0;
   }
@@ -148,7 +152,7 @@ export async function uploadAllTokensToRemote(tokenDir: string, verbose = false)
 
   if (files.length === 0) {
     if (verbose) {
-      console.error('[upload] No token files found');
+      process.stderr.write('[upload] No token files found\n');
     }
     return 0;
   }

@@ -149,17 +149,24 @@ export class GlmtProxy {
 
         // Info message (only show in verbose mode)
         if (this.verbose) {
-          console.error(
-            `[glmt] Proxy listening on port ${this.port} (streaming with auto-fallback)`
+          logger.info(
+            'glmt.proxy.listening_verbose',
+            'GLMT proxy listening (streaming with auto-fallback)',
+            {
+              port: this.port,
+            }
           );
         }
 
         // Debug mode notice
         if ((this.transformer as unknown as { debugLog: boolean }).debugLog) {
-          console.error(
-            `[glmt] Debug logging enabled: ${(this.transformer as unknown as { debugLogDir: string }).debugLogDir}`
+          logger.info('glmt.proxy.debug_log_enabled', 'Debug logging enabled', {
+            debugLogDir: (this.transformer as unknown as { debugLogDir: string }).debugLogDir,
+          });
+          logger.warn(
+            'glmt.proxy.debug_log_warning',
+            'Debug logs contain full request/response data'
           );
-          console.error(`[glmt] WARNING: Debug logs contain full request/response data`);
         }
 
         this.log(`Verbose logging enabled`);
@@ -167,7 +174,12 @@ export class GlmtProxy {
       });
 
       this.server.on('error', (error) => {
-        console.error('[glmt-proxy] Server error:', error);
+        logger.error('glmt.proxy.server_error', 'GLMT proxy server error', {
+          err:
+            error instanceof Error
+              ? { name: error.name, message: error.message }
+              : { message: String(error) },
+        });
         reject(error);
       });
     });
@@ -240,7 +252,12 @@ export class GlmtProxy {
       }
     } catch (error) {
       const err = error as Error;
-      console.error('[glmt-proxy] Request error:', err.message);
+      logger.error('glmt.proxy.request_error', 'GLMT proxy request error', {
+        err: { name: err.name, message: err.message },
+        method: req.method,
+        url: req.url,
+        durationMs: Date.now() - startTime,
+      });
       const duration = Date.now() - startTime;
       this.log(`Request failed after ${duration}ms: ${err.message}`);
 
@@ -464,9 +481,11 @@ export class GlmtProxy {
         );
 
         if (this.verbose) {
-          console.error(
-            `[glmt-proxy] Rate limited, retry ${attempt + 1}/${this.retryConfig.maxRetries} after ${Math.round(delay)}ms`
-          );
+          logger.warn('glmt.proxy.rate_limited_retry', 'Rate limited, retrying after backoff', {
+            attempt: attempt + 1,
+            maxRetries: this.retryConfig.maxRetries,
+            delayMs: Math.round(delay),
+          });
         }
 
         await this.sleep(delay);
@@ -526,8 +545,14 @@ export class GlmtProxy {
         const delay = this.calculateRetryDelay(attempt, retryAfter);
 
         if (this.verbose) {
-          console.error(
-            `[glmt-proxy] Rate limited, retry ${attempt + 1}/${this.retryConfig.maxRetries} after ${Math.round(delay)}ms`
+          logger.warn(
+            'glmt.proxy.rate_limited_retry_stream',
+            'Rate limited (streaming), retrying after backoff',
+            {
+              attempt: attempt + 1,
+              maxRetries: this.retryConfig.maxRetries,
+              delayMs: Math.round(delay),
+            }
           );
         }
 
@@ -766,7 +791,7 @@ export class GlmtProxy {
    */
   private log(message: string): void {
     if (this.verbose) {
-      console.error(`[glmt-proxy] ${message}`);
+      logger.info('glmt.proxy.verbose', message);
     }
   }
 
@@ -878,7 +903,12 @@ if (require.main === module) {
   const proxy = new GlmtProxy({ verbose });
 
   proxy.start().catch((error) => {
-    console.error('[glmt-proxy] Failed to start:', error);
+    logger.error('glmt.proxy.start_failed', 'GLMT proxy failed to start', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     process.exit(1);
   });
 
@@ -895,7 +925,12 @@ if (require.main === module) {
 
   // Keep process alive
   process.on('uncaughtException', (error) => {
-    console.error('[glmt-proxy] Uncaught exception:', error);
+    logger.error('glmt.proxy.uncaught_exception', 'GLMT proxy uncaught exception', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     proxy.stop();
     process.exit(1);
   });

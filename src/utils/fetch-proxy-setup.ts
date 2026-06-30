@@ -12,6 +12,8 @@ const FETCH_PROXY_PROTOCOLS = ['http:', 'https:'];
 type RoutingDispatchOptions = Parameters<Dispatcher['dispatch']>[0];
 type RoutingDispatchHandler = Parameters<Dispatcher['dispatch']>[1];
 
+export type UpstreamAgentTimeoutOptions = Pick<Agent.Options, 'headersTimeout' | 'bodyTimeout'>;
+
 type GlobalFetchProxyConfig = {
   httpProxyUrl?: string;
   httpsProxyUrl?: string;
@@ -19,14 +21,23 @@ type GlobalFetchProxyConfig = {
 };
 
 class RoutingProxyDispatcher extends Dispatcher {
-  private readonly directDispatcher = new Agent();
+  private readonly directDispatcher: Agent;
   private readonly httpProxyDispatcher: ProxyAgent | null;
   private readonly httpsProxyDispatcher: ProxyAgent | null;
 
-  constructor(httpProxyUrl: string | undefined, httpsProxyUrl: string | undefined) {
+  constructor(
+    httpProxyUrl: string | undefined,
+    httpsProxyUrl: string | undefined,
+    agentOptions: UpstreamAgentTimeoutOptions = {}
+  ) {
     super();
-    this.httpProxyDispatcher = httpProxyUrl ? new ProxyAgent(httpProxyUrl) : null;
-    this.httpsProxyDispatcher = httpsProxyUrl ? new ProxyAgent(httpsProxyUrl) : null;
+    this.directDispatcher = new Agent(agentOptions);
+    this.httpProxyDispatcher = httpProxyUrl
+      ? new ProxyAgent({ uri: httpProxyUrl, ...agentOptions })
+      : null;
+    this.httpsProxyDispatcher = httpsProxyUrl
+      ? new ProxyAgent({ uri: httpsProxyUrl, ...agentOptions })
+      : null;
   }
 
   dispatch(options: RoutingDispatchOptions, handler: RoutingDispatchHandler): boolean {
@@ -114,14 +125,16 @@ class RoutingProxyDispatcher extends Dispatcher {
   }
 }
 
-export function createGlobalFetchProxyDispatcher(): Dispatcher | null {
+export function createGlobalFetchProxyDispatcher(
+  agentOptions: UpstreamAgentTimeoutOptions = {}
+): Dispatcher | null {
   const { httpProxyUrl, httpsProxyUrl } = resolveGlobalFetchProxyConfig();
 
   if (!httpProxyUrl && !httpsProxyUrl) {
     return null;
   }
 
-  return new RoutingProxyDispatcher(httpProxyUrl, httpsProxyUrl);
+  return new RoutingProxyDispatcher(httpProxyUrl, httpsProxyUrl, agentOptions);
 }
 
 export function applyGlobalFetchProxy(): { enabled: boolean; error?: string } {

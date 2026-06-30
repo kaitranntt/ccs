@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en" class="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CCS Bar Promo Evidence</title>
+    <style>
+      :root {
+        --bg: #0d0d0d;
+        --fg: #e8e4df;
+        --card: #1a1714;
+        --border: #2d2923;
+        --muted: #8a837d;
+        --accent: #ef4444;
+        --good: #22c55e;
+        --code: #151210;
+      }
+      .light {
+        --bg: #f8f6f3;
+        --fg: #1a1714;
+        --card: #ffffff;
+        --border: #e5e0da;
+        --muted: #6b6560;
+        --accent: #dc2626;
+        --good: #15803d;
+        --code: #f3f0eb;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 32px 0 56px;
+      }
+      button {
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--fg);
+        border-radius: 8px;
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      .top {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+      h1 {
+        font-size: clamp(28px, 4vw, 48px);
+        line-height: 1.04;
+        letter-spacing: 0;
+      }
+      .sub {
+        margin-top: 10px;
+        color: var(--muted);
+        max-width: 760px;
+        line-height: 1.55;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin: 24px 0;
+      }
+      .card,
+      .shot,
+      .section {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+      .card {
+        padding: 16px;
+      }
+      .card h2 {
+        font-size: 13px;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+      .card p {
+        line-height: 1.45;
+      }
+      .section {
+        padding: 18px;
+        margin-top: 16px;
+      }
+      .section h2 {
+        font-size: 20px;
+        margin-bottom: 6px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-top: 14px;
+      }
+      .shot {
+        overflow: hidden;
+      }
+      .shot-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        border-bottom: 1px solid var(--border);
+        padding: 10px 12px;
+        font-size: 13px;
+      }
+      .pill {
+        color: var(--accent);
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+      img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      code {
+        background: var(--code);
+        border-radius: 6px;
+        padding: 2px 5px;
+      }
+      @media (max-width: 900px) {
+        main {
+          width: min(100% - 20px, 1180px);
+          padding-top: 20px;
+        }
+        .top,
+        .grid {
+          grid-template-columns: 1fr;
+          display: block;
+        }
+        .cards {
+          grid-template-columns: 1fr;
+        }
+        .shot + .shot {
+          margin-top: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="top">
+        <div>
+          <h1>PR 1517 · CCS Bar README and dashboard promotion</h1>
+          <p class="sub">
+            Captures from local branch <code>kai/feat/ccs-bar-promo</code>. Dashboard capture uses
+            Vite at <code>127.0.0.1:5187</code>, light theme, 1440x900 viewport, local auth-check
+            stubbed open, and no private account data.
+          </p>
+        </div>
+        <button id="theme-toggle" type="button">● Dark</button>
+      </div>
+
+      <div class="cards">
+        <section class="card">
+          <h2>What Changed</h2>
+          <p>README now introduces CCS Bar, and dashboard chrome shows a compact global CCS Bar link.</p>
+        </section>
+        <section class="card">
+          <h2>Why It Matters</h2>
+          <p>Users can discover the native macOS quota and usage companion from every dashboard route.</p>
+        </section>
+        <section class="card">
+          <h2>Review Cue</h2>
+          <p>Red callout marks the new top-bar button next to ClaudeKit and Sponsor controls.</p>
+        </section>
+      </div>
+
+      <section class="section">
+        <h2>1. Global Dashboard Entry Point</h2>
+        <p class="sub">The compact CCS Bar button is visible in the persistent dashboard header.</p>
+        <div class="grid">
+          <article class="shot">
+            <div class="shot-header">
+              <span class="pill">IMPLEMENTED</span>
+              <span>Dashboard chrome</span>
+            </div>
+            <img
+              src="dashboard-header-ccs-bar-button.png"
+              alt="CCS dashboard header with red callout around the CCS Bar button"
+            />
+          </article>
+          <article class="shot">
+            <div class="shot-header">
+              <span class="pill">CURRENT SNAPSHOT</span>
+              <span>Sanitized CCS Bar panel</span>
+            </div>
+            <img
+              src="ccs-bar-panel.webp"
+              alt="Sanitized CCS Bar macOS panel showing quota, spend, and account controls"
+            />
+          </article>
+        </div>
+      </section>
+    </main>
+    <script>
+      const button = document.querySelector("#theme-toggle");
+      button.addEventListener("click", () => {
+        document.documentElement.classList.toggle("light");
+        button.textContent = document.documentElement.classList.contains("light")
+          ? "● Dark"
+          : "○ Light";
+      });
+    </script>
+  </body>
+</html>

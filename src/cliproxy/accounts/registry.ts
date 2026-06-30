@@ -10,7 +10,7 @@ import { CLIProxyProvider } from '../types';
 import { PROVIDER_CAPABILITIES } from '../provider-capabilities';
 import { PROVIDER_TYPE_VALUES } from '../auth/auth-types';
 import { getAuthDir, getCliproxyDir } from '../config/config-generator';
-import { AccountsRegistry, AccountInfo, PROVIDERS_WITHOUT_EMAIL } from './types';
+import { AccountsRegistry, AccountInfo, PROVIDERS_WITHOUT_EMAIL, DrainOrderConfig } from './types';
 import {
   getAccountsRegistryPath,
   getPausedDir,
@@ -269,6 +269,10 @@ function populateRegistryFromTokenFiles(
       lastUsedAt:
         hydratedAccount?.lastUsedAt ||
         (token.stats.mtime || token.stats.birthtime || new Date()).toISOString(),
+      // Preserve tier from the hydrated registry entry. Without this, populate
+      // would silently strip tier metadata written by the quota command, breaking
+      // --by-tier ordering for file-copied fleets that are re-hydrated on read.
+      tier: hydratedAccount?.tier,
     };
 
     if (token.paused) {
@@ -818,5 +822,50 @@ export function discoverExistingAccounts(): void {
   mutateAccountsRegistry((registry) => {
     syncRegistryWithTokenFiles(registry);
     populateRegistryFromTokenFiles(registry);
+  });
+}
+
+/**
+ * Persist drain order configuration for a provider.
+ * The config survives re-auth and registry sync; priorities are NOT automatically
+ * re-applied after sync. Re-run `ccs cliproxy accounts order <provider> --by-tier`
+ * or `--set` after adding or re-authing accounts to re-apply.
+ */
+export function saveDrainOrderConfig(
+  provider: CLIProxyProvider,
+  config: DrainOrderConfig
+): boolean {
+  return mutateAccountsRegistry((registry) => {
+    const providerAccounts = registry.providers[provider];
+    if (!providerAccounts) {
+      return false;
+    }
+    providerAccounts.drainOrder = config;
+    return true;
+  });
+}
+
+/**
+ * Load persisted drain order configuration for a provider.
+ * Returns undefined if none stored (implies file order).
+ */
+export function loadDrainOrderConfig(provider: CLIProxyProvider): DrainOrderConfig | undefined {
+  return withAccountsRegistryLock(() => {
+    const registry = readAccountsRegistryFromDisk();
+    return registry.providers[provider]?.drainOrder;
+  });
+}
+
+/**
+ * Clear drain order configuration for a provider (revert to file order).
+ */
+export function clearDrainOrderConfig(provider: CLIProxyProvider): boolean {
+  return mutateAccountsRegistry((registry) => {
+    const providerAccounts = registry.providers[provider];
+    if (!providerAccounts) {
+      return false;
+    }
+    delete providerAccounts.drainOrder;
+    return true;
   });
 }

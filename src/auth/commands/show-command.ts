@@ -6,7 +6,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { initUI, header, color, fail, table } from '../../utils/ui';
+import { initUI, header, color, table } from '../../utils/ui';
 import { resolveAccountContextPolicy, formatAccountContextPolicy } from '../account-context';
 import { describeSettingsSync, summarizeAccountHistory } from '../account-profile-diagnostics';
 import { resolveConfiguredPlainCcsResumeLane } from '../resume-lane-diagnostics';
@@ -33,7 +33,6 @@ export async function handleShow(ctx: CommandContext, args: string[]): Promise<v
   });
 
   if (!profileName) {
-    console.log(fail('Profile name is required'));
     console.log('');
     console.log(`Usage: ${color('ccs auth show <profile> [--json]', 'command')}`);
     exitWithError('Profile name is required', ExitCode.PROFILE_ERROR);

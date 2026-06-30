@@ -41,12 +41,34 @@ export interface AccountInfo {
   projectId?: string;
 }
 
+/**
+ * Drain order mode for a provider's account pool.
+ * - "manual": user-specified ordered list of account IDs
+ * - "tier": auto-derived from AccountTier (ultra > pro > free); unknown = last
+ * - "file": stable file-system order (default, no priority writes)
+ */
+export type DrainOrderMode = 'manual' | 'tier' | 'file';
+
+/** Persisted drain order configuration for a provider */
+export interface DrainOrderConfig {
+  /** How priorities were last set */
+  mode: DrainOrderMode;
+  /**
+   * Ordered account IDs for manual mode.
+   * First = drained first (highest priority).
+   * Stale IDs (accounts removed since last --set) are silently ignored on re-apply.
+   */
+  orderedIds?: string[];
+}
+
 /** Provider accounts configuration */
 export interface ProviderAccounts {
   /** Default account ID for this provider */
   default: string;
   /** Map of account ID to account metadata */
   accounts: Record<string, Omit<AccountInfo, 'id' | 'provider' | 'isDefault'>>;
+  /** Persisted drain order configuration (optional; absent = file order) */
+  drainOrder?: DrainOrderConfig;
 }
 
 /** Accounts registry structure */

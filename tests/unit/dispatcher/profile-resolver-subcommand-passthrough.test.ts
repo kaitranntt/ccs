@@ -42,4 +42,25 @@ describe('isBareClaudeSubcommandPassthrough', () => {
     );
     expect(isBareClaudeSubcommandPassthrough('mcp', ['mcp', '--target', 'codex'])).toBe(false);
   });
+
+  it('does not reroute through a default profile configured for a non-claude target', () => {
+    expect(
+      isBareClaudeSubcommandPassthrough('setup-token', ['setup-token', 'sk-secret'], {
+        target: 'droid',
+      })
+    ).toBe(false);
+    expect(isBareClaudeSubcommandPassthrough('agents', ['agents'], { target: 'codex' })).toBe(
+      false
+    );
+  });
+
+  it('allows explicit claude target selection to override a non-claude default profile target', () => {
+    expect(
+      isBareClaudeSubcommandPassthrough(
+        'setup-token',
+        ['setup-token', 'sk-secret', '--target', 'claude'],
+        { target: 'droid' }
+      )
+    ).toBe(true);
+  });
 });

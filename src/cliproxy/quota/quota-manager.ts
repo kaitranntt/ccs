@@ -35,6 +35,7 @@ import {
 
 import type { RuntimeMonitorConfig } from '../../config/unified-config-types';
 import { loadOrCreateUnifiedConfig } from '../../config/config-loader-facade';
+import { getTierLockForProvider } from '../../config/schemas/quota';
 
 export type ManagedQuotaProvider = 'agy' | 'claude' | 'codex' | 'gemini' | 'ghcp';
 type ManagedQuotaResult =
@@ -262,6 +263,26 @@ export function isOnCooldown(provider: CLIProxyProvider, accountId: string): boo
 }
 
 /**
+ * Get the epoch-ms timestamp when an account's in-memory cooldown expires.
+ * Returns undefined when the account is not on cooldown (or the cooldown has
+ * already lapsed). This is the process-local cooldown; for the cross-process
+ * source of truth see readQuotaCooldownEntries() in account-safety.
+ */
+export function getCooldownUntil(
+  provider: CLIProxyProvider,
+  accountId: string
+): number | undefined {
+  const key = getCacheKey(provider, accountId);
+  const entry = cooldownMap.get(key);
+  if (!entry) return undefined;
+  if (Date.now() > entry.until) {
+    cooldownMap.delete(key);
+    return undefined;
+  }
+  return entry.until;
+}
+
+/**
  * Apply cooldown to an exhausted account
  */
 export function applyCooldown(
@@ -428,10 +449,20 @@ export async function findHealthyAccount(
 
   const accounts = getProviderAccounts(provider);
 
+  // When a tier is locked for this specific provider, restrict candidates to
+  // that tier only.  Locks are per-provider so locking "agy" to "ultra" does
+  // NOT affect failover for "claude", "codex", "gemini", or "ghcp".
+  // This is intentionally strict: no cross-tier fallback while a lock is active,
+  // so the user's explicit tier choice is always honored.
+  const tierLock = getTierLockForProvider(config.quota_management?.manual, provider);
+
   // Filter available accounts
   const available = accounts.filter(
     (a) =>
-      !exclude.includes(a.id) && !isAccountPaused(provider, a.id) && !isOnCooldown(provider, a.id)
+      !exclude.includes(a.id) &&
+      !isAccountPaused(provider, a.id) &&
+      !isOnCooldown(provider, a.id) &&
+      (tierLock === null || (a.tier || 'unknown') === tierLock)
   );
 
   if (available.length === 0) return null;
@@ -619,6 +650,33 @@ export async function preflightCheck(provider: CLIProxyProvider): Promise<Prefli
     if (forcedAccount && !isAccountPaused(provider, forcedAccount.id)) {
       return { proceed: true, accountId: forcedAccount.id, reason: 'Forced default override' };
     }
+  }
+
+  // When a tier is locked for this specific provider, the default account must
+  // match the locked tier.  If it doesn't, route to a healthy account in the
+  // locked tier instead.  Locks are per-provider: locking "agy" to "ultra"
+  // does NOT constrain "claude", "codex", "gemini", or "ghcp".
+  // This is intentionally strict: if no locked-tier account is available, do
+  // not fail open to a cross-tier default.
+  const tierLock = getTierLockForProvider(quotaConfig.manual, provider);
+  if (tierLock !== null && (defaultAccount.tier || 'unknown') !== tierLock) {
+    const lockedTierAccount = await findHealthyAccount(provider, []);
+    if (lockedTierAccount) {
+      setDefaultAccount(provider, lockedTierAccount.id);
+      touchAccount(provider, lockedTierAccount.id);
+      return {
+        proceed: true,
+        accountId: lockedTierAccount.id,
+        switchedFrom: defaultAccount.id,
+        reason: `Tier lock: selected ${tierLock} account`,
+      };
+    }
+
+    return {
+      proceed: false,
+      accountId: '',
+      reason: `Tier lock: no healthy ${tierLock} account available`,
+    };
   }
 
   // Check if default is paused

@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { initUI, color, dim, fail, info, ok } from '../../utils/ui';
+import { initUI, color, dim, info, ok } from '../../utils/ui';
 import { exitWithError } from '../../errors';
 import { ExitCode } from '../../errors/exit-codes';
 import {
@@ -44,7 +44,6 @@ export async function handleBackup(ctx: CommandContext, args: string[]): Promise
   });
 
   if (!profileName) {
-    console.log(fail('Profile name is required'));
     console.log('');
     console.log(`Usage: ${color('ccs auth backup <profile|default> [--json]', 'command')}`);
     exitWithError('Profile name is required', ExitCode.PROFILE_ERROR);

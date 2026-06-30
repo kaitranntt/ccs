@@ -484,4 +484,17 @@ describe('ensureModelConfiguration', () => {
     await ensureModelConfiguration('codex', cfg, false);
     expect(mockReconcileCodexModel).not.toHaveBeenCalled();
   });
+
+  // claude is model-neutral passthrough — must never auto-prompt at launch
+  it('claude non-composite → configureProviderModel NOT called (model-neutral)', async () => {
+    const cfg = { isComposite: false, customSettingsPath: undefined } as ExecutorConfig;
+    await ensureModelConfiguration('claude', cfg, false);
+    expect(mockConfigureProviderModel).not.toHaveBeenCalled();
+  });
+
+  it('claude composite → configureProviderModel NOT called', async () => {
+    const cfg = { isComposite: true } as ExecutorConfig;
+    await ensureModelConfiguration('claude', cfg, false);
+    expect(mockConfigureProviderModel).not.toHaveBeenCalled();
+  });
 });

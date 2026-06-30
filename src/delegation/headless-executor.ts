@@ -8,6 +8,7 @@
 import { spawn } from 'child_process';
 import * as path from 'path';
 import { killWithEscalation } from '../utils/process-utils';
+import { createLogger, forwardRequestIdEnv } from '../services/logging';
 import * as fs from 'fs';
 import { SessionManager } from './session-manager';
 import { SettingsParser } from './settings-parser';
@@ -53,7 +54,7 @@ import {
   appendThirdPartyWebSearchToolArgs,
   appendWebSearchTrace,
   createWebSearchTraceContext,
-  ensureWebSearchMcpOrThrow,
+  ensureWebSearchMcpForLaunch,
   getWebSearchHookEnv,
   readWebSearchTraceRecords,
   syncWebSearchMcpToConfigDir,
@@ -62,6 +63,27 @@ import { getCcsDir, getGlobalEnvConfig, loadSettings } from '../config/config-lo
 
 // Re-export types for consumers
 export type { ExecutionOptions, ExecutionResult, StreamMessage } from './executor/types';
+
+const logger = createLogger('delegation:headless-executor');
+
+export function summarizeClaudeLaunchArgsForLog(
+  args: readonly string[],
+  filteredExtraArgCount: number
+): Record<string, unknown> {
+  return {
+    argCount: args.length,
+    hasPrompt: args.includes('-p'),
+    hasSettings: args.includes('--settings'),
+    outputFormat: args.includes('--output-format') ? 'configured' : 'default',
+    verbose: args.includes('--verbose'),
+    hasResume: args.includes('--resume'),
+    hasPermissionMode: args.includes('--permission-mode'),
+    bypassPermissions: args.includes('--dangerously-skip-permissions'),
+    hasAllowedTools: args.includes('--allowedTools'),
+    hasDisallowedTools: args.includes('--disallowedTools'),
+    filteredExtraArgCount,
+  };
+}
 
 /**
  * Headless executor for Claude CLI delegation
@@ -128,14 +150,16 @@ export class HeadlessExecutor {
     });
     const inheritedClaudeConfigDir = continuityInheritance.claudeConfigDir;
     if (continuityInheritance.sourceAccount && process.env.CCS_DEBUG) {
-      console.error(
-        info(
-          `Continuity inheritance active: profile "${profile}" -> account "${continuityInheritance.sourceAccount}"`
-        )
+      process.stderr.write(
+        String(
+          info(
+            `Continuity inheritance active: profile "${profile}" -> account "${continuityInheritance.sourceAccount}"`
+          )
+        ) + '\n'
       );
     }
 
-    ensureWebSearchMcpOrThrow();
+    ensureWebSearchMcpForLaunch();
     const imageAnalysisMcpReady = ensureImageAnalysisMcpOrThrow();
     syncWebSearchMcpToConfigDir(inheritedClaudeConfigDir);
     syncImageAnalysisMcpToConfigDir(inheritedClaudeConfigDir);
@@ -197,10 +221,12 @@ export class HeadlessExecutor {
       imageAnalysisProvider &&
       imageAnalysisStatus.effectiveRuntimeMode === 'native-read'
     ) {
-      console.error(
-        info(
-          `${imageAnalysisStatus.effectiveRuntimeReason || `Image analysis via ${imageAnalysisProvider} is unavailable.`} This delegation will use native Read.`
-        )
+      process.stderr.write(
+        String(
+          info(
+            `${imageAnalysisStatus.effectiveRuntimeReason || `Image analysis via ${imageAnalysisProvider} is unavailable.`} This delegation will use native Read.`
+          )
+        ) + '\n'
       );
       imageAnalysisEnv = {
         ...imageAnalysisEnv,
@@ -214,10 +240,12 @@ export class HeadlessExecutor {
     ) {
       const ensureServiceResult = await ensureCliproxyService(resolveLifecyclePort(), false);
       if (!ensureServiceResult.started) {
-        console.error(
-          warn(
-            `Image analysis via ${imageAnalysisProvider} is unavailable because CCS could not start the local CLIProxy service. This delegation will use native Read.`
-          )
+        process.stderr.write(
+          String(
+            warn(
+              `Image analysis via ${imageAnalysisProvider} is unavailable because CCS could not start the local CLIProxy service. This delegation will use native Read.`
+            )
+          ) + '\n'
         );
         imageAnalysisEnv = {
           ...imageAnalysisEnv,
@@ -272,7 +300,9 @@ export class HeadlessExecutor {
       if (permissionMode === 'bypassPermissions') {
         args.push('--dangerously-skip-permissions');
         if (process.env.CCS_DEBUG) {
-          console.warn(warn('WARNING: Using --dangerously-skip-permissions mode'));
+          process.stderr.write(
+            String(warn('WARNING: Using --dangerously-skip-permissions mode')) + '\n'
+          );
         }
       } else {
         args.push('--permission-mode', permissionMode);
@@ -286,12 +316,16 @@ export class HeadlessExecutor {
         args.push('--resume', lastSession.sessionId);
         if (process.env.CCS_DEBUG) {
           const cost = lastSession.totalCost?.toFixed(4) || '0.0000';
-          console.error(info(`Resuming session: ${lastSession.sessionId} ($${cost})`));
+          process.stderr.write(
+            String(info(`Resuming session: ${lastSession.sessionId} ($${cost})`)) + '\n'
+          );
         }
       } else if (sessionId) {
         args.push('--resume', sessionId);
       } else {
-        console.warn(warn('No previous session found, starting new session'));
+        process.stderr.write(
+          String(warn('No previous session found, starting new session')) + '\n'
+        );
       }
     } else if (sessionId) {
       args.push('--resume', sessionId);
@@ -323,6 +357,7 @@ export class HeadlessExecutor {
 
     // Passthrough extra args (catch-all for new/unknown flags)
     // Filter out duplicates of explicitly handled flags
+    let filteredExtraArgCount = 0;
     if (extraArgs.length > 0) {
       const explicitFlags = new Set(['--max-turns', '--fallback-model', '--agents', '--betas']);
       const filteredExtras: string[] = [];
@@ -338,6 +373,7 @@ export class HeadlessExecutor {
       }
       if (filteredExtras.length > 0) {
         args.push(...filteredExtras);
+        filteredExtraArgCount = filteredExtras.length;
       }
     }
 
@@ -356,7 +392,11 @@ export class HeadlessExecutor {
     });
 
     if (process.env.CCS_DEBUG) {
-      console.error(info(`Claude CLI args: ${launchArgs.join(' ')}`));
+      logger.info(
+        'claude_cli_args',
+        'Claude CLI args prepared',
+        summarizeClaudeLaunchArgsForLog(launchArgs, filteredExtraArgCount)
+      );
     }
 
     // Initialize UI before spawning
@@ -419,7 +459,7 @@ export class HeadlessExecutor {
 
       if (showProgress) {
         const modelName = getModelDisplayName(profile);
-        console.error(ui.info(`Delegating to ${modelName}...`));
+        process.stderr.write(String(ui.info(`Delegating to ${modelName}...`)) + '\n');
       }
 
       // Strip Claude Code nested session guard env var to allow CCS delegation
@@ -432,6 +472,7 @@ export class HeadlessExecutor {
         ...imageAnalysisEnv,
         ...traceEnv,
         ...(claudeConfigDir ? { CLAUDE_CONFIG_DIR: claudeConfigDir } : {}),
+        ...forwardRequestIdEnv(),
         CCS_PROFILE_TYPE: 'settings',
       });
 
@@ -523,12 +564,14 @@ export class HeadlessExecutor {
 
         if (showProgress) {
           const durationSec = (duration / 1000).toFixed(1);
-          console.error(
-            timedOut
-              ? ui.warn(`Timed out after ${durationSec}s`)
-              : ui.info(`Completed in ${durationSec}s`)
+          process.stderr.write(
+            String(
+              timedOut
+                ? ui.warn(`Timed out after ${durationSec}s`)
+                : ui.info(`Completed in ${durationSec}s`)
+            ) + '\n'
           );
-          console.error('');
+          process.stderr.write('\n');
         }
 
         const result = buildExecutionResult({
@@ -662,7 +705,7 @@ export class HeadlessExecutor {
         const result = await this.execute(profile, enhancedPrompt, execOptions);
         if (result.success) return result;
         if (attempt < maxRetries) {
-          console.error(warn(`Attempt ${attempt + 1} failed, retrying...`));
+          process.stderr.write(String(warn(`Attempt ${attempt + 1} failed, retrying...`)) + '\n');
           await this._sleep(1000 * (attempt + 1));
           continue;
         }
@@ -670,7 +713,7 @@ export class HeadlessExecutor {
       } catch (error) {
         lastError = error as Error;
         if (attempt < maxRetries) {
-          console.error(warn(`Attempt ${attempt + 1} errored, retrying...`));
+          process.stderr.write(String(warn(`Attempt ${attempt + 1} errored, retrying...`)) + '\n');
           await this._sleep(1000 * (attempt + 1));
         }
       }

@@ -730,6 +730,18 @@ This pattern is used in:
 
 ---
 
+## Lint Enforcement Gates
+
+Two ESLint gates (`eslint.config.mjs`) lock in the maintainability epic's gains:
+
+- **`ccs/no-new-throw-error`** (error): flags new `throw new Error(...)`. Use a typed error from `src/errors/error-types.ts` (`AuthError`, `ConfigError`, `ProfileError`, `ProviderError`, `NetworkError`, `ProxyError`, `MigrationError`, `ValidationError`, `RetryableError`) so `handleError` emits a differentiated exit code. Existing ~340 sites are grandfathered in `eslint-rules/throw-error-baseline.json`; only **new** violations error. Regenerate the baseline when intentionally grandfathering a new site, or quarterly to prune converted entries:
+  ```bash
+  node scripts/generate-throw-error-baseline.js
+  ```
+- **`max-lines`** (warn, 400): warns on source files over 400 lines (`skipBlankLines`, `skipComments`). Split via the Monster File Splitting methodology above (barrel `index.ts` preserves the public API).
+
+When the no-throw rule blocks a change, prefer converting to the matching typed error. Only add to the baseline when the throw is genuinely out of scope to convert (and regenerate the baseline so the entry is explicit, not silent).
+
 ## Related Documentation
 
 - [Codebase Summary](./codebase-summary.md) - Full directory structure

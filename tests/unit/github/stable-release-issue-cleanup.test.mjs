@@ -30,6 +30,11 @@ describe('stable release issue cleanup', () => {
     expect(extractIssueNumbers(text, { includeRefs: false })).toEqual([12, 13, 14, 15]);
   });
 
+  it('handles long unmatched whitespace after an issue reference in linear time', () => {
+    const text = `Fixes #1${' '.repeat(50_000)}X`;
+    expect(extractIssueNumbers(text, { includeRefs: true })).toEqual([1]);
+  });
+
   it('extracts PR numbers from merge and squash commit subjects', () => {
     const text = [
       'Merge pull request #1392 from kaitranntt/kai/fix/foo',

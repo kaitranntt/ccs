@@ -10,6 +10,8 @@ import { maybeWarnAboutResumeLaneMismatch } from '../../auth/resume-lane-warning
 import { isProfileLocalSharedResourceMode } from '../../auth/shared-resource-policy';
 import { resolveNativeClaudeLaunchArgs } from '../environment-builder';
 import type { ProfileDispatchContext } from '../dispatcher-context';
+import { maybeShowPoolOnboardingHint } from '../../cliproxy/routing/pool-onboarding-hint';
+import { hasUnifiedConfig } from '../../config/config-loader-facade';
 
 export async function runAccountFlow(ctx: ProfileDispatchContext): Promise<void> {
   const {
@@ -56,6 +58,15 @@ export async function runAccountFlow(ctx: ProfileDispatchContext): Promise<void>
     CCS_IMAGE_ANALYSIS_SKIP: '1',
   };
   await maybeWarnAboutResumeLaneMismatch(profileInfo.name, instancePath, nativeClaudeRemainingArgs);
+
+  // One-time pool onboarding hint: fires when >= 2 native Claude profiles exist
+  // and pool routing is not yet enabled.  Print-only, TTY-gated, never blocks spawn.
+  // Gated on hasUnifiedConfig() so legacy profiles.json-only installs receive the
+  // hint from ccs doctor only (where dismissal semantics are preserved).
+  if (hasUnifiedConfig()) {
+    maybeShowPoolOnboardingHint();
+  }
+
   const launchArgs = resolveNativeClaudeLaunchArgs(
     nativeClaudeRemainingArgs,
     'account',

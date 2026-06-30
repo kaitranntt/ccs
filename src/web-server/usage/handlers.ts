@@ -121,7 +121,9 @@ export function filterByDateRange<
 }
 
 export function errorResponse(res: Response, error: unknown, defaultMessage: string): void {
-  console.error(defaultMessage + ':', error);
+  process.stderr.write(
+    String(`${defaultMessage}: ${error instanceof Error ? error.message : String(error)}`) + '\n'
+  );
   const errorMessage = error instanceof Error ? error.message : 'Unknown error';
   const isValidationError =
     errorMessage.includes('Invalid') ||

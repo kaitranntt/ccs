@@ -61,7 +61,10 @@ function startMockUpstream(port: number): Promise<void> {
   });
 }
 
-function runCli(args: string[], env: Record<string, string>): Promise<{ code: number | null; stdout: string; stderr: string }> {
+function runCli(
+  args: string[],
+  env: Record<string, string>
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [DIST_ENTRY, ...args], {
       env: {
@@ -101,6 +104,11 @@ describe('openai provider routing e2e', () => {
     const ccsDir = path.join(tempDir, '.ccs');
     const binDir = path.join(tempDir, 'bin');
     const outputPath = path.join(tempDir, 'claude-output.json');
+    const fakeClaudeRuntimePath = path.join(binDir, 'fake-claude.cjs');
+    const fakeClaudePath = path.join(
+      binDir,
+      process.platform === 'win32' ? 'claude.cmd' : 'claude'
+    );
     fs.mkdirSync(ccsDir, { recursive: true });
     fs.mkdirSync(binDir, { recursive: true });
 
@@ -123,8 +131,8 @@ describe('openai provider routing e2e', () => {
       'utf8'
     );
     fs.writeFileSync(
-      path.join(binDir, 'claude'),
-      `#!/usr/bin/env node
+      fakeClaudeRuntimePath,
+      `
 const fs = require('fs');
 (async () => {
   const response = await fetch(\`\${process.env.ANTHROPIC_BASE_URL}/v1/messages\`, {
@@ -153,6 +161,13 @@ const fs = require('fs');
   process.exit(1);
 });
 `,
+      'utf8'
+    );
+    fs.writeFileSync(
+      fakeClaudePath,
+      process.platform === 'win32'
+        ? '@echo off\r\nnode "%~dp0fake-claude.cjs" %*\r\n'
+        : '#!/bin/sh\nexec node "$(dirname "$0")/fake-claude.cjs" "$@"\n',
       { mode: 0o755 }
     );
 
@@ -160,7 +175,7 @@ const fs = require('fs');
       ...process.env,
       CCS_HOME: tempDir,
       CCS_E2E_OUTPUT: outputPath,
-      PATH: `${binDir}:${process.env.PATH || ''}`,
+      PATH: `${binDir}${path.delimiter}${process.env.PATH || ''}`,
     });
 
     expect(result.code).toBe(0);

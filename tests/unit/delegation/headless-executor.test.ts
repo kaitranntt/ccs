@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect } from 'bun:test';
+import { summarizeClaudeLaunchArgsForLog } from '../../../src/delegation/headless-executor';
 
 describe('HeadlessExecutor flag construction', () => {
   // Test the flag construction logic by simulating the filtering behavior
@@ -85,6 +86,37 @@ describe('HeadlessExecutor flag construction', () => {
         explicitFlags
       );
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('Debug launch-arg logging', () => {
+    it('summarizes launch args without persisting prompt text or passthrough secret values', () => {
+      const prompt = 'please analyze api_key=plainsecretvalue in this prompt';
+      const args = [
+        '-p',
+        prompt,
+        '--settings',
+        '/tmp/settings.json',
+        '--output-format',
+        'stream-json',
+        '--verbose',
+        '--api-key',
+        'plainsecretvalue',
+      ];
+
+      const summary = summarizeClaudeLaunchArgsForLog(args, 2);
+      const serialized = JSON.stringify(summary);
+
+      expect(serialized).not.toContain(prompt);
+      expect(serialized).not.toContain('plainsecretvalue');
+      expect(summary).toMatchObject({
+        argCount: args.length,
+        hasPrompt: true,
+        hasSettings: true,
+        outputFormat: 'configured',
+        verbose: true,
+        filteredExtraArgCount: 2,
+      });
     });
   });
 

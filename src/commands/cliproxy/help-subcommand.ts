@@ -53,16 +53,35 @@ export async function showHelp(): Promise<void> {
     [
       'Quota Management:',
       [
-        ['default <account>', 'Set default account for rotation'],
-        ['pause <account>', 'Pause account (skip in rotation)'],
-        ['resume <account>', 'Resume paused account'],
-        ['quota', 'Show quota status for all providers (Codex/Claude include 5h + weekly reset)'],
+        ['default <account> [--provider <name>]', 'Set default account for rotation'],
+        ['pause <account> [--provider <name>]', 'Pause account (skip in rotation)'],
+        ['resume <account> [--provider <name>]', 'Resume paused account'],
+        [
+          'quota',
+          'Show quota status + pool context (drain order, per-account available/cooling/paused)',
+        ],
         ['quota --provider <name>', `Filter by provider (${QUOTA_PROVIDER_HELP_TEXT})`],
         ['routing', 'Show current routing strategy and manual guidance'],
         ['routing explain', 'Explain strategy vs session-affinity and how sessions are recognized'],
         ['routing set <mode>', 'Explicitly set round-robin or fill-first'],
         ['routing affinity', 'Show local session-affinity status and TTL'],
         ['routing affinity <on|off> [--ttl <duration>]', 'Toggle local session-affinity settings'],
+        ['pool', 'Show pool routing status (fill-first + affinity + 429 cooldown)'],
+        ['pool --enable', 'Enable pool routing (writes cooling/affinity/retry-cap to config)'],
+        ['pool --disable', 'Disable pool routing and restore non-pool config'],
+        [
+          'accounts order <provider>',
+          'Show effective drain order (priority bucket desc, then ID asc)',
+        ],
+        [
+          'accounts order <provider> --by-tier',
+          'Set drain order from tier metadata (ultra > pro > free)',
+        ],
+        [
+          'accounts order <provider> --set a,b,c',
+          'Set manual drain order (comma-separated account IDs)',
+        ],
+        ['accounts order <provider> --reset', 'Revert drain order to stable file order'],
       ],
     ],
     [
@@ -70,9 +89,12 @@ export async function showHelp(): Promise<void> {
       [
         ['start', 'Start CLIProxy instance in background'],
         ['restart', 'Restart CLIProxy instance'],
-        ['status', 'Show running CLIProxy status'],
+        [
+          'status [--verbose]',
+          'Show CLIProxy status + Control Panel URL and login key (--verbose adds uptime)',
+        ],
         ['stop', 'Stop running CLIProxy instance'],
-        ['doctor', 'Quota diagnostics and shared project detection'],
+        ['doctor | diag', 'Quota diagnostics and shared project detection'],
       ],
     ],
     [

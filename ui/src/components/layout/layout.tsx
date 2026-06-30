@@ -10,6 +10,7 @@ import { ConnectionIndicator } from '@/components/shared/connection-indicator';
 import { LocalhostDisclaimer } from '@/components/shared/localhost-disclaimer';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ClaudeKitBadge } from '@/components/shared/claudekit-badge';
+import { CcsBarButton } from '@/components/shared/ccs-bar-button';
 import { SponsorButton } from '@/components/shared/sponsor-button';
 import { ProjectSelectionDialog } from '@/components/shared/project-selection-dialog';
 import { DeviceCodeDialog } from '@/components/shared/device-code-dialog';
@@ -44,6 +45,7 @@ export function Layout() {
         <header className="flex h-14 items-center justify-between px-6 border-b shrink-0 bg-background shadow-sm z-20">
           <div className="flex items-center gap-3">
             <ClaudeKitBadge />
+            <CcsBarButton />
             <SponsorButton />
           </div>
           <div className="flex items-center gap-2">

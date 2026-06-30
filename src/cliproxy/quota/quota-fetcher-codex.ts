@@ -13,6 +13,9 @@ import { sanitizeEmail, isTokenExpired } from '../auth/auth-utils';
 import type { CodexQuotaResult, CodexQuotaWindow, CodexCoreUsageSummary } from './quota-types';
 import { sanitizeCodexFeatureLabel } from './quota-label-sanitizer';
 import { extractCanonicalEmailFromAccountId } from '../accounts/email-account-identity';
+import { createLogger } from '../../services/logging';
+
+const logger = createLogger('cliproxy:quota:codex');
 
 /** ChatGPT backend API base URL */
 const CODEX_API_BASE = 'https://chatgpt.com/backend-api';
@@ -628,12 +631,17 @@ export async function fetchCodexQuota(
   accountId: string,
   verbose = false
 ): Promise<CodexQuotaResult> {
-  if (verbose) console.error(`[i] Fetching Codex quota for ${accountId}...`);
+  if (verbose)
+    logger.info('quota.fetch.start', 'Fetching Codex quota for account', { provider: 'codex' });
 
   const authData = readCodexAuthData(accountId);
   if (!authData) {
     const error = 'Auth file not found for Codex account';
-    if (verbose) console.error(`[!] Error: ${error}`);
+    if (verbose)
+      logger.warn('quota.fetch.auth_missing', error, {
+        provider: 'codex',
+        errorCode: 'auth_file_missing',
+      });
     return buildCodexFailureResult(accountId, {
       error,
       errorCode: 'auth_file_missing',
@@ -644,7 +652,11 @@ export async function fetchCodexQuota(
 
   if (authData.isExpired) {
     const error = 'Token expired - re-authenticate with ccs cliproxy auth codex';
-    if (verbose) console.error(`[!] Error: ${error}`);
+    if (verbose)
+      logger.warn('quota.fetch.token_expired', error, {
+        provider: 'codex',
+        errorCode: 'token_expired',
+      });
     return buildCodexFailureResult(accountId, {
       error,
       errorCode: 'token_expired',
@@ -656,7 +668,11 @@ export async function fetchCodexQuota(
 
   if (!authData.accountId) {
     const error = 'Missing ChatGPT-Account-Id in auth file';
-    if (verbose) console.error(`[!] Error: ${error}`);
+    if (verbose)
+      logger.warn('quota.fetch.missing_account_id', error, {
+        provider: 'codex',
+        errorCode: 'missing_account_id',
+      });
     return buildCodexFailureResult(accountId, {
       error,
       errorCode: 'missing_account_id',
@@ -685,7 +701,12 @@ export async function fetchCodexQuota(
 
       clearTimeout(timeoutId);
 
-      if (verbose) console.error(`[i] Codex API status: ${response.status} (attempt ${attempt})`);
+      if (verbose)
+        logger.info('quota.fetch.status', `Codex API status: ${response.status}`, {
+          provider: 'codex',
+          status: response.status,
+          attempt,
+        });
 
       if (!response.ok) {
         const bodyText = await response.text();
@@ -696,10 +717,14 @@ export async function fetchCodexQuota(
       const windows = buildCodexQuotaWindows(data);
       const unknownWindowLabels = getUnknownCodexWindowLabels(windows);
       if (unknownWindowLabels.length > 0 && shouldLogCodexWindowWarnings(verbose)) {
-        console.error(
-          `[!] Codex quota detected unknown window labels: ${unknownWindowLabels.join(', ')}`
+        logger.warn(
+          'quota.fetch.unknown_window_labels',
+          'Codex quota detected unknown window labels; window classification may need an update for upstream API changes',
+          {
+            provider: 'codex',
+            labels: unknownWindowLabels,
+          }
         );
-        console.error('    Window classification may need an update for upstream API changes.');
       }
       const coreUsage = buildCodexCoreUsageSummary(windows);
 
@@ -714,7 +739,11 @@ export async function fetchCodexQuota(
         else if (normalized === 'team') planType = 'team';
       }
 
-      if (verbose) console.error(`[i] Codex windows found: ${windows.length}`);
+      if (verbose)
+        logger.info('quota.fetch.windows', `Codex windows found: ${windows.length}`, {
+          provider: 'codex',
+          count: windows.length,
+        });
 
       return {
         success: true,
@@ -734,7 +763,19 @@ export async function fetchCodexQuota(
           : 'Unknown error';
 
       if (verbose) {
-        console.error(`[!] Codex quota error (attempt ${attempt}): ${lastErrorMsg}`);
+        logger.warn(
+          'quota.fetch.failed',
+          `Codex quota error (attempt ${attempt}): ${lastErrorMsg}`,
+          {
+            provider: 'codex',
+            attempt,
+            errorCode: isAbortError ? 'network_timeout' : 'network_error',
+            err:
+              err instanceof Error
+                ? { name: err.name, message: err.message }
+                : { message: String(err) },
+          }
+        );
       }
 
       // Retry timeout once; other failures return immediately.

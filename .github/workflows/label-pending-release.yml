@@ -38,7 +38,7 @@ jobs:
             $PR_BODY
             $COMMIT_TEXT"
             PR_ISSUES=$(printf '%s\n' "$PR_TEXT" | \
-              perl -ne 'while (/\b(?:fixes|closes|resolves|refs?)\s+((?:#[0-9]+\b(?:\s*(?:,|and)?\s*#[0-9]+\b)*))/ig) { print "$1\n"; }' | \
+              perl -ne 'while (/\b(?:fixes|closes|resolves|refs?)\s+((?:#[0-9]+\b(?:\s*+(?:,|and)?\s*+#[0-9]+\b)*))/ig) { print "$1\n"; }' | \
               grep -oE '#[0-9]+' || true)
             if [[ -n "$PR_ISSUES" ]]; then
               ALL_REFERENCED_ISSUES=$(printf '%s\n%s\n' "$ALL_REFERENCED_ISSUES" "$PR_ISSUES")

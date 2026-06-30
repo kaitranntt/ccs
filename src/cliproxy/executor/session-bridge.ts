@@ -26,6 +26,9 @@ import {
 import { withStartupLock } from '../services/startup-lock';
 import { killProcessOnPort } from '../../utils/platform-commands';
 import { stopQuotaMonitor } from '../quota/quota-manager';
+import { createLogger } from '../../services/logging';
+
+const logger = createLogger('cliproxy:executor:session-bridge');
 
 export interface ProxySessionResult {
   sessionId?: string;
@@ -43,7 +46,7 @@ export async function checkOrJoinProxy(
 ): Promise<ProxySessionResult> {
   const log = (msg: string) => {
     if (verbose) {
-      console.error(`[cliproxy] ${msg}`);
+      logger.info('proxy.check_or_join.trace', msg);
     }
   };
 
@@ -129,16 +132,18 @@ export async function checkOrJoinProxy(
 
       // Truly blocked by another application
       const { getPortCheckCommand } = await import('../../utils/platform-commands');
-      console.error('');
-      console.error(
-        warn(
-          `Port ${port} is blocked by ${proxyStatus.blocker.processName} (PID ${proxyStatus.blocker.pid})`
-        )
+      process.stderr.write('\n');
+      process.stderr.write(
+        String(
+          warn(
+            `Port ${port} is blocked by ${proxyStatus.blocker.processName} (PID ${proxyStatus.blocker.pid})`
+          )
+        ) + '\n'
       );
-      console.error('');
-      console.error('To fix this, close the blocking application or run:');
-      console.error(`  ${getPortCheckCommand(port)}`);
-      console.error('');
+      process.stderr.write('\n');
+      process.stderr.write('To fix this, close the blocking application or run:\n');
+      process.stderr.write(`  ${getPortCheckCommand(port)}\n`);
+      process.stderr.write('\n');
       throw new Error(`Port ${port} is in use by another application`);
     }
 
@@ -162,9 +167,13 @@ export function registerProxySession(
   const sessionId = registerSession(port, pid, installedVersion, backend);
 
   if (verbose) {
-    console.error(
-      `[cliproxy] Registered session ${sessionId} with new proxy (PID ${pid}, version ${installedVersion})`
-    );
+    logger.info('proxy.session.registered', 'Registered session with new proxy', {
+      sessionId,
+      port,
+      pid,
+      version: installedVersion,
+      backend,
+    });
   }
 
   return sessionId;
@@ -184,7 +193,7 @@ export function setupCleanupHandlers(
 ): void {
   const log = (msg: string) => {
     if (verbose) {
-      console.error(`[cliproxy] ${msg}`);
+      logger.info('proxy.cleanup.trace', msg);
     }
   };
 
@@ -228,7 +237,9 @@ export function setupCleanupHandlers(
   });
 
   claude.on('error', (error) => {
-    console.error(require('../../utils/ui').fail(`Claude CLI error: ${error}`));
+    process.stderr.write(
+      String(require('../../utils/ui').fail(`Claude CLI error: ${error}`)) + '\n'
+    );
     stopSessionResources();
     process.exit(1);
   });

@@ -1,4 +1,4 @@
-import { initUI, header, subheader, color, dim, ok, fail, infoBox } from '../../utils/ui';
+import { initUI, header, subheader, color, dim, ok, fail, infoBox, warn } from '../../utils/ui';
 import { extractOption } from '../arg-extractor';
 import {
   applyCliproxyRoutingStrategy,
@@ -9,6 +9,7 @@ import {
   readCliproxyRoutingState,
   readCliproxySessionAffinityState,
 } from '../../cliproxy/routing/routing-strategy';
+import { loadOrCreateUnifiedConfig } from '../../config/config-loader-facade';
 
 function printStrategyGuide(): void {
   console.log(subheader('Routing Modes:'));
@@ -134,6 +135,20 @@ export async function handleRoutingSet(args: string[]): Promise<void> {
   console.log(header('Update CLIProxy Routing'));
   console.log('');
 
+  // Pool routing is active: the generator bypasses stored routing and emits
+  // fill-first/affinity regardless.  Storing a strategy here creates a divergence
+  // between the unified config and the emitted config.yaml — warn the user.
+  const config = loadOrCreateUnifiedConfig();
+  if (config.cliproxy?.pool_routing?.enabled === true) {
+    console.log(
+      warn(
+        '[!] Pool routing is active. The stored strategy will not take effect\n' +
+          '    until pool routing is disabled: ccs cliproxy pool --disable'
+      )
+    );
+    console.log('');
+  }
+
   const result = await applyCliproxyRoutingStrategy(requested);
   console.log(ok(`Routing strategy set to ${requested}`));
   console.log(`  Applied: ${color(result.applied, 'info')}`);
@@ -222,6 +237,20 @@ export async function handleRoutingAffinitySet(args: string[]): Promise<void> {
   console.log('');
   console.log(header('Update CLIProxy Session Affinity'));
   console.log('');
+
+  // Pool routing is active: the generator bypasses stored session-affinity and emits
+  // affinity:true/1h regardless.  Storing a value here creates a divergence between
+  // the unified config and the emitted config.yaml — warn the user.
+  const affinityConfig = loadOrCreateUnifiedConfig();
+  if (affinityConfig.cliproxy?.pool_routing?.enabled === true) {
+    console.log(
+      warn(
+        '[!] Pool routing is active. The stored affinity setting will not take effect\n' +
+          '    until pool routing is disabled: ccs cliproxy pool --disable'
+      )
+    );
+    console.log('');
+  }
 
   const result = await applyCliproxySessionAffinitySettings({
     enabled: requested,

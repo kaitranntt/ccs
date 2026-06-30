@@ -61,10 +61,13 @@ CCS gives you one stable command surface while letting you switch between:
 
 - multiple runtimes such as Claude Code, Factory Droid, and Codex CLI
 - multiple Claude subscriptions and isolated account contexts
-- OAuth providers like Codex, Kiro, Claude, Qwen, Kimi, and more, with legacy
+- OAuth providers like Codex, Kiro, Claude, Kimi, and more, with legacy
   Copilot compatibility for existing setups
 - API and local-model profiles like GLM, Kimi, OpenRouter, Ollama, llama.cpp,
-  Novita, and Alibaba Coding Plan
+  Novita, Fireworks AI, and Alibaba Coding Plan
+
+Qwen Code account linking is not available in the bundled CLIProxy runtime yet;
+use an API-key Qwen profile such as Alibaba Coding Plan for Qwen models.
 
 The goal is simple: stop rewriting config files, stop breaking active sessions,
 and move between providers in seconds.
@@ -116,6 +119,17 @@ Need the full setup path instead of the short version?
 
 ## See CCS In Action
 
+### CCS Bar For macOS
+
+![CCS Bar](assets/screenshots/ccs-bar-panel.webp)
+
+CCS Bar puts live subscription quota, daily spend, and account controls in the
+macOS menu bar. Install it with `ccs bar install`, launch it with `ccs bar`, and
+tell us what would make it more useful: issues and ideas are welcome in
+[GitHub Issues](https://github.com/kaitranntt/ccs/issues).
+
+Deep dive: [CCS Bar](https://docs.ccs.kaitran.ca/features/dashboard/ccs-bar).
+
 ### Usage Analytics
 
 ![Analytics Dashboard](assets/screenshots/analytics.webp)
@@ -164,6 +178,7 @@ reference material.
 | Install CCS cleanly on a new machine | [Installation](https://docs.ccs.kaitran.ca/getting-started/installation) |
 | Go from install to a successful first run | [Your First CCS Session](https://docs.ccs.kaitran.ca/getting-started/first-session) |
 | See the dashboard and workflow surfaces before setup | [Product Tour](https://docs.ccs.kaitran.ca/getting-started/product-tour) |
+| Install the native macOS menu-bar companion | [CCS Bar](https://docs.ccs.kaitran.ca/features/dashboard/ccs-bar) |
 | Compare OAuth providers, Claude accounts, and API profiles | [Provider Overview](https://docs.ccs.kaitran.ca/providers/concepts/overview) |
 | Learn the dashboard structure and feature pages | [Dashboard Overview](https://docs.ccs.kaitran.ca/features/dashboard/overview) |
 | Configure profiles, paths, and environment variables | [Configuration](https://docs.ccs.kaitran.ca/getting-started/configuration) |

@@ -2,6 +2,9 @@ import { DeltaAccumulator } from '../../glmt/delta-accumulator';
 import { GlmtTransformer } from '../../glmt/glmt-transformer';
 import { SSEParser } from '../../glmt/sse-parser';
 import type { OpenAIResponse, SSEEvent } from '../../glmt/pipeline';
+import { createLogger } from '../../services/logging';
+
+const logger = createLogger('proxy:sse-stream-transformer');
 
 const JSON_TRANSLATION_ERROR_MESSAGE = 'Failed to translate OpenAI-compatible JSON response';
 const STREAM_TRANSLATION_ERROR_MESSAGE = 'Failed to translate OpenAI-compatible SSE response';
@@ -26,20 +29,13 @@ function createAnthropicErrorPayload(type: string, message: string): AnthropicEr
   };
 }
 
-function formatErrorForLog(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-}
-
-function logTranslationError(context: string, error: unknown): void {
-  console.error(`[proxy-sse-transformer] ${context}: ${formatErrorForLog(error)}`);
+function logTranslationError(event: string, message: string, error: unknown): void {
+  logger.error(event, message, {
+    err:
+      error instanceof Error
+        ? { name: error.name, message: error.message }
+        : { message: String(error) },
+  });
 }
 
 export function createAnthropicErrorResponse(
@@ -130,7 +126,11 @@ async function createAnthropicErrorProxyResponse(response: Response): Promise<Re
       }
     }
   } catch (error) {
-    logTranslationError('Failed to parse upstream error response', error);
+    logTranslationError(
+      'sse_transformer.upstream_error_parse_failed',
+      'Failed to parse upstream error response',
+      error
+    );
   }
 
   return createAnthropicErrorResponse(response.status, type, message, headers);
@@ -146,6 +146,7 @@ async function createAnthropicJsonResponse(response: Response): Promise<Response
     const anthropicResponse = new GlmtTransformer().transformResponse(openAIResponse);
     if (isSyntheticTransformationFallback(anthropicResponse)) {
       logTranslationError(
+        'sse_transformer.json_synthetic_fallback',
         'OpenAI-compatible JSON translation produced synthetic fallback response',
         anthropicResponse
       );
@@ -157,7 +158,11 @@ async function createAnthropicJsonResponse(response: Response): Promise<Response
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    logTranslationError('OpenAI-compatible JSON translation failed', error);
+    logTranslationError(
+      'sse_transformer.json_translation_failed',
+      'OpenAI-compatible JSON translation failed',
+      error
+    );
     return createAnthropicErrorResponse(502, 'api_error', JSON_TRANSLATION_ERROR_MESSAGE);
   }
 }
@@ -210,7 +215,11 @@ function createAnthropicStreamingResponse(response: Response): Response {
           }
         }
       } catch (error) {
-        logTranslationError('OpenAI-compatible SSE translation failed', error);
+        logTranslationError(
+          'sse_transformer.sse_translation_failed',
+          'OpenAI-compatible SSE translation failed',
+          error
+        );
         controller.enqueue(
           encoder.encode(
             formatSseEvent(

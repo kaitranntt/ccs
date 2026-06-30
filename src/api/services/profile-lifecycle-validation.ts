@@ -23,6 +23,8 @@ const ALLOWED_ANTHROPIC_ENV_KEYS = new Set<string>([
   'ANTHROPIC_BASE_URL',
   'ANTHROPIC_AUTH_TOKEN',
   'ANTHROPIC_API_KEY',
+  // Written by profile-writer when --extra-models is supplied
+  'ANTHROPIC_EXTRA_MODELS',
   ...MODEL_ENV_KEYS,
 ]);
 

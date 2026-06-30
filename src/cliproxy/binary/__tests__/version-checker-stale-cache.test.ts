@@ -39,6 +39,7 @@ describe('version-checker stale cache fallback', () => {
       getVersionCachePath('plus'),
       JSON.stringify({
         latestVersion: '6.9.23-0',
+        repo: 'kaitranntt/CLIProxyAPIPlus',
         checkedAt: Date.now() - VERSION_CACHE_DURATION_MS - 1_000,
       }),
       'utf8'
@@ -54,6 +55,33 @@ describe('version-checker stale cache fallback', () => {
     expect(result.currentVersion).toBe('6.6.80');
     expect(result.hasUpdate).toBe(true);
     expect(result.fromCache).toBe(true);
+  });
+
+  it('ignores legacy or cross-repo latest-version caches', async () => {
+    const { getVersionCachePath, writeInstalledVersion } = await import('../version-cache');
+    const { checkForUpdates } = await import('../version-checker');
+    const plusBinDir = path.join(tempHome, '.ccs', 'cliproxy', 'bin', 'plus');
+
+    fs.mkdirSync(plusBinDir, { recursive: true });
+    writeInstalledVersion(plusBinDir, '6.6.80');
+    for (const repo of [undefined, 'router-for-me/CLIProxyAPI']) {
+      fs.writeFileSync(
+        getVersionCachePath('plus'),
+        JSON.stringify({
+          latestVersion: '7.2.5',
+          checkedAt: Date.now(),
+          ...(repo ? { repo } : {}),
+        }),
+        'utf8'
+      );
+
+      const result = await checkForUpdates(plusBinDir, '6.6.80', false, 'plus', {
+        fetchLatestVersionFn: async () => '7.1.68-2',
+      });
+
+      expect(result.latestVersion).toBe('7.1.68-2');
+      expect(result.fromCache).toBe(false);
+    }
   });
 
   it('uses a stale release-list cache when GitHub list lookup fails', async () => {

@@ -68,10 +68,19 @@ export async function runPreDispatchHandlers(ctx: PreDispatchContext): Promise<b
   }
 
   // Auto-migrate to unified config format (silent if already migrated)
-  // Skip if user is explicitly running migrate command
+  // Skip if user is explicitly running migrate command.
+  // Wrapped in try-catch so a corrupt config.yaml does not crash pre-dispatch
+  // before doctor/setup can run and report the problem to the user.
   if (firstArg !== 'migrate') {
-    const { autoMigrate } = await import('../config/migration-manager');
-    await autoMigrate();
+    try {
+      const { autoMigrate } = await import('../config/migration-manager');
+      await autoMigrate();
+    } catch (err) {
+      cliLogger.warn('migration.failed', 'Auto-migration failed (config may be corrupt)', {
+        message: (err as Error).message,
+      });
+      // Do not print the error again — loadUnifiedConfig already printed the YAML details.
+    }
   }
 
   // Auto-recovery for missing configuration (BEFORE any early-exit commands)
@@ -90,8 +99,10 @@ export async function runPreDispatchHandlers(ctx: PreDispatchContext): Promise<b
     cliLogger.warn('recovery.failed', 'Auto-recovery failed during CLI startup', {
       message: (err as Error).message,
     });
-    // Recovery is best-effort - don't block basic CLI functionality
-    console.warn('[!] Recovery failed:', (err as Error).message);
+    // Recovery is best-effort - don't block basic CLI functionality. Use only the
+    // first line: a YAML parse error embeds a multi-line snippet the loader already
+    // printed, so re-emitting it here just duplicates the noise.
+    console.warn('[!] Recovery failed:', (err as Error).message.split('\n')[0].trim());
   }
 
   // Root command router (handles --help, --version, config, doctor, etc.)
@@ -111,13 +122,14 @@ export async function runPreDispatchHandlers(ctx: PreDispatchContext): Promise<b
     return true;
   }
 
-  // Special case: copilot command (GitHub Copilot integration)
-  // Route known subcommands to command handler, keep all other args as profile passthrough.
+  // Special case: copilot command (GitHub Copilot integration).
+  // Route ONLY known subcommands to the handler; any other arg is kept as
+  // passthrough to the copilot bridge profile flow (legacy behavior). Do not
+  // treat an arbitrary token as an unknown subcommand error, or this breaks the
+  // passthrough path.
   if (firstArg === 'copilot' && args.length > 1) {
     const copilotToken = args[1];
-    const shouldRouteToCopilotCommand = isCopilotSubcommandToken(copilotToken);
-
-    if (shouldRouteToCopilotCommand) {
+    if (isCopilotSubcommandToken(copilotToken)) {
       const { handleCopilotCommand } = await import('../commands/copilot-command');
       const exitCode = await handleCopilotCommand(args.slice(1));
       process.exit(exitCode);
@@ -125,11 +137,12 @@ export async function runPreDispatchHandlers(ctx: PreDispatchContext): Promise<b
   }
 
   // Special case: explicit legacy Cursor bridge namespace.
+  // Route ONLY known subcommands; keep other args as passthrough to the cursor
+  // bridge flow (legacy behavior).
   if (firstArg === LEGACY_CURSOR_PROFILE_NAME && args.length > 1) {
-    const { handleCursorCommand } = await import('../commands/cursor-command');
     const cursorToken = args[1];
-
     if (isCursorSubcommandToken(cursorToken)) {
+      const { handleCursorCommand } = await import('../commands/cursor-command');
       const exitCode = await handleCursorCommand(args.slice(1));
       process.exit(exitCode);
     }

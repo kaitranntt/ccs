@@ -13,8 +13,11 @@ import {
   getLocalSyncStatus,
 } from '../../cliproxy/sync';
 import { mutateConfig } from '../../config/config-loader-facade';
+import { ConfigError } from '../../errors/error-types';
+import { createLogger } from '../../services/logging';
 
 const router = Router();
+const logger = createLogger('web-server:routes:cliproxy-sync');
 
 /**
  * GET /api/cliproxy/sync/status - Get local sync status
@@ -133,7 +136,7 @@ router.put('/auto-sync', async (req: Request, res: Response): Promise<void> => {
     try {
       mutateConfig((config) => {
         if (!config.cliproxy) {
-          throw new Error('CLIProxy config not initialized');
+          throw new ConfigError('CLIProxy config not initialized');
         }
         config.cliproxy.auto_sync = enabled;
       });
@@ -147,7 +150,11 @@ router.put('/auto-sync', async (req: Request, res: Response): Promise<void> => {
       await restartAutoSyncWatcher();
     } catch (watcherError) {
       // Log but don't fail - config was saved successfully
-      console.warn('Watcher restart failed:', (watcherError as Error).message);
+      const e = watcherError as Error;
+      logger.warn('auto_sync.watcher_restart_failed', 'Watcher restart failed after config save', {
+        enabled,
+        err: { name: e.name, message: e.message },
+      });
     }
 
     res.json({ success: true, enabled });

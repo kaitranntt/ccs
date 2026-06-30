@@ -8,10 +8,13 @@
  * - Generate appropriate Anthropic SSE events
  */
 
+import { createLogger } from '../../services/logging';
 import type { DeltaAccumulator } from '../delta-accumulator';
 import type { SSEEvent, AnthropicSSEEvent, AccumulatorBlock } from './types';
 import { ResponseBuilder } from './response-builder';
 import { ToolCallHandler } from './tool-call-handler';
+
+const logger = createLogger('glmt:pipeline:stream-parser');
 
 export interface StreamParserConfig {
   verbose?: boolean;
@@ -144,10 +147,11 @@ export class StreamParser {
     const currentBlock = accumulator.getCurrentBlock();
 
     if (this.debugMode) {
-      console.error(`[StreamParser] Reasoning delta: ${reasoningContent.length} chars`);
-      console.error(
-        `[StreamParser] Current block: ${currentBlock?.type || 'none'}, index: ${currentBlock?.index ?? 'N/A'}`
-      );
+      logger.info('reasoning_delta', 'Reasoning content delta received', {
+        deltaLength: reasoningContent.length,
+        currentBlockType: currentBlock?.type || 'none',
+        currentBlockIndex: currentBlock?.index ?? null,
+      });
     }
 
     if (!currentBlock || currentBlock.type !== 'thinking') {
@@ -156,7 +160,9 @@ export class StreamParser {
       events.push(this.responseBuilder.createContentBlockStartEvent(block));
 
       if (this.debugMode) {
-        console.error(`[StreamParser] Started new thinking block ${block.index}`);
+        logger.info('thinking_block_started', 'Started new thinking block', {
+          blockIndex: block.index,
+        });
       }
     }
 
@@ -296,8 +302,7 @@ export class StreamParser {
    */
   private log(message: string): void {
     if (this.verbose) {
-      const timestamp = new Date().toTimeString().split(' ')[0]; // HH:MM:SS
-      console.error(`[StreamParser] [${timestamp}] ${message}`);
+      logger.warn('stream_parser_verbose', message, {});
     }
   }
 }

@@ -12,6 +12,23 @@ import { initUI, header, color, dim, ok, warn, info } from '../../utils/ui';
 import { getProxyStatus, startProxy, stopProxy } from '../../cliproxy/services';
 import { detectRunningProxy } from '../../cliproxy/proxy/proxy-detector';
 import { resolveLifecyclePort } from '../../cliproxy/config/port-manager';
+import { getEffectiveManagementSecret } from '../../cliproxy/auth/auth-token-manager';
+
+/**
+ * Print how to reach the local CLIProxy Control Panel (a.k.a. API Management
+ * Center) and the key needed to log in.
+ *
+ * The panel is served by CLIProxy at `/management.html` on the proxy port and
+ * its login is gated by the management secret (default `ccs`). The login screen
+ * only asks for a "Management Key" with no hint, so users frequently cannot get
+ * in. Surfacing the URL + resolved key here removes that guesswork.
+ */
+export function printControlPanelAccess(port: number): void {
+  const secret = getEffectiveManagementSecret();
+  console.log('');
+  console.log(`  Control Panel:    http://127.0.0.1:${port}/management.html`);
+  console.log(`  Panel login key:  ${secret}`);
+}
 
 export async function handleStart(verbose = false): Promise<void> {
   await initUI();
@@ -30,6 +47,9 @@ export async function handleStart(verbose = false): Promise<void> {
       console.log(ok(`CLIProxy started on port ${result.port}`));
     }
     console.log(dim('To stop: ccs cliproxy stop'));
+    if (result.port) {
+      printControlPanelAccess(result.port);
+    }
   } else {
     console.log(warn(result.error || 'Failed to start CLIProxy'));
   }
@@ -66,7 +86,7 @@ export async function handleRestart(verbose = false): Promise<void> {
   console.log('');
 }
 
-export async function handleProxyStatus(): Promise<void> {
+export async function handleProxyStatus(verbose = false): Promise<void> {
   await initUI();
   console.log(header('CLIProxy Status'));
   console.log('');
@@ -80,9 +100,20 @@ export async function handleProxyStatus(): Promise<void> {
     console.log(`  Sessions:   ${status.sessionCount || 0} active`);
     if (status.startedAt) {
       console.log(`  Started:    ${new Date(status.startedAt).toLocaleString()}`);
+      if (verbose) {
+        const uptimeMs = Date.now() - new Date(status.startedAt).getTime();
+        const uptimeSec = Math.floor(uptimeMs / 1000);
+        const h = Math.floor(uptimeSec / 3600);
+        const m = Math.floor((uptimeSec % 3600) / 60);
+        const s = uptimeSec % 60;
+        const uptimeStr = h > 0 ? `${h}h ${m}m ${s}s` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+        console.log(`  Uptime:     ${uptimeStr}`);
+      }
     }
+
     console.log('');
     console.log(dim('To stop: ccs cliproxy stop'));
+    printControlPanelAccess(status.port ?? port);
   } else {
     // Fallback: detect untracked/orphaned proxy process (e.g. detached session without lock file).
     const detected = await detectRunningProxy(port);
@@ -94,8 +125,12 @@ export async function handleProxyStatus(): Promise<void> {
       if (!detected.sessionCount) {
         console.log(dim('  Note: Detected running proxy without local session lock'));
       }
+      if (verbose) {
+        console.log(dim('  Note: Process detected via port scan; no local lock file present'));
+      }
       console.log('');
       console.log(dim('To stop: ccs cliproxy stop'));
+      printControlPanelAccess(port);
     } else {
       console.log(`  Status:     ${color('Not running', 'warning')}`);
       console.log('');

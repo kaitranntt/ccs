@@ -72,10 +72,13 @@ export class ConfigFilesChecker implements IHealthChecker {
       } catch (e) {
         spinner.fail();
         console.log(`  ${fail('config.yaml'.padEnd(22))}  Invalid YAML`);
+        // First line only: the parser message embeds a multi-line snippet the
+        // loader already printed, so keep the ERRORS entry to a single line.
+        const reason = (e as Error).message.split('\n')[0].trim();
         results.addCheck(
           'config.yaml',
           'error',
-          `Invalid YAML: ${(e as Error).message}`,
+          `Invalid YAML: ${reason}`,
           `Backup and recreate: mv ${configYamlPath} ${configYamlPath}.backup && npm install -g @kaitranntt/ccs --force`,
           { status: 'ERROR', info: 'Invalid YAML' }
         );

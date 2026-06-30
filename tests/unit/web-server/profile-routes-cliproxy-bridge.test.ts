@@ -5,6 +5,8 @@ import * as os from 'os';
 import * as path from 'path';
 import type { Server } from 'http';
 import profileRoutes from '../../../src/web-server/routes/profile-routes';
+import { invalidateConfigCache } from '../../../src/config/config-loader-facade';
+import { clearConfigCache } from '../../../src/cliproxy/config/base-config-loader';
 
 describe('profile-routes cliproxy bridge', () => {
   let server: Server;
@@ -42,6 +44,8 @@ describe('profile-routes cliproxy bridge', () => {
     tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-profile-routes-cliproxy-bridge-'));
     originalCcsHome = process.env.CCS_HOME;
     process.env.CCS_HOME = tempHome;
+    invalidateConfigCache();
+    clearConfigCache();
   });
 
   afterEach(() => {
@@ -50,6 +54,8 @@ describe('profile-routes cliproxy bridge', () => {
     } else {
       delete process.env.CCS_HOME;
     }
+    invalidateConfigCache();
+    clearConfigCache();
 
     if (tempHome && fs.existsSync(tempHome)) {
       fs.rmSync(tempHome, { recursive: true, force: true });

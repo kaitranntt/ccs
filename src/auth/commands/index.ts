@@ -5,14 +5,8 @@
  */
 
 // Types and utilities
-export {
-  AuthCommandArgs,
-  ProfileOutput,
-  ListOutput,
-  CommandContext,
-  parseArgs,
-  formatRelativeTime,
-} from './types';
+export type { AuthCommandArgs, ProfileOutput, ListOutput, CommandContext } from './types';
+export { parseArgs, formatRelativeTime } from './types';
 
 // Command handlers
 export { handleCreate } from './create-command';

@@ -17,6 +17,8 @@
  *   });
  */
 
+import { createLogger } from '../services/logging';
+
 interface SSEParserOptions {
   maxBufferSize?: number;
   throwOnMalformedJson?: boolean;
@@ -36,6 +38,7 @@ export class SSEParser {
   private maxBufferSize: number;
   private throwOnMalformedJson: boolean;
   private pendingCR: boolean;
+  private readonly logger = createLogger('glmt:sse-parser');
 
   constructor(options: SSEParserOptions = {}) {
     this.buffer = '';
@@ -118,14 +121,11 @@ export class SSEParser {
         currentEvent.index = this.eventCount;
         events.push({ ...currentEvent });
       } catch (e) {
-        if (typeof console !== 'undefined' && console.error) {
-          console.error(
-            '[SSEParser] Malformed JSON event:',
-            (e as Error).message,
-            'Data:',
-            data.substring(0, 100)
-          );
-        }
+        this.logger.warn('sse.malformed_json', 'Malformed JSON event in SSE stream', {
+          err: e instanceof Error ? { name: e.name, message: e.message } : { message: String(e) },
+          dataPreview: data.substring(0, 100),
+          eventIndex: this.eventCount,
+        });
         if (this.throwOnMalformedJson) {
           throw new Error(`Malformed SSE JSON event: ${(e as Error).message}`);
         }

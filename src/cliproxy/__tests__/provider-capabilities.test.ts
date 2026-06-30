@@ -5,6 +5,7 @@ import {
   getDeviceCodeVerificationProviders,
   getOAuthCallbackPort,
   getOAuthFlowType,
+  getUnsupportedAuthStartReason,
   PROVIDER_CAPABILITIES,
   getProviderDisplayName,
   getProvidersByOAuthFlow,
@@ -134,8 +135,18 @@ describe('provider-capabilities', () => {
     expect(getOAuthCallbackPort('gitlab')).toBe(17171);
     expect(getOAuthCallbackPort('gemini')).toBe(8085);
     expect(PROVIDER_CAPABILITIES.gemini.refreshOwnership).toBe('cliproxy');
+    expect(PROVIDER_CAPABILITIES.qwen.refreshOwnership).toBe('unsupported');
     expect(getProviderDisplayName('agy')).toBe('Antigravity');
     expect(getProviderDisplayName('kilo')).toBe('Kilo AI');
+  });
+
+  it('exposes auth start support separately from OAuth flow type', () => {
+    expect(getOAuthFlowType('qwen')).toBe('device_code');
+    expect(getUnsupportedAuthStartReason('qwen')).toContain(
+      'Qwen account linking is not supported'
+    );
+    expect(getUnsupportedAuthStartReason('kiro')).toBeNull();
+    expect(getUnsupportedAuthStartReason('qoder')).toBeNull();
   });
 
   it('throws when provider aliases collide across providers', () => {

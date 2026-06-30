@@ -14,7 +14,7 @@ import type { CursorDaemonConfig, CursorDaemonStatus } from './types';
 import { getPidFromFile, writePidToFile, removePidFile } from './cursor-daemon-pid';
 import { getCursorDaemonToken } from './cursor-daemon-auth';
 import { verifyDaemonOwnership } from './daemon-process-ownership';
-import { createLogger } from '../services/logging';
+import { createLogger, forwardRequestIdEnv } from '../services/logging';
 export { getPidFromFile, writePidToFile, removePidFile } from './cursor-daemon-pid';
 
 const logger = createLogger('cursor:daemon');
@@ -230,6 +230,7 @@ export async function startDaemon(
         detached: true,
         env: {
           ...process.env,
+          ...forwardRequestIdEnv(),
           CCS_CURSOR_DAEMON_TOKEN: effectiveConfig.daemon_token || '',
         },
       });

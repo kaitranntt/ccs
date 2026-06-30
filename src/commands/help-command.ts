@@ -122,12 +122,17 @@ export async function showProviderShortcutHelp(
   writeLine('');
   writeLine(`  ${providerEntry?.summary || 'CLIProxy OAuth provider shortcut'}.`);
   writeLine('');
+  const configSummary =
+    provider === 'claude'
+      ? 'Pin a model for this session (optional; use /model inside Claude Code instead)'
+      : 'Open the provider config flow';
+
   writeCommandTable(
     'Common Commands',
     [
       { name: `ccs ${provider} --auth`, summary: 'Authenticate the provider account via CLIProxy' },
       { name: `ccs ${provider} --accounts`, summary: 'List or manage stored CLIProxy accounts' },
-      { name: `ccs ${provider} --config`, summary: 'Open the provider config flow' },
+      { name: `ccs ${provider} --config`, summary: configSummary },
       { name: `ccs ${provider} "task"`, summary: 'Run Claude through this provider shortcut' },
     ],
     writeLine
@@ -290,6 +295,7 @@ export async function handleHelpCommand(writeLine: HelpWriter = console.log): Pr
       },
       { name: 'ccs proxy --help', summary: 'Deep help for the OpenAI-compatible local proxy' },
       { name: 'ccs docker --help', summary: 'Deep help for Docker deployment commands' },
+      { name: 'ccs bar --help', summary: 'Deep help for the CCS Bar macOS menu bar app' },
       { name: 'ccs cursor --help', summary: 'Deep help for Cursor runtime/admin commands' },
       { name: 'ccs copilot --help', summary: 'Deep help for deprecated GitHub Copilot commands' },
     ],
@@ -355,6 +361,7 @@ export async function handleHelpRoute(
     cursor: async () => await showProviderShortcutHelp('cursor', writeLine),
     proxy: async () =>
       process.exit(await (await import('./proxy-command')).handleProxyCommand(['--help'])),
+    bar: async () => (await import('./bar/help-subcommand')).showHelp(),
     docker: async () => (await import('./docker/help-subcommand')).showHelp(),
     migrate: async () => (await import('./migrate-command')).printMigrateHelp(),
     setup: async () => (await import('./setup-command')).handleSetupCommand(['--help']),

@@ -4,8 +4,9 @@
  * Exports refresh functions for each OAuth provider.
  *
  * Refresh responsibility:
- * - CLIProxy-delegated: gemini, codex, agy, kiro, ghcp, qwen, iflow, kimi
+ * - CLIProxy-delegated: gemini, codex, agy, kiro, ghcp, iflow, kimi
  *   (CLIProxyAPIPlus handles refresh automatically in background)
+ * - Unsupported account linking: qwen
  * - Not implemented: claude
  */
 
@@ -15,6 +16,7 @@ import {
   getTokenRefreshOwnership,
   isRefreshDelegatedToCLIProxy,
 } from '../../provider-capabilities';
+import { AuthError } from '../../../errors/error-types';
 
 /** Token refresh result */
 export interface ProviderRefreshResult {
@@ -26,7 +28,7 @@ export interface ProviderRefreshResult {
 }
 
 function assertNever(value: never): never {
-  throw new Error(`Unhandled token refresh ownership: ${String(value)}`);
+  throw new AuthError(`Unhandled token refresh ownership: ${String(value)}`);
 }
 
 /**

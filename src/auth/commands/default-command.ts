@@ -23,7 +23,6 @@ export async function handleDefault(ctx: CommandContext, args: string[]): Promis
   });
 
   if (!profileName) {
-    console.log(fail('Profile name is required'));
     console.log('');
     console.log(`Usage: ${color('ccs auth default <profile>', 'command')}`);
     exitWithError('Profile name is required', ExitCode.PROFILE_ERROR);

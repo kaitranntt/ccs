@@ -7,11 +7,12 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'bun:test';
 import * as http from 'http';
 import { ToolSanitizationProxy } from '../tool-sanitization-proxy';
+import { CodexReasoningProxy } from '../../ai-providers/codex-reasoning-proxy';
 
 // Mock upstream server that echoes requests
 let mockUpstream: http.Server;
 let mockUpstreamPort: number;
-let lastRequest: { body: unknown; headers: http.IncomingHttpHeaders } | null = null;
+let lastRequest: { path: string; body: unknown; headers: http.IncomingHttpHeaders } | null = null;
 
 // Track response to send back
 let mockResponse: { status: number; body: unknown; stream?: boolean } = {
@@ -28,6 +29,7 @@ beforeAll(async () => {
       req.on('end', () => {
         const body = Buffer.concat(chunks).toString('utf8');
         lastRequest = {
+          path: req.url || '',
           body: body ? JSON.parse(body) : null,
           headers: req.headers,
         };
@@ -181,6 +183,50 @@ describe('ToolSanitizationProxy Integration', () => {
         expect(lastRequest!.body).toEqual(originalBody);
       } finally {
         proxy.stop();
+      }
+    });
+
+    it('normalizes codex effort aliases through the provider-scoped local proxy chain', async () => {
+      const toolProxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const toolPort = await toolProxy.start();
+      const reasoningProxy = new CodexReasoningProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${toolPort}`,
+        modelMap: {
+          defaultModel: 'gpt-5.5-high',
+          opusModel: 'gpt-5.5-xhigh',
+          sonnetModel: 'gpt-5.5-high',
+          haikuModel: 'gpt-5.5-mini-medium',
+        },
+        defaultEffort: 'medium',
+      });
+      const reasoningPort = await reasoningProxy.start();
+
+      try {
+        const response = await fetch(
+          `http://127.0.0.1:${reasoningPort}/api/provider/codex/v1/messages`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'gpt-5.5-high',
+              messages: [{ role: 'user', content: 'hi' }],
+            }),
+          }
+        );
+
+        expect(response.ok).toBe(true);
+        expect(lastRequest).not.toBeNull();
+        expect(lastRequest!.path).toBe('/api/provider/codex/v1/messages');
+        expect((lastRequest!.body as Record<string, unknown>).model).toBe('gpt-5.5');
+        expect(
+          ((lastRequest!.body as Record<string, unknown>).reasoning as Record<string, unknown>)
+            .effort
+        ).toBe('high');
+      } finally {
+        reasoningProxy.stop();
+        toolProxy.stop();
       }
     });
 

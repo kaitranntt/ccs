@@ -15,6 +15,7 @@ import {
   loadOrCreateUnifiedConfig,
   mutateConfig,
 } from '../../config/config-loader-facade';
+import { ConfigError } from '../../errors/error-types';
 
 const router = Router();
 
@@ -160,8 +161,9 @@ router.put('/raw', (req: Request, res: Response): void => {
       try {
         restoreSettingsFile(settingsPath, previousContent, existedBefore);
       } catch (rollbackError) {
-        throw new Error(
-          `Failed to sync unified config after writing Copilot settings: ${(error as Error).message}. Rollback also failed: ${(rollbackError as Error).message}`
+        throw new ConfigError(
+          `Failed to sync unified config after writing Copilot settings: ${(error as Error).message}. Rollback also failed: ${(rollbackError as Error).message}`,
+          settingsPath
         );
       }
       throw error;

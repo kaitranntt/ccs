@@ -14,6 +14,9 @@ import {
   buildClaudeQuotaWindows,
   buildClaudeCoreUsageSummary,
 } from './quota-fetcher-claude-normalizer';
+import { createLogger } from '../../services/logging';
+
+const logger = createLogger('cliproxy:quota:claude');
 
 export { buildClaudeQuotaWindows, buildClaudeCoreUsageSummary };
 
@@ -218,25 +221,19 @@ function buildEmptyResult(
 }
 
 /**
- * Fetch quota for a single Claude account.
+ * Run the Anthropic OAuth usage fetch loop for a known-good access token.
+ *
+ * This is the single Anthropic-call surface shared by both the CLIProxy-managed
+ * path (fetchClaudeQuota) and the native-login path (fetchClaudeQuotaWithToken).
+ * It owns the 401/403/404/429/5xx branch logic, the bounded retry loop, and the
+ * window normalization so neither caller re-implements the hostile-endpoint
+ * handling. The callers differ only in WHERE the token comes from.
  */
-export async function fetchClaudeQuota(
+async function runClaudeUsageFetch(
+  accessToken: string,
   accountId: string,
-  verbose = false
+  verbose: boolean
 ): Promise<ClaudeQuotaResult> {
-  const authData = await readClaudeAuthData(accountId);
-  if (!authData) {
-    return buildEmptyResult('Auth file not found for Claude account', accountId);
-  }
-
-  if (authData.isExpired) {
-    return buildEmptyResult(
-      'Token expired - re-authenticate with ccs cliproxy auth claude',
-      accountId,
-      true
-    );
-  }
-
   let lastError = 'Unknown error';
 
   for (let attempt = 1; attempt <= CLAUDE_QUOTA_MAX_ATTEMPTS; attempt++) {
@@ -248,7 +245,7 @@ export async function fetchClaudeQuota(
         method: 'GET',
         signal: controller.signal,
         headers: {
-          Authorization: `Bearer ${authData.accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
           Accept: 'application/json',
           'Content-Type': 'application/json',
           'anthropic-beta': CLAUDE_OAUTH_BETA_HEADER,
@@ -256,7 +253,11 @@ export async function fetchClaudeQuota(
       });
 
       if (verbose) {
-        console.error(`[i] Claude OAuth usage status: ${response.status} (attempt ${attempt})`);
+        logger.info('quota.fetch.status', `Claude OAuth usage status: ${response.status}`, {
+          provider: 'claude',
+          status: response.status,
+          attempt,
+        });
       }
 
       if (response.status === 401) {
@@ -283,15 +284,23 @@ export async function fetchClaudeQuota(
         lastError =
           (await readResponseErrorMessage(response)) ||
           `Claude OAuth usage API error: ${response.status}`;
-        if (
-          attempt < CLAUDE_QUOTA_MAX_ATTEMPTS &&
-          (response.status === 429 || response.status >= 500)
-        ) {
+        // Surface the upstream status + Retry-After so an outer caller (the
+        // native collector's circuit-breaker) can honor backoff guidance.
+        const retryAfter = response.headers.get('retry-after');
+        // Do not inner-retry 429 with no delay; the outer cache + circuit breaker
+        // honor Retry-After and bound total volume. Inner retry stays for
+        // transient 5xx only.
+        if (attempt < CLAUDE_QUOTA_MAX_ATTEMPTS && response.status >= 500) {
           clearTimeout(timeoutId);
           continue;
         }
         clearTimeout(timeoutId);
-        return buildEmptyResult(lastError, accountId);
+        return {
+          ...buildEmptyResult(lastError, accountId),
+          httpStatus: response.status,
+          retryable: response.status === 429 || response.status >= 500,
+          ...(retryAfter ? { errorDetail: `retry-after:${retryAfter}` } : {}),
+        };
       }
 
       let payload: unknown;
@@ -329,21 +338,70 @@ export async function fetchClaudeQuota(
             : 'Unknown error';
 
       if (verbose) {
-        const errorDetails =
-          error instanceof Error ? (error.stack ?? error.message) : JSON.stringify(error);
-        console.error(
-          `[!] Claude OAuth usage failed (attempt ${attempt}): ${lastError}${errorDetails ? `\n${errorDetails}` : ''}`
+        logger.warn(
+          'quota.fetch.failed',
+          `Claude OAuth usage failed (attempt ${attempt}): ${lastError}`,
+          {
+            provider: 'claude',
+            attempt,
+            err:
+              error instanceof Error
+                ? { name: error.name, message: error.message }
+                : { message: String(error) },
+          }
         );
       }
 
       if (attempt >= CLAUDE_QUOTA_MAX_ATTEMPTS) {
         clearTimeout(timeoutId);
-        return buildEmptyResult(lastError, accountId);
+        return { ...buildEmptyResult(lastError, accountId), retryable: true };
       }
     }
   }
 
-  return buildEmptyResult(lastError, accountId);
+  return { ...buildEmptyResult(lastError, accountId), retryable: true };
+}
+
+/**
+ * Fetch quota using a directly-supplied native OAuth access token.
+ *
+ * Reuses the exact Anthropic call + normalization as fetchClaudeQuota; the only
+ * difference is the token source (the logged-in Claude Code credential rather
+ * than a CLIProxy-managed auth file). Lives in this file so it can share the
+ * file-private beta header, timeout, attempt count, and branch logic.
+ */
+export async function fetchClaudeQuotaWithToken(
+  accessToken: string,
+  accountId = 'claude-code',
+  verbose = false
+): Promise<ClaudeQuotaResult> {
+  if (!accessToken || accessToken.trim().length === 0) {
+    return buildEmptyResult('Missing native Claude access token', accountId, true);
+  }
+  return runClaudeUsageFetch(accessToken.trim(), accountId, verbose);
+}
+
+/**
+ * Fetch quota for a single Claude account.
+ */
+export async function fetchClaudeQuota(
+  accountId: string,
+  verbose = false
+): Promise<ClaudeQuotaResult> {
+  const authData = await readClaudeAuthData(accountId);
+  if (!authData) {
+    return buildEmptyResult('Auth file not found for Claude account', accountId);
+  }
+
+  if (authData.isExpired) {
+    return buildEmptyResult(
+      'Token expired - re-authenticate with ccs cliproxy auth claude',
+      accountId,
+      true
+    );
+  }
+
+  return runClaudeUsageFetch(authData.accessToken, accountId, verbose);
 }
 
 /**

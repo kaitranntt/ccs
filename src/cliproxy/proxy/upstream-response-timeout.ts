@@ -70,7 +70,14 @@ export function attachUpstreamResponseTimeout(options: {
 
   const clear = () => {
     settled = true;
-    upstreamRes.setTimeout(0);
+    // Under Node, keep-alive agents detach the socket from the IncomingMessage
+    // before user 'end' listeners run, so upstreamRes.socket is null here and
+    // Node's unguarded IncomingMessage.setTimeout() would throw an uncaught
+    // TypeError that kills the whole proxy process. The detached socket has no
+    // pending timer to clear (Agent#keepSocketAlive resets it), so skipping is safe.
+    if (upstreamRes.socket) {
+      upstreamRes.setTimeout(0);
+    }
   };
 
   upstreamRes.setTimeout(timeoutMs, () => {

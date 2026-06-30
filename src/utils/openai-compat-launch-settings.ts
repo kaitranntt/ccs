@@ -10,6 +10,12 @@ export interface OpenAICompatLaunchSettings {
   cleanup: () => void;
 }
 
+// SIBLING HELPER: src/cliproxy/executor/launch-settings.ts (prepareLaunchSettings)
+// solves the same problem by OVERLAYING resolved routing values instead of
+// stripping them. This strip-based variant is required where callers deliberately
+// delete a routing key (e.g. ANTHROPIC_API_KEY in settings-flow) and need it
+// ABSENT from the launch settings. Do not unify without an explicit force-absent
+// key list — see issue #1609.
 export function createOpenAICompatLaunchSettings(
   settingsPath: string,
   settings: Settings

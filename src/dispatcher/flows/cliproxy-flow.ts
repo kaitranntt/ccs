@@ -14,7 +14,6 @@ import {
 } from '../../cliproxy';
 import { getEffectiveEnvVars, getCompositeEnvVars } from '../../cliproxy/config/env-builder';
 import { resolveLifecyclePort } from '../../cliproxy/config/port-manager';
-import { ensureWebSearchMcpOrThrow } from '../../utils/websearch-manager';
 import { ensureImageAnalysisMcpOrThrow } from '../../utils/image-analysis';
 import {
   ensureProfileHooks as ensureImageAnalyzerHooks,
@@ -38,9 +37,6 @@ export async function runCliproxyFlow(ctx: ProfileDispatchContext): Promise<void
 
   const imageAnalysisMcpReady =
     resolvedTarget === 'claude' ? ensureImageAnalysisMcpOrThrow() : true;
-  if (resolvedTarget === 'claude') {
-    ensureWebSearchMcpOrThrow();
-  }
   const provider = profileInfo.provider || (profileInfo.name as CLIProxyProvider);
   const expandedCliproxySettingsPath = profileInfo.settingsPath
     ? expandPath(profileInfo.settingsPath)
@@ -67,12 +63,14 @@ export async function runCliproxyFlow(ctx: ProfileDispatchContext): Promise<void
   if (resolvedTarget !== 'claude') {
     const adapter = targetAdapter;
     if (!adapter) {
-      console.error(fail(`Target adapter not found for "${resolvedTarget}"`));
+      process.stderr.write(String(fail(`Target adapter not found for "${resolvedTarget}"`)) + '\n');
       process.exitCode = 1;
       return;
     }
     if (!adapter.supportsProfileType('cliproxy')) {
-      console.error(fail(`${adapter.displayName} does not support CLIProxy profiles`));
+      process.stderr.write(
+        String(fail(`${adapter.displayName} does not support CLIProxy profiles`)) + '\n'
+      );
       process.exitCode = 1;
       return;
     }
@@ -112,12 +110,16 @@ export async function runCliproxyFlow(ctx: ProfileDispatchContext): Promise<void
         targetRemainingArgs.some((arg) => arg.startsWith(`${flag}=`))
     );
     if (providedUnsupportedFlag) {
-      console.error(
-        fail(
-          `${providedUnsupportedFlag} is only supported when running CLIProxy profiles on Claude target`
-        )
+      process.stderr.write(
+        String(
+          fail(
+            `${providedUnsupportedFlag} is only supported when running CLIProxy profiles on Claude target`
+          )
+        ) + '\n'
       );
-      console.error(info(`Run with Claude target: ccs ${profileInfo.name} --target claude ...`));
+      process.stderr.write(
+        String(info(`Run with Claude target: ccs ${profileInfo.name} --target claude ...`)) + '\n'
+      );
       process.exitCode = 1;
       return;
     }
@@ -129,14 +131,20 @@ export async function runCliproxyFlow(ctx: ProfileDispatchContext): Promise<void
       ] as CLIProxyProvider[];
       const missingProvider = compositeProviders.find((p) => !isAuthenticated(p));
       if (missingProvider) {
-        console.error(fail(`Missing OAuth auth for composite tier provider: ${missingProvider}`));
-        console.error(info(`Authenticate first: ccs ${missingProvider} --auth`));
+        process.stderr.write(
+          String(fail(`Missing OAuth auth for composite tier provider: ${missingProvider}`)) + '\n'
+        );
+        process.stderr.write(
+          String(info(`Authenticate first: ccs ${missingProvider} --auth`)) + '\n'
+        );
         process.exitCode = 1;
         return;
       }
     } else if (!isAuthenticated(provider)) {
-      console.error(fail(`No OAuth authentication found for provider: ${provider}`));
-      console.error(info(`Authenticate first: ccs ${provider} --auth`));
+      process.stderr.write(
+        String(fail(`No OAuth authentication found for provider: ${provider}`)) + '\n'
+      );
+      process.stderr.write(String(info(`Authenticate first: ccs ${provider} --auth`)) + '\n');
       process.exitCode = 1;
       return;
     }
@@ -146,7 +154,9 @@ export async function runCliproxyFlow(ctx: ProfileDispatchContext): Promise<void
       targetRemainingArgs.includes('--verbose') || targetRemainingArgs.includes('-v')
     );
     if (!ensureServiceResult.started) {
-      console.error(fail(ensureServiceResult.error || 'Failed to start local CLIProxy service'));
+      process.stderr.write(
+        String(fail(ensureServiceResult.error || 'Failed to start local CLIProxy service')) + '\n'
+      );
       process.exitCode = 1;
       return;
     }
@@ -177,13 +187,16 @@ export async function runCliproxyFlow(ctx: ProfileDispatchContext): Promise<void
     };
 
     if (!creds.baseUrl || !creds.apiKey) {
-      console.error(
-        fail(
-          `Missing CLIProxy runtime credentials for ${profileInfo.name} (ANTHROPIC_BASE_URL/AUTH_TOKEN)`
-        )
+      process.stderr.write(
+        String(
+          fail(
+            `Missing CLIProxy runtime credentials for ${profileInfo.name} (ANTHROPIC_BASE_URL/AUTH_TOKEN)`
+          )
+        ) + '\n'
       );
-      console.error(
-        info('Reconfigure with: ccs config > CLIProxy, or run ccs <provider> --config')
+      process.stderr.write(
+        String(info('Reconfigure with: ccs config > CLIProxy, or run ccs <provider> --config')) +
+          '\n'
       );
       process.exitCode = 1;
       return;

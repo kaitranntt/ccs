@@ -285,4 +285,84 @@ describe('cliproxy routing strategy service', () => {
       expect(state.message).toContain('not reachable');
     });
   });
+
+  // PR #1514 fix index 2: for a remote target, readCliproxyRoutingState must NOT
+  // present the local pool flag as if it described the remote proxy. It surfaces
+  // manageable:false + a message, mirroring the session-affinity remote handling.
+  it('marks remote pool routing as not manageable (local flag does not describe the remote proxy)', async () => {
+    await withScopedConfig(async () => {
+      routingTarget = {
+        host: 'remote.example.com',
+        port: 8080,
+        protocol: 'http',
+        isRemote: true,
+      };
+      responseFactory = async () =>
+        new Response(JSON.stringify({ strategy: 'round-robin' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+      // Enable the LOCAL pool flag — the remote proxy must still report not-manageable.
+      const { mutateUnifiedConfig } = await import('../../../config/unified-config-loader');
+      mutateUnifiedConfig((config) => {
+        if (config.cliproxy) {
+          config.cliproxy.pool_routing = { enabled: true, max_retry_credentials: 3 };
+        }
+      });
+
+      const mod = await loadRoutingModule();
+      const state = await mod.readCliproxyRoutingState();
+
+      expect(state.target).toBe('remote');
+      expect(state.poolRouting?.manageable).toBe(false);
+      expect(state.poolRouting?.message).toContain('remote proxy');
+    });
+  });
+
+  // PR #1514 fix index 14 (backend): when local pool routing is enabled, the apply
+  // result message must carry the pool-override note so API/dashboard consumers see
+  // the same caveat the CLI prints.
+  it('appends a pool-active override note to local strategy apply when pool routing is on', async () => {
+    await withScopedConfig(async () => {
+      const { mutateUnifiedConfig } = await import('../../../config/unified-config-loader');
+      mutateUnifiedConfig((config) => {
+        if (config.cliproxy) {
+          config.cliproxy.pool_routing = { enabled: true, max_retry_credentials: 3 };
+        }
+      });
+
+      const mod = await loadRoutingModule();
+      const result = await mod.applyCliproxyRoutingStrategy('round-robin');
+
+      expect(result.message).toContain('Pool routing is active');
+      expect(result.message).toContain('ccs cliproxy pool --disable');
+    });
+  });
+
+  it('appends a pool-active override note to local affinity apply when pool routing is on', async () => {
+    await withScopedConfig(async () => {
+      const { mutateUnifiedConfig } = await import('../../../config/unified-config-loader');
+      mutateUnifiedConfig((config) => {
+        if (config.cliproxy) {
+          config.cliproxy.pool_routing = { enabled: true, max_retry_credentials: 3 };
+        }
+      });
+
+      const mod = await loadRoutingModule();
+      const result = await mod.applyCliproxySessionAffinitySettings({ enabled: true, ttl: '1h' });
+
+      expect(result.message).toContain('Pool routing is active');
+      expect(result.message).toContain('ccs cliproxy pool --disable');
+    });
+  });
+
+  // Without pool routing, the apply message must NOT carry the override note.
+  it('does not append the pool-override note when pool routing is off', async () => {
+    await withScopedConfig(async () => {
+      const mod = await loadRoutingModule();
+      const result = await mod.applyCliproxyRoutingStrategy('fill-first');
+      expect(result.message).not.toContain('Pool routing is active');
+    });
+  });
 });

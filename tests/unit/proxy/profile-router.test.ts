@@ -93,4 +93,28 @@ describe('resolveOpenAICompatProfileConfig', () => {
     expect(result).not.toBeNull();
     expect(result?.provider).toBe('generic-chat-completion-api');
   });
+
+  it('honors CCS_OPENAI_PROXY_PASSTHROUGH=1 for Anthropic-style endpoints', () => {
+    const result = resolveOpenAICompatProfileConfig('kimic', '/tmp/kimic.settings.json', {
+      ANTHROPIC_BASE_URL: 'https://api.kimi.com/coding/',
+      ANTHROPIC_AUTH_TOKEN: 'sk-kimi',
+      ANTHROPIC_MODEL: 'kimi-k2p7-coding',
+      CCS_OPENAI_PROXY_PASSTHROUGH: 'true',
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.passthrough).toBe(true);
+  });
+
+  it('defaults passthrough to false when CCS_OPENAI_PROXY_PASSTHROUGH is unset', () => {
+    const result = resolveOpenAICompatProfileConfig('gateway', '/tmp/gateway.settings.json', {
+      ANTHROPIC_BASE_URL: 'https://gateway.example.com/v1',
+      ANTHROPIC_AUTH_TOKEN: 'gateway-token',
+      ANTHROPIC_MODEL: 'gpt-4.1',
+      CCS_DROID_PROVIDER: 'generic-chat-completion-api',
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.passthrough).toBeFalsy();
+  });
 });

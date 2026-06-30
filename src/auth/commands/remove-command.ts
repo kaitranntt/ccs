@@ -6,7 +6,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { initUI, color, ok, fail, info } from '../../utils/ui';
+import { initUI, color, ok, info } from '../../utils/ui';
 import { InteractivePrompt } from '../../utils/prompt';
 
 import { exitWithError } from '../../errors';
@@ -26,7 +26,6 @@ export async function handleRemove(ctx: CommandContext, args: string[]): Promise
   });
 
   if (!profileName) {
-    console.log(fail('Profile name is required'));
     console.log('');
     console.log(`Usage: ${color('ccs auth remove <profile> [--yes]', 'command')}`);
     exitWithError('Profile name is required', ExitCode.PROFILE_ERROR);
@@ -37,7 +36,6 @@ export async function handleRemove(ctx: CommandContext, args: string[]): Promise
   const existsUnified = ctx.registry.hasAccountUnified(profileName);
 
   if (!existsLegacy && !existsUnified) {
-    console.log(fail(`Profile not found: ${profileName}`));
     exitWithError(`Profile not found: ${profileName}`, ExitCode.PROFILE_ERROR);
   }
 

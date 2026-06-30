@@ -27,6 +27,7 @@ import {
   verifyClaudeExtensionBinding,
 } from '../services/claude-extension-settings-service';
 import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
+import { ValidationError } from '../../errors/error-types';
 
 const router = Router();
 const VALID_HOSTS = new Set(CLAUDE_EXTENSION_HOSTS.map((host) => host.id));
@@ -37,8 +38,9 @@ const VALID_TARGETS = new Set<ClaudeExtensionActionTarget>(['shared', 'ide', 'al
 function getHostFromRequest(req: Request): ClaudeExtensionHost {
   const rawHost = String(req.query.host || 'vscode');
   if (!VALID_HOSTS.has(rawHost as ClaudeExtensionHost)) {
-    throw new Error(
-      `Invalid host "${rawHost}". Use: ${CLAUDE_EXTENSION_HOSTS.map((host) => host.id).join(', ')}`
+    throw new ValidationError(
+      `Invalid host "${rawHost}". Use: ${CLAUDE_EXTENSION_HOSTS.map((host) => host.id).join(', ')}`,
+      'host'
     );
   }
   return rawHost as ClaudeExtensionHost;
@@ -48,7 +50,7 @@ function getActionTarget(req: Request): ClaudeExtensionActionTarget {
   const rawTarget =
     req.body && typeof req.body.target === 'string' ? req.body.target.trim().toLowerCase() : 'all';
   if (!VALID_TARGETS.has(rawTarget as ClaudeExtensionActionTarget)) {
-    throw new Error('Invalid target. Use: shared, ide, or all');
+    throw new ValidationError('Invalid target. Use: shared, ide, or all', 'target');
   }
   return rawTarget as ClaudeExtensionActionTarget;
 }

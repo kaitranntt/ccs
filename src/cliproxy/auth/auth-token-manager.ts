@@ -11,6 +11,7 @@ import { randomBytes } from 'crypto';
 
 import { CCS_INTERNAL_API_KEY, CCS_CONTROL_PANEL_SECRET } from '../config/generator';
 import { loadOrCreateUnifiedConfig, mutateConfig } from '../../config/config-loader-facade';
+import { ProfileError } from '../../errors/error-types';
 
 /**
  * Generate a cryptographically secure token.
@@ -133,7 +134,7 @@ export function setVariantApiKey(variantName: string, apiKey: string | undefined
     const variant = config.cliproxy.variants[variantName];
 
     if (!variant) {
-      throw new Error(`Variant '${variantName}' not found`);
+      throw new ProfileError(`Variant '${variantName}' not found`, variantName);
     }
 
     if (!variant.auth) {

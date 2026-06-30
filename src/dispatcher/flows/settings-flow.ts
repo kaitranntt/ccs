@@ -14,7 +14,7 @@ import {
   validateAnthropicKey,
 } from '../../utils/api-key-validator';
 import {
-  ensureWebSearchMcpOrThrow,
+  ensureWebSearchMcpForLaunch,
   displayWebSearchStatus,
   getWebSearchHookEnv,
   syncWebSearchMcpToConfigDir,
@@ -94,15 +94,18 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
   if (browserAttachRuntime?.warning) {
     process.stderr.write(`${warn(browserAttachRuntime.warning)}\n`);
   }
+  let shouldDisplayWebSearchStatus = true;
   if (resolvedTarget === 'claude') {
-    ensureWebSearchMcpOrThrow();
+    shouldDisplayWebSearchStatus = ensureWebSearchMcpForLaunch();
     if (browserRuntimeEnv) {
       ensureBrowserMcpOrThrow();
     }
   }
 
   // Display WebSearch status (single line, equilibrium UX)
-  displayWebSearchStatus();
+  if (shouldDisplayWebSearchStatus) {
+    displayWebSearchStatus();
+  }
 
   const continuityInheritance =
     resolvedTarget === 'claude'
@@ -113,10 +116,12 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
         })
       : {};
   if (continuityInheritance.sourceAccount && process.env.CCS_DEBUG) {
-    console.error(
-      info(
-        `Continuity inheritance active: profile "${profileInfo.name}" -> account "${continuityInheritance.sourceAccount}"`
-      )
+    process.stderr.write(
+      String(
+        info(
+          `Continuity inheritance active: profile "${profileInfo.name}" -> account "${continuityInheritance.sourceAccount}"`
+        )
+      ) + '\n'
     );
   }
   const inheritedClaudeConfigDir = continuityInheritance.claudeConfigDir;
@@ -165,14 +170,16 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
       cliproxyBridgeProvider: cliproxyBridge?.provider ?? null,
     });
     if (!compatibility.supported) {
-      console.error(
-        fail(
-          compatibility.reason ||
-            `${targetAdapter?.displayName || resolvedTarget} does not support this profile.`
-        )
+      process.stderr.write(
+        String(
+          fail(
+            compatibility.reason ||
+              `${targetAdapter?.displayName || resolvedTarget} does not support this profile.`
+          )
+        ) + '\n'
       );
       if (compatibility.suggestion) {
-        console.error(info(compatibility.suggestion));
+        process.stderr.write(String(info(compatibility.suggestion)) + '\n');
       }
       process.exit(1);
     }
@@ -187,7 +194,7 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
 
   if (glmtNormalization) {
     for (const message of glmtNormalization.warnings) {
-      console.error(warn(message));
+      process.stderr.write(String(warn(message)) + '\n');
     }
   }
 
@@ -197,14 +204,16 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
     if (apiKey) {
       const validation = await validateGlmKey(apiKey, settingsEnv['ANTHROPIC_BASE_URL']);
       if (!validation.valid) {
-        console.error('');
-        console.error(fail(validation.error || 'API key validation failed'));
+        process.stderr.write('\n');
+        process.stderr.write(String(fail(validation.error || 'API key validation failed')) + '\n');
         if (validation.suggestion) {
-          console.error('');
-          console.error(validation.suggestion);
+          process.stderr.write('\n');
+          process.stderr.write(String(validation.suggestion) + '\n');
         }
-        console.error('');
-        console.error(info('To skip validation: CCS_SKIP_PREFLIGHT=1 ccs glm "prompt"'));
+        process.stderr.write('\n');
+        process.stderr.write(
+          String(info('To skip validation: CCS_SKIP_PREFLIGHT=1 ccs glm "prompt"')) + '\n'
+        );
         process.exit(1);
       }
     }
@@ -215,14 +224,16 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
     if (apiKey) {
       const validation = await validateMiniMaxKey(apiKey, settingsEnv['ANTHROPIC_BASE_URL']);
       if (!validation.valid) {
-        console.error('');
-        console.error(fail(validation.error || 'API key validation failed'));
+        process.stderr.write('\n');
+        process.stderr.write(String(fail(validation.error || 'API key validation failed')) + '\n');
         if (validation.suggestion) {
-          console.error('');
-          console.error(validation.suggestion);
+          process.stderr.write('\n');
+          process.stderr.write(String(validation.suggestion) + '\n');
         }
-        console.error('');
-        console.error(info('To skip validation: CCS_SKIP_PREFLIGHT=1 ccs mm "prompt"'));
+        process.stderr.write('\n');
+        process.stderr.write(
+          String(info('To skip validation: CCS_SKIP_PREFLIGHT=1 ccs mm "prompt"')) + '\n'
+        );
         process.exit(1);
       }
     }
@@ -235,15 +246,17 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
     if (anthropicApiKey && !hasBaseUrl) {
       const validation = await validateAnthropicKey(anthropicApiKey);
       if (!validation.valid) {
-        console.error('');
-        console.error(fail(validation.error || 'API key validation failed'));
+        process.stderr.write('\n');
+        process.stderr.write(String(fail(validation.error || 'API key validation failed')) + '\n');
         if (validation.suggestion) {
-          console.error('');
-          console.error(validation.suggestion);
+          process.stderr.write('\n');
+          process.stderr.write(String(validation.suggestion) + '\n');
         }
-        console.error('');
-        console.error(
-          info(`To skip validation: CCS_SKIP_PREFLIGHT=1 ccs ${profileInfo.name} "prompt"`)
+        process.stderr.write('\n');
+        process.stderr.write(
+          String(
+            info(`To skip validation: CCS_SKIP_PREFLIGHT=1 ccs ${profileInfo.name} "prompt"`)
+          ) + '\n'
         );
         process.exit(1);
       }
@@ -271,7 +284,7 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
   // Log global env injection for visibility (debug mode only)
   if (globalEnvConfig.enabled && Object.keys(globalEnv).length > 0 && process.env.CCS_DEBUG) {
     const envNames = Object.keys(globalEnv).join(', ');
-    console.error(info(`Global env: ${envNames}`));
+    process.stderr.write(String(info(`Global env: ${envNames}`)) + '\n');
   }
 
   // For Claude target launches that already pass `--settings`, keep runtime env free of
@@ -302,7 +315,7 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
   if (resolvedTarget !== 'claude') {
     const adapter = targetAdapter;
     if (!adapter) {
-      console.error(fail(`Target adapter not found for "${resolvedTarget}"`));
+      process.stderr.write(String(fail(`Target adapter not found for "${resolvedTarget}"`)) + '\n');
       process.exit(1);
     }
     const directAnthropicBaseUrl =
@@ -349,14 +362,18 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
       insecure: openAICompatProfile.insecure,
     });
     if (!proxyStart.success) {
-      console.error(fail(proxyStart.error || 'Failed to start local OpenAI-compatible proxy'));
+      process.stderr.write(
+        String(fail(proxyStart.error || 'Failed to start local OpenAI-compatible proxy')) + '\n'
+      );
       process.exit(1);
     }
 
-    console.error(
-      info(
-        `Using local OpenAI-compatible proxy for "${profileInfo.name}" on port ${proxyStart.port}`
-      )
+    process.stderr.write(
+      String(
+        info(
+          `Using local OpenAI-compatible proxy for "${profileInfo.name}" on port ${proxyStart.port}`
+        )
+      ) + '\n'
     );
 
     const proxyEnv = {

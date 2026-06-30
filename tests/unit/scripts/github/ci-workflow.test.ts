@@ -18,7 +18,10 @@ describe('pr ci workflow', () => {
 
     expect(workflow).toContain('name: CI');
     expect(workflow).toContain('pull_request:');
-    expect(workflow).toContain('branches: [main, dev]');
+    // main and dev must always be covered; long-lived epic branches may be
+    // appended temporarily (e.g. kai/feat/1464-account-pools) so phase PRs
+    // targeting the epic get full CI.
+    expect(workflow).toMatch(/branches: \[main, dev(?:, [^\]]+)?\]/);
     // 4 jobs: validate (matrix), build, test, compose-parity — each gated
     expect(workflow.split(trustedAuthorGate).length - 1).toBe(4);
     expect(workflow).toContain('group: ci-${{ github.ref }}');

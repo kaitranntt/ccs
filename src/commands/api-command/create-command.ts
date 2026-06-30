@@ -196,14 +196,17 @@ async function resolveModelConfiguration(
   if (isOpenRouterUrl(baseUrl) && !providedModel) {
     console.log('');
     console.log(info('OpenRouter detected!'));
-    const useInteractive = await InteractivePrompt.confirm('Browse models interactively?', {
-      default: true,
-    });
-    if (useInteractive) {
-      const selection = await pickOpenRouterModel();
-      if (selection) {
-        openRouterModel = selection.model;
-        openRouterTierMapping = selection.tierMapping;
+    // --yes/-y suppresses interactive model browser; use preset defaultModel instead
+    if (!yes) {
+      const useInteractive = await InteractivePrompt.confirm('Browse models interactively?', {
+        default: true,
+      });
+      if (useInteractive) {
+        const selection = await pickOpenRouterModel();
+        if (selection) {
+          openRouterModel = selection.model;
+          openRouterTierMapping = selection.tierMapping;
+        }
       }
     }
     console.log('');
@@ -568,6 +571,17 @@ export async function handleApiCreateCommand(args: string[]): Promise<void> {
       `  ${color(`ccs-droid ${name} "your prompt"`, 'command')} ${dim('# explicit droid alias')}`
     );
     console.log(`  ${color(`ccsd ${name} "your prompt"`, 'command')} ${dim('# legacy shortcut')}`);
+    console.log(
+      `  ${color(`ccs ${name} --target claude "your prompt"`, 'command')} ${dim('# override to Claude')}`
+    );
+  } else if (target === 'codex') {
+    console.log(
+      `  ${color(`ccs ${name} "your prompt"`, 'command')} ${dim('# uses Codex CLI by default')}`
+    );
+    console.log(
+      `  ${color(`ccs-codex ${name} "your prompt"`, 'command')} ${dim('# explicit Codex alias')}`
+    );
+    console.log(`  ${color(`ccsx ${name} "your prompt"`, 'command')} ${dim('# short alias')}`);
     console.log(
       `  ${color(`ccs ${name} --target claude "your prompt"`, 'command')} ${dim('# override to Claude')}`
     );

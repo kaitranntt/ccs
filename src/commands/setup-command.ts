@@ -128,7 +128,16 @@ async function selectOption(
 export function isFirstTimeInstall(): boolean {
   // Check unified config first (config.yaml)
   if (hasUnifiedConfig()) {
-    const loaded = loadUnifiedConfig();
+    let loaded: ReturnType<typeof loadUnifiedConfig>;
+    try {
+      loaded = loadUnifiedConfig();
+    } catch {
+      // Config exists but is corrupted/unparseable — treat as not first-time so we
+      // don't run the setup wizard; the YAML error was already printed by loadUnifiedConfig.
+      console.log(warn('Warning: ~/.ccs/config.yaml exists but appears corrupted'));
+      console.log(info('  Run `ccs setup --force` to reset, or `ccs doctor` to diagnose'));
+      return false;
+    }
 
     // Config exists but is corrupted/invalid - don't treat as first-time
     if (loaded === null) {

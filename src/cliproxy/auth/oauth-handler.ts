@@ -16,6 +16,7 @@ import { fail, info, warn, color, ok } from '../../utils/ui';
 import { createLogger } from '../../services/logging';
 import { ensureCLIProxyBinary, getStoredConfiguredBackend } from '../binary-manager';
 import { generateConfig } from '../config/config-generator';
+import { AuthError, ConfigError } from '../../errors/error-types';
 import { CLIProxyBackend, CLIProxyProvider } from '../types';
 import {
   AccountInfo,
@@ -75,7 +76,10 @@ import {
   warnOAuthBanRisk,
   warnPossible403Ban,
 } from '../accounts/account-safety';
+import { maybeOfferPoolRouting } from '../routing/pool-opt-in-prompt';
+import { checkCrossLaneEmailOverlap } from '../accounts/account-safety-cross-lane';
 import { ensureCliAntigravityResponsibility } from '../auth/antigravity-responsibility';
+import { getUnsupportedAuthStartReason } from '../provider-capabilities';
 import { InteractivePrompt } from '../../utils/prompt';
 import { getCcsDir } from '../../utils/config-manager';
 import { generateSessionId } from './project-selection-handler';
@@ -245,8 +249,9 @@ export async function requestPasteCallbackStart(
     kiroMethod: options?.kiroMethod,
   });
   if (!startPath) {
-    throw new Error(
-      `Paste-callback start is not available for ${provider} with the selected method`
+    throw new AuthError(
+      `Paste-callback start is not available for ${provider} with the selected method`,
+      provider
     );
   }
   const normalizedGitLabBaseUrl =
@@ -259,7 +264,7 @@ export async function requestPasteCallbackStart(
   });
 
   if (!response.ok) {
-    throw new Error(`OAuth start failed with status ${response.status}`);
+    throw new AuthError(`OAuth start failed with status ${response.status}`, provider);
   }
 
   return (await response.json()) as PasteCallbackStartData;
@@ -313,11 +318,11 @@ export function normalizeGitLabBaseUrl(baseUrl: string | undefined): string | un
   try {
     parsed = new URL(normalized);
   } catch {
-    throw new Error('GitLab URL must be a valid http:// or https:// URL');
+    throw new ConfigError('GitLab URL must be a valid http:// or https:// URL');
   }
 
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error('GitLab URL must use http:// or https://');
+    throw new ConfigError('GitLab URL must use http:// or https://');
   }
 
   parsed.hash = '';
@@ -612,12 +617,17 @@ function buildOAuthArgs(
     kiroIDCFlow?: OAuthOptions['kiroIDCFlow'];
   } = {}
 ): string[] {
+  const unsupportedReason = getUnsupportedAuthStartReason(provider);
+  if (unsupportedReason) {
+    throw new AuthError(unsupportedReason, provider);
+  }
+
   const args = ['--config', configPath];
 
   if (provider === 'kiro') {
     const method = normalizeKiroAuthMethod(options.kiroMethod);
     if (!isKiroCLIAuthMethod(method)) {
-      throw new Error(`Kiro auth method '${method}' is not supported by CLI flow.`);
+      throw new AuthError(`Kiro auth method '${method}' is not supported by CLI flow.`, 'kiro');
     }
     args.push(
       ...getKiroCLIAuthArgs(method, {
@@ -1087,6 +1097,12 @@ export async function triggerOAuth(
   options: OAuthOptions = {}
 ): Promise<AccountInfo | null> {
   const oauthConfig = getOAuthConfig(provider);
+  const unsupportedReason = getUnsupportedAuthStartReason(provider);
+  if (unsupportedReason) {
+    console.log(fail(unsupportedReason));
+    return null;
+  }
+
   warnOAuthBanRisk(provider);
   const oauthStartedAt = Date.now();
   logger.stage('auth', 'cliproxy.oauth.start', 'Triggering OAuth flow', {
@@ -1133,6 +1149,8 @@ export async function triggerOAuth(
 
   // Check for existing accounts
   const existingAccounts = getProviderAccounts(provider);
+  // Capture count before registration for 1->2 transition detection
+  const accountCountBeforeAdd = existingAccounts.length;
   const existingNameMatch = nickname ? findAccountNameMatch(existingAccounts, nickname) : null;
   const targetAccountId = options.expectedAccountId || existingNameMatch?.id;
   const nicknameError = !fromUI
@@ -1363,6 +1381,38 @@ export async function triggerOAuth(
   }
 
   if (account) {
+    // Cross-lane overlap guard: warn if this account's email is also active
+    // in native Claude profiles (same account in two lanes is the documented ban vector).
+    if (account.email) {
+      checkCrossLaneEmailOverlap(provider, account.email);
+    }
+
+    // Pool routing opt-in: offer at the 1->2 account-add transition for verified providers.
+    // Only runs for local CLI sessions — skip when fromUI is true because the dashboard
+    // calls triggerOAuth from an HTTP request handler; the server may be running in a
+    // foreground terminal (ccs api / ccs dashboard) where process.stdin.isTTY is true,
+    // so reaching InteractivePrompt.confirm would block the HTTP request on the server's
+    // stdin and show the consent prompt to the wrong audience.
+    // Dashboard parity for the opt-in belongs to Phase 6.
+    if (!fromUI) {
+      try {
+        await maybeOfferPoolRouting(provider, accountCountBeforeAdd);
+      } catch (promptErr) {
+        // A regenerateConfig or prompt failure must not fail triggerOAuth after a
+        // successful account registration — the account is already registered.
+        logger.stage(
+          'auth',
+          'cliproxy.pool-prompt.error',
+          'Pool routing prompt failed (non-fatal)',
+          { provider },
+          { level: 'warn' }
+        );
+        if (process.env.CCS_DEBUG) {
+          console.error('[!] Pool routing prompt error (non-fatal):', promptErr);
+        }
+      }
+    }
+
     logger.stage(
       'auth',
       'cliproxy.oauth.success',

@@ -44,8 +44,15 @@ const slowTests = [
 // CommonJS-heavy JS suites stay slow by default because many of them mutate
 // module cache or process state. Opt them into `test:fast` only after they are
 // proven stable in the mixed fast bucket.
-const fastJsTests = new Set([
-  'tests/unit/flag-parsing-simple.test.js',
+const fastJsTests = new Set(['tests/unit/flag-parsing-simple.test.js']);
+
+const isolatedTests = new Set([
+  'tests/unit/targets/codex-adapter-exec.test.ts',
+  'tests/unit/targets/codex-adapter.test.ts',
+  'tests/unit/targets/droid-adapter.test.ts',
+  'tests/unit/targets/target-registry.test.ts',
+  'tests/unit/utils/fetch-proxy-setup.test.ts',
+  'tests/unit/web-server/usage/account-attribution.test.ts',
 ]);
 
 const filePattern = /(\.test\.(c|m)?[jt]s|\.spec\.(c|m)?[jt]s|-test\.(c|m)?[jt]s)$/;
@@ -89,6 +96,11 @@ function shouldForceSlow(file) {
   return readsBuiltDist(file);
 }
 
+function usesBunTestRunner(relativePath) {
+  const source = fs.readFileSync(path.join(rootDir, relativePath), 'utf8');
+  return source.includes('bun:test') || /(^|[^\w.])(?:describe|it)\s*\(/m.test(source);
+}
+
 function getSlowSet() {
   const discovered = getDiscoveredTests();
   const forceSlow = discovered.filter((file) => shouldForceSlow(file));
@@ -99,9 +111,101 @@ function selectBucket(name) {
   const discovered = getDiscoveredTests();
   const slowSet = getSlowSet();
 
-  return name === 'slow'
-    ? [...slowSet].sort()
-    : discovered.filter((file) => !slowSet.has(file));
+  return name === 'slow' ? [...slowSet].sort() : discovered.filter((file) => !slowSet.has(file));
+}
+
+function toBunTestPath(relativePath) {
+  if (
+    relativePath.startsWith('./') ||
+    relativePath.startsWith('../') ||
+    path.isAbsolute(relativePath)
+  ) {
+    return relativePath;
+  }
+
+  return `./${relativePath}`;
+}
+
+function getBunArgs(name, selected = selectBucket(name)) {
+  const testPaths = selected.map(toBunTestPath);
+
+  // Slow bucket forces sequential execution because it spawns subprocesses,
+  // binds ports, and touches shared state — parallelism causes flakes.
+  // Fast bucket keeps bun's default parallelism for speed.
+  return name === 'slow' ? ['test', '--max-concurrency=1', ...testPaths] : ['test', ...testPaths];
+}
+
+function shouldRunIsolated(file) {
+  return file.startsWith('src/') || isolatedTests.has(file) || !usesBunTestRunner(file);
+}
+
+function getBunRuns(name, selected = selectBucket(name)) {
+  const shared = selected.filter((file) => !shouldRunIsolated(file));
+  const isolated = selected.filter(shouldRunIsolated);
+  const runs = [];
+
+  if (shared.length > 0) {
+    runs.push({
+      label: 'shared',
+      selected: shared,
+      bunArgs: getBunArgs(name, shared),
+      quietOnPass: false,
+    });
+  }
+
+  for (const file of isolated) {
+    runs.push({
+      label: file,
+      selected: [file],
+      bunArgs: getBunArgs(name, [file]),
+      quietOnPass: true,
+    });
+  }
+
+  return runs;
+}
+
+function stripAnsi(value) {
+  return value.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+function parseBunFileCount(output) {
+  const match = stripAnsi(output).match(/Ran\s+\d+\s+tests?\s+across\s+(\d+)\s+files?/i);
+  return match ? Number(match[1]) : null;
+}
+
+function verifyReportedFileCount(selectedCount, output) {
+  const reportedCount = parseBunFileCount(output);
+
+  if (reportedCount === null) {
+    return {
+      ok: false,
+      message: '[X] Could not find Bun test file count in output.',
+      reportedCount,
+      selectedCount,
+    };
+  }
+
+  if (reportedCount !== selectedCount) {
+    return {
+      ok: false,
+      message:
+        `[X] Bun ran ${reportedCount} files, but the bucket selected ${selectedCount} files. ` +
+        'Check test path arguments for filter/path ambiguity.',
+      reportedCount,
+      selectedCount,
+    };
+  }
+
+  return {
+    ok: true,
+    reportedCount,
+    selectedCount,
+  };
+}
+
+function shouldVerifyRunFileCount(run) {
+  return run.selected.every((file) => usesBunTestRunner(file));
 }
 
 function ensureBuildForSlowBucket() {
@@ -116,6 +220,54 @@ function ensureBuildForSlowBucket() {
   });
 
   return build.status ?? 1;
+}
+
+function runBunTest(run) {
+  const result = spawnSync('bun', run.bunArgs, {
+    cwd: rootDir,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    shell: process.platform === 'win32',
+  });
+
+  const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+  const writeOutput = () => {
+    if (result.stdout) {
+      process.stdout.write(result.stdout);
+    }
+    if (result.stderr) {
+      process.stderr.write(result.stderr);
+    }
+  };
+
+  if (result.error) {
+    writeOutput();
+    console.error(`[X] Failed to run bun test: ${result.error.message}`);
+    return 1;
+  }
+
+  const exitCode = result.status ?? 1;
+  if (exitCode !== 0) {
+    writeOutput();
+    return exitCode;
+  }
+
+  if (shouldVerifyRunFileCount(run)) {
+    const countCheck = verifyReportedFileCount(run.selected.length, output);
+    if (!countCheck.ok) {
+      writeOutput();
+      console.error(countCheck.message);
+      return 1;
+    }
+  }
+
+  if (run.quietOnPass) {
+    console.log(`[OK] ${run.label}`);
+  } else {
+    writeOutput();
+  }
+
+  return 0;
 }
 
 function runBucket(name) {
@@ -133,20 +285,25 @@ function runBucket(name) {
     }
   }
 
-  // Slow bucket forces sequential execution because it spawns subprocesses,
-  // binds ports, and touches shared state — parallelism causes flakes.
-  // Fast bucket keeps bun's default parallelism for speed.
-  const bunArgs = name === 'slow'
-    ? ['test', '--max-concurrency=1', ...selected]
-    : ['test', ...selected];
+  const runs = getBunRuns(name, selected);
+  const isolatedCount = runs.filter((run) => run.quietOnPass).length;
+  if (isolatedCount > 0) {
+    console.log(`[i] Running ${isolatedCount} test file(s) in isolated Bun processes.`);
+  }
 
-  const result = spawnSync('bun', bunArgs, {
-    cwd: rootDir,
-    stdio: 'inherit',
-    shell: process.platform === 'win32',
-  });
+  let exitCode = 0;
+  for (const run of runs) {
+    const status = runBunTest(run);
+    if (status !== 0) {
+      exitCode = status;
+    }
+  }
 
-  return result.status ?? 1;
+  if (exitCode === 0) {
+    console.log(`[OK] Bucket '${name}' ran ${selected.length} selected test files.`);
+  }
+
+  return exitCode;
 }
 
 function main(args = process.argv.slice(2)) {
@@ -180,10 +337,19 @@ if (require.main === module) {
 module.exports = {
   slowTests,
   fastJsTests,
+  isolatedTests,
   readsBuiltDist,
   shouldForceSlow,
   getDiscoveredTests,
   getSlowSet,
   selectBucket,
+  toBunTestPath,
+  getBunArgs,
+  usesBunTestRunner,
+  shouldRunIsolated,
+  getBunRuns,
+  parseBunFileCount,
+  verifyReportedFileCount,
+  shouldVerifyRunFileCount,
   main,
 };

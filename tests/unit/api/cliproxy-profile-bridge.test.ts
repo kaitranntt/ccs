@@ -8,6 +8,8 @@ import {
   resolveCliproxyBridgeProfile,
   suggestCliproxyBridgeName,
 } from '../../../src/api/services/cliproxy-profile-bridge';
+import { invalidateConfigCache } from '../../../src/config/config-loader-facade';
+import { clearConfigCache } from '../../../src/cliproxy/config/base-config-loader';
 
 describe('cliproxy-profile-bridge', () => {
   let tempHome = '';
@@ -17,6 +19,8 @@ describe('cliproxy-profile-bridge', () => {
     tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-cliproxy-bridge-'));
     originalCcsHome = process.env.CCS_HOME;
     process.env.CCS_HOME = tempHome;
+    invalidateConfigCache();
+    clearConfigCache();
   });
 
   afterEach(() => {
@@ -25,18 +29,32 @@ describe('cliproxy-profile-bridge', () => {
     } else {
       process.env.CCS_HOME = originalCcsHome;
     }
+    invalidateConfigCache();
+    clearConfigCache();
 
     if (tempHome && fs.existsSync(tempHome)) {
       fs.rmSync(tempHome, { recursive: true, force: true });
     }
   });
 
-  it('resolves routed profile payload for a local CLIProxy provider', () => {
+  function writeBackendConfig(backend: 'original' | 'plus'): void {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(ccsDir, 'config.yaml'),
+      ['version: 1', 'cliproxy:', `  backend: ${backend}`, ''].join('\n'),
+      'utf8'
+    );
+    invalidateConfigCache();
+    clearConfigCache();
+  }
+
+  it('resolves routed profile payload for a local original-backend CLIProxy provider', () => {
     const bridge = resolveCliproxyBridgeProfile('gemini');
 
     expect(bridge.name).toBe('gemini-api');
-    expect(bridge.baseUrl).toBe('http://127.0.0.1:8317/api/provider/gemini');
-    expect(bridge.routePath).toBe('/api/provider/gemini');
+    expect(bridge.baseUrl).toBe('http://127.0.0.1:8317/');
+    expect(bridge.routePath).toBe('/');
     expect(bridge.models.default.length).toBeGreaterThan(0);
   });
 
@@ -49,6 +67,7 @@ describe('cliproxy-profile-bridge', () => {
   });
 
   it('detects CLIProxy-backed profile metadata and normalizes localhost loopback URLs', () => {
+    writeBackendConfig('plus');
     const metadata = resolveCliproxyBridgeMetadata({
       env: {
         ANTHROPIC_BASE_URL: 'http://localhost:8317/api/provider/gemini',

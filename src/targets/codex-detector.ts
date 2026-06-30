@@ -1,11 +1,19 @@
 import * as fs from 'fs';
 import * as childProcess from 'child_process';
 import { expandPath } from '../utils/helpers';
-import { escapeShellArg, getWindowsEscapedCommandShell } from '../utils/shell-executor';
+import {
+  escapeShellArg,
+  getWindowsEscapedCommandShell,
+  stripAnthropicEnv,
+  stripBrowserEnv,
+  stripCodexSessionEnv,
+} from '../utils/shell-executor';
 import type { TargetBinaryInfo } from './target-adapter';
 
 const CODEX_CONFIG_OVERRIDE_FEATURE = 'config-overrides';
 const CODEX_CONFIG_OVERRIDE_PROBE_ARGS = ['-c', 'model="gpt-5"', '--version'];
+const CCSXP_CLIPROXY_SHORTCUT_ENV = 'CCSXP_CLIPROXY_SHORTCUT';
+const CODEX_RUNTIME_ENV_KEY = 'CCS_CODEX_API_KEY';
 
 function buildWindowsCodexCandidates(matches: string[]): string[] {
   const shellCandidates = matches.filter((entry) => /\.(exe|cmd|bat|ps1)$/i.test(entry));
@@ -32,10 +40,21 @@ function buildWindowsCodexCandidates(matches: string[]): string[] {
   return [...new Set([...prioritized, ...bareCandidates])];
 }
 
+function buildCodexProbeEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    ...stripBrowserEnv(stripCodexSessionEnv(stripAnthropicEnv(process.env))),
+  };
+  delete env[CCSXP_CLIPROXY_SHORTCUT_ENV];
+  delete env[CODEX_RUNTIME_ENV_KEY];
+  return env;
+}
+
 function runCodexProbe(codexPath: string, args: string[]): string | undefined {
   const isWindows = process.platform === 'win32';
   const isPowerShellScript = isWindows && /\.ps1$/i.test(codexPath);
   const needsShell = isWindows && /\.(cmd|bat)$/i.test(codexPath);
+
+  const env = buildCodexProbeEnv();
 
   try {
     if (isPowerShellScript) {
@@ -44,6 +63,7 @@ function runCodexProbe(codexPath: string, args: string[]): string | undefined {
         ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', codexPath, ...args],
         {
           encoding: 'utf8',
+          env,
           stdio: ['ignore', 'pipe', 'ignore'],
           timeout: 5000,
           windowsHide: true,
@@ -55,6 +75,7 @@ function runCodexProbe(codexPath: string, args: string[]): string | undefined {
       const cmdString = [codexPath, ...args].map(escapeShellArg).join(' ');
       const result = childProcess.spawnSync(cmdString, {
         encoding: 'utf8',
+        env,
         stdio: ['ignore', 'pipe', 'ignore'],
         timeout: 5000,
         windowsHide: true,
@@ -65,6 +86,7 @@ function runCodexProbe(codexPath: string, args: string[]): string | undefined {
 
     return childProcess.execFileSync(codexPath, args, {
       encoding: 'utf8',
+      env,
       stdio: ['ignore', 'pipe', 'ignore'],
       timeout: 5000,
     });

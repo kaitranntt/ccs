@@ -39,6 +39,7 @@ import {
 import type { ProxyTarget } from '../proxy/proxy-target-resolver';
 import { getEffectiveApiKey } from '../auth/auth-token-manager';
 import { isSettings, type Settings } from '../../types/config';
+import { buildCliproxyProviderPath } from '../config/provider-route';
 
 export interface RemoteProxyConfig {
   host: string;
@@ -373,7 +374,10 @@ export function buildClaudeEnvironment(config: ProxyChainConfig): Record<string,
 
   if (codexReasoningPort) {
     // Codex reasoning proxy is the outermost layer for codex provider
-    finalBaseUrl = `http://127.0.0.1:${codexReasoningPort}/api/provider/codex`;
+    const providerPath = useRemoteProxy
+      ? '/api/provider/codex'
+      : buildCliproxyProviderPath('codex');
+    finalBaseUrl = `http://127.0.0.1:${codexReasoningPort}${providerPath}`;
   }
 
   const effectiveEnvVars = {

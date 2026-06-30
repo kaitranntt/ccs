@@ -6,6 +6,7 @@ your API profile points at an OpenAI-compatible chat completions endpoint.
 This is useful for providers such as:
 
 - Hugging Face Inference Providers
+- Tuning Engines
 - OpenRouter
 - Ollama
 - llama.cpp servers
@@ -48,10 +49,18 @@ Create or reuse an API profile that points at an OpenAI-compatible endpoint:
 ccs api create --preset hf
 ```
 
+For Tuning Engines:
+
+```bash
+ccs api create --preset te
+```
+
 Then you can use the profile directly:
 
 ```bash
 ccs hf
+# or
+ccs te
 ```
 
 CCS detects that the profile is OpenAI-compatible and auto-routes Claude Code
@@ -326,6 +335,14 @@ That flag is respected by both:
 
 - CCS now preserves upstream rate-limit errors and retry headers
 - Empty or malformed provider JSON is returned as Anthropic-style `api_error`
+
+### Slow upstreams: `socket connection was closed unexpectedly`
+
+- Long-running upstreams (self-hosted LLMs with queue/prefill phases) can stay
+  silent for minutes before the first or next token. The proxy already allows up
+  to 10 minutes per request; set `CCS_OPENAI_PROXY_REQUEST_TIMEOUT_MS` in the
+  profile settings to raise or lower that ceiling.
+- Restart the proxy after changing the setting.
 
 ### Requests route to the wrong model/profile
 

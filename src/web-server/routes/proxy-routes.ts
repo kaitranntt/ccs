@@ -9,6 +9,7 @@
 
 import { Router, Request, Response } from 'express';
 
+import { createLogger } from '../../services/logging';
 import { testConnection } from '../../cliproxy/services/remote-proxy-client';
 import { isProxyRunning } from '../../cliproxy/services/proxy-lifecycle-service';
 import { DEFAULT_BACKEND } from '../../cliproxy/binary/platform-detector';
@@ -27,6 +28,8 @@ import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middlewar
 import { loadOrCreateUnifiedConfig, mutateConfig } from '../../config/config-loader-facade';
 
 const router = Router();
+
+const logger = createLogger('web-server:routes:cliproxy-server');
 
 router.use((req: Request, res: Response, next) => {
   if (
@@ -48,7 +51,12 @@ router.get('/', async (_req: Request, res: Response) => {
     const config = await loadOrCreateUnifiedConfig();
     res.json(config.cliproxy_server || DEFAULT_CLIPROXY_SERVER_CONFIG);
   } catch (error) {
-    console.error('[cliproxy-server-routes] Failed to load proxy config:', error);
+    logger.error('cliproxy_server.route.load_config_failed', 'Failed to load proxy config', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Failed to load proxy config' });
   }
 });
@@ -113,7 +121,14 @@ router.put('/', (req: Request, res: Response) => {
 
     res.json(updated.cliproxy_server);
   } catch (error) {
-    console.error('[cliproxy-server-routes] Failed to save proxy config:', error);
+    logger.error('cliproxy_server.route.save_config_failed', 'Failed to save proxy config', {
+      path: req.path,
+      method: req.method,
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Failed to save proxy config' });
   }
 });
@@ -130,7 +145,12 @@ router.get('/backend', async (_req: Request, res: Response) => {
       managementPanelRepository: getManagementPanelRepository(),
     });
   } catch (error) {
-    console.error('[cliproxy-server-routes] Failed to load backend config:', error);
+    logger.error('cliproxy_server.route.load_backend_failed', 'Failed to load backend config', {
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Failed to load backend config' });
   }
 });
@@ -187,7 +207,14 @@ router.put('/backend', (req: Request, res: Response) => {
 
     res.json({ backend, managementPanelRepository: getManagementPanelRepository() });
   } catch (error) {
-    console.error('[cliproxy-server-routes] Failed to save backend config:', error);
+    logger.error('cliproxy_server.route.save_backend_failed', 'Failed to save backend config', {
+      path: req.path,
+      method: req.method,
+      err:
+        error instanceof Error
+          ? { name: error.name, message: error.message }
+          : { message: String(error) },
+    });
     res.status(500).json({ error: 'Failed to save backend config' });
   }
 });
@@ -221,7 +248,18 @@ router.post('/test', async (req: Request, res: Response) => {
 
     res.json(status);
   } catch (error) {
-    console.error('[cliproxy-server-routes] Failed to test connection:', error);
+    logger.error(
+      'cliproxy_server.route.test_connection_failed',
+      'Failed to test remote proxy connection',
+      {
+        path: req.path,
+        method: req.method,
+        err:
+          error instanceof Error
+            ? { name: error.name, message: error.message }
+            : { message: String(error) },
+      }
+    );
     res.status(500).json({ error: 'Failed to test connection' });
   }
 });

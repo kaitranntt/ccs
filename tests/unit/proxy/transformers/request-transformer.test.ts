@@ -115,4 +115,36 @@ describe('ProxyRequestTransformer', () => {
     expect(result.stop).toEqual(['A']);
     expect(result.metadata).toBeUndefined();
   });
+
+  it('sets stream_options.include_usage for streaming requests so upstreams return token usage', () => {
+    const transformer = new ProxyRequestTransformer();
+    const result = transformer.transform({
+      stream: true,
+      messages: [{ role: 'user', content: 'ping' }],
+    });
+
+    expect(result.stream).toBe(true);
+    expect(result.stream_options).toEqual({ include_usage: true });
+  });
+
+  it('omits stream_options for non-streaming requests', () => {
+    const transformer = new ProxyRequestTransformer();
+    const result = transformer.transform({
+      stream: false,
+      messages: [{ role: 'user', content: 'ping' }],
+    });
+
+    expect(result.stream).toBe(false);
+    expect(result.stream_options).toBeUndefined();
+  });
+
+  it('omits stream_options when the upstream flag is absent', () => {
+    const transformer = new ProxyRequestTransformer();
+    const result = transformer.transform({
+      messages: [{ role: 'user', content: 'ping' }],
+    });
+
+    expect(result.stream).toBe(false);
+    expect(result.stream_options).toBeUndefined();
+  });
 });

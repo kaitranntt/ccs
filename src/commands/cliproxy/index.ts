@@ -48,6 +48,8 @@ import {
   handleCatalogReset,
   handleCatalogJson,
 } from './catalog-subcommand';
+import { handlePoolSubcommand } from './pool-subcommand';
+import { handleOrderSubcommand } from './order-subcommand';
 
 /**
  * Parse --backend flag from args
@@ -144,7 +146,12 @@ export async function handleCliproxyCommand(args: string[]): Promise<void> {
   const verbose = hasAnyFlag(remainingArgs, ['--verbose', '-v']);
   const command = remainingArgs[0];
 
-  if (hasAnyFlag(remainingArgs, ['--help', '-h'])) {
+  // Show global cliproxy help whenever --help/-h appears (order-insensitive, so
+  // `cliproxy status --help` and `cliproxy --verbose --help` both work). The one
+  // exception is `routing affinity --help`, which renders affinity-specific help
+  // after dispatch (handled below).
+  const isRoutingAffinity = command === 'routing' && remainingArgs[1] === 'affinity';
+  if (!isRoutingAffinity && hasAnyFlag(remainingArgs, ['--help', '-h'])) {
     await showHelp();
     return;
   }
@@ -186,6 +193,26 @@ export async function handleCliproxyCommand(args: string[]): Promise<void> {
     return;
   }
 
+  if (command === 'pool') {
+    await handlePoolSubcommand(remainingArgs.slice(1));
+    return;
+  }
+
+  if (command === 'accounts') {
+    const subcommand = remainingArgs[1];
+    if (subcommand === 'order') {
+      await handleOrderSubcommand(remainingArgs.slice(2));
+      return;
+    }
+    // Unknown (or missing) accounts subcommand: report and show help.
+    // 'order' is currently the only accounts subcommand.
+    console.error(`[X] Unknown accounts subcommand: ${subcommand ?? '(none)'}`);
+    console.error('    Usage: ccs cliproxy accounts order <provider>');
+    process.exitCode = 1;
+    await showHelp();
+    return;
+  }
+
   if (command === 'routing') {
     const subcommand = remainingArgs[1];
     if (subcommand === 'set') {
@@ -223,7 +250,7 @@ export async function handleCliproxyCommand(args: string[]): Promise<void> {
     start: async () => handleStart(verbose),
     stop: async () => handleStop(),
     restart: async () => handleRestart(verbose),
-    status: async () => handleProxyStatus(),
+    status: async () => handleProxyStatus(verbose),
     doctor: async () => handleDoctor(verbose),
     diag: async () => handleDoctor(verbose),
     default: async () => handleSetDefault(remainingArgs.slice(1)),

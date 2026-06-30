@@ -1,4 +1,4 @@
-import { initUI, header, color, fail, ok, table } from '../../utils/ui';
+import { initUI, header, color, ok, table } from '../../utils/ui';
 import { resolveAccountContextPolicy } from '../account-context';
 import {
   isSharedResourceMode,
@@ -30,7 +30,6 @@ export async function handleResources(ctx: CommandContext, args: string[]): Prom
   });
 
   if (!profileName) {
-    console.log(fail('Profile name is required'));
     console.log('');
     console.log(
       `Usage: ${color('ccs auth resources <profile> [--mode shared|profile-local] [--json]', 'command')}`

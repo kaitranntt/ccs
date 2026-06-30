@@ -1,11 +1,27 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { buildClaudeEnvironment, resolveCliproxyImageAnalysisEnv } from '../env-resolver';
 import type { ImageAnalysisStatus } from '../../../utils/hooks';
+import { invalidateConfigCache } from '../../../config/config-loader-facade';
+import { clearConfigCache } from '../../config/base-config-loader';
 
 const tempDirs: string[] = [];
+let originalCcsHome: string | undefined;
+let configHome = '';
+
+function writeBackendConfig(backend: 'original' | 'plus'): void {
+  const ccsDir = path.join(configHome, '.ccs');
+  fs.mkdirSync(ccsDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(ccsDir, 'config.yaml'),
+    ['version: 1', 'cliproxy:', `  backend: ${backend}`, ''].join('\n'),
+    'utf8'
+  );
+  invalidateConfigCache();
+  clearConfigCache();
+}
 
 function createCodexSettingsFile(models: {
   defaultModel: string;
@@ -70,7 +86,23 @@ function createImageAnalysisStatus(
 }
 
 describe('buildClaudeEnvironment codex fallback normalization', () => {
+  beforeEach(() => {
+    originalCcsHome = process.env.CCS_HOME;
+    configHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-env-resolver-home-'));
+    tempDirs.push(configHome);
+    process.env.CCS_HOME = configHome;
+    invalidateConfigCache();
+    clearConfigCache();
+  });
+
   afterEach(() => {
+    if (originalCcsHome !== undefined) {
+      process.env.CCS_HOME = originalCcsHome;
+    } else {
+      delete process.env.CCS_HOME;
+    }
+    invalidateConfigCache();
+    clearConfigCache();
     while (tempDirs.length > 0) {
       const tempDir = tempDirs.pop();
       if (tempDir) {
@@ -99,6 +131,7 @@ describe('buildClaudeEnvironment codex fallback normalization', () => {
     expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.3-codex(xhigh)');
     expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-5.3-codex(high)');
     expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('gpt-5.4-mini(medium)');
+    expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317');
   });
 
   it('keeps codex effort aliases when reasoning proxy is active', () => {
@@ -122,6 +155,27 @@ describe('buildClaudeEnvironment codex fallback normalization', () => {
     expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.3-codex-xhigh');
     expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-5.3-codex-high');
     expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('gpt-5.4-mini-medium');
+    expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:9444');
+  });
+
+  it('keeps scoped codex reasoning URL when the plus backend is active', () => {
+    writeBackendConfig('plus');
+    const settingsPath = createCodexSettingsFile({
+      defaultModel: 'gpt-5.3-codex-high',
+      opusModel: 'gpt-5.3-codex-xhigh',
+      sonnetModel: 'gpt-5.3-codex-high',
+      haikuModel: 'gpt-5.4-mini-medium',
+    });
+
+    const env = buildClaudeEnvironment({
+      provider: 'codex',
+      useRemoteProxy: false,
+      localPort: 8317,
+      customSettingsPath: settingsPath,
+      codexReasoningPort: 9444,
+      verbose: false,
+    });
+
     expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:9444/api/provider/codex');
   });
 

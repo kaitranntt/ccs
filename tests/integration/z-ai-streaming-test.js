@@ -7,10 +7,9 @@ const API_KEY = process.env.Z_AI_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN;
 const MODEL = 'GLM-4.6';
 
 if (!API_KEY || API_KEY === 'your-api-key-here') {
-  console.error('[ERROR] Z.AI API key not found');
-  console.error('[INFO] Set Z_AI_API_KEY or ANTHROPIC_AUTH_TOKEN environment variable');
-  console.error('[INFO] Example: export Z_AI_API_KEY=your-key-here');
-  process.exit(1);
+  console.log('[SKIP] Z.AI API key not found');
+  console.log('[INFO] Set Z_AI_API_KEY or ANTHROPIC_AUTH_TOKEN to run this external smoke test');
+  process.exit(0);
 }
 
 // Test request with reasoning
@@ -19,14 +18,15 @@ const requestBody = JSON.stringify({
   messages: [
     {
       role: 'user',
-      content: 'Solve this math problem step by step: What is 27 * 453? Show your reasoning process.'
-    }
+      content:
+        'Solve this math problem step by step: What is 27 * 453? Show your reasoning process.',
+    },
   ],
   stream: true,
   reasoning: true,
   reasoning_effort: 'medium',
   max_tokens: 4096,
-  do_sample: true
+  do_sample: true,
 });
 
 const options = {
@@ -36,10 +36,10 @@ const options = {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${API_KEY}`,
+    Authorization: `Bearer ${API_KEY}`,
     'Content-Length': Buffer.byteLength(requestBody),
-    'User-Agent': 'CCS-GLMT-StreamingTest/1.0'
-  }
+    'User-Agent': 'CCS-GLMT-StreamingTest/1.0',
+  },
 };
 
 console.log('═══════════════════════════════════════════════════════════════');
@@ -63,7 +63,7 @@ const req = https.request(options, (res) => {
 
   if (res.statusCode !== 200) {
     let errorBody = '';
-    res.on('data', chunk => errorBody += chunk);
+    res.on('data', (chunk) => (errorBody += chunk));
     res.on('end', () => {
       console.error('[ERROR] Request failed:', res.statusCode, res.statusMessage);
       console.error('[ERROR] Response:', errorBody);
@@ -98,7 +98,7 @@ const req = https.request(options, (res) => {
     // Keep incomplete line in buffer
     buffer = lines.pop() || '';
 
-    lines.forEach(line => {
+    lines.forEach((line) => {
       if (line.startsWith('data: ')) {
         eventCount++;
         const data = line.substring(6);
@@ -124,7 +124,10 @@ const req = https.request(options, (res) => {
             console.log(`[EVENT ${eventCount}] *** REASONING IN DELTA ***`);
             console.log('  Delta keys:', Object.keys(delta).join(', '));
             console.log('  Reasoning chunk length:', delta.reasoning_content.length);
-            console.log('  Reasoning chunk preview:', JSON.stringify(delta.reasoning_content.substring(0, 80)));
+            console.log(
+              '  Reasoning chunk preview:',
+              JSON.stringify(delta.reasoning_content.substring(0, 80))
+            );
             console.log('');
           }
 
@@ -134,7 +137,10 @@ const req = https.request(options, (res) => {
             console.log(`[EVENT ${eventCount}] *** REASONING IN MESSAGE (COMPLETE) ***`);
             console.log('  Message keys:', Object.keys(message).join(', '));
             console.log('  Reasoning total length:', message.reasoning_content.length);
-            console.log('  Reasoning preview:', message.reasoning_content.substring(0, 100).replace(/\n/g, ' '));
+            console.log(
+              '  Reasoning preview:',
+              message.reasoning_content.substring(0, 100).replace(/\n/g, ' ')
+            );
             console.log('');
           }
 
@@ -159,7 +165,6 @@ const req = https.request(options, (res) => {
             console.log(`[EVENT ${eventCount}] Usage:`, JSON.stringify(parsed.usage));
             console.log('');
           }
-
         } catch (e) {
           console.log(`[EVENT ${eventCount}] [PARSE ERROR]`, e.message);
           console.log('  Raw:', data.substring(0, 100));

@@ -27,6 +27,7 @@ export function getWebSearchHookEnv(): Record<string, string> {
     CCS_WEBSEARCH_BRAVE: '0',
     CCS_WEBSEARCH_SEARXNG: '0',
     CCS_WEBSEARCH_DUCKDUCKGO: '0',
+    CCS_WEBSEARCH_AGY: '0',
     CCS_WEBSEARCH_GEMINI: '0',
     CCS_WEBSEARCH_OPENCODE: '0',
     CCS_WEBSEARCH_GROK: '0',
@@ -80,12 +81,24 @@ export function getWebSearchHookEnv(): Record<string, string> {
     env.CCS_WEBSEARCH_SEARXNG_MAX_RESULTS = String(wsConfig.providers.searxng.max_results || 5);
   }
 
+  if (wsConfig.providers?.agy?.enabled) {
+    env.CCS_WEBSEARCH_AGY = '1';
+    if (wsConfig.providers.agy.model) {
+      env.CCS_WEBSEARCH_AGY_MODEL = wsConfig.providers.agy.model;
+    }
+    // Antigravity is the primary CLI fallback, so its timeout wins.
+    env.CCS_WEBSEARCH_TIMEOUT = String(wsConfig.providers.agy.timeout || 90);
+  }
+
   if (wsConfig.providers?.gemini?.enabled) {
     env.CCS_WEBSEARCH_GEMINI = '1';
     if (wsConfig.providers.gemini.model) {
       env.CCS_WEBSEARCH_GEMINI_MODEL = wsConfig.providers.gemini.model;
     }
-    env.CCS_WEBSEARCH_TIMEOUT = String(wsConfig.providers.gemini.timeout || 55);
+    // Only set if Antigravity (primary) has not already chosen the timeout.
+    if (!env.CCS_WEBSEARCH_TIMEOUT) {
+      env.CCS_WEBSEARCH_TIMEOUT = String(wsConfig.providers.gemini.timeout || 55);
+    }
   }
 
   if (wsConfig.providers?.opencode?.enabled) {

@@ -18,6 +18,7 @@ import {
   DEFAULT_LOGGING_CONFIG,
   DEFAULT_OFFICIAL_CHANNELS_CONFIG,
   DEFAULT_THINKING_CONFIG,
+  buildOutputLimitsEnv,
 } from '../unified-config-types';
 import type {
   BrowserConfig,
@@ -52,6 +53,13 @@ function getConfig(): import('../unified-config-types').UnifiedConfig {
   return loader.loadOrCreateUnifiedConfig();
 }
 
+function getPersistedConfig(): import('../unified-config-types').UnifiedConfig | null {
+  const loader = require('../unified-config-loader') as {
+    loadUnifiedConfig: () => import('../unified-config-types').UnifiedConfig | null;
+  };
+  return loader.loadUnifiedConfig();
+}
+
 // ---------------------------------------------------------------------------
 // GeminiWebSearchInfo interface
 // ---------------------------------------------------------------------------
@@ -82,6 +90,7 @@ export function getWebSearchConfig(): {
     brave?: { enabled?: boolean; max_results?: number };
     searxng?: { enabled?: boolean; url?: string; max_results?: number };
     duckduckgo?: { enabled?: boolean; max_results?: number };
+    agy?: { enabled?: boolean; model?: string; timeout?: number };
     gemini?: GeminiWebSearchInfo;
     opencode?: { enabled?: boolean; model?: string; timeout?: number };
     grok?: { enabled?: boolean; timeout?: number };
@@ -118,6 +127,12 @@ export function getWebSearchConfig(): {
     max_results: config.websearch?.providers?.searxng?.max_results ?? 5,
   };
 
+  const agyConfig = {
+    enabled: config.websearch?.providers?.agy?.enabled ?? false,
+    model: config.websearch?.providers?.agy?.model ?? 'gemini-2.5-flash',
+    timeout: config.websearch?.providers?.agy?.timeout ?? 90,
+  };
+
   const geminiConfig: GeminiWebSearchInfo = {
     enabled:
       config.websearch?.providers?.gemini?.enabled ?? config.websearch?.gemini?.enabled ?? false,
@@ -144,6 +159,7 @@ export function getWebSearchConfig(): {
     braveConfig.enabled ||
     searxngConfig.enabled ||
     duckDuckGoConfig.enabled ||
+    agyConfig.enabled ||
     geminiConfig.enabled ||
     opencodeConfig.enabled ||
     grokConfig.enabled;
@@ -157,6 +173,7 @@ export function getWebSearchConfig(): {
       brave: braveConfig,
       searxng: searxngConfig,
       duckduckgo: duckDuckGoConfig,
+      agy: agyConfig,
       gemini: geminiConfig,
       opencode: opencodeConfig,
       grok: grokConfig,
@@ -176,6 +193,19 @@ export function getGlobalEnvConfig(): GlobalEnvConfig {
     enabled: config.global_env?.enabled ?? true,
     env: config.global_env?.env ?? { ...DEFAULT_GLOBAL_ENV },
   };
+}
+
+/**
+ * Get opt-in output-limit env vars for the spawned downstream CLI (issue #231).
+ *
+ * Returns ONLY the env vars the user has explicitly configured under
+ * config.runtime.outputLimits. When the section is absent or empty, returns an
+ * empty object so callers inject nothing and the downstream CLI keeps its own
+ * defaults. All values are strings.
+ */
+export function getOutputLimitsEnv(): Record<string, string> {
+  const config = getConfig();
+  return buildOutputLimitsEnv(config.runtime?.outputLimits);
 }
 
 /**
@@ -291,6 +321,22 @@ export function getDashboardAuthConfig(): DashboardAuthConfig {
 export function getBrowserConfig(): BrowserConfig {
   const config = getConfig();
   return canonicalizeBrowserConfig(config.browser);
+}
+
+/**
+ * Return whether the persisted browser config explicitly defines
+ * claude.devtools_port. Canonicalized BrowserConfig values always contain a
+ * default port, so config-backed browser attach callers must use this raw
+ * persisted shape to decide whether the port should bypass profile discovery.
+ */
+export function hasExplicitClaudeBrowserDevtoolsPort(): boolean {
+  const claude = getPersistedConfig()?.browser?.claude;
+  if (!claude || !Object.prototype.hasOwnProperty.call(claude, 'devtools_port')) {
+    return false;
+  }
+
+  const port = claude.devtools_port;
+  return Number.isFinite(port) && Math.floor(port as number) === port && port >= 1 && port <= 65535;
 }
 
 /**

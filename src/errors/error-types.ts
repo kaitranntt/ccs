@@ -5,6 +5,10 @@
  * - Standardized exit codes
  * - Recoverable flag for retry logic
  * - Consistent error formatting
+ *
+ * Fields are declared explicitly (no TypeScript parameter properties) so this
+ * module is erasable-syntax-compatible: web UI builds enforce
+ * `erasableSyntaxOnly` and reach this module via the @shared graph.
  */
 
 import { ExitCode } from './exit-codes';
@@ -14,12 +18,17 @@ import { ExitCode } from './exit-codes';
  * Extends standard Error with exit code and recovery information
  */
 export class CCSError extends Error {
+  readonly code: ExitCode;
+  readonly recoverable: boolean;
+
   constructor(
     message: string,
-    public readonly code: ExitCode = ExitCode.GENERAL_ERROR,
-    public readonly recoverable: boolean = false
+    code: ExitCode = ExitCode.GENERAL_ERROR,
+    recoverable: boolean = false
   ) {
     super(message);
+    this.code = code;
+    this.recoverable = recoverable;
     this.name = 'CCSError';
     // Maintain proper stack trace in V8 environments
     if (Error.captureStackTrace) {
@@ -33,12 +42,12 @@ export class CCSError extends Error {
  * Examples: missing config file, invalid JSON, corrupt settings
  */
 export class ConfigError extends CCSError {
-  constructor(
-    message: string,
-    public readonly configPath?: string
-  ) {
+  readonly configPath?: string;
+
+  constructor(message: string, configPath?: string) {
     super(message, ExitCode.CONFIG_ERROR, false);
     this.name = 'ConfigError';
+    this.configPath = configPath;
   }
 }
 
@@ -47,13 +56,14 @@ export class ConfigError extends CCSError {
  * Examples: connection refused, timeout, DNS resolution failure
  */
 export class NetworkError extends CCSError {
-  constructor(
-    message: string,
-    public readonly url?: string,
-    public readonly statusCode?: number
-  ) {
+  readonly url?: string;
+  readonly statusCode?: number;
+
+  constructor(message: string, url?: string, statusCode?: number) {
     super(message, ExitCode.NETWORK_ERROR, true); // Network errors are typically recoverable
     this.name = 'NetworkError';
+    this.url = url;
+    this.statusCode = statusCode;
   }
 }
 
@@ -62,12 +72,12 @@ export class NetworkError extends CCSError {
  * Examples: invalid API key, expired token, insufficient permissions
  */
 export class AuthError extends CCSError {
-  constructor(
-    message: string,
-    public readonly provider?: string
-  ) {
+  readonly provider?: string;
+
+  constructor(message: string, provider?: string) {
     super(message, ExitCode.AUTH_ERROR, false);
     this.name = 'AuthError';
+    this.provider = provider;
   }
 }
 
@@ -76,12 +86,12 @@ export class AuthError extends CCSError {
  * Examples: Claude CLI not found, corrupted binary, permission denied
  */
 export class BinaryError extends CCSError {
-  constructor(
-    message: string,
-    public readonly binaryPath?: string
-  ) {
+  readonly binaryPath?: string;
+
+  constructor(message: string, binaryPath?: string) {
     super(message, ExitCode.BINARY_ERROR, false);
     this.name = 'BinaryError';
+    this.binaryPath = binaryPath;
   }
 }
 
@@ -90,13 +100,14 @@ export class BinaryError extends CCSError {
  * Examples: API rate limit, service unavailable, invalid model
  */
 export class ProviderError extends CCSError {
-  constructor(
-    message: string,
-    public readonly provider: string,
-    public readonly details?: unknown
-  ) {
+  readonly provider: string;
+  readonly details?: unknown;
+
+  constructor(message: string, provider: string, details?: unknown) {
     super(message, ExitCode.PROVIDER_ERROR, true); // Provider errors may be recoverable
     this.name = 'ProviderError';
+    this.provider = provider;
+    this.details = details;
   }
 }
 
@@ -105,13 +116,14 @@ export class ProviderError extends CCSError {
  * Examples: profile not found, invalid profile name, duplicate profile
  */
 export class ProfileError extends CCSError {
-  constructor(
-    message: string,
-    public readonly profileName?: string,
-    public readonly availableProfiles?: string[]
-  ) {
+  readonly profileName?: string;
+  readonly availableProfiles?: string[];
+
+  constructor(message: string, profileName?: string, availableProfiles?: string[]) {
     super(message, ExitCode.PROFILE_ERROR, false);
     this.name = 'ProfileError';
+    this.profileName = profileName;
+    this.availableProfiles = availableProfiles;
   }
 }
 
@@ -120,12 +132,12 @@ export class ProfileError extends CCSError {
  * Examples: proxy startup failure, port conflict, proxy timeout
  */
 export class ProxyError extends CCSError {
-  constructor(
-    message: string,
-    public readonly port?: number
-  ) {
+  readonly port?: number;
+
+  constructor(message: string, port?: number) {
     super(message, ExitCode.PROXY_ERROR, false);
     this.name = 'ProxyError';
+    this.port = port;
   }
 }
 
@@ -134,13 +146,14 @@ export class ProxyError extends CCSError {
  * Examples: failed to migrate config, backup creation failed
  */
 export class MigrationError extends CCSError {
-  constructor(
-    message: string,
-    public readonly fromVersion?: string,
-    public readonly toVersion?: string
-  ) {
+  readonly fromVersion?: string;
+  readonly toVersion?: string;
+
+  constructor(message: string, fromVersion?: string, toVersion?: string) {
     super(message, ExitCode.MIGRATION_ERROR, false);
     this.name = 'MigrationError';
+    this.fromVersion = fromVersion;
+    this.toVersion = toVersion;
   }
 }
 
@@ -160,12 +173,12 @@ export class UserAbortError extends CCSError {
  * Distinguishes user-input validation failures from system errors
  */
 export class ValidationError extends CCSError {
-  constructor(
-    message: string,
-    public readonly field?: string
-  ) {
+  readonly field?: string;
+
+  constructor(message: string, field?: string) {
     super(message, ExitCode.GENERAL_ERROR, false);
     this.name = 'ValidationError';
+    this.field = field;
   }
 }
 
@@ -174,13 +187,14 @@ export class ValidationError extends CCSError {
  * Signals that the operation may succeed on retry (e.g. rate limits, timeouts)
  */
 export class RetryableError extends CCSError {
-  constructor(
-    message: string,
-    public readonly originalError?: Error,
-    public readonly retryAfter?: number // ms until next attempt
-  ) {
+  readonly originalError?: Error;
+  readonly retryAfter?: number; // ms until next attempt
+
+  constructor(message: string, originalError?: Error, retryAfter?: number) {
     super(message, ExitCode.GENERAL_ERROR, true);
     this.name = 'RetryableError';
+    this.originalError = originalError;
+    this.retryAfter = retryAfter;
   }
 }
 

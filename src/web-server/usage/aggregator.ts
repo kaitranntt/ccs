@@ -85,7 +85,7 @@ function getInstancePaths(): string[] {
       return fs.existsSync(projectsPath);
     });
   } catch {
-    console.error(fail('Failed to read CCS instances directory'));
+    process.stderr.write(String(fail('Failed to read CCS instances directory')) + '\n');
     return [];
   }
 }
@@ -436,7 +436,7 @@ async function refreshFromSource(): Promise<{
       instanceDataResults.push(data);
     } catch (err) {
       const instanceName = path.basename(instancePath);
-      console.error(fail(`Failed to load instance ${instanceName}: ${err}`));
+      process.stderr.write(String(fail(`Failed to load instance ${instanceName}: ${err}`)) + '\n');
     }
   }
 
@@ -467,7 +467,7 @@ async function refreshFromSource(): Promise<{
       console.log(info(`Included native Codex usage data (${codexEntries.length} event(s))`));
     }
   } catch (err) {
-    console.error(fail(`Failed to load native Codex usage data: ${err}`));
+    process.stderr.write(String(fail(`Failed to load native Codex usage data: ${err}`)) + '\n');
   }
 
   try {
@@ -480,7 +480,7 @@ async function refreshFromSource(): Promise<{
       console.log(info(`Included native Droid usage data (${droidEntries.length} event(s))`));
     }
   } catch (err) {
-    console.error(fail(`Failed to load native Droid usage data: ${err}`));
+    process.stderr.write(String(fail(`Failed to load native Droid usage data: ${err}`)) + '\n');
   }
 
   // Load CLIProxy usage data (from local snapshot cache)
@@ -493,7 +493,7 @@ async function refreshFromSource(): Promise<{
       console.log(info('Included CLIProxy usage data'));
     }
   } catch (err) {
-    console.error(fail(`Failed to load CLIProxy usage data: ${err}`));
+    process.stderr.write(String(fail(`Failed to load CLIProxy usage data: ${err}`)) + '\n');
   }
 
   // Merge all data sources
@@ -595,7 +595,7 @@ async function getCachedData<T>(key: string, ttl: number, loader: () => Promise<
           persistCacheIfComplete();
         })
         .catch((err) => {
-          console.error(fail(`Background refresh failed for ${key}: ${err}`));
+          process.stderr.write(String(fail(`Background refresh failed for ${key}: ${err}`)) + '\n');
         })
         .finally(() => {
           pendingRequests.delete(key);
@@ -731,7 +731,9 @@ export async function prewarmUsageCache(): Promise<{
         isRefreshing = true;
         refreshFromSourceCoalesced()
           .then(() => console.log(ok('Background refresh complete')))
-          .catch((err) => console.error(fail(`Background refresh failed: ${err}`)))
+          .catch((err) =>
+            process.stderr.write(String(fail(`Background refresh failed: ${err}`)) + '\n')
+          )
           .finally(() => {
             isRefreshing = false;
           });
@@ -748,7 +750,7 @@ export async function prewarmUsageCache(): Promise<{
     console.log(ok(`Usage cache ready (${elapsed}ms)`));
     return { timestamp: Date.now(), elapsed, source: 'fresh' };
   } catch (err) {
-    console.error(fail(`Failed to prewarm usage cache: ${err}`));
+    process.stderr.write(String(fail(`Failed to prewarm usage cache: ${err}`)) + '\n');
     throw err;
   }
 }

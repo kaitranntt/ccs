@@ -16,6 +16,9 @@
 import * as http from 'http';
 import * as https from 'https';
 import type { Socket } from 'net';
+import { createLogger } from '../../services/logging';
+
+const logger = createLogger('cliproxy:https-tunnel-proxy');
 
 export interface HttpsTunnelConfig {
   /** Remote server hostname */
@@ -72,9 +75,13 @@ export class HttpsTunnelProxy {
     };
   }
 
-  private log(message: string): void {
+  /**
+   * Trace-level operational log gated on verbose mode (request routing, lifecycle chatter).
+   * Errors/warnings are logged directly via logger.* and are not gated.
+   */
+  private trace(message: string): void {
     if (this.config.verbose) {
-      console.error(`[https-tunnel] ${message}`);
+      logger.info('tunnel.trace', message);
     }
   }
 
@@ -104,7 +111,7 @@ export class HttpsTunnelProxy {
           reject(new Error('Failed to bind to any port'));
           return;
         }
-        this.log(
+        this.trace(
           `Started on port ${this.port}, tunneling to https://${this.config.remoteHost}:${this.config.remotePort}`
         );
         resolve(this.port);
@@ -132,7 +139,7 @@ export class HttpsTunnelProxy {
     this.server = null;
     this.port = null;
     this.startingPromise = null;
-    this.log('Stopped');
+    this.trace('Stopped');
   }
 
   getPort(): number | null {
@@ -182,7 +189,7 @@ export class HttpsTunnelProxy {
     const method = req.method || 'GET';
     const requestPath = req.url || '/';
 
-    this.log(
+    this.trace(
       `${method} ${requestPath} → https://${this.config.remoteHost}:${this.config.remotePort}${requestPath}`
     );
 
@@ -190,7 +197,9 @@ export class HttpsTunnelProxy {
       await this.forwardRequest(req, res, requestPath);
     } catch (error) {
       const err = error as Error;
-      this.log(`Error: ${err.message}`);
+      logger.error('tunnel.request_failed', 'Tunnel request handler failed', {
+        err: { name: err.name, message: err.message },
+      });
       if (!res.headersSent) {
         res.writeHead(502, { 'Content-Type': 'application/json' });
       }
@@ -231,26 +240,30 @@ export class HttpsTunnelProxy {
 
       upstreamReq.on('timeout', () => {
         const timeoutError = new Error('Upstream request timeout');
-        this.log(`Timeout: ${timeoutError.message}`);
+        logger.warn('tunnel.upstream_timeout', timeoutError.message);
         upstreamReq.destroy();
         reject(timeoutError);
       });
 
       upstreamReq.on('error', (err) => {
-        this.log(`Upstream error: ${err.message}`);
+        logger.error('tunnel.upstream_error', 'Upstream request error', {
+          err: { name: err.name, message: err.message },
+        });
         reject(err);
       });
 
       // Handle client disconnect (premature close)
       originalReq.on('error', (err) => {
-        this.log(`Client request error: ${err.message}`);
+        logger.error('tunnel.client_request_error', 'Client request error', {
+          err: { name: err.name, message: err.message },
+        });
         upstreamReq.destroy();
         reject(err);
       });
 
       originalReq.on('close', () => {
         if (!originalReq.complete) {
-          this.log('Client disconnected prematurely');
+          logger.warn('tunnel.client_premature_close', 'Client disconnected prematurely');
           upstreamReq.destroy();
         }
       });

@@ -7,6 +7,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCcsDir } from '../config/config-loader-facade';
+import { createLogger } from '../services/logging';
+
+const logger = createLogger('delegation:session-manager');
 
 interface SessionData {
   sessionId: string;
@@ -145,9 +148,12 @@ class SessionManager {
       const content = fs.readFileSync(this.sessionsPath, 'utf8');
       return JSON.parse(content) as SessionsRegistry;
     } catch (error) {
-      if (process.env.CCS_DEBUG) {
-        console.warn(`[!] Failed to load sessions: ${(error as Error).message}`);
-      }
+      logger.warn('session.load.failed', 'Failed to load delegation sessions', {
+        err:
+          error instanceof Error
+            ? { name: error.name, message: error.message }
+            : { message: String(error) },
+      });
       return {};
     }
   }
@@ -163,7 +169,12 @@ class SessionManager {
       }
       fs.writeFileSync(this.sessionsPath, JSON.stringify(sessions, null, 2), { mode: 0o600 });
     } catch (error) {
-      console.error(`[!] Failed to save sessions: ${(error as Error).message}`);
+      logger.error('session.save.failed', 'Failed to save delegation sessions', {
+        err:
+          error instanceof Error
+            ? { name: error.name, message: error.message }
+            : { message: String(error) },
+      });
     }
   }
 }

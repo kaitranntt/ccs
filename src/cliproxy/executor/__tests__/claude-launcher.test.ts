@@ -34,7 +34,7 @@ mock.module('child_process', () => ({
 const mockEscapeShellArg = jest.fn((s: string) => `"${s}"`);
 const mockGetWindowsEscapedCommandShell = jest.fn().mockReturnValue('cmd.exe');
 
-mock.module('../../utils/shell-executor', () => ({
+mock.module('../../../utils/shell-executor', () => ({
   escapeShellArg: mockEscapeShellArg,
   getWindowsEscapedCommandShell: mockGetWindowsEscapedCommandShell,
 }));
@@ -46,7 +46,7 @@ mock.module('../../config/config-generator', () => ({
   getProviderConfig: jest.fn(),
 }));
 
-mock.module('../../utils/websearch-manager', () => ({
+mock.module('../../../utils/websearch-manager', () => ({
   appendThirdPartyWebSearchToolArgs: (args: string[]) => args,
   createWebSearchTraceContext: jest.fn().mockReturnValue({}),
   ensureWebSearchMcpOrThrow: jest.fn(),
@@ -54,17 +54,17 @@ mock.module('../../utils/websearch-manager', () => ({
   getWebSearchHookEnv: jest.fn().mockReturnValue({}),
 }));
 
-mock.module('../../utils/image-analysis', () => ({
+mock.module('../../../utils/image-analysis', () => ({
   appendThirdPartyImageAnalysisToolArgs: (args: string[]) => [...args, '--mcp-image-analysis'],
   syncImageAnalysisMcpToConfigDir: jest.fn(),
   ensureImageAnalysisMcpOrThrow: jest.fn().mockReturnValue(true),
 }));
 
-mock.module('../../utils/browser', () => ({
+mock.module('../../../utils/browser', () => ({
   appendBrowserToolArgs: (args: string[]) => [...args, '--browser'],
 }));
 
-mock.module('../accounts/account-manager', () => ({
+mock.module('../../accounts/account-manager', () => ({
   getDefaultAccount: jest.fn().mockReturnValue(null),
 }));
 
@@ -82,9 +82,19 @@ mock.module('../account-resolution', () => ({
 }));
 
 // Dynamic import for quota-manager
-mock.module('../quota/quota-manager', () => ({
+mock.module('../../quota/quota-manager', () => ({
   startQuotaMonitor: jest.fn(),
   stopQuotaMonitor: jest.fn(),
+}));
+
+const mockCleanupLaunchSettings = jest.fn();
+const mockPrepareLaunchSettings = jest.fn().mockReturnValue({
+  settingsPath: '/tmp/fake-settings-overlay.json',
+  cleanup: mockCleanupLaunchSettings,
+});
+
+mock.module('../launch-settings', () => ({
+  prepareLaunchSettings: mockPrepareLaunchSettings,
 }));
 
 // ── Subject under test ────────────────────────────────────────────────────────
@@ -131,6 +141,12 @@ describe('launchClaude', () => {
     mockSpawn.mockClear();
     mockSetupCleanupHandlers.mockClear();
     mockEscapeShellArg.mockClear();
+    mockCleanupLaunchSettings.mockClear();
+    mockPrepareLaunchSettings.mockClear();
+    mockPrepareLaunchSettings.mockReturnValue({
+      settingsPath: '/tmp/fake-settings-overlay.json',
+      cleanup: mockCleanupLaunchSettings,
+    });
   });
 
   it('calls spawn with claudeCli and includes --settings arg', async () => {
@@ -189,6 +205,16 @@ describe('launchClaude', () => {
     expect(result).toBe(mockSpawnResult);
   });
 
+  it('calls cleanup and rethrows when spawn throws synchronously', async () => {
+    const spawnErr = new Error('ERR_INVALID_ARG_VALUE');
+    mockSpawn.mockImplementationOnce(() => {
+      throw spawnErr;
+    });
+
+    await expect(launchClaude(baseContext())).rejects.toThrow('ERR_INVALID_ARG_VALUE');
+    expect(mockCleanupLaunchSettings).toHaveBeenCalledTimes(1);
+  });
+
   describe('Windows shell escaping', () => {
     const originalPlatform = process.platform;
 
@@ -202,7 +228,7 @@ describe('launchClaude', () => {
 
     it('uses shell mode for .cmd executables on Windows', async () => {
       await launchClaude(baseContext({ claudeCli: 'C:\\tools\\claude.cmd' }));
-      const spawnOpts = mockSpawn.mock.calls[0][2] as { shell: string | boolean };
+      const spawnOpts = mockSpawn.mock.calls[0][1] as { shell: string | boolean };
       // shell property should be set (cmd.exe from mock)
       expect(spawnOpts.shell).toBeTruthy();
     });
