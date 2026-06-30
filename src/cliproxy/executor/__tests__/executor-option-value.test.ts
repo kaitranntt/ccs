@@ -141,7 +141,7 @@ describe('execClaudeWithCLIProxy browser flag validation', () => {
     }
   });
 
-  it('degrades WebSearch provisioning failures for CLIProxy launches', async () => {
+  it('fails closed on WebSearch provisioning failures for CLIProxy launches', async () => {
     makeWebSearchProvisioningFail();
 
     const markerPath = path.join(tmpHome, 'fake-claude-launched');
@@ -176,26 +176,30 @@ describe('execClaudeWithCLIProxy browser flag validation', () => {
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     try {
-      await execClaudeWithCLIProxy(
-        fakeClaudePath,
-        'gemini',
-        [
-          '--proxy-host',
-          '127.0.0.1',
-          '--proxy-port',
-          String(address.port),
-          '--proxy-auth-token',
-          'SECRET_TOKEN_FOR_VALIDATION',
-          '--remote-only',
-          '--print',
-          'hello',
-        ],
-        {}
+      await expect(
+        execClaudeWithCLIProxy(
+          fakeClaudePath,
+          'gemini',
+          [
+            '--proxy-host',
+            '127.0.0.1',
+            '--proxy-port',
+            String(address.port),
+            '--proxy-auth-token',
+            'SECRET_TOKEN_FOR_VALIDATION',
+            '--remote-only',
+            '--print',
+            'hello',
+          ],
+          {}
+        )
+      ).rejects.toThrow(
+        'WebSearch is enabled, but CCS could not prepare the local WebSearch tool.'
       );
 
-      expect(await waitForFile(markerPath)).toBe(true);
+      expect(await waitForFile(markerPath)).toBe(false);
       expect(requestCount).toBeGreaterThan(0);
-      expect(exitSpy).toHaveBeenCalledWith(0);
+      expect(exitSpy).not.toHaveBeenCalledWith(0);
     } finally {
       exitSpy.mockRestore();
       logSpy.mockRestore();
