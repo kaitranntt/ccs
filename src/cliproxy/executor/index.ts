@@ -548,7 +548,7 @@ export async function execClaudeWithCLIProxy(
       keys: Object.keys(env)
         .filter((key) => key.startsWith('CCS_BROWSER_'))
         .sort(),
-      ws: env.CCS_BROWSER_DEVTOOLS_WS_URL || '',
+      hasDevtoolsWsUrl: Boolean(env.CCS_BROWSER_DEVTOOLS_WS_URL),
     });
   }
   logEnvironment(env, webSearchEnv, verbose);
