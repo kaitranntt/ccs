@@ -1,12 +1,12 @@
 /**
  * Tests for printControlPanelAccess: the Control Panel (API Management Center)
- * URL + login-key surface shown by `ccs cliproxy status` / `start`.
+ * URL + masked login-key hint shown by `ccs cliproxy status` / `start`.
  *
  * Why this matters:
- *  - The Control Panel login screen only asks for a "Management Key" with no
- *    hint. Users who don't know the default (`ccs`) cannot get in. This surface
- *    is the fix, so it must print the panel URL on the active port and the
- *    EFFECTIVE key (default `ccs`, or the user's custom management_secret).
+ *  - Routine lifecycle output is commonly pasted into logs and support tickets,
+ *    so it must not disclose the raw management key. The helper should print
+ *    the panel URL, a masked key for orientation, and the explicit command users
+ *    can run when they intentionally need the full key.
  */
 import * as fs from 'fs';
 import * as os from 'os';
@@ -56,12 +56,14 @@ describe('printControlPanelAccess', () => {
     }
   });
 
-  it('prints the panel URL on the given port and the default key (ccs)', () => {
+  it('prints the panel URL on the given port and masks the default key', () => {
     printControlPanelAccess(8317);
     const out = lines.join('\n');
     expect(out).toContain('http://127.0.0.1:8317/management.html');
     expect(out).toContain('Panel login key:');
-    expect(out).toContain('ccs');
+    expect(out).toContain('Panel login key:  ****');
+    expect(out).toContain('ccs tokens --show');
+    expect(out).not.toContain('Panel login key:  ccs');
   });
 
   it('uses the active port in the URL', () => {
@@ -69,7 +71,7 @@ describe('printControlPanelAccess', () => {
     expect(lines.join('\n')).toContain('http://127.0.0.1:9000/management.html');
   });
 
-  it('prints a custom management_secret when configured', () => {
+  it('masks a custom management_secret when configured', () => {
     mutateConfig((config) => {
       if (!config.cliproxy) {
         config.cliproxy = {};
@@ -84,6 +86,8 @@ describe('printControlPanelAccess', () => {
     printControlPanelAccess(8317);
     const out = lines.join('\n');
     expect(out).toContain('Panel login key:');
-    expect(out).toContain('my-custom-key');
+    expect(out).toContain('my-c...-key');
+    expect(out).toContain('ccs tokens --show');
+    expect(out).not.toContain('my-custom-key');
   });
 });

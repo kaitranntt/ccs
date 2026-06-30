@@ -12,22 +12,24 @@ import { initUI, header, color, dim, ok, warn, info } from '../../utils/ui';
 import { getProxyStatus, startProxy, stopProxy } from '../../cliproxy/services';
 import { detectRunningProxy } from '../../cliproxy/proxy/proxy-detector';
 import { resolveLifecyclePort } from '../../cliproxy/config/port-manager';
-import { getEffectiveManagementSecret } from '../../cliproxy/auth/auth-token-manager';
+import { getEffectiveManagementSecret, maskToken } from '../../cliproxy/auth/auth-token-manager';
 
 /**
  * Print how to reach the local CLIProxy Control Panel (a.k.a. API Management
- * Center) and the key needed to log in.
+ * Center) without exposing the management secret in routine output.
  *
  * The panel is served by CLIProxy at `/management.html` on the proxy port and
- * its login is gated by the management secret (default `ccs`). The login screen
- * only asks for a "Management Key" with no hint, so users frequently cannot get
- * in. Surfacing the URL + resolved key here removes that guesswork.
+ * its login is gated by the management secret (default `ccs`). Keep the resolved
+ * key masked here because `start` and `status` output is commonly shared in
+ * support tickets and logs. Users can explicitly reveal tokens with
+ * `ccs tokens --show` when they need the raw value.
  */
 export function printControlPanelAccess(port: number): void {
   const secret = getEffectiveManagementSecret();
   console.log('');
   console.log(`  Control Panel:    http://127.0.0.1:${port}/management.html`);
-  console.log(`  Panel login key:  ${secret}`);
+  console.log(`  Panel login key:  ${maskToken(secret)}`);
+  console.log(dim('  To show the full key: ccs tokens --show'));
 }
 
 export async function handleStart(verbose = false): Promise<void> {
