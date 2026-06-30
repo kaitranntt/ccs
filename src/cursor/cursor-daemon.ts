@@ -53,6 +53,14 @@ async function resolveDaemonEntrypoint(): Promise<string | null> {
   return null;
 }
 
+export function buildDaemonProcessEnv(daemonToken: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    CCS_CURSOR_DAEMON_TOKEN: daemonToken,
+    ANTHROPIC_AUTH_TOKEN: daemonToken,
+  };
+}
+
 /**
  * Check if cursor daemon is running on the specified port.
  * Uses 127.0.0.1 instead of localhost for more reliable local connections.
@@ -224,10 +232,7 @@ export async function startDaemon(
       proc = spawn(process.execPath, args, {
         stdio: 'ignore',
         detached: true,
-        env: {
-          ...process.env,
-          CCS_CURSOR_DAEMON_TOKEN: effectiveConfig.daemon_token || '',
-        },
+        env: buildDaemonProcessEnv(effectiveConfig.daemon_token || ''),
       });
 
       // Unref so parent can exit

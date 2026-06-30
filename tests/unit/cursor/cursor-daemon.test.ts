@@ -16,6 +16,7 @@ import {
   getDaemonStatus,
   stopDaemon,
   startDaemon,
+  buildDaemonProcessEnv,
 } from '../../../src/cursor/cursor-daemon';
 import { getCcsDir } from '../../../src/utils/config-manager';
 import { handleCursorCommand } from '../../../src/commands/cursor-command';
@@ -145,6 +146,26 @@ describe('removePidFile', () => {
 
   it('does not throw when PID file does not exist', () => {
     expect(() => removePidFile()).not.toThrow();
+  });
+});
+
+describe('buildDaemonProcessEnv', () => {
+  it('uses the daemon token for both daemon and Anthropic caller auth', () => {
+    const originalAnthropicToken = process.env.ANTHROPIC_AUTH_TOKEN;
+    process.env.ANTHROPIC_AUTH_TOKEN = 'inherited-stale-token';
+
+    try {
+      const env = buildDaemonProcessEnv('generated-daemon-token');
+
+      expect(env.CCS_CURSOR_DAEMON_TOKEN).toBe('generated-daemon-token');
+      expect(env.ANTHROPIC_AUTH_TOKEN).toBe('generated-daemon-token');
+    } finally {
+      if (originalAnthropicToken !== undefined) {
+        process.env.ANTHROPIC_AUTH_TOKEN = originalAnthropicToken;
+      } else {
+        delete process.env.ANTHROPIC_AUTH_TOKEN;
+      }
+    }
   });
 });
 

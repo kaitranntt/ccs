@@ -327,7 +327,11 @@ export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Ser
       }
 
       if (isAnthropicRoute) {
-        const expectedToken = (process.env.ANTHROPIC_AUTH_TOKEN || 'cursor-managed').trim();
+        const expectedToken = (
+          process.env.ANTHROPIC_AUTH_TOKEN ||
+          process.env.CCS_CURSOR_DAEMON_TOKEN ||
+          'cursor-managed'
+        ).trim();
         const requestToken = getAnthropicRequestToken(req.headers);
         if (!expectedToken || requestToken !== expectedToken) {
           await pipeWebResponseToNode(
