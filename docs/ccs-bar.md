@@ -126,10 +126,10 @@ The app ships as a single floating GitHub release asset, `CCS-Bar.app.zip` under
 
 The `Bar Release` workflow (`.github/workflows/bar-release.yml`) builds and publishes the asset automatically. It is scoped tightly so it never affects other PRs or CI:
 
-- It runs only on a push to `main` that touches `macos-bar/**`, or a manual run from the Actions tab (`workflow_dispatch`).
+- It runs only on a push to `main` that touches `macos-bar/**`, or a manual run from the Actions tab (`workflow_dispatch`) when the selected ref is `main`.
 - It runs only on the dedicated self-hosted macOS runner (label `ccs-bar`); the Linux CI runners never pick it up and it never competes for them.
 
-So bar changes reach users when they land on `main` (the stable cadence). To cut a release without a code change, or to re-publish, trigger the workflow manually.
+So bar changes reach users when they land on `main` (the stable cadence). To cut a release without a code change, or to re-publish, trigger the workflow manually with `main` selected as the workflow ref.
 
 ### Manual fallback
 

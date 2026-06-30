@@ -5,7 +5,7 @@ name: Bar Release
 #
 # Scoped deliberately so it NEVER burdens other PRs or CI:
 #   - Triggers ONLY on push to `main` that changes `macos-bar/**`, or a manual
-#     run. Regular PRs, dev pushes, and non-bar changes do not start it.
+#     run from `main`. Regular PRs, dev pushes, and non-bar changes do not start it.
 #   - Runs ONLY on the dedicated self-hosted macOS runner (label `ccs-bar` on
 #     kai-minim4). The Linux CI runners never match this job, and this job never
 #     competes for them.
@@ -32,10 +32,14 @@ concurrency:
 jobs:
   release:
     name: Build and publish CCS Bar
+    if: github.ref == 'refs/heads/main'
     runs-on: [self-hosted, macos, ccs-bar]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
 
       - name: Read bar version
         id: ver
