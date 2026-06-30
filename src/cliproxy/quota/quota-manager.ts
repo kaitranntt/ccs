@@ -514,8 +514,9 @@ export async function reconcileExhaustedRotationAccounts(
     return [];
   }
 
-  const { pauseAccountForQuotaCooldown, restoreExpiredQuotaPauses } =
-    await import('../accounts/account-safety');
+  const { pauseAccountForQuotaCooldown, restoreExpiredQuotaPauses } = await import(
+    '../accounts/account-safety'
+  );
   restoreExpiredQuotaPauses();
 
   const config = loadOrCreateUnifiedConfig();
@@ -623,8 +624,9 @@ export async function preflightCheck(provider: CLIProxyProvider): Promise<Prefli
     return { proceed: true, accountId: defaultAccount?.id || '' };
   }
 
-  const { pauseAccountForQuotaCooldown, restoreExpiredQuotaPauses } =
-    await import('../accounts/account-safety');
+  const { pauseAccountForQuotaCooldown, restoreExpiredQuotaPauses } = await import(
+    '../accounts/account-safety'
+  );
   restoreExpiredQuotaPauses();
 
   const config = loadOrCreateUnifiedConfig();

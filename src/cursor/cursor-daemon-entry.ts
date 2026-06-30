@@ -22,6 +22,7 @@ import { translateAnthropicRequest } from './cursor-anthropic-translator';
 import { checkAuthStatus } from './cursor-auth';
 import { getModelsForDaemon, resolveCursorRequestModel } from './cursor-models';
 import type { CursorTool } from './cursor-protobuf-schema';
+import { ValidationError } from '../errors/error-types';
 
 interface DaemonRuntimeOptions {
   port: number;
@@ -204,17 +205,20 @@ function withCursorDaemonRequestContext<T>(
 
 function normalizeMessages(raw: unknown): NormalizedOpenAIMessage[] {
   if (!Array.isArray(raw)) {
-    throw new Error('messages must be an array');
+    throw new ValidationError('messages must be an array', 'messages');
   }
 
   return raw.map((message, index) => {
     if (typeof message !== 'object' || message === null) {
-      throw new Error(`messages[${index}] must be an object`);
+      throw new ValidationError(`messages[${index}] must be an object`, `messages[${index}]`);
     }
 
     const m = message as Record<string, unknown>;
     if (typeof m.role !== 'string' || !m.role) {
-      throw new Error(`messages[${index}].role must be a non-empty string`);
+      throw new ValidationError(
+        `messages[${index}].role must be a non-empty string`,
+        `messages[${index}].role`
+      );
     }
 
     const content = m.content;
@@ -224,7 +228,10 @@ function normalizeMessages(raw: unknown): NormalizedOpenAIMessage[] {
       typeof content !== 'string' &&
       !Array.isArray(content)
     ) {
-      throw new Error(`messages[${index}].content must be string, array, or null`);
+      throw new ValidationError(
+        `messages[${index}].content must be string, array, or null`,
+        `messages[${index}].content`
+      );
     }
 
     return {
@@ -388,7 +395,11 @@ export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Ser
         }
 
         if (isAnthropicRoute) {
-          const expectedToken = (process.env.ANTHROPIC_AUTH_TOKEN || 'cursor-managed').trim();
+          const expectedToken = (
+            process.env.ANTHROPIC_AUTH_TOKEN ||
+            process.env.CCS_CURSOR_DAEMON_TOKEN ||
+            'cursor-managed'
+          ).trim();
           const requestToken = getAnthropicRequestToken(req.headers);
           if (!expectedToken || requestToken !== expectedToken) {
             await pipeWebResponseToNode(
