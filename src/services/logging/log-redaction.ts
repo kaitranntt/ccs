@@ -12,7 +12,14 @@ const SENSITIVE_KEY_PATTERN =
 
 /** CLI flags whose following argument should be redacted in argv arrays. */
 const SENSITIVE_ARGV_FLAG_PATTERN =
-  /^--(token|api[_-]?key|auth|auth[_-]?token|secret|bearer|password|client[_-]?secret|refresh[_-]?token|access[_-]?token|id[_-]?token)$/i;
+  /^--(token|api[_-]?key|auth|auth[_-]?token|secret|bearer|password|client[_-]?secret|refresh[_-]?token|access[_-]?token|id[_-]?token|prompt)$/i;
+
+/** Short CLI flags whose following argument should be redacted in argv arrays. */
+const SENSITIVE_SHORT_ARGV_FLAG_PATTERN = /^-p$/;
+
+/** CLI flags whose inline `--flag=value` payload should be redacted in argv arrays. */
+const SENSITIVE_ARGV_ASSIGNMENT_PATTERN =
+  /^--(token|api[_-]?key|auth|auth[_-]?token|secret|bearer|password|client[_-]?secret|refresh[_-]?token|access[_-]?token|id[_-]?token|prompt)=/i;
 
 /** Bearer/Basic/Token auth-scheme prefix in raw string values. */
 const AUTH_SCHEME_VALUE_PATTERN = /^(Bearer|Basic|Token)\s+\S+/;
@@ -126,8 +133,16 @@ export function redactArgv(argv: readonly string[]): string[] {
   const out: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
+    if (SENSITIVE_ARGV_ASSIGNMENT_PATTERN.test(arg)) {
+      const separatorIndex = arg.indexOf('=');
+      out.push(`${arg.slice(0, separatorIndex + 1)}[redacted]`);
+      continue;
+    }
     out.push(arg);
-    if (SENSITIVE_ARGV_FLAG_PATTERN.test(arg) && i + 1 < argv.length) {
+    if (
+      (SENSITIVE_ARGV_FLAG_PATTERN.test(arg) || SENSITIVE_SHORT_ARGV_FLAG_PATTERN.test(arg)) &&
+      i + 1 < argv.length
+    ) {
       out.push('[redacted]');
       i++;
     }

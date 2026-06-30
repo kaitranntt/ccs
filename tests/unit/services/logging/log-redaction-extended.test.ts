@@ -136,4 +136,24 @@ describe('redactArgv', () => {
       '[redacted]',
     ]);
   });
+
+  it('redacts prompt values passed with -p and --prompt', () => {
+    expect(redactArgv(['glm', '-p', 'summarize secret account notes'])).toEqual([
+      'glm',
+      '-p',
+      '[redacted]',
+    ]);
+
+    expect(redactArgv(['glm', '--prompt', 'summarize secret account notes'])).toEqual([
+      'glm',
+      '--prompt',
+      '[redacted]',
+    ]);
+  });
+
+  it('redacts inline prompt and sensitive flag assignments', () => {
+    expect(
+      redactArgv(['glm', '--prompt=summarize secret account notes', '--api-key=plainsecret'])
+    ).toEqual(['glm', '--prompt=[redacted]', '--api-key=[redacted]']);
+  });
 });
