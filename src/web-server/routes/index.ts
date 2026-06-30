@@ -7,7 +7,13 @@
 
 import { Router } from 'express';
 import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
-import { BAR_AUTH_TOKEN_HEADER, getOrCreateBarAuthToken } from '../../utils/bar-auth-token';
+import {
+  BAR_AUTH_NONCE_HEADER,
+  BAR_AUTH_TOKEN_HEADER,
+  createBarAuthProof,
+  getOrCreateBarAuthToken,
+  isValidBarAuthNonce,
+} from '../../utils/bar-auth-token';
 
 // Import domain routers
 import profileRoutes from './profile-routes';
@@ -69,11 +75,13 @@ apiRoutes.use((req, res, next) => {
   // Exact segment match so a future sibling like '/barbaz' isn't accidentally gated.
   if (req.path === '/bar' || req.path.startsWith('/bar/')) {
     if (requireLocalAccessWhenAuthDisabled(req, res, BAR_LOCAL_ACCESS_ERROR)) {
-      // Echo the token unconditionally so the probe can verify it without
-      // having sent the secret in the request. Only the real CCS Bar process
-      // (which owns the 0600 file) can produce this value — a rogue loopback
-      // process that hasn't read the file cannot replicate it.
-      res.setHeader(BAR_AUTH_TOKEN_HEADER, getOrCreateBarAuthToken());
+      // Authenticate liveness probes with a nonce-bound HMAC so normal Bar
+      // responses never disclose the persistent file token, and captured probe
+      // proofs cannot be replayed for a future probe.
+      const nonce = req.header(BAR_AUTH_NONCE_HEADER)?.trim() ?? '';
+      if (isValidBarAuthNonce(nonce)) {
+        res.setHeader(BAR_AUTH_TOKEN_HEADER, createBarAuthProof(getOrCreateBarAuthToken(), nonce));
+      }
       next();
     }
     return;

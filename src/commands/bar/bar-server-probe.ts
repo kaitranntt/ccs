@@ -8,7 +8,13 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { BAR_AUTH_TOKEN_HEADER, getOrCreateBarAuthToken } from '../../utils/bar-auth-token';
+import {
+  BAR_AUTH_NONCE_HEADER,
+  BAR_AUTH_TOKEN_HEADER,
+  createBarAuthNonce,
+  isMatchingBarAuthProof,
+  getOrCreateBarAuthToken,
+} from '../../utils/bar-auth-token';
 
 export interface DashboardInfo {
   port: number;
@@ -46,12 +52,10 @@ export function resolveBarPort(ccsDir: string): number | null {
  * from a healthy one (200) without depending on a higher-level HTTP client.
  *
  * Token authentication: the probe does NOT send the token in the request.
- * The real CCS Bar server reads the token from the 0600 file and includes it
- * unconditionally in the x-ccs-bar-token response header. The probe then checks
- * that the echoed value matches the locally-read token. A rogue loopback process
- * that has not read the 0600 file cannot produce the correct value, so a 200
- * without a matching token header is rejected. Sending the token in the request
- * would defeat this — any process could echo what it received.
+ * Instead, it sends a fresh nonce. The real CCS Bar server reads the token from
+ * the 0600 file and returns HMAC(token, nonce) in the x-ccs-bar-token response
+ * header. The probe verifies the nonce-bound proof, so a captured proof cannot
+ * be replayed for a future probe.
  */
 export async function defaultFindRunningServer(ccsDir: string): Promise<DashboardInfo | null> {
   const token = getOrCreateBarAuthToken(ccsDir);
@@ -61,6 +65,7 @@ export async function defaultFindRunningServer(ccsDir: string): Promise<Dashboar
     const parsed = new URL(url);
     const port = Number(parsed.port);
     const host = parsed.hostname.replace(/^\[|\]$/g, '');
+    const nonce = createBarAuthNonce();
 
     return new Promise((resolve) => {
       let rawResponse = '';
@@ -79,23 +84,21 @@ export async function defaultFindRunningServer(ccsDir: string): Promise<Dashboar
           return;
         }
         if (statusCode === 200) {
-          // Accept only when the server includes the correct token in the
-          // response without having received it in the request. Only the real
-          // CCS Bar process (which owns the 0600 file) can produce this value.
+          // Accept only when the server includes a correct nonce-bound proof.
           const echoMatch = headerSection.match(
             new RegExp(`${BAR_AUTH_TOKEN_HEADER}:\\s*([^\\r\\n]+)`, 'i')
           );
-          const echoedToken = echoMatch ? echoMatch[1].trim() : '';
-          resolve({ ok: echoedToken === token, authRequired: false });
+          const proof = echoMatch ? echoMatch[1].trim() : '';
+          resolve({ ok: isMatchingBarAuthProof(token, nonce, proof), authRequired: false });
           return;
         }
         resolve({ ok: false, authRequired: false });
       };
       const socket = net.connect({ host, port }, () => {
-        // Do NOT include the token in the request — sending the secret to the
-        // party being authenticated lets any reflector trivially pass the check.
+        // Do NOT include the token in the request; only send a fresh nonce so
+        // the server can prove it knows the token without disclosing it.
         socket.write(
-          `GET ${parsed.pathname}${parsed.search} HTTP/1.1\r\nHost: ${parsed.host}\r\nConnection: close\r\n\r\n`
+          `GET ${parsed.pathname}${parsed.search} HTTP/1.1\r\nHost: ${parsed.host}\r\n${BAR_AUTH_NONCE_HEADER}: ${nonce}\r\nConnection: close\r\n\r\n`
         );
       });
       socket.setTimeout(1500, () => finish());
