@@ -7,6 +7,9 @@
  */
 
 import { beforeEach, describe, expect, it } from 'bun:test';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import {
   getNativeAccountRows,
   getCachedNativeAccountRows,
@@ -467,6 +470,125 @@ function makeCodexDeps(
 // ============================================================================
 
 describe('Codex network path', () => {
+  it('default resolver skips paused Codex accounts before live network refresh', async () => {
+    const originalCcsHome = process.env.CCS_HOME;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-bar-paused-codex-'));
+    process.env.CCS_HOME = tempHome;
+
+    try {
+      const registryDir = path.join(tempHome, '.ccs', 'cliproxy');
+      fs.mkdirSync(registryDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(registryDir, 'accounts.json'),
+        JSON.stringify(
+          {
+            version: 1,
+            providers: {
+              codex: {
+                default: 'paused-codex@example.com',
+                accounts: {
+                  'paused-codex@example.com': {
+                    email: 'paused-codex@example.com',
+                    tokenFile: 'paused-codex@example.com.json',
+                    paused: true,
+                  },
+                  'active-codex@example.com': {
+                    email: 'active-codex@example.com',
+                    tokenFile: 'active-codex@example.com.json',
+                  },
+                },
+              },
+            },
+          },
+          null,
+          2
+        )
+      );
+      fs.mkdirSync(path.join(registryDir, 'auth'), { recursive: true });
+      fs.writeFileSync(
+        path.join(registryDir, 'auth', 'active-codex@example.com.json'),
+        JSON.stringify({ type: 'codex' })
+      );
+
+      const fetchedAccountIds: string[] = [];
+      const deps = makeCodexDeps({
+        clock: { now: 1_000_000 },
+        // Exercise the production default resolver rather than injecting an
+        // account id, but keep the actual network call mocked.
+        getDefaultCodexAccountId: undefined,
+        fetchCodexNetworkQuota: async (accountId: string) => {
+          fetchedAccountIds.push(accountId);
+          return { ...codexSuccessQuota(), accountId };
+        },
+      });
+
+      await getNativeAccountRows(deps);
+
+      expect(fetchedAccountIds).toEqual(['active-codex@example.com']);
+    } finally {
+      if (originalCcsHome !== undefined) {
+        process.env.CCS_HOME = originalCcsHome;
+      } else {
+        delete process.env.CCS_HOME;
+      }
+      fs.rmSync(tempHome, { recursive: true, force: true });
+    }
+  });
+
+  it('default resolver does not live-refresh when all Codex accounts are paused', async () => {
+    const originalCcsHome = process.env.CCS_HOME;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-bar-all-paused-codex-'));
+    process.env.CCS_HOME = tempHome;
+
+    try {
+      const registryDir = path.join(tempHome, '.ccs', 'cliproxy');
+      fs.mkdirSync(registryDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(registryDir, 'accounts.json'),
+        JSON.stringify(
+          {
+            version: 1,
+            providers: {
+              codex: {
+                default: 'paused-codex@example.com',
+                accounts: {
+                  'paused-codex@example.com': {
+                    email: 'paused-codex@example.com',
+                    tokenFile: 'paused-codex@example.com.json',
+                    paused: true,
+                  },
+                },
+              },
+            },
+          },
+          null,
+          2
+        )
+      );
+
+      let networkCalls = 0;
+      const deps = makeCodexDeps({
+        clock: { now: 1_000_000 },
+        getDefaultCodexAccountId: undefined,
+        fetchCodexNetworkQuota: async () => {
+          networkCalls += 1;
+          return codexSuccessQuota();
+        },
+      });
+
+      await getNativeAccountRows(deps);
+
+      expect(networkCalls).toBe(0);
+      expect(deps.localCount()).toBe(1);
+    } finally {
+      if (originalCcsHome !== undefined) {
+        process.env.CCS_HOME = originalCcsHome;
+      } else {
+        delete process.env.CCS_HOME;
+      }
+      fs.rmSync(tempHome, { recursive: true, force: true });
+    }
+  });
   it('network success builds a fresh row from coreUsage — no staleAsOf, health ok, correct windows', async () => {
     const clock = { now: 1_000_000 };
     const deps = makeCodexDeps({ clock });

@@ -29,7 +29,7 @@ import {
 } from './claude-native-credentials';
 import { fetchClaudeQuotaWithToken } from '../../cliproxy/quota/quota-fetcher-claude';
 import { fetchCodexQuota } from '../../cliproxy/quota/quota-fetcher-codex';
-import { getDefaultAccount } from '../../cliproxy/accounts/query';
+import { getActiveAccounts } from '../../cliproxy/accounts/query';
 import { getCodexLocalQuota, type CodexLocalQuota } from './codex-local-quota-collector';
 import type { ClaudeQuotaResult, CodexQuotaResult } from '../../cliproxy/quota/quota-types';
 import type { BarSummaryRow, QuotaWindowDetail } from '../routes/bar-routes';
@@ -534,7 +534,13 @@ async function collectCodexRow(
   }
 
   const getDefaultAccountId =
-    deps.getDefaultCodexAccountId ?? (() => getDefaultAccount('codex')?.id ?? null);
+    deps.getDefaultCodexAccountId ??
+    (() => {
+      const activeAccounts = getActiveAccounts('codex');
+      return (
+        activeAccounts.find((account) => account.isDefault)?.id ?? activeAccounts[0]?.id ?? null
+      );
+    });
   const fetchNetwork =
     deps.fetchCodexNetworkQuota ?? ((accountId: string) => fetchCodexQuota(accountId));
   const getCodex = deps.getCodexQuota ?? getCodexLocalQuota;
