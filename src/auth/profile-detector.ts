@@ -427,6 +427,14 @@ class ProfileDetector {
     // Check if account-based default exists (legacy)
     const profiles = this.readProfiles();
 
+    if (unifiedConfig?.default && profiles.profiles[unifiedConfig.default]) {
+      return {
+        type: 'account',
+        name: unifiedConfig.default,
+        profile: profiles.profiles[unifiedConfig.default],
+      };
+    }
+
     if (profiles.default && profiles.profiles[profiles.default]) {
       return {
         type: 'account',

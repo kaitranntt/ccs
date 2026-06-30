@@ -5,7 +5,7 @@
  * - API-backed: Exa, Tavily, Brave
  * - Self-hosted: SearXNG
  * - Zero-setup: DuckDuckGo
- * - Legacy CLI fallbacks: Gemini, Grok, OpenCode
+ * - LLM CLI fallbacks: Antigravity (agy, recommended), Gemini (deprecated), Grok, OpenCode
  */
 
 /**
@@ -61,7 +61,24 @@ export interface SearxngWebSearchConfig {
 }
 
 /**
+ * Antigravity CLI (agy) WebSearch configuration.
+ *
+ * Recommended LLM CLI fallback. `agy` is Google's successor to the retired
+ * `gemini` CLI. Install: `curl -fsSL https://antigravity.google/cli/install.sh | bash`.
+ */
+export interface AgyWebSearchConfig {
+  /** Enable Antigravity CLI fallback (default: false) */
+  enabled?: boolean;
+  /** Model to use (default: gemini-2.5-flash; accepts legacy gemini ids) */
+  model?: string;
+  /** Timeout in seconds (default: 90) */
+  timeout?: number;
+}
+
+/**
  * Gemini CLI WebSearch configuration.
+ *
+ * @deprecated Google retired the gemini CLI on 2026-06-18. Use Antigravity (agy) instead.
  */
 export interface GeminiWebSearchConfig {
   /** Enable Gemini CLI legacy fallback (default: false) */
@@ -109,7 +126,9 @@ export interface WebSearchProvidersConfig {
   searxng?: SearxngWebSearchConfig;
   /** DuckDuckGo HTML search - zero setup default backend */
   duckduckgo?: DuckDuckGoWebSearchConfig;
-  /** Gemini CLI - optional legacy LLM fallback */
+  /** Antigravity CLI (agy) - recommended LLM CLI fallback (Gemini CLI successor) */
+  agy?: AgyWebSearchConfig;
+  /** Gemini CLI - deprecated legacy LLM fallback (retired upstream) */
   gemini?: GeminiWebSearchConfig;
   /** Grok CLI - optional legacy LLM fallback */
   grok?: GrokWebSearchConfig;

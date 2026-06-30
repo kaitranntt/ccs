@@ -8,6 +8,7 @@
 
 // Types
 export type {
+  AgyCliStatus,
   GeminiCliStatus,
   GrokCliStatus,
   OpenCodeCliStatus,
@@ -20,7 +21,10 @@ export type {
 
 export type { WebSearchApiKeyState } from './provider-secrets';
 
-// Gemini CLI
+// Antigravity CLI (agy) - recommended Gemini CLI successor
+export { getAgyCliStatus, hasAgyCli, clearAgyCliCache } from './agy';
+
+// Gemini CLI (deprecated)
 export {
   getGeminiCliStatus,
   hasGeminiCli,

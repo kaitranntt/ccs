@@ -62,6 +62,11 @@ describe('settings profile WebSearch launch', () => {
       JSON.stringify({ profiles: { glm: settingsPath } }, null, 2) + '\n'
     );
     fs.writeFileSync(
+      path.join(ccsDir, 'config.yaml'),
+      ['version: 12', 'websearch:', '  enabled: true', ''].join('\n'),
+      'utf8'
+    );
+    fs.writeFileSync(
       settingsPath,
       JSON.stringify(
         {
@@ -93,6 +98,7 @@ exit 0
       CCS_HOME: tmpHome,
       CCS_CLAUDE_PATH: fakeClaudePath,
       CCS_DEBUG: '1',
+      CCS_SKIP_PREFLIGHT: '1',
     };
   });
 
@@ -104,40 +110,30 @@ exit 0
     fs.rmSync(tmpHome, { recursive: true, force: true });
   });
 
-  it('continues without local WebSearch when the tool runtime cannot be prepared', () => {
+  it('fails closed when the local WebSearch tool runtime cannot be prepared', () => {
     if (process.platform === 'win32') return;
 
     fs.writeFileSync(path.join(ccsDir, 'hooks'), 'not-a-directory', 'utf8');
 
     const result = runCcs(['glm', 'smoke'], baseEnv);
 
-    expect(result.status).toBe(0);
+    expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('could not prepare the local WebSearch tool');
-    expect(result.stderr).toContain('This session will continue without local WebSearch');
-    expect(fs.existsSync(claudeArgsLogPath)).toBe(true);
-    const launchedArgs = fs.readFileSync(claudeArgsLogPath, 'utf8');
-    expect(launchedArgs).toContain('--disallowedTools');
-    expect(launchedArgs).toContain('WebSearch');
-    expect(launchedArgs).toContain('--append-system-prompt');
-    expect(launchedArgs).toContain(STEERING_PROMPT_SNIPPET);
+    expect(result.stderr).not.toContain('This session will continue without local WebSearch');
+    expect(fs.existsSync(claudeArgsLogPath)).toBe(false);
   });
 
-  it('continues delegated headless launch when the local WebSearch tool runtime cannot be prepared', () => {
+  it('fails closed for delegated headless launch when the local WebSearch tool runtime cannot be prepared', () => {
     if (process.platform === 'win32') return;
 
     fs.writeFileSync(path.join(ccsDir, 'hooks'), 'not-a-directory', 'utf8');
 
     const result = runCcs(['glm', '-p', 'smoke'], baseEnv);
 
-    expect(result.status).toBe(0);
+    expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('could not prepare the local WebSearch tool');
-    expect(result.stderr).toContain('This session will continue without local WebSearch');
-    expect(fs.existsSync(claudeArgsLogPath)).toBe(true);
-    const launchedArgs = fs.readFileSync(claudeArgsLogPath, 'utf8');
-    expect(launchedArgs).toContain('--disallowedTools');
-    expect(launchedArgs).toContain('WebSearch');
-    expect(launchedArgs).toContain('--append-system-prompt');
-    expect(launchedArgs).toContain(STEERING_PROMPT_SNIPPET);
+    expect(result.stderr).not.toContain('This session will continue without local WebSearch');
+    expect(fs.existsSync(claudeArgsLogPath)).toBe(false);
   });
 
   it('keeps launch non-fatal when WebSearch is disabled', () => {
@@ -145,7 +141,7 @@ exit 0
 
     fs.writeFileSync(
       path.join(ccsDir, 'config.yaml'),
-      'version: 12\nwebsearch:\n  enabled: false\n',
+      ['version: 12', 'websearch:', '  enabled: false', ''].join('\n'),
       'utf8'
     );
     fs.writeFileSync(path.join(ccsDir, 'hooks'), 'not-a-directory', 'utf8');
@@ -165,6 +161,11 @@ exit 0
   it('writes a source-side launch trace for settings profiles when tracing is enabled', () => {
     if (process.platform === 'win32') return;
 
+    fs.writeFileSync(
+      path.join(ccsDir, 'config.yaml'),
+      ['version: 12', 'websearch:', '  enabled: false', ''].join('\n'),
+      'utf8'
+    );
     const tracePath = path.join(ccsDir, 'logs', 'websearch-trace.jsonl');
     const result = runCcs(['glm', 'smoke'], {
       ...baseEnv,

@@ -2,6 +2,7 @@ import { describe, expect, it, spyOn } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import * as agyCli from '../../../../src/utils/websearch/agy';
 import * as geminiCli from '../../../../src/utils/websearch/gemini-cli';
 import * as grokCli from '../../../../src/utils/websearch/grok-cli';
 import * as opencodeCli from '../../../../src/utils/websearch/opencode-cli';
@@ -13,7 +14,9 @@ import {
 } from '../../../../src/utils/websearch/status';
 import type { WebSearchCliInfo } from '../../../../src/utils/websearch/types';
 
-function provider(overrides: Partial<WebSearchCliInfo> & Pick<WebSearchCliInfo, 'id' | 'name'>): WebSearchCliInfo {
+function provider(
+  overrides: Partial<WebSearchCliInfo> & Pick<WebSearchCliInfo, 'id' | 'name'>
+): WebSearchCliInfo {
   return {
     id: overrides.id,
     kind: overrides.kind ?? 'backend',
@@ -151,6 +154,10 @@ describe('websearch readiness', () => {
       installed: false,
       version: null,
     } as any);
+    const agyStatusSpy = spyOn(agyCli, 'getAgyCliStatus').mockReturnValue({
+      installed: false,
+      version: null,
+    } as any);
 
     try {
       const providers = getWebSearchCliProviders();
@@ -166,6 +173,7 @@ describe('websearch readiness', () => {
       geminiAuthSpy.mockRestore();
       grokStatusSpy.mockRestore();
       opencodeStatusSpy.mockRestore();
+      agyStatusSpy.mockRestore();
     }
   });
 
@@ -205,6 +213,10 @@ describe('websearch readiness', () => {
       installed: false,
       version: null,
     } as any);
+    const agyStatusSpy = spyOn(agyCli, 'getAgyCliStatus').mockReturnValue({
+      installed: false,
+      version: null,
+    } as any);
 
     try {
       const providers = getWebSearchCliProviders();
@@ -216,6 +228,72 @@ describe('websearch readiness', () => {
     } finally {
       getConfigSpy.mockRestore();
       apiKeySpy.mockRestore();
+      geminiStatusSpy.mockRestore();
+      geminiAuthSpy.mockRestore();
+      grokStatusSpy.mockRestore();
+      opencodeStatusSpy.mockRestore();
+      agyStatusSpy.mockRestore();
+    }
+  });
+
+  it('exposes Antigravity (agy) as a recommended CLI provider when enabled and installed', () => {
+    const getConfigSpy = spyOn(unifiedConfigLoader, 'getWebSearchConfig').mockReturnValue({
+      enabled: true,
+      providers: {
+        exa: { enabled: false, max_results: 5 },
+        tavily: { enabled: false, max_results: 5 },
+        brave: { enabled: false, max_results: 5 },
+        searxng: { enabled: false, url: '', max_results: 5 },
+        duckduckgo: { enabled: false, max_results: 5 },
+        agy: { enabled: true, model: 'gemini-2.5-flash', timeout: 90 },
+        gemini: { enabled: false },
+        grok: { enabled: false },
+        opencode: { enabled: false },
+      },
+    } as any);
+    const apiKeySpy = spyOn(providerSecrets, 'getWebSearchApiKeyStates').mockReturnValue({
+      exa: { envVar: 'EXA_API_KEY', configured: false, available: false, source: 'none' },
+      tavily: { envVar: 'TAVILY_API_KEY', configured: false, available: false, source: 'none' },
+      brave: { envVar: 'BRAVE_API_KEY', configured: false, available: false, source: 'none' },
+    });
+    const agyStatusSpy = spyOn(agyCli, 'getAgyCliStatus').mockReturnValue({
+      installed: true,
+      version: '1.0.13',
+    } as any);
+    const geminiStatusSpy = spyOn(geminiCli, 'getGeminiCliStatus').mockReturnValue({
+      installed: false,
+      version: null,
+    } as any);
+    const geminiAuthSpy = spyOn(geminiCli, 'isGeminiAuthenticated').mockReturnValue(false);
+    const grokStatusSpy = spyOn(grokCli, 'getGrokCliStatus').mockReturnValue({
+      installed: false,
+      version: null,
+    } as any);
+    const opencodeStatusSpy = spyOn(opencodeCli, 'getOpenCodeCliStatus').mockReturnValue({
+      installed: false,
+      version: null,
+    } as any);
+
+    try {
+      const providers = getWebSearchCliProviders();
+      const agy = providers.find((entry) => entry.id === 'agy');
+
+      expect(agy?.name).toBe('Antigravity CLI');
+      expect(agy?.kind).toBe('legacy-cli');
+      expect(agy?.command).toBe('agy');
+      expect(agy?.enabled).toBe(true);
+      expect(agy?.available).toBe(true);
+      expect(agy?.requiresApiKey).toBe(false);
+      expect(agy?.installCommand).toContain('antigravity.google');
+      expect(agy?.detail).toContain('1.0.13');
+
+      const readiness = buildWebSearchReadiness(true, providers);
+      expect(readiness.readiness).toBe('ready');
+      expect(readiness.message).toContain('Antigravity CLI');
+    } finally {
+      getConfigSpy.mockRestore();
+      apiKeySpy.mockRestore();
+      agyStatusSpy.mockRestore();
       geminiStatusSpy.mockRestore();
       geminiAuthSpy.mockRestore();
       grokStatusSpy.mockRestore();
@@ -293,6 +371,10 @@ describe('websearch readiness', () => {
       installed: false,
       version: null,
     } as any);
+    const agyStatusSpy = spyOn(agyCli, 'getAgyCliStatus').mockReturnValue({
+      installed: false,
+      version: null,
+    } as any);
 
     try {
       const providers = getWebSearchCliProviders();
@@ -313,6 +395,7 @@ describe('websearch readiness', () => {
       geminiAuthSpy.mockRestore();
       grokStatusSpy.mockRestore();
       opencodeStatusSpy.mockRestore();
+      agyStatusSpy.mockRestore();
 
       if (originalCcsHome === undefined) {
         delete process.env.CCS_HOME;

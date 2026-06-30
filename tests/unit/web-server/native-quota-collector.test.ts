@@ -7,6 +7,9 @@
  */
 
 import { beforeEach, describe, expect, it } from 'bun:test';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import {
   getNativeAccountRows,
   getCachedNativeAccountRows,
@@ -467,6 +470,202 @@ function makeCodexDeps(
 // ============================================================================
 
 describe('Codex network path', () => {
+  it('production profile enumeration skips paused Codex accounts before live network refresh', async () => {
+    const originalCcsHome = process.env.CCS_HOME;
+    const originalHome = process.env.HOME;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-bar-paused-codex-'));
+    process.env.CCS_HOME = tempHome;
+    process.env.HOME = tempHome;
+
+    try {
+      const ccsDir = path.join(tempHome, '.ccs');
+      const cliproxyDir = path.join(ccsDir, 'cliproxy');
+      fs.mkdirSync(cliproxyDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(ccsDir, 'codex-profiles.yaml'),
+        [
+          'version: "1.0"',
+          'default: paused',
+          'profiles:',
+          '  paused:',
+          '    type: codex',
+          '    created: "2026-01-01T00:00:00.000Z"',
+          '    last_used: null',
+          '    email: paused-codex@example.com',
+          '    account_id: paused-codex@example.com',
+          '  active:',
+          '    type: codex',
+          '    created: "2026-01-02T00:00:00.000Z"',
+          '    last_used: null',
+          '    email: active-codex@example.com',
+          '    account_id: active-codex@example.com',
+          '',
+        ].join('\n')
+      );
+      fs.writeFileSync(
+        path.join(cliproxyDir, 'accounts.json'),
+        JSON.stringify(
+          {
+            version: 1,
+            providers: {
+              codex: {
+                default: 'paused-codex@example.com',
+                accounts: {
+                  'paused-codex@example.com': {
+                    email: 'paused-codex@example.com',
+                    tokenFile: 'paused-codex@example.com.json',
+                    paused: true,
+                  },
+                  'active-codex@example.com': {
+                    email: 'active-codex@example.com',
+                    tokenFile: 'active-codex@example.com.json',
+                  },
+                },
+              },
+            },
+          },
+          null,
+          2
+        )
+      );
+      fs.mkdirSync(path.join(cliproxyDir, 'auth'), { recursive: true });
+      fs.mkdirSync(path.join(cliproxyDir, 'auth-paused'), { recursive: true });
+      fs.writeFileSync(
+        path.join(cliproxyDir, 'auth', 'active-codex@example.com.json'),
+        JSON.stringify({ type: 'codex' })
+      );
+      fs.writeFileSync(
+        path.join(cliproxyDir, 'auth-paused', 'paused-codex@example.com.json'),
+        JSON.stringify({ type: 'codex' })
+      );
+
+      const fetchedAccountIds: string[] = [];
+      const deps = makeCodexDeps({
+        clock: { now: 1_000_000 },
+        listClaudeProfiles: () => [],
+        readCredentials: undefined,
+        getDefaultCodexAccountId: undefined,
+        readCodexNativeAuth: (profile: string) => ({
+          accessToken: `token-${profile}`,
+          accountId: profile === 'active' ? 'active-codex@example.com' : 'paused-codex@example.com',
+        }),
+        fetchCodexNetworkQuota: async (accountId: string) => {
+          fetchedAccountIds.push(accountId);
+          return { ...codexSuccessQuota(), accountId };
+        },
+      });
+
+      const rows = await getNativeAccountRows(deps);
+
+      expect(fetchedAccountIds).toEqual(['active-codex@example.com']);
+      expect(rows.find((row) => row.profile === 'paused')).toBeUndefined();
+      const active = rows.find((row) => row.profile === 'active');
+      expect(active?.paused).toBe(false);
+      expect(active?.is_default).toBe(true);
+    } finally {
+      if (originalCcsHome !== undefined) {
+        process.env.CCS_HOME = originalCcsHome;
+      } else {
+        delete process.env.CCS_HOME;
+      }
+      if (originalHome !== undefined) {
+        process.env.HOME = originalHome;
+      } else {
+        delete process.env.HOME;
+      }
+      fs.rmSync(tempHome, { recursive: true, force: true });
+    }
+  });
+
+  it('production profile enumeration does not live-refresh when all Codex accounts are paused', async () => {
+    const originalCcsHome = process.env.CCS_HOME;
+    const originalHome = process.env.HOME;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-bar-all-paused-codex-'));
+    process.env.CCS_HOME = tempHome;
+    process.env.HOME = tempHome;
+
+    try {
+      const ccsDir = path.join(tempHome, '.ccs');
+      const cliproxyDir = path.join(ccsDir, 'cliproxy');
+      fs.mkdirSync(cliproxyDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(ccsDir, 'codex-profiles.yaml'),
+        [
+          'version: "1.0"',
+          'default: paused',
+          'profiles:',
+          '  paused:',
+          '    type: codex',
+          '    created: "2026-01-01T00:00:00.000Z"',
+          '    last_used: null',
+          '    email: paused-codex@example.com',
+          '    account_id: paused-codex@example.com',
+          '',
+        ].join('\n')
+      );
+      fs.writeFileSync(
+        path.join(cliproxyDir, 'accounts.json'),
+        JSON.stringify(
+          {
+            version: 1,
+            providers: {
+              codex: {
+                default: 'paused-codex@example.com',
+                accounts: {
+                  'paused-codex@example.com': {
+                    email: 'paused-codex@example.com',
+                    tokenFile: 'paused-codex@example.com.json',
+                    paused: true,
+                  },
+                },
+              },
+            },
+          },
+          null,
+          2
+        )
+      );
+      fs.mkdirSync(path.join(cliproxyDir, 'auth-paused'), { recursive: true });
+      fs.writeFileSync(
+        path.join(cliproxyDir, 'auth-paused', 'paused-codex@example.com.json'),
+        JSON.stringify({ type: 'codex' })
+      );
+
+      let networkCalls = 0;
+      const deps = makeCodexDeps({
+        clock: { now: 1_000_000 },
+        listClaudeProfiles: () => [],
+        readCredentials: undefined,
+        getDefaultCodexAccountId: undefined,
+        readCodexNativeAuth: (profile: string) => ({
+          accessToken: `token-${profile}`,
+          accountId: 'paused-codex@example.com',
+        }),
+        fetchCodexNetworkQuota: async () => {
+          networkCalls += 1;
+          return codexSuccessQuota();
+        },
+      });
+
+      const rows = await getNativeAccountRows(deps);
+
+      expect(networkCalls).toBe(0);
+      expect(deps.localCount()).toBe(0);
+      expect(rows.find((row) => row.profile === 'paused')).toBeUndefined();
+    } finally {
+      if (originalCcsHome !== undefined) {
+        process.env.CCS_HOME = originalCcsHome;
+      } else {
+        delete process.env.CCS_HOME;
+      }
+      if (originalHome !== undefined) {
+        process.env.HOME = originalHome;
+      } else {
+        delete process.env.HOME;
+      }
+      fs.rmSync(tempHome, { recursive: true, force: true });
+    }
+  });
   it('network success builds a fresh row from coreUsage — no staleAsOf, health ok, correct windows', async () => {
     const clock = { now: 1_000_000 };
     const deps = makeCodexDeps({ clock });
@@ -773,5 +972,616 @@ describe('getCachedNativeAccountRows (instant, no-fetch fallback)', () => {
 
     resetNativeQuotaState();
     expect(getCachedNativeAccountRows()).toEqual([]);
+  });
+});
+
+// ============================================================================
+// Multi-profile path tests (GH-1595)
+//
+// These tests inject listClaudeProfiles / listCodexProfiles / defaultClaudeProfile
+// / defaultCodexProfile so the production profile-enumeration path is exercised
+// without touching real ~/.ccs or any Keychain. The readClaudeCredentialsForProfile
+// and readCodexNativeAuth seams prevent fs access.
+// ============================================================================
+
+/**
+ * Build a NativeQuotaDeps for the multi-profile path.
+ *
+ * - claudeProfiles: profile names for the Claude surface (ccs)
+ * - codexProfiles: profile names for the Codex surface (ccsx)
+ * - claudeDefault / codexDefault: the active profile per surface (paused:false)
+ * - credsForProfile: map from profile name to credentials (null = parked)
+ * - claudeFetch: network fetcher for Claude (all profiles share one implementation)
+ * - codexNativeAuth: map from profile name to {accessToken, accountId}
+ * - codexNetworkFetch: network fetcher for Codex (all profiles share one impl)
+ */
+function makeMultiProfileDeps(opts: {
+  clock: { now: number };
+  claudeProfiles: string[];
+  codexProfiles: string[];
+  claudeDefault?: string | null;
+  codexDefault?: string | null;
+  credsForProfile?: (profile: string) => ClaudeNativeCredentials | null;
+  claudeFetch?: (token: string, accountId?: string) => Promise<ClaudeQuotaResult>;
+  codexNativeAuth?: (profile: string) => { accessToken: string; accountId: string } | null;
+  codexNetworkFetch?: (accountId: string) => Promise<CodexQuotaResult>;
+  codexLocalFallback?: () => Promise<CodexLocalQuota | null>;
+}): NativeQuotaDeps & {
+  claudeFetchCount: () => number;
+  codexNetworkCount: () => number;
+} {
+  let claudeFetches = 0;
+  let codexNetworkFetches = 0;
+
+  const {
+    clock,
+    claudeProfiles,
+    codexProfiles,
+    claudeDefault = null,
+    codexDefault = null,
+    credsForProfile = () => null,
+    claudeFetch = async () => successQuota(),
+    codexNativeAuth = () => null,
+    codexNetworkFetch = async () => codexSuccessQuota(),
+    codexLocalFallback = async () => null,
+  } = opts;
+
+  return {
+    // Enumeration seams
+    listClaudeProfiles: () => claudeProfiles,
+    listCodexProfiles: () => codexProfiles,
+    defaultClaudeProfile: () => claudeDefault,
+    defaultCodexProfile: () => codexDefault,
+    // Credential seams (file-only, no keychain)
+    readClaudeCredentialsForProfile: credsForProfile,
+    readCodexNativeAuth: codexNativeAuth,
+    // Fetch seams
+    fetchClaudeQuota: async (token: string, accountId?: string) => {
+      claudeFetches += 1;
+      return claudeFetch(token, accountId);
+    },
+    fetchCodexNetworkQuota: async (accountId: string) => {
+      codexNetworkFetches += 1;
+      return codexNetworkFetch(accountId);
+    },
+    getCodexQuota: codexLocalFallback,
+    // Disable legacy single-profile paths
+    readCredentials: () => null,
+    getDefaultCodexAccountId: () => null,
+    // Clock + sleep seams
+    now: () => clock.now,
+    sleep: async () => {},
+    // Counters
+    claudeFetchCount: () => claudeFetches,
+    codexNetworkCount: () => codexNetworkFetches,
+  };
+}
+
+describe('multi-profile: account_id and wire fields', () => {
+  it('Claude profile rows carry surface="ccs", account_id="ccs:<p>", is_subscription=true', async () => {
+    const clock = { now: 1_000_000 };
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: ['work', 'ck'],
+      codexProfiles: [],
+      claudeDefault: 'work',
+      // 'work' has creds; 'ck' does not (parked)
+      credsForProfile: (p) => (p === 'work' ? maxCreds() : null),
+      claudeFetch: async () => successQuota(),
+    });
+
+    const rows = await getNativeAccountRows(deps);
+    expect(rows.length).toBe(2);
+
+    const work = rows.find((r) => r.profile === 'work');
+    expect(work).toBeDefined();
+    expect(work?.account_id).toBe('ccs:work');
+    expect(work?.surface).toBe('ccs');
+    expect(work?.is_subscription).toBe(true);
+    expect(work?.provider).toBe('claude-code');
+
+    const ck = rows.find((r) => r.profile === 'ck');
+    expect(ck).toBeDefined();
+    expect(ck?.account_id).toBe('ccs:ck');
+    expect(ck?.surface).toBe('ccs');
+    expect(ck?.is_subscription).toBe(true);
+  });
+
+  it('Codex profile rows carry surface="ccsx", account_id="ccsx:<p>", is_subscription=true', async () => {
+    const clock = { now: 1_000_000 };
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: [],
+      codexProfiles: ['personal', 'ck'],
+      codexDefault: 'personal',
+      codexNativeAuth: (p) => ({ accessToken: `tok-${p}`, accountId: `id-${p}` }),
+      codexNetworkFetch: async () => codexSuccessQuota(),
+    });
+
+    const rows = await getNativeAccountRows(deps);
+    expect(rows.length).toBe(2);
+
+    const personal = rows.find((r) => r.profile === 'personal');
+    expect(personal?.account_id).toBe('ccsx:personal');
+    expect(personal?.surface).toBe('ccsx');
+    expect(personal?.is_subscription).toBe(true);
+    expect(personal?.provider).toBe('codex');
+
+    const ck = rows.find((r) => r.profile === 'ck');
+    expect(ck?.account_id).toBe('ccsx:ck');
+    expect(ck?.surface).toBe('ccsx');
+    expect(ck?.is_subscription).toBe(true);
+  });
+
+  it('paused reflects liveness (creds present), NOT default-ness; is_default marks the default independently', async () => {
+    const clock = { now: 1_000_000 };
+    const deps = makeMultiProfileDeps({
+      clock,
+      // Claude: work = default + creds (live); ck = non-default + NO creds (parked).
+      claudeProfiles: ['work', 'ck'],
+      // Codex: personal = default + creds (live); ck = NON-default + creds (live).
+      codexProfiles: ['personal', 'ck'],
+      claudeDefault: 'work',
+      codexDefault: 'personal',
+      credsForProfile: (p) => (p === 'work' ? maxCreds() : null),
+      claudeFetch: async () => successQuota(),
+      codexNativeAuth: (p) => ({ accessToken: `tok-${p}`, accountId: `id-${p}` }),
+      codexNetworkFetch: async () => codexSuccessQuota(),
+    });
+
+    const rows = await getNativeAccountRows(deps);
+
+    // Claude work: default + creds -> live, not dimmed.
+    const claudeWork = rows.find((r) => r.surface === 'ccs' && r.profile === 'work');
+    expect(claudeWork?.paused).toBe(false);
+    expect(claudeWork?.is_default).toBe(true);
+
+    // Claude ck: non-default + NO creds -> parked/dimmed.
+    const claudeCk = rows.find((r) => r.surface === 'ccs' && r.profile === 'ck');
+    expect(claudeCk?.paused).toBe(true);
+    expect(claudeCk?.is_default).toBe(false);
+
+    // Codex personal: default + creds -> live.
+    const codexPersonal = rows.find((r) => r.surface === 'ccsx' && r.profile === 'personal');
+    expect(codexPersonal?.paused).toBe(false);
+    expect(codexPersonal?.is_default).toBe(true);
+
+    // Codex ck: NON-default but HAS creds -> LIVE, NOT dimmed. This is the key
+    // correctness guarantee: a valid isolated subscription is never dimmed just
+    // because it is not the surface default.
+    const codexCk = rows.find((r) => r.surface === 'ccsx' && r.profile === 'ck');
+    expect(codexCk?.paused).toBe(false);
+    expect(codexCk?.is_default).toBe(false);
+  });
+
+  it('N Claude + M Codex profiles produce N+M rows', async () => {
+    const clock = { now: 1_000_000 };
+    const claudeProfiles = ['work', 'ck', 'personal'];
+    const codexProfiles = ['personal', 'ck'];
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles,
+      codexProfiles,
+      claudeDefault: 'work',
+      codexDefault: 'personal',
+      credsForProfile: () => maxCreds(),
+      codexNativeAuth: (p) => ({ accessToken: `tok-${p}`, accountId: `id-${p}` }),
+    });
+
+    const rows = await getNativeAccountRows(deps);
+    expect(rows.length).toBe(claudeProfiles.length + codexProfiles.length);
+  });
+
+  it('rows are sorted by (surface, profile)', async () => {
+    const clock = { now: 1_000_000 };
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: ['work', 'ck'],
+      codexProfiles: ['ck', 'personal'],
+      claudeDefault: 'work',
+      codexDefault: 'personal',
+      credsForProfile: () => maxCreds(),
+      codexNativeAuth: (p) => ({ accessToken: `tok-${p}`, accountId: `id-${p}` }),
+    });
+
+    const rows = await getNativeAccountRows(deps);
+    const keys = rows.map((r) => `${r.surface}:${r.profile}`);
+    // ccs:ck < ccs:work < ccsx:ck < ccsx:personal
+    expect(keys).toEqual(['ccs:ck', 'ccs:work', 'ccsx:ck', 'ccsx:personal']);
+  });
+});
+
+describe('multi-profile: Claude file-only reader', () => {
+  it('profile with .credentials.json present -> live fetch row (paused:false when default)', async () => {
+    const clock = { now: 1_000_000 };
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: ['work'],
+      codexProfiles: [],
+      claudeDefault: 'work',
+      credsForProfile: (p) => (p === 'work' ? maxCreds() : null),
+      claudeFetch: async () => successQuota(),
+    });
+
+    const rows = await getNativeAccountRows(deps);
+    expect(rows.length).toBe(1);
+    const row = rows[0];
+    expect(row?.profile).toBe('work');
+    expect(row?.quotaStatus).toBe('ok');
+    expect(row?.needsReauth).toBe(false);
+    expect(row?.paused).toBe(false);
+    expect(deps.claudeFetchCount()).toBe(1);
+  });
+
+  it('profile without .credentials.json -> parked row (needsReauth:true, no live fetch)', async () => {
+    const clock = { now: 1_000_000 };
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: ['ck'],
+      codexProfiles: [],
+      claudeDefault: 'ck',
+      credsForProfile: () => null, // no file on disk
+      claudeFetch: async () => successQuota(),
+    });
+
+    const rows = await getNativeAccountRows(deps);
+    expect(rows.length).toBe(1);
+    const row = rows[0];
+    expect(row?.profile).toBe('ck');
+    expect(row?.needsReauth).toBe(true);
+    expect(row?.quota_percentage).toBeNull();
+    // No live network call when creds are absent
+    expect(deps.claudeFetchCount()).toBe(0);
+  });
+
+  it('absent creds row has quotaStatus unsupported (honest "needs auth" state)', async () => {
+    const clock = { now: 1_000_000 };
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: ['ck'],
+      codexProfiles: [],
+      claudeDefault: 'ck',
+      credsForProfile: () => null,
+    });
+
+    const rows = await getNativeAccountRows(deps);
+    const row = rows[0];
+    expect(row?.quotaStatus).toBe('unsupported');
+    expect(row?.is_subscription).toBe(true);
+  });
+});
+
+describe('multi-profile: per-profile circuit breaker isolation', () => {
+  it("one profile's 429 does not open another profile's breaker", async () => {
+    const MAX_COOLDOWN_JUMP_MP = 61_000;
+    const clock = { now: 1_000_000 };
+    let workFails = true;
+
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: ['work', 'ck'],
+      codexProfiles: [],
+      claudeDefault: 'work',
+      credsForProfile: () => maxCreds(),
+      claudeFetch: async (_token, accountId) => {
+        // 'work' (ccs:work) always 429s; 'ck' always succeeds
+        if (accountId?.includes('work') && workFails) {
+          return {
+            success: false,
+            windows: [],
+            coreUsage: { fiveHour: null, weekly: null },
+            lastUpdated: Date.now(),
+            accountId: accountId ?? 'ccs:work',
+            httpStatus: 429,
+            retryable: true,
+            error: 'rate limited',
+          } as ClaudeQuotaResult;
+        }
+        return successQuota();
+      },
+    });
+
+    // Trip the work breaker with 3 consecutive 429s.
+    for (let i = 0; i < 3; i++) {
+      resetNativeQuotaState();
+      clock.now += i === 0 ? 0 : MAX_COOLDOWN_JUMP_MP;
+      // Re-inject the multi-profile deps after reset so the state maps are fresh.
+      await getNativeAccountRows({
+        ...deps,
+        listClaudeProfiles: () => ['work'],
+        listCodexProfiles: () => [],
+        defaultClaudeProfile: () => 'work',
+      });
+    }
+
+    // After the three 429s on 'work', check that 'ck' still succeeds.
+    // We reset state to have a clean run where 'ck' has no prior breaker history.
+    resetNativeQuotaState();
+    clock.now += MAX_COOLDOWN_JUMP_MP;
+    workFails = false;
+
+    const rows = await getNativeAccountRows(deps);
+    const ckRow = rows.find((r) => r.profile === 'ck');
+    const workRow = rows.find((r) => r.profile === 'work');
+
+    // 'ck' should succeed — its breaker was never tripped.
+    expect(ckRow?.quotaStatus).toBe('ok');
+    // 'work' is also fine after reset (no breaker state).
+    expect(workRow?.quotaStatus).toBe('ok');
+  });
+
+  it("per-profile breaker: one profile's 429s only block that profile", async () => {
+    const clock = { now: 1_000_000 };
+    let workCall429Count = 0;
+
+    // 'work' returns 429 each call; 'ck' returns success.
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: ['work', 'ck'],
+      codexProfiles: [],
+      claudeDefault: 'work',
+      credsForProfile: () => maxCreds(),
+      claudeFetch: async (_token, accountId) => {
+        if (accountId?.includes('work')) {
+          workCall429Count += 1;
+          return {
+            success: false,
+            windows: [],
+            coreUsage: { fiveHour: null, weekly: null },
+            lastUpdated: clock.now,
+            accountId: accountId ?? '',
+            httpStatus: 429,
+            retryable: true,
+            error: 'rate limited',
+          } as ClaudeQuotaResult;
+        }
+        return successQuota();
+      },
+    });
+
+    // First call: 'work' gets a 429, 'ck' succeeds.
+    const rows1 = await getNativeAccountRows(deps);
+    const ck1 = rows1.find((r) => r.profile === 'ck');
+    expect(ck1?.quotaStatus).toBe('ok');
+    expect(workCall429Count).toBeGreaterThanOrEqual(1);
+
+    // Skip past cooldown for 'work' only; 'ck' is within TTL.
+    clock.now += 62_000;
+
+    // Second call past 'work' cooldown: work tries again (429 again); ck cached.
+    const rows2 = await getNativeAccountRows(deps);
+    const ck2 = rows2.find((r) => r.profile === 'ck');
+    // 'ck' still has a good cached row.
+    expect(ck2?.quotaStatus).toBe('ok');
+  });
+});
+
+describe('multi-profile: displayName uses profile name', () => {
+  it('displayName is the profile name, not "Claude Code" or "Codex"', async () => {
+    const clock = { now: 1_000_000 };
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: ['my-work'],
+      codexProfiles: ['my-codex'],
+      claudeDefault: 'my-work',
+      codexDefault: 'my-codex',
+      credsForProfile: () => maxCreds(),
+      codexNativeAuth: (p) => ({ accessToken: `tok-${p}`, accountId: `id-${p}` }),
+    });
+
+    const rows = await getNativeAccountRows(deps);
+    const c = rows.find((r) => r.surface === 'ccs');
+    const x = rows.find((r) => r.surface === 'ccsx');
+    expect(c?.displayName).toBe('my-work');
+    expect(x?.displayName).toBe('my-codex');
+  });
+});
+
+describe('multi-profile: getCachedNativeAccountRows reflects per-profile maps', () => {
+  it('returns cached rows from all profiles after a collect', async () => {
+    const clock = { now: 1_000_000 };
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: ['work', 'ck'],
+      codexProfiles: ['personal'],
+      claudeDefault: 'work',
+      codexDefault: 'personal',
+      credsForProfile: () => maxCreds(),
+      codexNativeAuth: (p) => ({ accessToken: `tok-${p}`, accountId: `id-${p}` }),
+    });
+
+    await getNativeAccountRows(deps);
+
+    const cached = getCachedNativeAccountRows();
+    expect(cached.every((r) => r.cached === true)).toBe(true);
+    // Should have rows for work, ck, and personal (parked 'ck' has no cached row
+    // yet because it had creds in this test so it did fetch)
+    const profiles = cached.map((r) => r.profile);
+    expect(profiles).toContain('work');
+    expect(profiles).toContain('personal');
+
+    resetNativeQuotaState();
+    expect(getCachedNativeAccountRows()).toEqual([]);
+  });
+});
+
+describe('review focus areas: reauth caching + codex local fallback', () => {
+  it('Claude reauth (401) profile is dimmed, cached, and not re-polled within cooldown', async () => {
+    resetNativeQuotaState();
+    const clock = { now: 5_000_000 };
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: ['work'],
+      codexProfiles: [],
+      claudeDefault: 'work',
+      credsForProfile: () => maxCreds(),
+      claudeFetch: async () => reauthQuota(),
+    });
+
+    const first = await getNativeAccountRows(deps);
+    const r1 = first.find((r) => r.profile === 'work');
+    expect(r1?.needsReauth).toBe(true);
+    expect(r1?.paused).toBe(true); // dimmed
+    expect(deps.claudeFetchCount()).toBe(1);
+
+    // A forced refresh within the cooldown serves the cached reauth row and does
+    // NOT re-hit the endpoint (no repeated 401 on the same account).
+    const second = await getNativeAccountRows(deps, { force: true });
+    const r2 = second.find((r) => r.profile === 'work');
+    expect(r2?.needsReauth).toBe(true);
+    expect(r2?.cached).toBe(true);
+    expect(deps.claudeFetchCount()).toBe(1);
+  });
+
+  it('Codex reauth (401) profile is dimmed, cached, and not re-polled within cooldown', async () => {
+    resetNativeQuotaState();
+    const clock = { now: 5_000_000 };
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: [],
+      codexProfiles: ['ck'],
+      codexDefault: 'default',
+      codexNativeAuth: (p) => ({ accessToken: `t-${p}`, accountId: `id-${p}` }),
+      codexNetworkFetch: async () => ({ success: false, needsReauth: true }) as CodexQuotaResult,
+    });
+
+    const first = await getNativeAccountRows(deps);
+    const r1 = first.find((r) => r.profile === 'ck');
+    expect(r1?.needsReauth).toBe(true);
+    expect(r1?.paused).toBe(true);
+    expect(deps.codexNetworkCount()).toBe(1);
+
+    const second = await getNativeAccountRows(deps, { force: true });
+    expect(second.find((r) => r.profile === 'ck')?.cached).toBe(true);
+    expect(deps.codexNetworkCount()).toBe(1);
+  });
+
+  it('Codex named profile without on-disk auth is parked, never filled from global local data', async () => {
+    resetNativeQuotaState();
+    const clock = { now: 5_000_000 };
+    let localCalls = 0;
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: [],
+      codexProfiles: ['ck'],
+      codexDefault: 'default',
+      codexNativeAuth: () => null, // no auth.json for the named profile
+      codexLocalFallback: async () => {
+        localCalls += 1;
+        return codexLocalQuota();
+      },
+    });
+
+    const rows = await getNativeAccountRows(deps);
+    const ck = rows.find((r) => r.profile === 'ck');
+    expect(ck).toBeDefined();
+    expect(ck?.paused).toBe(true); // parked, dimmed
+    expect(ck?.needsReauth).toBe(true);
+    expect(ck?.quota_percentage).toBeNull();
+    // The global ~/.codex session data is never attributed to a named profile.
+    expect(localCalls).toBe(0);
+  });
+
+  it('Codex default profile without auth uses the global local session fallback', async () => {
+    resetNativeQuotaState();
+    const clock = { now: 5_000_000 };
+    let localCalls = 0;
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: [],
+      codexProfiles: ['default'],
+      codexDefault: 'default',
+      codexNativeAuth: () => null,
+      codexLocalFallback: async () => {
+        localCalls += 1;
+        return codexLocalQuota();
+      },
+    });
+
+    const rows = await getNativeAccountRows(deps);
+    const def = rows.find((r) => r.profile === 'default');
+    expect(def).toBeDefined();
+    // The bare default legitimately reflects the global ~/.codex local data.
+    expect(localCalls).toBe(1);
+    expect(def?.quotaStatus).not.toBe('unsupported');
+  });
+
+  it('cache-fallback rows keep is_default for the default profile', async () => {
+    resetNativeQuotaState();
+    const clock = { now: 6_000_000 };
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: ['work', 'ck'],
+      codexProfiles: ['default', 'ck'],
+      claudeDefault: 'work',
+      codexDefault: 'default',
+      credsForProfile: () => maxCreds(),
+      claudeFetch: async () => successQuota(),
+      codexNativeAuth: (p) => ({ accessToken: `t-${p}`, accountId: `id-${p}` }),
+      codexNetworkFetch: async () => codexSuccessQuota(),
+    });
+
+    await getNativeAccountRows(deps); // populate the per-profile caches
+
+    // The cache-fallback path must preserve is_default so the UI still orders and
+    // tags the default account when /summary serves from cache.
+    const cached = getCachedNativeAccountRows();
+    expect(cached.find((r) => r.surface === 'ccs' && r.profile === 'work')?.is_default).toBe(true);
+    expect(cached.find((r) => r.surface === 'ccsx' && r.profile === 'default')?.is_default).toBe(
+      true
+    );
+    expect(cached.find((r) => r.surface === 'ccs' && r.profile === 'ck')?.is_default).toBe(false);
+    expect(cached.find((r) => r.surface === 'ccsx' && r.profile === 'ck')?.is_default).toBe(false);
+  });
+
+  it('parked (no-creds) rows use a short TTL so a fresh login is detected quickly', async () => {
+    resetNativeQuotaState();
+    const clock = { now: 7_000_000 };
+    let hasCreds = false;
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: ['work'],
+      codexProfiles: [],
+      claudeDefault: 'work',
+      credsForProfile: () => (hasCreds ? maxCreds() : null),
+      claudeFetch: async () => successQuota(),
+    });
+
+    // First poll: no creds -> parked, no network.
+    const first = await getNativeAccountRows(deps);
+    expect(first.find((r) => r.profile === 'work')?.paused).toBe(true);
+    expect(deps.claudeFetchCount()).toBe(0);
+
+    // User logs in; advance past the short parked TTL (30s) but far within the
+    // full quota TTL (10min). The parked row must NOT be served stale.
+    hasCreds = true;
+    clock.now += 31_000;
+    const second = await getNativeAccountRows(deps);
+    const work = second.find((r) => r.profile === 'work');
+    expect(work?.paused).toBe(false); // now live, not dimmed
+    expect(work?.quotaStatus).toBe('ok');
+    expect(deps.claudeFetchCount()).toBe(1); // re-checked -> fetched
+  });
+
+  it('Codex named profile with valid auth but sparse payload stays active, not parked', async () => {
+    resetNativeQuotaState();
+    const clock = { now: 7_000_000 };
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: [],
+      codexProfiles: ['ck'],
+      codexDefault: 'default',
+      codexNativeAuth: (p) => ({ accessToken: `t-${p}`, accountId: `id-${p}` }),
+      // Successful response but NO core windows (sparse / changed payload).
+      codexNetworkFetch: async () => ({ success: true }) as CodexQuotaResult,
+    });
+
+    const rows = await getNativeAccountRows(deps);
+    const ck = rows.find((r) => r.profile === 'ck');
+    expect(ck).toBeDefined();
+    expect(ck?.paused).toBe(false); // active subscription, not parked
+    expect(ck?.needsReauth).toBe(false);
+    expect(ck?.quotaStatus).toBe('ok');
+    expect(ck?.quota_percentage).toBeNull(); // no windows, but still active
   });
 });

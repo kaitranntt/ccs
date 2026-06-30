@@ -143,6 +143,7 @@ export async function probeCursorRuntime(config: CursorConfig): Promise<CursorPr
     const startResult = await startDaemon({
       port: config.port,
       ghost_mode: config.ghost_mode,
+      daemon_token: daemonToken,
     });
 
     if (!startResult.success) {
@@ -190,7 +191,7 @@ export async function probeCursorRuntime(config: CursorConfig): Promise<CursorPr
     try {
       const response = await fetch(`http://127.0.0.1:${config.port}/v1/chat/completions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-ccs-cursor-token': daemonToken },
         body: JSON.stringify({
           model,
           max_tokens: 8,

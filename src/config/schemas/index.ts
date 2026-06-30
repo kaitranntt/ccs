@@ -66,6 +66,7 @@ export type {
   ExaWebSearchConfig,
   TavilyWebSearchConfig,
   SearxngWebSearchConfig,
+  AgyWebSearchConfig,
   GeminiWebSearchConfig,
   GrokWebSearchConfig,
   OpenCodeWebSearchConfig,

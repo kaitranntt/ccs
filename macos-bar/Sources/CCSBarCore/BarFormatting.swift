@@ -165,9 +165,47 @@ public enum BarFormatting {
   /// Code or Codex plan) rather than a CLIProxy-managed OAuth pool account. Drives
   /// the "Subscriptions" grouping + badge so a user reads "this is MY plan quota",
   /// not one of the rotating pool credentials.
+  ///
+  /// Prefers the explicit `is_subscription` flag from the server (multi-profile
+  /// feature). Falls back to the legacy heuristic (`accountId == provider`) so
+  /// old single-profile payloads still work without `is_subscription`.
   public static func isNativeSubscription(_ row: BarSummaryRow) -> Bool {
-    (row.provider == "claude-code" && row.accountId == "claude-code")
+    if let s = row.isSubscription { return s }
+    // Legacy fallback for old payloads that omit is_subscription.
+    return (row.provider == "claude-code" && row.accountId == "claude-code")
       || (row.provider == "codex" && row.accountId == "codex")
+  }
+
+  /// Surface + profile chip label for multi-profile cards, e.g. "ccs · work" or
+  /// "ccsx · ck". Returns nil for CLIProxy pool rows that have no profile.
+  public static func surfaceProfileLabel(_ row: BarSummaryRow) -> String? {
+    guard let p = row.profile else { return nil }
+    let s = row.surface ?? row.provider
+    return "\(s) · \(p)"
+  }
+
+  /// True when this row is the surface's default/base account — the bare login
+  /// (e.g. `ccsx` => ~/.codex), as opposed to a named `ccsx <profile>` profile.
+  /// The server names this account "default".
+  public static func isBaseAccount(_ row: BarSummaryRow) -> Bool {
+    row.profile == "default"
+  }
+
+  /// Primary card title. For the default/base account it is the bare command the
+  /// user actually runs ("ccsx" / "ccs"); for a named profile it is the profile
+  /// name ("ck"). Falls back to the provider product label for legacy rows.
+  public static func accountTitle(_ row: BarSummaryRow) -> String {
+    if isBaseAccount(row) { return row.surface ?? providerLabel(row.provider) }
+    return row.profile ?? providerLabel(row.provider)
+  }
+
+  /// Secondary chip beside the title. The default/base account is tagged
+  /// "default"; a named profile is tagged with the surface that owns it
+  /// ("ccs"/"ccsx") so "ck" reads as a ccsx profile. Nil for pool rows.
+  public static func accountTag(_ row: BarSummaryRow) -> String? {
+    guard row.profile != nil else { return nil }
+    if isBaseAccount(row) { return "default" }
+    return row.surface ?? row.provider
   }
 
   /// Friendly product label for a provider key. Native subscription keys read as

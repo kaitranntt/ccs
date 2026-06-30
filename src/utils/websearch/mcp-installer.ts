@@ -440,28 +440,14 @@ export function ensureWebSearchMcpOrThrow(): void {
 }
 
 /**
- * Prepare WebSearch for a user launch without blocking Claude startup.
+ * Prepare WebSearch for a user launch.
  *
- * Returns true when the normal WebSearch status line is still accurate. A
- * failed MCP prepare already prints a degraded-path warning, so callers should
- * skip the ready/status line when this returns false.
+ * WebSearch-enabled launches must fail closed when the managed local MCP
+ * runtime cannot be prepared. Otherwise CCS would still suppress Claude's
+ * native WebSearch and inject fallback steering while the constrained MCP
+ * search path is unavailable.
  */
 export function ensureWebSearchMcpForLaunch(): boolean {
-  const wsConfig = getWebSearchConfig();
-  if (!wsConfig.enabled) {
-    return true;
-  }
-
-  const ready = ensureWebSearchMcp();
-  if (!ready) {
-    process.stderr.write(
-      String(
-        warn(
-          'WebSearch is enabled, but CCS could not prepare the local WebSearch tool. This session will continue without local WebSearch.'
-        )
-      ) + '\n'
-    );
-  }
-
-  return ready;
+  ensureWebSearchMcpOrThrow();
+  return true;
 }

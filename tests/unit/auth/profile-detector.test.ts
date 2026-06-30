@@ -190,6 +190,51 @@ describe('ProfileDetector', () => {
       }
     });
 
+    it('should resolve a unified default that points to a legacy-only account profile', () => {
+      const originalCcsHome = process.env.CCS_HOME;
+      process.env.CCS_HOME = tempDir;
+      const ccsDir = path.join(tempDir, '.ccs');
+      fs.mkdirSync(ccsDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(ccsDir, 'profiles.json'),
+        JSON.stringify({
+          default: 'oldDefault',
+          profiles: {
+            oldDefault: { created: '2025-01-01', last_used: '2025-01-02' },
+            legacyOnly: { created: '2025-02-01', last_used: '2025-02-02' },
+          },
+        })
+      );
+
+      const mockUnifiedConfig = {
+        version: 2,
+        default: 'legacyOnly',
+        profiles: {},
+        accounts: {},
+      };
+
+      const isUnifiedModeSpy = spyOn(unifiedConfigLoader, 'isUnifiedMode').mockReturnValue(true);
+      const loadUnifiedConfigSpy = spyOn(unifiedConfigLoader, 'loadUnifiedConfig').mockReturnValue(
+        mockUnifiedConfig as any
+      );
+
+      try {
+        const localDetector = new ProfileDetector();
+        const result = localDetector.resolveDefaultProfileResult();
+        expect(result.type).toBe('account');
+        expect(result.name).toBe('legacyOnly');
+        expect(result.profile).toEqual({ created: '2025-02-01', last_used: '2025-02-02' });
+      } finally {
+        isUnifiedModeSpy.mockRestore();
+        loadUnifiedConfigSpy.mockRestore();
+        if (originalCcsHome !== undefined) {
+          process.env.CCS_HOME = originalCcsHome;
+        } else {
+          delete process.env.CCS_HOME;
+        }
+      }
+    });
+
     it('should return null for unknown profile (throws error)', () => {
       const isUnifiedModeSpy = spyOn(unifiedConfigLoader, 'isUnifiedMode').mockReturnValue(false);
       // Mock readConfig/readProfiles to return empty

@@ -16,14 +16,13 @@ import {
   getDaemonStatus,
   stopDaemon,
   startDaemon,
+  buildDaemonProcessEnv,
 } from '../../../src/cursor/cursor-daemon';
 import { getCcsDir } from '../../../src/utils/config-manager';
 import { handleCursorCommand } from '../../../src/commands/cursor-command';
-import {
-  renderCursorHelp,
-  renderCursorStatus,
-} from '../../../src/commands/cursor-command-display';
+import { renderCursorHelp, renderCursorStatus } from '../../../src/commands/cursor-command-display';
 import { loadCredentials } from '../../../src/cursor/cursor-auth';
+import { getCursorDaemonToken } from '../../../src/cursor/cursor-daemon-auth';
 import { DEFAULT_CURSOR_CONFIG } from '../../../src/config/unified-config-types';
 
 // Test isolation
@@ -148,6 +147,26 @@ describe('removePidFile', () => {
   });
 });
 
+describe('buildDaemonProcessEnv', () => {
+  it('uses the daemon token for both daemon and Anthropic caller auth', () => {
+    const originalAnthropicToken = process.env.ANTHROPIC_AUTH_TOKEN;
+    process.env.ANTHROPIC_AUTH_TOKEN = 'inherited-stale-token';
+
+    try {
+      const env = buildDaemonProcessEnv('generated-daemon-token');
+
+      expect(env.CCS_CURSOR_DAEMON_TOKEN).toBe('generated-daemon-token');
+      expect(env.ANTHROPIC_AUTH_TOKEN).toBe('generated-daemon-token');
+    } finally {
+      if (originalAnthropicToken !== undefined) {
+        process.env.ANTHROPIC_AUTH_TOKEN = originalAnthropicToken;
+      } else {
+        delete process.env.ANTHROPIC_AUTH_TOKEN;
+      }
+    }
+  });
+});
+
 describe('startDaemon', () => {
   it('rejects invalid port (0)', async () => {
     const result = await startDaemon({ port: 0 });
@@ -197,7 +216,7 @@ describe('isDaemonRunning', () => {
         throw new Error('Unable to resolve test server port');
       }
 
-      const result = await isDaemonRunning(address.port, "bad-token");
+      const result = await isDaemonRunning(address.port, 'bad-token');
       expect(result).toBe(false);
     } finally {
       await new Promise<void>((resolve) => {
@@ -221,6 +240,41 @@ describe('getDaemonStatus', () => {
     expect(status.running).toBe(false);
     expect(status.port).toBe(19999);
     expect(status.pid).toBeUndefined();
+  });
+
+  it('uses the persisted daemon token when checking status', async () => {
+    const daemonToken = getCursorDaemonToken();
+    const server = http.createServer((req, res) => {
+      if (req.url === '/health' && req.headers['x-ccs-cursor-token'] === daemonToken) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, service: 'cursor-daemon' }));
+        return;
+      }
+
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Unauthorized' }));
+    });
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, '127.0.0.1', () => resolve());
+    });
+
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('Unable to resolve test server port');
+      }
+
+      writePidToFile(12345);
+      const status = await getDaemonStatus(address.port);
+      expect(status.running).toBe(true);
+      expect(status.port).toBe(address.port);
+      expect(status.pid).toBe(12345);
+    } finally {
+      await new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      });
+    }
   });
 });
 
@@ -275,17 +329,18 @@ describe('stopDaemon', () => {
   });
 
   it('refuses to stop when daemon ownership cannot be verified', async () => {
-    const killSpy = spyOn(process, 'kill').mockImplementation(
-      ((pid: number, signal?: NodeJS.Signals | number) => {
-        if (pid === process.pid && signal === 0) {
-          const err = new Error('EPERM') as NodeJS.ErrnoException;
-          err.code = 'EPERM';
-          throw err;
-        }
+    const killSpy = spyOn(process, 'kill').mockImplementation(((
+      pid: number,
+      signal?: NodeJS.Signals | number
+    ) => {
+      if (pid === process.pid && signal === 0) {
+        const err = new Error('EPERM') as NodeJS.ErrnoException;
+        err.code = 'EPERM';
+        throw err;
+      }
 
-        return true;
-      }) as typeof process.kill
-    );
+      return true;
+    }) as typeof process.kill);
 
     writePidToFile(process.pid);
 
@@ -388,11 +443,13 @@ describe('renderCursorStatus', () => {
         true
       );
       expect(
-        logs.some((line) => line.includes('Chat route:      http://127.0.0.1:20129/v1/chat/completions'))
+        logs.some((line) =>
+          line.includes('Chat route:      http://127.0.0.1:20129/v1/chat/completions')
+        )
       ).toBe(true);
-      expect(
-        logs.some((line) => line.includes('Anthropic base:  http://127.0.0.1:20129'))
-      ).toBe(true);
+      expect(logs.some((line) => line.includes('Anthropic base:  http://127.0.0.1:20129'))).toBe(
+        true
+      );
       expect(
         logs.some((line) => line.includes(`Raw settings:    ${getCcsDir()}/cursor.settings.json`))
       ).toBe(true);
@@ -460,9 +517,9 @@ describe('renderCursorStatus', () => {
         { running: true, port: 20129, pid: 1234 }
       );
 
-      expect(logs.some((line) => line.includes('Raw settings:    ~/.ccs/cursor.settings.json'))).toBe(
-        true
-      );
+      expect(
+        logs.some((line) => line.includes('Raw settings:    ~/.ccs/cursor.settings.json'))
+      ).toBe(true);
     } finally {
       if (originalCcsHomeValue !== undefined) {
         process.env.CCS_HOME = originalCcsHomeValue;
@@ -496,15 +553,11 @@ describe('renderCursorHelp', () => {
           line.includes('Deprecated: `ccs cursor` now belongs to the CLIProxy Cursor provider.')
         )
       ).toBe(true);
-      expect(logs.some((line) => line.includes('probe     Run a live authenticated runtime probe'))).toBe(
-        true
-      );
       expect(
-        logs.some((line) => line.includes('ccs cursor --auth'))
+        logs.some((line) => line.includes('probe     Run a live authenticated runtime probe'))
       ).toBe(true);
-      expect(
-        logs.some((line) => line.includes('ccs legacy cursor [claude args]'))
-      ).toBe(true);
+      expect(logs.some((line) => line.includes('ccs cursor --auth'))).toBe(true);
+      expect(logs.some((line) => line.includes('ccs legacy cursor [claude args]'))).toBe(true);
     } finally {
       console.log = originalLog;
     }

@@ -7,7 +7,7 @@ export interface ContentBlock {
   type: string;
   text?: string;
   thinking?: string;
-  signature?: ThinkingSignature;
+  signature?: string;
   id?: string;
   name?: string;
   input?: Record<string, unknown>;
@@ -95,12 +95,9 @@ export interface TransformResult {
   error?: string;
 }
 
-export interface ThinkingSignature {
-  type: string;
-  hash: string;
-  length: number;
-  timestamp: number;
-}
+// Anthropic contract: a thinking block's signature is a non-empty opaque
+// string. Kept as a named alias so existing imports stay intact.
+export type ThinkingSignature = string;
 
 // OpenAI response types
 export interface OpenAIChoice {

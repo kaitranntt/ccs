@@ -87,6 +87,16 @@ mock.module('../../quota/quota-manager', () => ({
   stopQuotaMonitor: jest.fn(),
 }));
 
+const mockCleanupLaunchSettings = jest.fn();
+const mockPrepareLaunchSettings = jest.fn().mockReturnValue({
+  settingsPath: '/tmp/fake-settings-overlay.json',
+  cleanup: mockCleanupLaunchSettings,
+});
+
+mock.module('../launch-settings', () => ({
+  prepareLaunchSettings: mockPrepareLaunchSettings,
+}));
+
 // ── Subject under test ────────────────────────────────────────────────────────
 
 import { launchClaude } from '../claude-launcher';
@@ -131,6 +141,12 @@ describe('launchClaude', () => {
     mockSpawn.mockClear();
     mockSetupCleanupHandlers.mockClear();
     mockEscapeShellArg.mockClear();
+    mockCleanupLaunchSettings.mockClear();
+    mockPrepareLaunchSettings.mockClear();
+    mockPrepareLaunchSettings.mockReturnValue({
+      settingsPath: '/tmp/fake-settings-overlay.json',
+      cleanup: mockCleanupLaunchSettings,
+    });
   });
 
   it('calls spawn with claudeCli and includes --settings arg', async () => {
@@ -187,6 +203,16 @@ describe('launchClaude', () => {
   it('returns the ChildProcess from spawn', async () => {
     const result = await launchClaude(baseContext());
     expect(result).toBe(mockSpawnResult);
+  });
+
+  it('calls cleanup and rethrows when spawn throws synchronously', async () => {
+    const spawnErr = new Error('ERR_INVALID_ARG_VALUE');
+    mockSpawn.mockImplementationOnce(() => {
+      throw spawnErr;
+    });
+
+    await expect(launchClaude(baseContext())).rejects.toThrow('ERR_INVALID_ARG_VALUE');
+    expect(mockCleanupLaunchSettings).toHaveBeenCalledTimes(1);
   });
 
   describe('Windows shell escaping', () => {

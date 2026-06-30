@@ -77,6 +77,16 @@ describe('cursor daemon lifecycle smoke', () => {
 
     expect(await isDaemonRunning(port, daemonToken)).toBe(true);
 
+    const standardAuthHealthResponse = await fetch(`http://127.0.0.1:${port}/health`, {
+      headers: { 'x-api-key': daemonToken },
+    });
+    expect(standardAuthHealthResponse.status).toBe(200);
+
+    const bearerAuthHealthResponse = await fetch(`http://127.0.0.1:${port}/health`, {
+      headers: { Authorization: `Bearer ${daemonToken}` },
+    });
+    expect(bearerAuthHealthResponse.status).toBe(200);
+
     const modelsResponse = await fetch(`http://127.0.0.1:${port}/v1/models`);
     expect(modelsResponse.status).toBe(200);
     const modelsJson = (await modelsResponse.json()) as { object?: string; data?: unknown[] };

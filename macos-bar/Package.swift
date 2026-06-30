@@ -10,7 +10,7 @@ import PackageDescription
 // the core is verified.
 let package = Package(
   name: "CCSBar",
-  platforms: [.macOS(.v13)],
+  platforms: [.macOS(.v14)],
   products: [
     .executable(name: "CCSBar", targets: ["CCSBarApp"]),
     .executable(name: "ccs-bar-check", targets: ["CCSBarCheck"]),

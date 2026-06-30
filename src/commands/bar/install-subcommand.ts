@@ -20,8 +20,9 @@ import * as os from 'os';
 import * as path from 'path';
 import { getCcsDir } from '../../config/config-loader-facade';
 import { hasAnyFlag } from '../arg-extractor';
-import { getLaunchJsonPath, LAUNCH_JSON_SCHEMA } from './bar-paths';
+import { getLaunchJsonPath } from './bar-paths';
 import type { LaunchJson } from './bar-paths';
+import { createBarLaunchDescriptor } from './launch-descriptor';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -671,13 +672,7 @@ export async function handleBarInstall(
   //     Non-fatal — install has already succeeded at this point.
   try {
     const launchJsonPath = getLaunchJsonPath(ccsDir);
-    const launchDescriptor: LaunchJson = {
-      schema: LAUNCH_JSON_SCHEMA,
-      runtime: process.execPath,
-      args: [process.argv[1], 'bar', 'serve'],
-      home: os.homedir(),
-      ...(process.env.CCS_HOME ? { ccsHome: process.env.CCS_HOME } : {}),
-    };
+    const launchDescriptor = createBarLaunchDescriptor();
     writeLaunchDescriptor(launchJsonPath, launchDescriptor);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

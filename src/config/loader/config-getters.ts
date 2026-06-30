@@ -90,6 +90,7 @@ export function getWebSearchConfig(): {
     brave?: { enabled?: boolean; max_results?: number };
     searxng?: { enabled?: boolean; url?: string; max_results?: number };
     duckduckgo?: { enabled?: boolean; max_results?: number };
+    agy?: { enabled?: boolean; model?: string; timeout?: number };
     gemini?: GeminiWebSearchInfo;
     opencode?: { enabled?: boolean; model?: string; timeout?: number };
     grok?: { enabled?: boolean; timeout?: number };
@@ -126,6 +127,12 @@ export function getWebSearchConfig(): {
     max_results: config.websearch?.providers?.searxng?.max_results ?? 5,
   };
 
+  const agyConfig = {
+    enabled: config.websearch?.providers?.agy?.enabled ?? false,
+    model: config.websearch?.providers?.agy?.model ?? 'gemini-2.5-flash',
+    timeout: config.websearch?.providers?.agy?.timeout ?? 90,
+  };
+
   const geminiConfig: GeminiWebSearchInfo = {
     enabled:
       config.websearch?.providers?.gemini?.enabled ?? config.websearch?.gemini?.enabled ?? false,
@@ -152,6 +159,7 @@ export function getWebSearchConfig(): {
     braveConfig.enabled ||
     searxngConfig.enabled ||
     duckDuckGoConfig.enabled ||
+    agyConfig.enabled ||
     geminiConfig.enabled ||
     opencodeConfig.enabled ||
     grokConfig.enabled;
@@ -165,6 +173,7 @@ export function getWebSearchConfig(): {
       brave: braveConfig,
       searxng: searxngConfig,
       duckduckgo: duckDuckGoConfig,
+      agy: agyConfig,
       gemini: geminiConfig,
       opencode: opencodeConfig,
       grok: grokConfig,

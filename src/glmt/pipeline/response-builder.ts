@@ -177,17 +177,16 @@ export class ResponseBuilder {
 
   /**
    * Generate thinking signature for Claude Code UI
+   *
+   * Anthropic requires a thinking block's `signature` to be a non-empty
+   * opaque STRING. Emit a deterministic base64 token (no Date.now()) so the
+   * thinking block stays valid against reasoning backends; returning an object
+   * here produces an invalid thinking block and breaks the stream.
    */
   generateThinkingSignature(thinking: string): ThinkingSignature {
-    // Generate signature hash
     const hash = crypto.createHash('sha256').update(thinking).digest('hex').substring(0, 16);
 
-    return {
-      type: 'thinking_signature',
-      hash: hash,
-      length: thinking.length,
-      timestamp: Date.now(),
-    };
+    return Buffer.from(`ccs-thinking:${hash}:${thinking.length}`).toString('base64');
   }
 
   /**

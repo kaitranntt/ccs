@@ -21,7 +21,6 @@ import * as os from 'os';
 import * as path from 'path';
 import type { ChildProcess } from 'child_process';
 import { getCcsDir } from '../../config/config-loader-facade';
-import { NetworkError } from '../../errors/error-types';
 import {
   BAR_AUTH_NONCE_HEADER,
   BAR_AUTH_TOKEN_HEADER,
@@ -29,19 +28,17 @@ import {
   isMatchingBarAuthProof,
   getOrCreateBarAuthToken,
 } from '../../utils/bar-auth-token';
-import {
-  getBarDir,
-  getBarJsonPath,
-  getLaunchJsonPath,
-  getServeLogPath,
-  LAUNCH_JSON_SCHEMA,
-} from './bar-paths';
+import { getBarDir, getBarJsonPath, getLaunchJsonPath, getServeLogPath } from './bar-paths';
 import type { LaunchJson } from './bar-paths';
+import { createBarLaunchDescriptor } from './launch-descriptor';
 import {
   defaultFindRunningServer as _defaultFindRunningServer,
   resolveBarPort as _resolveBarPort,
 } from './bar-server-probe';
 import type { DashboardInfo as _DashboardInfo } from './bar-server-probe';
+
+const BAR_PROBE_TIMEOUT_MS = 1500;
+const MAX_BAR_PROBE_RESPONSE_BYTES = 8192;
 
 // ---------------------------------------------------------------------------
 // Re-exports — backward compat for tests that import from this module.
@@ -141,6 +138,13 @@ export class BarServerAuthRequiredError extends Error {
   }
 }
 
+export class BarServerTimeoutError extends Error {
+  constructor(baseUrl: string, timeoutSeconds: number) {
+    super(`CCS Bar server did not become live at ${baseUrl} within ${timeoutSeconds}s`);
+    this.name = 'BarServerTimeoutError';
+  }
+}
+
 function isAuthRequiredStatus(statusCode: number): boolean {
   return statusCode === 401 || statusCode === 403;
 }
@@ -158,9 +162,12 @@ export async function defaultWaitForServerLive(baseUrl: string): Promise<void> {
     return new Promise((resolve) => {
       let rawResponse = '';
       let settled = false;
+      const absoluteDeadline = setTimeout(() => finish(), BAR_PROBE_TIMEOUT_MS);
+      absoluteDeadline.unref?.();
       const finish = (statusCode: number | null = null, headerSection = '') => {
         if (settled) return;
         settled = true;
+        clearTimeout(absoluteDeadline);
         socket.destroy();
         if (statusCode === 200) {
           const echoMatch = headerSection.match(
@@ -182,9 +189,13 @@ export async function defaultWaitForServerLive(baseUrl: string): Promise<void> {
           );
         }
       );
-      socket.setTimeout(1500, () => finish());
+      socket.setTimeout(BAR_PROBE_TIMEOUT_MS, () => finish());
       socket.on('data', (chunk) => {
         rawResponse += chunk.toString('utf8');
+        if (rawResponse.length > MAX_BAR_PROBE_RESPONSE_BYTES) {
+          finish();
+          return;
+        }
         const statusMatch = rawResponse.match(/^HTTP\/\d(?:\.\d)?\s+(\d{3})/);
         if (statusMatch) {
           const code = Number(statusMatch[1]);
@@ -217,10 +228,7 @@ export async function defaultWaitForServerLive(baseUrl: string): Promise<void> {
     await new Promise<void>((resolve) => setTimeout(resolve, INTERVAL_MS));
   }
 
-  throw new NetworkError(
-    `CCS Bar server did not become live at ${baseUrl} within ${TIMEOUT_MS / 1000}s`,
-    baseUrl
-  );
+  throw new BarServerTimeoutError(baseUrl, TIMEOUT_MS / 1000);
 }
 
 function defaultWriteLaunchDescriptor(jsonPath: string, descriptor: LaunchJson): void {
@@ -316,14 +324,8 @@ export async function handleBarLaunch(
   }
 
   // 2b. Write/refresh launch.json so the Swift app can self-start next time.
-  const launchDescriptor: LaunchJson = {
-    schema: LAUNCH_JSON_SCHEMA,
-    runtime: process.execPath,
-    args: [process.argv[1], 'bar', 'serve'],
-    home: os.homedir(),
-    ...(process.env.CCS_HOME ? { ccsHome: process.env.CCS_HOME } : {}),
-  };
   try {
+    const launchDescriptor = createBarLaunchDescriptor();
     writeLaunchDescriptor(launchJsonPath, launchDescriptor);
   } catch (err) {
     // Non-fatal — the Swift app falls back to resolving `ccs` via PATH.

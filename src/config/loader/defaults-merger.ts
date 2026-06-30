@@ -160,6 +160,11 @@ export function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfi
           enabled: partial.websearch?.providers?.duckduckgo?.enabled ?? true,
           max_results: partial.websearch?.providers?.duckduckgo?.max_results ?? 5,
         },
+        agy: {
+          enabled: partial.websearch?.providers?.agy?.enabled ?? false,
+          model: partial.websearch?.providers?.agy?.model ?? 'gemini-2.5-flash',
+          timeout: partial.websearch?.providers?.agy?.timeout ?? 90,
+        },
         gemini: {
           enabled:
             partial.websearch?.providers?.gemini?.enabled ??

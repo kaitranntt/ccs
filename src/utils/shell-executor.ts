@@ -34,13 +34,17 @@ export function stripAnthropicEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return result;
 }
 
-const ANTHROPIC_ROUTING_ENV_KEYS = [
+export const ANTHROPIC_ROUTING_ENV_KEYS = [
   'ANTHROPIC_BASE_URL',
   'ANTHROPIC_AUTH_TOKEN',
   'ANTHROPIC_API_KEY',
 ];
 const ANTHROPIC_ROUTING_ENV_KEY_SET = new Set(ANTHROPIC_ROUTING_ENV_KEYS);
-const ANTHROPIC_MODEL_ENV_KEYS = [
+// NOTE: This is the intentional routing-overlay SUPERSET of model env keys
+// (includes ANTHROPIC_SMALL_FAST_MODEL). A separate 4-key `ANTHROPIC_MODEL_ENV_KEYS`
+// exists in src/shared/extended-context-utils.ts (re-exported as MODEL_ENV_VAR_KEYS).
+// The two are NOT interchangeable — import deliberately by purpose. See issue #1609.
+export const ANTHROPIC_MODEL_ENV_KEYS = [
   'ANTHROPIC_MODEL',
   'ANTHROPIC_DEFAULT_OPUS_MODEL',
   'ANTHROPIC_DEFAULT_SONNET_MODEL',

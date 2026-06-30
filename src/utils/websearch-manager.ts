@@ -16,6 +16,7 @@
 
 // Re-export types
 export type {
+  AgyCliStatus,
   GeminiCliStatus,
   GrokCliStatus,
   OpenCodeCliStatus,
@@ -25,6 +26,8 @@ export type {
 } from './websearch/types';
 
 // Re-export CLI detection functions
+export { getAgyCliStatus, hasAgyCli, clearAgyCliCache } from './websearch/agy';
+
 export {
   getGeminiCliStatus,
   hasGeminiCli,
@@ -92,12 +95,18 @@ export {
 export { ensureProfileHooks, ensureProfileHooksOrThrow } from './websearch/profile-hook-injector';
 
 // Import for local use
-import { clearGeminiCliCache, clearGrokCliCache, clearOpenCodeCliCache } from './websearch';
+import {
+  clearAgyCliCache,
+  clearGeminiCliCache,
+  clearGrokCliCache,
+  clearOpenCodeCliCache,
+} from './websearch';
 
 /**
  * Clear all CLI caches
  */
 export function clearAllCliCaches(): void {
+  clearAgyCliCache();
   clearGeminiCliCache();
   clearGrokCliCache();
   clearOpenCodeCliCache();
