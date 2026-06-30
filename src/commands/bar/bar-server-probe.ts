@@ -10,6 +10,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { BAR_AUTH_TOKEN_HEADER, getOrCreateBarAuthToken } from '../../utils/bar-auth-token';
 
+const PROBE_TIMEOUT_MS = 1500;
+const MAX_PROBE_RESPONSE_BYTES = 8192;
+
 export interface DashboardInfo {
   port: number;
   baseUrl: string;
@@ -65,9 +68,12 @@ export async function defaultFindRunningServer(ccsDir: string): Promise<Dashboar
     return new Promise((resolve) => {
       let rawResponse = '';
       let settled = false;
+      const absoluteDeadline = setTimeout(() => finish(), PROBE_TIMEOUT_MS);
+      absoluteDeadline.unref?.();
       const finish = (statusCode = 0, headerSection = '') => {
         if (settled) return;
         settled = true;
+        clearTimeout(absoluteDeadline);
         // Tear down the socket the moment we have enough to decide. The summary
         // endpoint only needs the status code for liveness, so a non-CCS
         // loopback service that streams forever cannot block discovery from
@@ -98,9 +104,13 @@ export async function defaultFindRunningServer(ccsDir: string): Promise<Dashboar
           `GET ${parsed.pathname}${parsed.search} HTTP/1.1\r\nHost: ${parsed.host}\r\nConnection: close\r\n\r\n`
         );
       });
-      socket.setTimeout(1500, () => finish());
+      socket.setTimeout(PROBE_TIMEOUT_MS, () => finish());
       socket.on('data', (chunk) => {
         rawResponse += chunk.toString('utf8');
+        if (rawResponse.length > MAX_PROBE_RESPONSE_BYTES) {
+          finish();
+          return;
+        }
         const statusMatch = rawResponse.match(/^HTTP\/\d(?:\.\d)?\s+(\d{3})/);
         if (statusMatch) {
           const code = Number(statusMatch[1]);

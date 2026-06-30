@@ -3159,12 +3159,7 @@ describe('defaultFindRunningServer: socket-level 401/403 classifies authRequired
         setImmediate(() => {
           onConnect();
           for (const cb of listeners.data ?? []) {
-            cb(
-              Buffer.from(
-                `HTTP/1.1 200 OK\r\nx-ccs-bar-token: ${token}\r\n\r\n`,
-                'utf8'
-              )
-            );
+            cb(Buffer.from(`HTTP/1.1 200 OK\r\nx-ccs-bar-token: ${token}\r\n\r\n`, 'utf8'));
           }
         });
         return socket;
@@ -3384,7 +3379,9 @@ describe('defaultFindRunningServer: streaming lower-priority probes', () => {
             // exactly what the production CCS Bar server does, and is the property
             // that prevents a rogue reflector from passing the check.
             for (const cb of data) {
-              cb(Buffer.from(`HTTP/1.1 200 OK\r\nx-ccs-bar-token: ${expectedToken}\r\n\r\n`, 'utf8'));
+              cb(
+                Buffer.from(`HTTP/1.1 200 OK\r\nx-ccs-bar-token: ${expectedToken}\r\n\r\n`, 'utf8')
+              );
             }
           }
           // Port 3000 never emits a status line: simulate an endlessly
@@ -3418,6 +3415,150 @@ describe('defaultFindRunningServer: streaming lower-priority probes', () => {
     });
     expect(highPrioritySocketDestroyed).toBe(true);
     expect(lowerPriorityProbeStarted).toBe(true);
+  });
+});
+
+describe('bar raw socket probes: absolute deadline for malformed streaming peers', () => {
+  it('continues past a higher-priority trickling non-HTTP response and returns a lower-priority hit', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(ccsDir, 'bar.json'),
+      JSON.stringify({ port: 41236, baseUrl: 'http://127.0.0.1:41236', authMode: 'loopback' })
+    );
+
+    const { getOrCreateBarAuthToken: getToken } = await import(
+      `../../../src/utils/bar-auth-token?test=${Date.now()}-deadline-find`
+    );
+    const expectedToken = getToken(ccsDir);
+
+    mock.module('net', () => ({
+      connect: (opts: { host: string; port: number }, onConnect: () => void): unknown => {
+        const listeners: Record<string, Array<(arg?: unknown) => void>> = {};
+        let interval: ReturnType<typeof setInterval> | undefined;
+        const socket = {
+          on(event: string, cb: (arg?: unknown) => void) {
+            (listeners[event] ??= []).push(cb);
+            return socket;
+          },
+          setTimeout() {
+            return socket;
+          },
+          write() {
+            return true;
+          },
+          destroy() {
+            if (interval) clearInterval(interval);
+            return socket;
+          },
+        };
+
+        setImmediate(() => {
+          onConnect();
+          if (opts.port === 41236) {
+            interval = setInterval(() => {
+              for (const cb of listeners.data ?? []) cb(Buffer.from('x', 'utf8'));
+            }, 25);
+            interval.unref?.();
+            return;
+          }
+          if (opts.port === 3000) {
+            for (const cb of listeners.data ?? []) {
+              cb(
+                Buffer.from(`HTTP/1.1 200 OK\r\nx-ccs-bar-token: ${expectedToken}\r\n\r\n`, 'utf8')
+              );
+            }
+          }
+        });
+
+        return socket;
+      },
+    }));
+
+    moduleSeq++;
+    const { defaultFindRunningServer } = (await import(
+      `../../../src/commands/bar/bar-server-probe?test=${Date.now()}-${moduleSeq}`
+    )) as {
+      defaultFindRunningServer: (
+        ccsDir: string
+      ) => Promise<{ port: number; baseUrl: string; authRequired?: boolean } | null>;
+    };
+
+    const result = await Promise.race([
+      defaultFindRunningServer(ccsDir),
+      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 2500)),
+    ]);
+
+    expect(result).toEqual({
+      port: 3000,
+      baseUrl: 'http://127.0.0.1:3000',
+      authRequired: false,
+    });
+  });
+
+  it('does not let a single launch wait probe outlive the outer deadline', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    const realDateNow = Date.now;
+    let dateCall = 0;
+    Date.now = () => {
+      dateCall++;
+      return dateCall < 4 ? 0 : 10_001;
+    };
+
+    mock.module('net', () => ({
+      connect: (_opts: { host: string; port: number }, onConnect: () => void): unknown => {
+        const listeners: Record<string, Array<(arg?: unknown) => void>> = {};
+        let interval: ReturnType<typeof setInterval> | undefined;
+        const socket = {
+          on(event: string, cb: (arg?: unknown) => void) {
+            (listeners[event] ??= []).push(cb);
+            return socket;
+          },
+          setTimeout() {
+            return socket;
+          },
+          write() {
+            return true;
+          },
+          destroy() {
+            if (interval) clearInterval(interval);
+            return socket;
+          },
+        };
+
+        setImmediate(() => {
+          onConnect();
+          interval = setInterval(() => {
+            for (const cb of listeners.data ?? []) cb(Buffer.from('x', 'utf8'));
+          }, 25);
+          interval.unref?.();
+        });
+
+        return socket;
+      },
+    }));
+
+    try {
+      moduleSeq++;
+      const { defaultWaitForServerLive } = (await import(
+        `../../../src/commands/bar/launch-subcommand?test=${Date.now()}-${moduleSeq}`
+      )) as {
+        defaultWaitForServerLive: (baseUrl: string) => Promise<void>;
+      };
+
+      const result = await Promise.race([
+        defaultWaitForServerLive('http://127.0.0.1:9996')
+          .then(() => 'resolved' as const)
+          .catch(() => 'rejected' as const),
+        new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 2500)),
+      ]);
+
+      expect(result).toBe('rejected');
+    } finally {
+      Date.now = realDateNow;
+    }
   });
 });
 

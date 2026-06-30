@@ -36,6 +36,9 @@ import {
 } from './bar-server-probe';
 import type { DashboardInfo as _DashboardInfo } from './bar-server-probe';
 
+const BAR_PROBE_TIMEOUT_MS = 1500;
+const MAX_BAR_PROBE_RESPONSE_BYTES = 8192;
+
 // ---------------------------------------------------------------------------
 // Re-exports — backward compat for tests that import from this module.
 // resolveBarPort + defaultFindRunningServer are canonical in bar-server-probe.ts;
@@ -134,6 +137,13 @@ export class BarServerAuthRequiredError extends Error {
   }
 }
 
+export class BarServerTimeoutError extends Error {
+  constructor(baseUrl: string, timeoutSeconds: number) {
+    super(`CCS Bar server did not become live at ${baseUrl} within ${timeoutSeconds}s`);
+    this.name = 'BarServerTimeoutError';
+  }
+}
+
 function isAuthRequiredStatus(statusCode: number): boolean {
   return statusCode === 401 || statusCode === 403;
 }
@@ -150,9 +160,12 @@ export async function defaultWaitForServerLive(baseUrl: string): Promise<void> {
     return new Promise((resolve) => {
       let rawResponse = '';
       let settled = false;
+      const absoluteDeadline = setTimeout(() => finish(), BAR_PROBE_TIMEOUT_MS);
+      absoluteDeadline.unref?.();
       const finish = (statusCode: number | null = null, headerSection = '') => {
         if (settled) return;
         settled = true;
+        clearTimeout(absoluteDeadline);
         socket.destroy();
         if (statusCode === 200) {
           const echoMatch = headerSection.match(
@@ -174,9 +187,13 @@ export async function defaultWaitForServerLive(baseUrl: string): Promise<void> {
           );
         }
       );
-      socket.setTimeout(1500, () => finish());
+      socket.setTimeout(BAR_PROBE_TIMEOUT_MS, () => finish());
       socket.on('data', (chunk) => {
         rawResponse += chunk.toString('utf8');
+        if (rawResponse.length > MAX_BAR_PROBE_RESPONSE_BYTES) {
+          finish();
+          return;
+        }
         const statusMatch = rawResponse.match(/^HTTP\/\d(?:\.\d)?\s+(\d{3})/);
         if (statusMatch) {
           const code = Number(statusMatch[1]);
@@ -209,7 +226,7 @@ export async function defaultWaitForServerLive(baseUrl: string): Promise<void> {
     await new Promise<void>((resolve) => setTimeout(resolve, INTERVAL_MS));
   }
 
-  throw new Error(`CCS Bar server did not become live at ${baseUrl} within ${TIMEOUT_MS / 1000}s`);
+  throw new BarServerTimeoutError(baseUrl, TIMEOUT_MS / 1000);
 }
 
 function defaultWriteLaunchDescriptor(jsonPath: string, descriptor: LaunchJson): void {
