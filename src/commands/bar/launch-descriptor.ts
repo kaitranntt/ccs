@@ -8,6 +8,7 @@
  * instead of the package-manager entrypoint.
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -16,6 +17,10 @@ import { LAUNCH_JSON_SCHEMA } from './bar-paths';
 import type { LaunchJson } from './bar-paths';
 
 const SHIM_MODE = 0o700;
+
+function sha256File(filePath: string): string {
+  return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+}
 
 export interface LaunchDescriptorOptions {
   entrypointPath?: string;
@@ -38,11 +43,29 @@ function resolveEntrypoint(entrypointPath?: string): string {
 
 export function writeLaunchShim(home: string, entrypointPath?: string): string {
   const resolvedEntrypoint = resolveEntrypoint(entrypointPath);
+  const expectedEntrypointHash = sha256File(resolvedEntrypoint);
   const shimPath = getLaunchShimPath(home);
   const shimDir = path.dirname(shimPath);
   const contents = [
     '#!/usr/bin/env node',
-    `require(${JSON.stringify(resolvedEntrypoint)});`,
+    "const crypto = require('crypto');",
+    "const fs = require('fs');",
+    "const Module = require('module');",
+    "const path = require('path');",
+    `const expectedEntrypoint = ${JSON.stringify(resolvedEntrypoint)};`,
+    `const expectedHash = ${JSON.stringify(expectedEntrypointHash)};`,
+    'const resolvedEntrypoint = fs.realpathSync(expectedEntrypoint);',
+    "if (resolvedEntrypoint !== expectedEntrypoint) throw new Error('CCS Bar launch shim target changed. Run `ccs bar launch` to refresh launch.json.');",
+    'const entrypointStat = fs.statSync(resolvedEntrypoint);',
+    "if (!entrypointStat.isFile()) throw new Error('CCS Bar launch shim target is not a regular file.');",
+    'const source = fs.readFileSync(resolvedEntrypoint);',
+    "const actualHash = crypto.createHash('sha256').update(source).digest('hex');",
+    "if (actualHash !== expectedHash) throw new Error('CCS Bar launch shim target changed. Run `ccs bar launch` to refresh launch.json.');",
+    'const targetModule = new Module(resolvedEntrypoint, module);',
+    'targetModule.filename = resolvedEntrypoint;',
+    'targetModule.paths = Module._nodeModulePaths(path.dirname(resolvedEntrypoint));',
+    'require.cache[resolvedEntrypoint] = targetModule;',
+    "targetModule._compile(source.toString('utf8'), resolvedEntrypoint);",
     '',
   ].join('\n');
 
