@@ -99,6 +99,39 @@ describe('validateFilePath', () => {
     expect(result.readonly).toBe(false);
   });
 
+  test('rejects macOS case-variant paths through symlinked segments', () => {
+    if (process.platform === 'win32') {
+      return;
+    }
+
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { value: 'darwin' });
+
+    try {
+      const ccsDir = path.join(tempDir, '.ccs');
+      const caseVariantCcsDir = path.join(tempDir, '.CCS');
+      const sharedDir = path.join(ccsDir, 'shared');
+      const outsideCommandsDir = path.join(tempDir, '.claude', 'commands');
+      const linkedCommandsDir = path.join(sharedDir, 'commands');
+
+      fs.mkdirSync(sharedDir, { recursive: true });
+      fs.mkdirSync(outsideCommandsDir, { recursive: true });
+      fs.symlinkSync(ccsDir, caseVariantCcsDir, 'dir');
+      fs.symlinkSync(outsideCommandsDir, linkedCommandsDir, 'dir');
+
+      const result = validateFilePath(
+        path.join(caseVariantCcsDir, 'shared', 'commands', 'pwned.md')
+      );
+
+      expect(result.valid).toBe(false);
+      expect(result.readonly).toBe(false);
+    } finally {
+      if (platformDescriptor) {
+        Object.defineProperty(process, 'platform', platformDescriptor);
+      }
+    }
+  });
+
   test('rejects symlinked Claude settings path', () => {
     if (process.platform === 'win32') {
       return;

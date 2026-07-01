@@ -399,8 +399,12 @@ function isSymlinkPath(filePath: string): boolean {
   }
 }
 
-function hasSymlinkSegment(basePath: string, targetPath: string): boolean {
-  const relative = path.relative(basePath, targetPath);
+function hasSymlinkSegment(
+  basePath: string,
+  comparisonBasePath: string,
+  comparisonTargetPath: string
+): boolean {
+  const relative = path.relative(comparisonBasePath, comparisonTargetPath);
   if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
     return false;
   }
@@ -432,7 +436,7 @@ export function validateFilePath(filePath: string): {
 
   // Check if path is within ~/.ccs/
   if (isPathWithin(ccsDir, normalizedPath)) {
-    if (hasSymlinkSegment(resolvedCcsDir, resolvedPath)) {
+    if (hasSymlinkSegment(resolvedCcsDir, ccsDir, normalizedPath)) {
       return { valid: false, readonly: false, error: 'Access to this path is not allowed' };
     }
 
