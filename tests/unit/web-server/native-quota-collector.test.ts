@@ -989,7 +989,7 @@ describe('getCachedNativeAccountRows (instant, no-fetch fallback)', () => {
  *
  * - claudeProfiles: profile names for the Claude surface (ccs)
  * - codexProfiles: profile names for the Codex surface (ccsx)
- * - claudeDefault / codexDefault: the active profile per surface (paused:false)
+ * - claudeDefault / codexDefault: the only live-polled profile per surface (paused:false)
  * - credsForProfile: map from profile name to credentials (null = parked)
  * - claudeFetch: network fetcher for Claude (all profiles share one implementation)
  * - codexNativeAuth: map from profile name to {accessToken, accountId}
@@ -1113,13 +1113,13 @@ describe('multi-profile: account_id and wire fields', () => {
     expect(ck?.is_subscription).toBe(true);
   });
 
-  it('paused reflects liveness (creds present), NOT default-ness; is_default marks the default independently', async () => {
+  it('only default profiles are live-polled; is_default marks the default independently', async () => {
     const clock = { now: 1_000_000 };
     const deps = makeMultiProfileDeps({
       clock,
       // Claude: work = default + creds (live); ck = non-default + NO creds (parked).
       claudeProfiles: ['work', 'ck'],
-      // Codex: personal = default + creds (live); ck = NON-default + creds (live).
+      // Codex: personal = default + creds (live); ck = NON-default + creds (cache-only).
       codexProfiles: ['personal', 'ck'],
       claudeDefault: 'work',
       codexDefault: 'personal',
@@ -1146,11 +1146,11 @@ describe('multi-profile: account_id and wire fields', () => {
     expect(codexPersonal?.paused).toBe(false);
     expect(codexPersonal?.is_default).toBe(true);
 
-    // Codex ck: NON-default but HAS creds -> LIVE, NOT dimmed. This is the key
-    // correctness guarantee: a valid isolated subscription is never dimmed just
-    // because it is not the surface default.
+    // Codex ck: NON-default with creds is cache-only/parked. Only the default
+    // profile is live-polled so a dashboard request cannot fan out to every
+    // configured subscription account.
     const codexCk = rows.find((r) => r.surface === 'ccsx' && r.profile === 'ck');
-    expect(codexCk?.paused).toBe(false);
+    expect(codexCk?.paused).toBe(true);
     expect(codexCk?.is_default).toBe(false);
   });
 
@@ -1170,6 +1170,8 @@ describe('multi-profile: account_id and wire fields', () => {
 
     const rows = await getNativeAccountRows(deps);
     expect(rows.length).toBe(claudeProfiles.length + codexProfiles.length);
+    expect(deps.claudeFetchCount()).toBe(1);
+    expect(deps.codexNetworkCount()).toBe(1);
   });
 
   it('rows are sorted by (surface, profile)', async () => {
@@ -1264,7 +1266,7 @@ describe('multi-profile: per-profile circuit breaker isolation', () => {
       claudeDefault: 'work',
       credsForProfile: () => maxCreds(),
       claudeFetch: async (_token, accountId) => {
-        // 'work' (ccs:work) always 429s; 'ck' always succeeds
+        // 'work' (ccs:work) always 429s; 'ck' remains cache-only
         if (accountId?.includes('work') && workFails) {
           return {
             success: false,
@@ -1294,8 +1296,8 @@ describe('multi-profile: per-profile circuit breaker isolation', () => {
       });
     }
 
-    // After the three 429s on 'work', check that 'ck' still succeeds.
-    // We reset state to have a clean run where 'ck' has no prior breaker history.
+    // After the three 429s on 'work', check that 'ck' remains cache-only.
+    // We reset state to have a clean run with no prior breaker history.
     resetNativeQuotaState();
     clock.now += MAX_COOLDOWN_JUMP_MP;
     workFails = false;
@@ -1304,8 +1306,8 @@ describe('multi-profile: per-profile circuit breaker isolation', () => {
     const ckRow = rows.find((r) => r.profile === 'ck');
     const workRow = rows.find((r) => r.profile === 'work');
 
-    // 'ck' should succeed — its breaker was never tripped.
-    expect(ckRow?.quotaStatus).toBe('ok');
+    // 'ck' stays cache-only, independent of work's breaker.
+    expect(ckRow?.quotaStatus).toBe('unsupported');
     // 'work' is also fine after reset (no breaker state).
     expect(workRow?.quotaStatus).toBe('ok');
   });
@@ -1339,10 +1341,10 @@ describe('multi-profile: per-profile circuit breaker isolation', () => {
       },
     });
 
-    // First call: 'work' gets a 429, 'ck' succeeds.
+    // First call: 'work' gets a 429, 'ck' remains cache-only.
     const rows1 = await getNativeAccountRows(deps);
     const ck1 = rows1.find((r) => r.profile === 'ck');
-    expect(ck1?.quotaStatus).toBe('ok');
+    expect(ck1?.quotaStatus).toBe('unsupported');
     expect(workCall429Count).toBeGreaterThanOrEqual(1);
 
     // Skip past cooldown for 'work' only; 'ck' is within TTL.
@@ -1351,8 +1353,8 @@ describe('multi-profile: per-profile circuit breaker isolation', () => {
     // Second call past 'work' cooldown: work tries again (429 again); ck cached.
     const rows2 = await getNativeAccountRows(deps);
     const ck2 = rows2.find((r) => r.profile === 'ck');
-    // 'ck' still has a good cached row.
-    expect(ck2?.quotaStatus).toBe('ok');
+    // 'ck' remains cache-only and is not affected by work's breaker.
+    expect(ck2?.quotaStatus).toBe('unsupported');
   });
 });
 
@@ -1449,11 +1451,11 @@ describe('review focus areas: reauth caching + codex local fallback', () => {
     const r1 = first.find((r) => r.profile === 'ck');
     expect(r1?.needsReauth).toBe(true);
     expect(r1?.paused).toBe(true);
-    expect(deps.codexNetworkCount()).toBe(1);
+    expect(deps.codexNetworkCount()).toBe(0);
 
     const second = await getNativeAccountRows(deps, { force: true });
     expect(second.find((r) => r.profile === 'ck')?.cached).toBe(true);
-    expect(deps.codexNetworkCount()).toBe(1);
+    expect(deps.codexNetworkCount()).toBe(0);
   });
 
   it('Codex named profile without on-disk auth is parked, never filled from global local data', async () => {
@@ -1563,7 +1565,7 @@ describe('review focus areas: reauth caching + codex local fallback', () => {
     expect(deps.claudeFetchCount()).toBe(1); // re-checked -> fetched
   });
 
-  it('Codex named profile with valid auth but sparse payload stays active, not parked', async () => {
+  it('Codex named profile with valid auth but sparse payload stays parked when not default', async () => {
     resetNativeQuotaState();
     const clock = { now: 7_000_000 };
     const deps = makeMultiProfileDeps({
@@ -1579,9 +1581,9 @@ describe('review focus areas: reauth caching + codex local fallback', () => {
     const rows = await getNativeAccountRows(deps);
     const ck = rows.find((r) => r.profile === 'ck');
     expect(ck).toBeDefined();
-    expect(ck?.paused).toBe(false); // active subscription, not parked
-    expect(ck?.needsReauth).toBe(false);
-    expect(ck?.quotaStatus).toBe('ok');
-    expect(ck?.quota_percentage).toBeNull(); // no windows, but still active
+    expect(ck?.paused).toBe(true); // cache-only, parked until selected as default
+    expect(ck?.needsReauth).toBe(true);
+    expect(ck?.quotaStatus).toBe('unsupported');
+    expect(ck?.quota_percentage).toBeNull(); // no windows while parked
   });
 });

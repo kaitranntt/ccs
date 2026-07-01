@@ -710,12 +710,72 @@ function codexProfileMatchesPausedAccount(
 /**
  * Tag a row with whether it is the surface's default profile (drives the
  * "active" badge only). The row's own `paused` flag is authoritative for
- * dimming: it is already set by the collector to reflect LIVENESS — parked
- * (no on-disk creds / unsupported) rows arrive with paused:true; profiles with
- * a usable token arrive with paused:false regardless of default status. We must
- * NOT override `paused` from `isDefault`, or a valid non-default subscription
- * (e.g. an isolated `ccsx` profile) would render dimmed despite live quota.
+ * dimming: live/default rows arrive with paused:false, while non-default
+ * profiles are served cache-only and dimmed to avoid live-refresh fan-out.
  */
+
+function buildParkedClaudeProfileRow(profile: string, now: number): BarSummaryRow {
+  return {
+    account_id: `${SURFACE_CLAUDE}:${profile}`,
+    provider: CLAUDE_NATIVE_PROVIDER,
+    surface: SURFACE_CLAUDE,
+    profile,
+    is_subscription: true,
+    displayName: profile,
+    tier: null,
+    paused: true,
+    quota_percentage: null,
+    quotaStatus: 'unsupported',
+    next_reset: null,
+    is_default: false,
+    last_activity_at: null,
+    today_cost: null,
+    health: 'ok',
+    cached: false,
+    fetchedAt: new Date(now).toISOString(),
+    needsReauth: true,
+  };
+}
+
+function buildParkedCodexProfileRow(profile: string, now: number): BarSummaryRow {
+  return {
+    account_id: `${SURFACE_CODEX}:${profile}`,
+    provider: CODEX_NATIVE_PROVIDER,
+    surface: SURFACE_CODEX,
+    profile,
+    is_subscription: true,
+    displayName: profile,
+    tier: null,
+    paused: true,
+    quota_percentage: null,
+    quotaStatus: 'unsupported',
+    next_reset: null,
+    is_default: false,
+    last_activity_at: null,
+    today_cost: null,
+    health: 'ok',
+    cached: false,
+    fetchedAt: new Date(now).toISOString(),
+    needsReauth: true,
+  };
+}
+
+function collectCachedOrParkedProfileRow(
+  map: Map<string, ProviderState>,
+  profile: string,
+  now: number,
+  buildParkedRow: (profile: string, now: number) => BarSummaryRow
+): BarSummaryRow {
+  const state = getState(map, profile);
+  if (state.cachedRow) {
+    return { ...state.cachedRow, cached: true, paused: true };
+  }
+  const parkedRow = buildParkedRow(profile, now);
+  state.cachedRow = parkedRow;
+  state.cachedAt = now;
+  return parkedRow;
+}
+
 function markDefault(row: BarSummaryRow, isDefault: boolean): BarSummaryRow {
   return { ...row, is_default: isDefault };
 }
@@ -734,10 +794,11 @@ function markDefaultAndSyncCache(
   isDefault: boolean
 ): BarSummaryRow {
   const state = map.get(profile);
+  const marked = markDefault(row, isDefault);
   if (state?.cachedRow) {
-    state.cachedRow = { ...state.cachedRow, is_default: isDefault };
+    state.cachedRow = marked;
   }
-  return markDefault(row, isDefault);
+  return marked;
 }
 
 async function collectClaudeRowForProfile(
@@ -789,26 +850,7 @@ async function collectClaudeRowForProfile(
       // user has not logged in via 'ccs auth' for this machine or the credentials
       // are stored only in keychain (which we deliberately do not access here).
       if (!creds) {
-        const parkedRow: BarSummaryRow = {
-          account_id: `${SURFACE_CLAUDE}:${profile}`,
-          provider: CLAUDE_NATIVE_PROVIDER,
-          surface: SURFACE_CLAUDE,
-          profile,
-          is_subscription: true,
-          displayName: profile,
-          tier: null,
-          paused: true,
-          quota_percentage: null,
-          quotaStatus: 'unsupported',
-          next_reset: null,
-          is_default: false,
-          last_activity_at: null,
-          today_cost: null,
-          health: 'ok',
-          cached: false,
-          fetchedAt: new Date(now).toISOString(),
-          needsReauth: true,
-        };
+        const parkedRow = buildParkedClaudeProfileRow(profile, now);
         // Cache the parked row so repeated calls don't re-stat the fs.
         state.cachedRow = parkedRow;
         state.cachedAt = now;
@@ -1062,26 +1104,7 @@ async function collectCodexRowForProfile(
       // profile.
       const stale = serveCached(state);
       if (stale) return stale;
-      const parkedRow: BarSummaryRow = {
-        account_id: `${SURFACE_CODEX}:${profile}`,
-        provider: CODEX_NATIVE_PROVIDER,
-        surface: SURFACE_CODEX,
-        profile,
-        is_subscription: true,
-        displayName: profile,
-        tier: null,
-        paused: true,
-        quota_percentage: null,
-        quotaStatus: 'unsupported',
-        next_reset: null,
-        is_default: false,
-        last_activity_at: null,
-        today_cost: null,
-        health: 'ok',
-        cached: false,
-        fetchedAt: new Date(now).toISOString(),
-        needsReauth: true,
-      };
+      const parkedRow = buildParkedCodexProfileRow(profile, now);
       state.cachedRow = parkedRow;
       state.cachedAt = now;
       return parkedRow;
@@ -1545,30 +1568,62 @@ async function getNativeAccountRowsMultiProfile(
   })();
 
   const tasks: Promise<BarSummaryRow | null>[] = [];
+  const results: (BarSummaryRow | null)[] = [];
+  const now = (deps.now ?? Date.now)();
 
-  // Forced refresh applies to every profile: parked profiles (no creds) short-
-  // circuit to a parked row with zero network, so forcing them is free, while
-  // every profile that has a usable token gets live quota — not just the
-  // default. Per-profile TTL + breaker still protect each account.
+  // Preserve the safety budget: only the active/default profile for each surface
+  // may perform a live refresh. Non-default profiles are cache-only (or parked)
+  // so one /summary request can trigger at most one Claude and one Codex live
+  // upstream call regardless of configured profile count.
   for (const p of claudeProfiles) {
     const isDefault = p === claudeDefault;
+    if (!isDefault) {
+      results.push(
+        markDefaultAndSyncCache(
+          claudeProfileStates,
+          p,
+          collectCachedOrParkedProfileRow(claudeProfileStates, p, now, buildParkedClaudeProfileRow),
+          false
+        )
+      );
+      continue;
+    }
     tasks.push(
-      collectClaudeRowForProfile(p, deps, force)
-        .then((r) => (r ? markDefaultAndSyncCache(claudeProfileStates, p, r, isDefault) : null))
+      collectClaudeRowForProfile(
+        p,
+        deps,
+        force || claudeProfileStates.get(p)?.cachedRow?.quotaStatus === 'unsupported'
+      )
+        .then((r) => (r ? markDefaultAndSyncCache(claudeProfileStates, p, r, true) : null))
         .catch(() => null)
     );
   }
 
   for (const p of codexProfiles) {
     const isDefault = p === codexDefault;
+    if (!isDefault) {
+      results.push(
+        markDefaultAndSyncCache(
+          codexProfileStates,
+          p,
+          collectCachedOrParkedProfileRow(codexProfileStates, p, now, buildParkedCodexProfileRow),
+          false
+        )
+      );
+      continue;
+    }
     tasks.push(
-      collectCodexRowForProfile(p, deps, force)
-        .then((r) => (r ? markDefaultAndSyncCache(codexProfileStates, p, r, isDefault) : null))
+      collectCodexRowForProfile(
+        p,
+        deps,
+        force || codexProfileStates.get(p)?.cachedRow?.quotaStatus === 'unsupported'
+      )
+        .then((r) => (r ? markDefaultAndSyncCache(codexProfileStates, p, r, true) : null))
         .catch(() => null)
     );
   }
 
-  const results = await Promise.all(tasks);
+  results.push(...(await Promise.all(tasks)));
   const rows = results.filter((r): r is BarSummaryRow => r !== null);
 
   // Sort by (surface, profile) for stable ordering.
