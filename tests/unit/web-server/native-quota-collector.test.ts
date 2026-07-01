@@ -1586,4 +1586,37 @@ describe('review focus areas: reauth caching + codex local fallback', () => {
     expect(ck?.quotaStatus).toBe('unsupported');
     expect(ck?.quota_percentage).toBeNull(); // no windows while parked
   });
+
+  it('non-default cache-only rows do not overwrite the canonical live cache', async () => {
+    resetNativeQuotaState();
+    const clock = { now: 8_000_000 };
+    let codexDefault = 'ck';
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: [],
+      codexProfiles: ['default', 'ck'],
+      codexDefault,
+      codexNativeAuth: (p) => ({ accessToken: `t-${p}`, accountId: `id-${p}` }),
+      codexNetworkFetch: async () => codexSuccessQuota(),
+    });
+    deps.defaultCodexProfile = () => codexDefault;
+
+    const first = await getNativeAccountRows(deps);
+    expect(first.find((r) => r.profile === 'ck')?.paused).toBe(false);
+    expect(deps.codexNetworkCount()).toBe(1);
+
+    codexDefault = 'default';
+    const second = await getNativeAccountRows(deps);
+    const ckAsNonDefault = second.find((r) => r.profile === 'ck');
+    expect(ckAsNonDefault?.cached).toBe(true);
+    expect(ckAsNonDefault?.paused).toBe(true);
+    expect(deps.codexNetworkCount()).toBe(2);
+
+    codexDefault = 'ck';
+    const third = await getNativeAccountRows(deps);
+    const ckDefaultAgain = third.find((r) => r.profile === 'ck');
+    expect(ckDefaultAgain?.cached).toBe(true);
+    expect(ckDefaultAgain?.paused).toBe(false);
+    expect(deps.codexNetworkCount()).toBe(2);
+  });
 });

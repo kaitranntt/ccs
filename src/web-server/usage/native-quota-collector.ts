@@ -796,7 +796,7 @@ function markDefaultAndSyncCache(
   const state = map.get(profile);
   const marked = markDefault(row, isDefault);
   if (state?.cachedRow) {
-    state.cachedRow = marked;
+    state.cachedRow = { ...state.cachedRow, is_default: isDefault };
   }
   return marked;
 }
