@@ -399,8 +399,26 @@ function isSymlinkPath(filePath: string): boolean {
   }
 }
 
+function getRequestedBasePath(basePath: string, targetPath: string): string {
+  const comparisonBasePath = normalizePathForComparison(basePath);
+  const comparisonTargetPath = normalizePathForComparison(targetPath);
+  const comparisonBaseWithSeparator = comparisonBasePath.endsWith(path.sep)
+    ? comparisonBasePath
+    : `${comparisonBasePath}${path.sep}`;
+
+  if (
+    comparisonTargetPath === comparisonBasePath ||
+    comparisonTargetPath.startsWith(comparisonBaseWithSeparator)
+  ) {
+    return targetPath.slice(0, basePath.length);
+  }
+
+  return basePath;
+}
+
 function hasSymlinkSegment(
   basePath: string,
+  targetPath: string,
   comparisonBasePath: string,
   comparisonTargetPath: string
 ): boolean {
@@ -409,8 +427,22 @@ function hasSymlinkSegment(
     return false;
   }
 
-  let currentPath = basePath;
-  const segments = relative.split(path.sep).filter(Boolean);
+  const requestedBasePath = getRequestedBasePath(basePath, targetPath);
+  if (requestedBasePath !== basePath && isSymlinkPath(requestedBasePath)) {
+    return true;
+  }
+
+  const requestedRelative = path.relative(requestedBasePath, targetPath);
+  if (
+    requestedRelative === '' ||
+    requestedRelative.startsWith('..') ||
+    path.isAbsolute(requestedRelative)
+  ) {
+    return false;
+  }
+
+  let currentPath = requestedBasePath;
+  const segments = requestedRelative.split(path.sep).filter(Boolean);
   for (const segment of segments) {
     currentPath = path.join(currentPath, segment);
     if (isSymlinkPath(currentPath)) {
@@ -436,7 +468,7 @@ export function validateFilePath(filePath: string): {
 
   // Check if path is within ~/.ccs/
   if (isPathWithin(ccsDir, normalizedPath)) {
-    if (hasSymlinkSegment(resolvedCcsDir, ccsDir, normalizedPath)) {
+    if (hasSymlinkSegment(resolvedCcsDir, resolvedPath, ccsDir, normalizedPath)) {
       return { valid: false, readonly: false, error: 'Access to this path is not allowed' };
     }
 
