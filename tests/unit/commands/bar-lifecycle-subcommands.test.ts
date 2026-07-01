@@ -810,11 +810,16 @@ describe('launch descriptor shim', () => {
       `const expectedEntrypoint = ${JSON.stringify(resolvedEntrypoint)};`
     );
     expect(shimContents).toContain('const expectedHash = ');
+    expect(shimContents).toContain('const source = fs.readFileSync(resolvedEntrypoint);');
     expect(shimContents).toContain('if (actualHash !== expectedHash)');
-    expect(shimContents).toContain('require(resolvedEntrypoint);');
+    expect(shimContents).toContain('require.cache[resolvedEntrypoint] = targetModule;');
+    expect(shimContents).toContain(
+      "targetModule._compile(source.toString('utf8'), resolvedEntrypoint);"
+    );
+    expect(shimContents).not.toContain('require(resolvedEntrypoint);');
   });
 
-  it('rejects a modified original entrypoint before requiring it', async () => {
+  it('rejects a modified original entrypoint before executing it', async () => {
     const packageDist = path.join(
       tempHome,
       '.bun',
