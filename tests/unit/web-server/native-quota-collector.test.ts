@@ -1249,6 +1249,96 @@ describe('multi-profile: Claude file-only reader', () => {
     expect(row?.quotaStatus).toBe('unsupported');
     expect(row?.is_subscription).toBe(true);
   });
+
+  it('existing default profile directory without creds does not read global credentials', async () => {
+    const originalCcsHome = process.env.CCS_HOME;
+    const tempCcsHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-bar-default-profile-'));
+    const clock = { now: 1_000_000 };
+    let defaultReadCount = 0;
+    let fetchCount = 0;
+
+    try {
+      process.env.CCS_HOME = tempCcsHome;
+      fs.mkdirSync(path.join(tempCcsHome, '.ccs', 'instances', 'default'), { recursive: true });
+
+      const rows = await getNativeAccountRows({
+        readCredentials: () => {
+          defaultReadCount += 1;
+          return { claudeAiOauth: { accessToken: 'global-token', subscriptionType: 'max' } };
+        },
+        listClaudeProfiles: () => ['default'],
+        listCodexProfiles: () => [],
+        defaultClaudeProfile: () => 'default',
+        defaultCodexProfile: () => null,
+        fetchClaudeQuota: async () => {
+          fetchCount += 1;
+          return successQuota();
+        },
+        getCodexQuota: async () => null,
+        now: () => clock.now,
+        sleep: async () => {},
+      });
+
+      const row = rows.find((r) => r.surface === 'ccs' && r.profile === 'default');
+      expect(defaultReadCount).toBe(0);
+      expect(fetchCount).toBe(0);
+      expect(row?.needsReauth).toBe(true);
+      expect(row?.quotaStatus).toBe('unsupported');
+    } finally {
+      if (originalCcsHome === undefined) {
+        delete process.env.CCS_HOME;
+      } else {
+        process.env.CCS_HOME = originalCcsHome;
+      }
+      fs.rmSync(tempCcsHome, { recursive: true, force: true });
+    }
+  });
+
+  it('existing default profile credentials win over global credentials', async () => {
+    const originalCcsHome = process.env.CCS_HOME;
+    const tempCcsHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-bar-default-profile-'));
+    const clock = { now: 1_000_000 };
+    let fetchedToken: string | null = null;
+
+    try {
+      process.env.CCS_HOME = tempCcsHome;
+      const defaultInstanceDir = path.join(tempCcsHome, '.ccs', 'instances', 'default');
+      fs.mkdirSync(defaultInstanceDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(defaultInstanceDir, '.credentials.json'),
+        JSON.stringify({ claudeAiOauth: { accessToken: 'profile-token', subscriptionType: 'max' } })
+      );
+
+      const rows = await getNativeAccountRows({
+        readCredentials: () => ({
+          claudeAiOauth: { accessToken: 'global-token', subscriptionType: 'max' },
+        }),
+        listClaudeProfiles: () => ['default'],
+        listCodexProfiles: () => [],
+        defaultClaudeProfile: () => 'default',
+        defaultCodexProfile: () => null,
+        fetchClaudeQuota: async (token) => {
+          fetchedToken = token;
+          return successQuota();
+        },
+        getCodexQuota: async () => null,
+        now: () => clock.now,
+        sleep: async () => {},
+      });
+
+      const row = rows.find((r) => r.surface === 'ccs' && r.profile === 'default');
+      expect(fetchedToken).toBe('profile-token');
+      expect(row?.needsReauth).toBe(false);
+      expect(row?.quotaStatus).toBe('ok');
+    } finally {
+      if (originalCcsHome === undefined) {
+        delete process.env.CCS_HOME;
+      } else {
+        process.env.CCS_HOME = originalCcsHome;
+      }
+      fs.rmSync(tempCcsHome, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('multi-profile: per-profile circuit breaker isolation', () => {

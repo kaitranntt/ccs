@@ -497,7 +497,10 @@ function serveCached(state: ProviderState): BarSummaryRow | null {
  * is absent or unparseable, returns null — the caller emits a parked row.
  * Never calls security/Keychain — zero new keychain access from this feature.
  */
-function readClaudeCredentialsForProfileFromDisk(profile: string): ClaudeNativeCredentials | null {
+function readClaudeCredentialsForProfileFromDisk(
+  profile: string,
+  readDefaultCredentials: () => ClaudeNativeCredentials | null = readClaudeCredentials
+): ClaudeNativeCredentials | null {
   try {
     const instanceDir = path.join(getCcsDir(), 'instances', profile);
     const credFile = path.join(instanceDir, '.credentials.json');
@@ -518,7 +521,7 @@ function readClaudeCredentialsForProfileFromDisk(profile: string): ClaudeNativeC
     // file-only and never touch the Keychain; a real instance directory named
     // "default" is therefore parked when its file is absent.
     if (profile === DEFAULT_PROFILE && !fs.existsSync(instanceDir)) {
-      return readClaudeCredentials();
+      return readDefaultCredentials();
     }
     return null;
   } catch {
@@ -772,9 +775,10 @@ async function collectClaudeRowForProfile(
   }
 
   // For per-profile reads: use the injected seam (file-only, no keychain).
+  const readDefaultCredentials = deps.readCredentials ?? readClaudeCredentials;
   const readCreds =
     deps.readClaudeCredentialsForProfile ??
-    ((p: string) => readClaudeCredentialsForProfileFromDisk(p));
+    ((p: string) => readClaudeCredentialsForProfileFromDisk(p, readDefaultCredentials));
   const fetchQuota = deps.fetchClaudeQuota ?? fetchClaudeQuotaWithToken;
   const sleep = deps.sleep ?? defaultSleep;
 
