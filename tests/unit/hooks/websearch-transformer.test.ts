@@ -133,6 +133,16 @@ describe('websearch-transformer legacy CLI safety', () => {
     expect(source).not.toContain('shell: isWindows');
     expect(source.match(/shell: false/g) || []).toHaveLength(4);
   });
+
+  it('does not disable Antigravity permission checks for query-derived prompts', () => {
+    const source = readFileSync(hookPath, 'utf8');
+
+    expect(source).not.toContain("'--dangerously-skip-permissions'");
+    expect(source).not.toContain('"--dangerously-skip-permissions"');
+    expect(source).toContain(
+      "const args = ['--model', model, '--print-timeout', `${timeoutSec}s`, '-p', prompt]"
+    );
+  });
 });
 
 describe('websearch-transformer hook helpers', () => {
