@@ -805,9 +805,56 @@ describe('launch descriptor shim', () => {
     const mode = fs.statSync(descriptor.args[0]).mode & 0o777;
     expect((mode & 0o022) === 0).toBe(true);
     const resolvedEntrypoint = fs.realpathSync(realEntrypoint);
-    expect(fs.readFileSync(descriptor.args[0], 'utf8')).toContain(
-      `require(${JSON.stringify(resolvedEntrypoint)});`
+    const shimContents = fs.readFileSync(descriptor.args[0], 'utf8');
+    expect(shimContents).toContain(
+      `const expectedEntrypoint = ${JSON.stringify(resolvedEntrypoint)};`
     );
+    expect(shimContents).toContain('const expectedHash = ');
+    expect(shimContents).toContain('if (actualHash !== expectedHash)');
+    expect(shimContents).toContain('require(resolvedEntrypoint);');
+  });
+
+  it('rejects a modified original entrypoint before requiring it', async () => {
+    const packageDist = path.join(
+      tempHome,
+      '.bun',
+      'install',
+      'global',
+      'node_modules',
+      '@kaitranntt',
+      'ccs',
+      'dist'
+    );
+    const binDir = path.join(tempHome, '.bun', 'bin');
+    const markerPath = path.join(tempHome, 'attacker-marker');
+    const realEntrypoint = path.join(packageDist, 'ccs.js');
+    const symlinkedEntrypoint = path.join(binDir, 'ccs');
+
+    fs.mkdirSync(packageDist, { recursive: true });
+    fs.mkdirSync(binDir, { recursive: true });
+    fs.writeFileSync(realEntrypoint, 'console.log("original");\n', { mode: 0o777 });
+    fs.symlinkSync(realEntrypoint, symlinkedEntrypoint);
+
+    const { createBarLaunchDescriptor } = await loadLaunchDescriptor();
+    const descriptor = createBarLaunchDescriptor({
+      entrypointPath: symlinkedEntrypoint,
+      runtime: process.execPath,
+      home: tempHome,
+    });
+
+    fs.writeFileSync(
+      realEntrypoint,
+      `require('fs').writeFileSync(${JSON.stringify(markerPath)}, 'executed');\n`
+    );
+
+    const proc = Bun.spawnSync([descriptor.runtime, ...descriptor.args], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+
+    expect(proc.exitCode).not.toBe(0);
+    expect(Buffer.from(proc.stderr).toString()).toContain('CCS Bar launch shim target changed');
+    expect(fs.existsSync(markerPath)).toBe(false);
   });
 });
 
