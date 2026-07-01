@@ -498,23 +498,27 @@ function serveCached(state: ProviderState): BarSummaryRow | null {
  * Never calls security/Keychain — zero new keychain access from this feature.
  */
 function readClaudeCredentialsForProfileFromDisk(profile: string): ClaudeNativeCredentials | null {
-  // The bare `ccs` default login uses the standard global credential lookup:
-  // ~/.claude/.credentials.json, falling back to the single global
-  // "Claude Code-credentials" Keychain item that Claude Code itself maintains.
-  // This is the ONE pre-existing global read the shipped Bar already performs --
-  // NOT a per-profile Keychain scan. Isolated `ccs auth` profiles below stay
-  // file-only and never touch the Keychain.
-  if (profile === DEFAULT_PROFILE) {
-    return readClaudeCredentials();
-  }
   try {
     const instanceDir = path.join(getCcsDir(), 'instances', profile);
     const credFile = path.join(instanceDir, '.credentials.json');
-    if (!fs.existsSync(credFile)) return null;
-    const raw = fs.readFileSync(credFile, 'utf8');
-    const parsed = JSON.parse(raw) as unknown;
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as ClaudeNativeCredentials;
+    if (fs.existsSync(credFile)) {
+      const raw = fs.readFileSync(credFile, 'utf8');
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as ClaudeNativeCredentials;
+      }
+      return null;
+    }
+
+    // The bare `ccs` default login uses the standard global credential lookup:
+    // ~/.claude/.credentials.json, falling back to the single global
+    // "Claude Code-credentials" Keychain item that Claude Code itself maintains.
+    // This is the ONE pre-existing global read the shipped Bar already performs --
+    // NOT a per-profile Keychain scan. Isolated `ccs auth` profiles stay
+    // file-only and never touch the Keychain; a real instance directory named
+    // "default" is therefore parked when its file is absent.
+    if (profile === DEFAULT_PROFILE && !fs.existsSync(instanceDir)) {
+      return readClaudeCredentials();
     }
     return null;
   } catch {

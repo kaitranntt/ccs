@@ -20,6 +20,11 @@ describe('account context helpers', () => {
     expect(isValidAccountProfileName('gemini:default')).toBe(false);
   });
 
+  it('rejects reserved account profile names', () => {
+    expect(isValidAccountProfileName('default')).toBe(false);
+    expect(isValidAccountProfileName('Default')).toBe(false);
+  });
+
   it('falls back to default shared group for invalid persisted metadata', () => {
     const resolved = resolveAccountContextPolicy({
       context_mode: 'shared',
