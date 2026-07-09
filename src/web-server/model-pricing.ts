@@ -203,6 +203,13 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
     cacheCreationPerMillion: 3.75,
     cacheReadPerMillion: 0.3,
   },
+  // Claude 5 Sonnet ($3/$15)
+  'claude-sonnet-5': {
+    inputPerMillion: 3.0,
+    outputPerMillion: 15.0,
+    cacheCreationPerMillion: 3.75,
+    cacheReadPerMillion: 0.3,
+  },
   // Claude 4.6 Sonnet ($3/$15)
   'claude-sonnet-4-6': {
     inputPerMillion: 3.0,

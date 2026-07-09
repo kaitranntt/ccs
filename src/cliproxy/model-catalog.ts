@@ -431,6 +431,22 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
         extendedContext: true,
       },
       {
+        id: 'claude-sonnet-5',
+        name: 'Claude Sonnet 5',
+        description: 'Latest generation Sonnet',
+        nativeImageInput: true,
+        // Claude 5 generation: same adaptive-thinking surface as Fable 5 /
+        // Opus 4.8. Anthropic accepts only effort levels; manual budget_tokens
+        // is rejected with 400.
+        thinking: {
+          type: 'levels',
+          levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          maxLevel: 'max',
+          dynamicAllowed: true,
+        },
+        extendedContext: true,
+      },
+      {
         id: 'claude-sonnet-4-6',
         name: 'Claude Sonnet 4.6',
         description: 'Balanced performance and speed',

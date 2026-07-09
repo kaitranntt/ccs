@@ -801,6 +801,18 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
         },
       },
       {
+        id: 'claude-sonnet-5',
+        name: 'Claude Sonnet 5',
+        description: 'Latest generation Sonnet',
+        extendedContext: true,
+        presetMapping: {
+          default: 'claude-sonnet-5',
+          opus: 'claude-opus-4-8',
+          sonnet: 'claude-sonnet-5',
+          haiku: 'claude-haiku-4-5-20251001',
+        },
+      },
+      {
         id: 'claude-sonnet-4-6',
         name: 'Claude Sonnet 4.6',
         description: 'Balanced performance and speed',
