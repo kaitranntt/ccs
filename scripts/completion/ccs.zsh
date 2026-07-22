@@ -1,6 +1,6 @@
 #compdef ccs
 
-# Zsh completion for CCS (Claude Code Switch)
+# Zsh completion for CCS (Claude Codex Switch)
 
 _ccs() {
   local current

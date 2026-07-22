@@ -4,7 +4,7 @@ Last Updated: 2026-05-07
 
 ## Product Overview
 
-**Product Name**: CCS (Claude Code Switch)
+**Product Name**: CCS (Claude Codex Switch)
 
 **Tagline**: The multi-provider profile and runtime manager for Claude Code and compatible CLIs
 

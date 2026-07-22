@@ -1584,7 +1584,7 @@ const resources = {
       // ========================================
       heroSection: {
         title: 'CCS Config',
-        subtitle: 'Claude Code Switch Dashboard',
+        subtitle: 'Claude Codex Switch Dashboard',
       },
       hubFooter: {
         logs: 'Logs',
@@ -4231,7 +4231,7 @@ const resources = {
       },
       heroSection: {
         title: 'CCS Config',
-        subtitle: 'Claude Code Switch Dashboard',
+        subtitle: 'Claude Codex Switch Dashboard',
       },
       hubFooter: {
         logs: '日志',
@@ -6937,7 +6937,7 @@ const resources = {
       },
       heroSection: {
         title: 'CCS Config',
-        subtitle: 'Bảng điều khiển Claude Code Switch',
+        subtitle: 'Bảng điều khiển Claude Codex Switch',
       },
       hubFooter: {
         logs: 'Nhật ký',
@@ -10126,7 +10126,7 @@ const resources = {
       },
       heroSection: {
         title: 'CCS Config',
-        subtitle: 'Claude Code Switch Dashboard',
+        subtitle: 'Claude Codex Switch Dashboard',
       },
       homePageV2: {
         title: 'ホーム',
@@ -12400,7 +12400,7 @@ const resources = {
       // ========================================
       heroSection: {
         title: 'CCS Config',
-        subtitle: 'Claude Code Switch 대시보드',
+        subtitle: 'Claude Codex Switch 대시보드',
       },
       hubFooter: {
         logs: '로그',

@@ -2,7 +2,7 @@
 
 Last Updated: 2026-04-14
 
-High-level architecture overview for the CCS (Claude Code Switch) system.
+High-level architecture overview for the CCS (Claude Codex Switch) system.
 
 ---
 

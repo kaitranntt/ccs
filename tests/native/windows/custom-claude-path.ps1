@@ -648,7 +648,7 @@ function Test-Category6-Integration {
 
         $Output = & $CcsPath --version 2>&1 | Out-String
 
-        $ShowsVersion = $Output -match "CCS \(Claude Code Switch\) version"
+        $ShowsVersion = $Output -match "CCS \(Claude Codex Switch\) v\d+\.\d+\.\d+"
 
         if ($ShowsVersion) {
             $Duration = ((Get-Date) - $TestStart).TotalMilliseconds

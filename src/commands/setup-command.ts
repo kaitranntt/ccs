@@ -283,7 +283,7 @@ async function runSetupWizard(force: boolean = false): Promise<void> {
       return;
     }
 
-    console.log('Welcome to CCS (Claude Code Switch)!');
+    console.log('Welcome to CCS (Claude Codex Switch)!');
     console.log('This wizard will help you configure CCS for first-time use.');
     console.log('');
 

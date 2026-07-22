@@ -1,4 +1,4 @@
-# Fish completion for CCS (Claude Code Switch)
+# Fish completion for CCS (Claude Codex Switch)
 
 function __fish_ccs_complete
     set -l tokens_before_current (commandline -opc)

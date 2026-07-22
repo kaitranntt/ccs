@@ -1,6 +1,6 @@
 <div align="center">
 
-# CCS - Claude Code Switch
+# CCS - Claude Codex Switch
 
 ![CCS Logo](assets/ccs-logo-medium.png)
 
