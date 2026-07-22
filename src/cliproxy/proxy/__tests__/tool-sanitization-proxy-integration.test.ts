@@ -690,6 +690,200 @@ describe('ToolSanitizationProxy Integration', () => {
       });
     }
 
+    it('strips only cache_control for root-routed grok-* models while surviving other fields', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      try {
+        await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'grok-4',
+            tools: [
+              {
+                name: 'grok_tool',
+                description: 'Root-routed Grok test',
+                cache_control: { type: 'ephemeral' },
+                strict: true,
+                input_examples: [{ x: 1 }],
+                defer_loading: true,
+                type: 'custom',
+                input_schema: {
+                  type: 'object',
+                  properties: {
+                    x: {
+                      type: 'string',
+                      examples: ['keep the schema'],
+                    },
+                  },
+                },
+              },
+            ],
+          }),
+        });
+
+        const sentTools = (lastRequest!.body as Record<string, unknown>).tools as Array<
+          Record<string, unknown>
+        >;
+        expect(sentTools[0].name).toBe('grok_tool');
+        expect(sentTools[0].description).toBe('Root-routed Grok test');
+        expect(sentTools[0].cache_control).toBeUndefined();
+        // Round-trip: untouched top-level fields survive (codex-parity strip set).
+        expect(sentTools[0].strict).toBe(true);
+        expect(sentTools[0].input_examples).toEqual([{ x: 1 }]);
+        expect(sentTools[0].defer_loading).toBe(true);
+        expect(sentTools[0].type).toBe('custom');
+        expect(sentTools[0].input_schema).toEqual({
+          type: 'object',
+          properties: {
+            x: {
+              type: 'string',
+            },
+          },
+        });
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    it('strips only cache_control on the xai provider path', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      try {
+        await fetch(`http://127.0.0.1:${port}/api/provider/xai/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'grok-4',
+            tools: [
+              {
+                name: 'xai_tool',
+                description: 'xai path test',
+                cache_control: { type: 'ephemeral' },
+                strict: true,
+              },
+            ],
+          }),
+        });
+
+        const sentTools = (lastRequest!.body as Record<string, unknown>).tools as Array<
+          Record<string, unknown>
+        >;
+        expect(sentTools[0].name).toBe('xai_tool');
+        expect(sentTools[0].cache_control).toBeUndefined();
+        expect(sentTools[0].strict).toBe(true);
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    it('strips only cache_control on the kimi provider path', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      try {
+        await fetch(`http://127.0.0.1:${port}/api/provider/kimi/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'kimi-k2',
+            tools: [
+              {
+                name: 'kimi_tool',
+                description: 'kimi path test',
+                cache_control: { type: 'ephemeral' },
+                strict: true,
+              },
+            ],
+          }),
+        });
+
+        const sentTools = (lastRequest!.body as Record<string, unknown>).tools as Array<
+          Record<string, unknown>
+        >;
+        expect(sentTools[0].name).toBe('kimi_tool');
+        expect(sentTools[0].cache_control).toBeUndefined();
+        expect(sentTools[0].strict).toBe(true);
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    it('strips only cache_control for kimi aliases on the iflow provider path', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      try {
+        // kimi-k2.5 normalizes to kimi-k2 on the iflow route, then still strips.
+        await fetch(`http://127.0.0.1:${port}/api/provider/iflow/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'kimi-k2.5',
+            tools: [
+              {
+                name: 'iflow_kimi_tool',
+                description: 'iflow kimi alias test',
+                cache_control: { type: 'ephemeral' },
+                strict: true,
+              },
+            ],
+          }),
+        });
+
+        const sentBody = lastRequest!.body as Record<string, unknown>;
+        expect(sentBody.model).toBe('kimi-k2');
+        const sentTools = sentBody.tools as Array<Record<string, unknown>>;
+        expect(sentTools[0].name).toBe('iflow_kimi_tool');
+        expect(sentTools[0].cache_control).toBeUndefined();
+        expect(sentTools[0].strict).toBe(true);
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    it('preserves top-level tool fields for non-kimi models on the iflow provider path', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      try {
+        await fetch(`http://127.0.0.1:${port}/api/provider/iflow/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'qwen3-coder-plus',
+            tools: [
+              {
+                name: 'iflow_qwen_tool',
+                description: 'iflow non-kimi passthrough',
+                cache_control: { type: 'ephemeral' },
+              },
+            ],
+          }),
+        });
+
+        const sentTools = (lastRequest!.body as Record<string, unknown>).tools as Array<
+          Record<string, unknown>
+        >;
+        expect(sentTools[0].name).toBe('iflow_qwen_tool');
+        expect(sentTools[0].cache_control).toEqual({ type: 'ephemeral' });
+      } finally {
+        proxy.stop();
+      }
+    });
+
     it('preserves top-level tool fields for non-target root routes', async () => {
       const proxy = new ToolSanitizationProxy({
         upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,

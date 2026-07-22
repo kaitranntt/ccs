@@ -60,6 +60,13 @@ const GEMINI_UNSUPPORTED_TOOL_FIELDS = new Set([
 ]);
 
 const CODEX_UNSUPPORTED_TOOL_FIELDS = new Set(['cache_control']);
+
+// xAI (Grok) and Moonshot (Kimi) get the same minimal strip set as Codex: the
+// Anthropic-only `cache_control` tool field. Kept codex-parity until live PoC
+// evidence justifies stripping more, to avoid over-stripping fields a backend
+// actually consumes.
+const XAI_UNSUPPORTED_TOOL_FIELDS = new Set(['cache_control']);
+const KIMI_UNSUPPORTED_TOOL_FIELDS = new Set(['cache_control']);
 const CODEX_FAST_SERVICE_TIER = 'priority';
 const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
 const LEGACY_CODEX_MODEL_ID_REGEX = /^gpt-5(?:\.\d+)?-codex(?:-(?:mini|max))?$/i;
@@ -220,6 +227,26 @@ function getUnsupportedToolFields(
     (normalizedProvider === null && isKnownCodexModelId(model))
   ) {
     return CODEX_UNSUPPORTED_TOOL_FIELDS;
+  }
+
+  // xAI (Grok): explicit provider path, or root-routed `grok-*` model. The xai
+  // profile points at the proxy root, so providerFromPath is null for Grok
+  // traffic and detection must fall back to the model prefix.
+  if (
+    normalizedProvider === 'xai' ||
+    (normalizedProvider === null && normalizedModel?.startsWith('grok-'))
+  ) {
+    return XAI_UNSUPPORTED_TOOL_FIELDS;
+  }
+
+  // Kimi (Moonshot): explicit kimi path, the iflow route serving kimi model
+  // aliases, or a root-routed `kimi-*` model.
+  if (
+    normalizedProvider === 'kimi' ||
+    (normalizedProvider === 'iflow' && normalizedModel?.startsWith('kimi-')) ||
+    (normalizedProvider === null && normalizedModel?.startsWith('kimi-'))
+  ) {
+    return KIMI_UNSUPPORTED_TOOL_FIELDS;
   }
 
   return null;
