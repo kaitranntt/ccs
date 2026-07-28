@@ -10,14 +10,8 @@ import {
 } from '../../cliproxy/ai-providers/model-id-normalizer';
 import { mapExternalProviderName } from '../../cliproxy/provider-capabilities';
 import type { CLIProxyProvider } from '../../cliproxy/types';
+import { ANTHROPIC_MODEL_ENV_KEYS } from '../../shared/extended-context-utils';
 import type { ProfileValidationIssue, ProfileValidationSummary } from './profile-types';
-
-const MODEL_ENV_KEYS = [
-  'ANTHROPIC_MODEL',
-  'ANTHROPIC_DEFAULT_OPUS_MODEL',
-  'ANTHROPIC_DEFAULT_SONNET_MODEL',
-  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
-] as const;
 
 const ALLOWED_ANTHROPIC_ENV_KEYS = new Set<string>([
   'ANTHROPIC_BASE_URL',
@@ -25,7 +19,7 @@ const ALLOWED_ANTHROPIC_ENV_KEYS = new Set<string>([
   'ANTHROPIC_API_KEY',
   // Written by profile-writer when --extra-models is supplied
   'ANTHROPIC_EXTRA_MODELS',
-  ...MODEL_ENV_KEYS,
+  ...ANTHROPIC_MODEL_ENV_KEYS,
 ]);
 
 function resolveProviderFromBaseUrl(baseUrl: string): CLIProxyProvider | null {
@@ -118,7 +112,7 @@ export function validateApiProfileSettingsPayload(settings: unknown): ProfileVal
   }
 
   const provider = resolveProviderFromBaseUrl(baseUrl);
-  for (const modelKey of MODEL_ENV_KEYS) {
+  for (const modelKey of ANTHROPIC_MODEL_ENV_KEYS) {
     const value = envObj[modelKey];
     if (typeof value !== 'string' || value.trim().length === 0) continue;
     const denyReason = getDeniedModelIdReasonForProvider(value, provider);

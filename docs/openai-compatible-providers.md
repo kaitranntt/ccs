@@ -1,35 +1,44 @@
-# OpenAI-Compatible Provider Routing
+# OpenAI-Compatible Proxy Developer Contract
 
-CCS can route Claude Code traffic through a local Anthropic-compatible proxy when
-your API profile points at an OpenAI-compatible chat completions endpoint.
+The canonical
+[OpenAI-Compatible Provider Routing guide](https://docs.ccs.kaitran.ca/features/proxy/openai-compatible-providers)
+owns user setup and workflows. This local contract retains runtime and
+configuration invariants used by source, tests, and operators.
 
-This is useful for providers such as:
+## Profile-Scoped Insecure TLS
 
-- Hugging Face Inference Providers
-- Tuning Engines
-- OpenRouter
-- Ollama
-- llama.cpp servers
-- OpenAI-compatible self-hosted gateways
+`CCS_OPENAI_PROXY_INSECURE` is read from an OpenAI-compatible profile env.
+Truthy values are `1`, `true`, `yes`, and `on` (case-insensitive). When enabled,
+the local proxy disables upstream certificate verification for that profile,
+including request-time routing to another insecure profile.
 
-## Related Project: claude-code-router
+This flag weakens TLS verification. Keep it explicit and profile-scoped; never
+make it a global default or infer it from a failed certificate check. The live
+resolution and dispatcher contracts are in
+[`profile-router.ts`](../src/proxy/profile-router.ts) and
+[`proxy-server.ts`](../src/proxy/server/proxy-server.ts).
 
-[claude-code-router](https://github.com/musistudio/claude-code-router) is the
-main external reference that informed this CCS work. Their Anthropic/OpenAI
-transformer design helped shape the routing approach here.
+## Request Timeout
 
-When to use CCR:
+`CCS_OPENAI_PROXY_REQUEST_TIMEOUT_MS` controls the upstream request timeout in
+milliseconds:
 
-- you want a standalone router without CCS profile integration
-- you do not need CCS account/runtime management around the request flow
+- default: `600000` (10 minutes);
+- accepted: values whose `Number.parseInt` result is positive;
+- missing, invalid, zero, or negative values: fall back to the default.
 
-When to use CCS:
+Upstream Undici header/body timeouts must stay above the request timeout so they
+do not terminate slow self-hosted inference first. The current implementation
+adds a 30-second grace ceiling. Source of truth:
+[`messages-route.ts`](../src/proxy/server/messages-route.ts).
 
-- you already use CCS API profiles or runtime bridges
-- you want the proxy flow available through `ccs <profile>` and `ccs proxy ...`
-- you want the routing behavior documented and tested inside the CCS workflow
+## Compatibility Boundary
 
-## What CCS Does
+These variables configure the local Anthropic-to-OpenAI proxy. They do not
+convert a non-compatible profile into a compatible one, bypass local proxy
+authentication, or authorize remote binding. Keep profile detection, adaptive
+port selection, passthrough mode, request-time routing, and scenario routing
+documented in the public guide.
 
 When you launch a compatible settings profile with the Claude target, CCS now:
 
@@ -411,3 +420,6 @@ Pre-merge gate:
 ```bash
 bun run validate
 ```
+
+Focused behavior locks live in `tests/unit/proxy/` and
+`tests/integration/proxy/`.

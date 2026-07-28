@@ -7,6 +7,7 @@ import type {
   RoutingStrategy,
   CliproxySessionAffinityState,
 } from '@/lib/api-client';
+import { CliproxyRetryControl } from './cliproxy-retry-control';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 
@@ -277,6 +278,8 @@ export function RoutingGuidanceCard({
             {sessionAffinityState.message}
           </div>
         ) : null}
+
+        <CliproxyRetryControl />
       </div>
     );
   }

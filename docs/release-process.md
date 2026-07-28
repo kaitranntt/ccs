@@ -1,106 +1,117 @@
 # CCS Release Process
 
-CCS uses a decoupled release model: every merge to `main` immediately publishes
-a stable npm `@latest` release and an immutable Docker `:<ver>` tag. Docker
-mutable tags (`:latest`, `:<MAJOR>`, `:<MINOR>`) require a separate manual
-promote step after an operator-verified soak window. This decouples the npm
-ecosystem from the Docker stability gate.
+CCS has separate development, stable npm, and Docker promotion lanes. A branch
+push starts the relevant workflow. Eligible `dev` pushes publish the next custom
+development prerelease after their gates pass; `main` publishes only when
+semantic-release finds release-worthy commits.
 
-## Phase 1 — Automatic stable release (on every merge to `main`)
+## Release lanes
 
-1. A PR is merged into `main` with a conventional commit (`feat:`, `fix:`, etc.).
-2. `release.yml` triggers semantic-release, which reads `.releaserc.cjs`.
-3. Because `main` is a stable channel, semantic-release cuts a GitHub release
-   tagged `vX.Y.Z` and publishes the npm package to the `@latest` dist-tag
-   immediately. No rc channel, no soak delay on npm.
-4. `docker-release.yml` triggers on the `release: published` event and:
-   - Validates the tag as stable semver (`vX.Y.Z`).
-   - Builds the integrated image for `linux/amd64` and `linux/arm64`.
-   - Pushes **only the immutable** `ghcr.io/kaitranntt/ccs:X.Y.Z` tag.
-   - Signs the image with cosign (keyless OIDC).
-   - Runs smoke tests (`smoke-test` job).
-   - Mutable tags (`:latest`, `:<MAJOR>`, `:<MINOR>`) are **not** added at
-     this stage — `promote-mutable-tags` only runs on explicit
-     `workflow_dispatch` with `promote_to_latest=true`.
+| Source | Workflow | Result |
+| --- | --- | --- |
+| Push to `dev` | [`dev-release.yml`](../.github/workflows/dev-release.yml) | Custom development prerelease and npm `@dev` publication |
+| Push to `main` | [`release.yml`](../.github/workflows/release.yml) | Semantic-release stable version, npm `@latest`, tag, and GitHub release when commits require a release |
+| Published stable or `rc` GitHub release | [`docker-release.yml`](../.github/workflows/docker-release.yml) | Immutable integrated Docker version tag, signature, and smoke test |
+| Manual stable promotion | [`promote-release.yml`](../.github/workflows/promote-release.yml) | Docker `:latest`, major, and minor aliases |
+| Stable GitHub release | [`sync-dev-after-release.yml`](../.github/workflows/sync-dev-after-release.yml) | Merge released `main` state back into `dev` |
 
-## Phase 2 — Manual promotion to Docker mutable tags (rc.1 soak window)
+## Development prereleases
 
-After the immutable `:<ver>` Docker image has soaked (typically 24 h with no
-reported issues), the operator promotes mutable tags:
+`Dev Release` runs on pushes to `dev` and can also be dispatched manually.
+After build and validation gates, it calls
+[`scripts/dev-release.sh`](../scripts/dev-release.sh). That script owns the
+`<stable>-dev.<n>` version sequence and npm `@dev` publication. It is
+intentionally separate from the production semantic-release configuration.
 
-1. Verify the immutable image is healthy:
+Generated `chore(release): ...` pushes are skipped by the workflow guard to
+prevent release recursion.
 
-   ```bash
-   docker pull ghcr.io/kaitranntt/ccs:X.Y.Z
-   docker run --rm -p 3000:3000 -p 8317:8317 ghcr.io/kaitranntt/ccs:X.Y.Z
-   # check http://localhost:3000 and http://localhost:8317
-   ```
+## Stable npm and GitHub releases
 
-2. Optionally verify the cosign signature:
+`Release` runs on `main`. It builds the CLI and dashboard, runs the fast, slow,
+and end-to-end gates, then invokes semantic-release with
+[`.releaserc.cjs`](../.releaserc.cjs).
 
-   ```bash
-   cosign verify \
-     --certificate-identity-regexp "https://github.com/kaitranntt/ccs/.github/workflows/docker-release.yml" \
-     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-     ghcr.io/kaitranntt/ccs:X.Y.Z
-   ```
+Semantic-release analyzes commits since the previous stable release:
 
-3. Run the `promote-release` workflow via GitHub Actions UI or CLI:
+- `feat` produces at least a minor release;
+- `fix`, `hotfix`, `refactor`, and `style` produce patch releases under the
+  repository rules;
+- breaking-change notation produces the appropriate major release; and
+- commits without a matching release rule may produce no release.
 
-   ```bash
-   gh workflow run promote-release.yml \
-     --field tag=vX.Y.Z
-   ```
+When a release is required, the lane updates `CHANGELOG.md` and `package.json`,
+publishes npm `@latest`, creates the stable Git tag and GitHub release, and
+pushes the generated release commit to `main`. Do not bump versions or create
+release tags manually.
 
-   This dispatches `docker-release.yml` with `promote_to_latest=true`, which
-   triggers the `promote-mutable-tags` job to add `:latest`, `:<MAJOR>`, and
-   `:<MINOR>` via `docker buildx imagetools create`.
+## Docker publication and promotion
 
-   Alternatively, dispatch `docker-release.yml` directly:
+The supported integrated image is `ghcr.io/kaitranntt/ccs`.
 
-   ```bash
-   gh workflow run "Publish Docker Image" \
-     --field tag=vX.Y.Z \
-     --field promote_to_latest=true
-   ```
+On a published stable `vX.Y.Z` or release-candidate `vX.Y.Z-rc.N` GitHub
+release, `Publish Docker Image`:
 
-## Why npm and Docker have different soak windows
+1. validates the release tag;
+2. checks out that tag;
+3. builds the integrated image for `linux/amd64` and `linux/arm64`;
+4. publishes only the matching immutable version tag;
+5. signs the image digest with keyless cosign; and
+6. smoke-tests the published image.
 
-- **npm `@latest`**: Published immediately on every `main` merge. npm users who
-  pin a version are unaffected; users who run `npm install -g @kaitranntt/ccs`
-  get the latest immediately. Rollback is `npm install -g @kaitranntt/ccs@X.Y.Z`.
-- **Docker `:latest`**: Promoted only after operator confirmation. Users who
-  pull `:latest` or run `docker pull` without a pinned tag are shielded from
-  a bad image. The immutable `:<ver>` tag is always available for pinned usage
-  from the moment of release.
-
-## Verifying the promotion
+Mutable aliases are a separate operator decision. After verifying the immutable
+image and allowing the desired soak period, dispatch `promote-release.yml`:
 
 ```bash
-# Confirm :latest points to the promoted digest
-docker buildx imagetools inspect ghcr.io/kaitranntt/ccs:latest
+gh workflow run promote-release.yml --field tag=vX.Y.Z
+```
 
-# Confirm npm @latest updated (happens automatically at Phase 1)
+The promotion workflow verifies that the stable GitHub release and immutable
+image exist, then dispatches `docker-release.yml` with
+`promote_to_latest=true`. The promotion job creates `:latest`, `:X`, and
+`:X.Y` aliases from the immutable image digest.
+
+The deprecated `ccs-dashboard` image has its own sunset compatibility job.
+Do not use its tag behavior as the contract for the supported integrated image.
+
+## Post-release development sync
+
+A published, non-prerelease `vX.Y.Z` release targeting `main` triggers
+`Sync Dev After Main Release`. The workflow merges `main` into `dev`, resolves
+known generated version-file conflicts in favor of the released `main` state,
+and pushes `dev`. That push intentionally triggers the normal `Push CI` and
+development-release lanes.
+
+## Verification
+
+```bash
+# npm channels
 npm view @kaitranntt/ccs dist-tags
+
+# immutable integrated image
+docker buildx imagetools inspect ghcr.io/kaitranntt/ccs:X.Y.Z
+
+# mutable alias after promotion
+docker buildx imagetools inspect ghcr.io/kaitranntt/ccs:latest
 ```
 
-## Rollback
+Verify the GitHub Actions run and tag point to the expected commit before
+announcing a release.
 
-If a promoted release is found to be bad:
+## Recovery
 
-```bash
-# Repoint :latest to the previous known-good immutable tag
-docker buildx imagetools create \
-  --tag ghcr.io/kaitranntt/ccs:latest \
-  ghcr.io/kaitranntt/ccs:PREVIOUS.VERSION
+- **Bad npm release:** publish a corrected patch. Do not unpublish a version
+  used by downstream consumers.
+- **Bad immutable Docker image:** leave the immutable tag unchanged and publish
+  a corrected version.
+- **Bad mutable Docker promotion:** promote a known-good immutable digest back
+  to the mutable aliases through the controlled workflow.
+- **Failed `dev` sync:** repair the merge against current `main` and `dev`;
+  never overwrite branch history.
 
-# For npm, publish a fix as a new patch release (do not unpublish)
-# Unpublishing npm packages causes downstream breakage for pinned consumers.
-```
+## Branch and tag summary
 
-## Branch / tag taxonomy
-
-| Branch | Semantic-release channel | npm dist-tag | Docker tag (on release event) | Docker mutable (on promote) |
-|--------|--------------------------|--------------|-------------------------------|------------------------------|
-| `main` | stable | `@latest` | `:<ver>` (immutable, immediate) | `:latest`, `:<MAJOR>`, `:<MINOR>` (after soak) |
-| `dev` | `dev` prerelease | `@dev` | not published | not published |
+| Branch | Package channel | npm dist-tag | Integrated Docker |
+| --- | --- | --- | --- |
+| `dev` | Development prerelease | `@dev` | None |
+| `main` | Stable semantic release | `@latest` | Immutable tag on GitHub release; mutable aliases after manual promotion |

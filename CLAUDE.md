@@ -38,6 +38,23 @@ Profile resolution priority:
 
 All env values written into settings must be strings.
 
+## Documentation Truth
+
+Use the narrowest authoritative source:
+
+1. Source, tests, package scripts, and workflows define implemented behavior.
+2. `CLAUDE.md` and `CONTRIBUTING.md` define repository workflow.
+3. `docs/README.md` maps maintainer documentation and its owners.
+4. The separate `kaitranntt/ccs-docs` repository and published site own user
+   guides and CLI reference.
+5. Generated artifacts and live runtime checks define what shipped or is
+   currently running.
+
+Do not copy inventories, line counts, locale lists, target lists, or command
+details when a stable source link is enough. Update the owning documentation
+when behavior, commands, setup, architecture, security posture, or maintainer
+workflow changes. Remove stale claims instead of preserving them as TODOs.
+
 ## User-Facing Change Checklist
 
 - Update the matching `--help` handler when CLI behavior changes.
@@ -46,7 +63,10 @@ All env values written into settings must be strings.
 - Use neutral broad examples such as `ccs`, `ccs codex`, `ccs glm`, or
   `ccs <provider>` unless the page is provider-specific.
 - If CLI commands, config, providers, install steps, or user workflows change,
-  update the public CCS docs in `/Users/kaitran/CloudPersonal/ccs/docs`.
+  update the separate public CCS docs repository. Maintainers using the
+  standard CloudPersonal checkout may have it at
+  `/Users/kaitran/CloudPersonal/ccs/docs`; fork contributors can use their own
+  checkout and coordinate the matching docs change in the PR.
 
 Help locations:
 

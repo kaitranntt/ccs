@@ -1,4 +1,4 @@
-# PowerShell completion for CCS (Claude Code Switch)
+# PowerShell completion for CCS (Claude Codex Switch)
 
 function Invoke-CcsCompletionBackend {
     param(

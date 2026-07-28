@@ -37,6 +37,7 @@ describe('buildLaunchSettingsOverlay', () => {
       env: {
         ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/codex',
         ANTHROPIC_MODEL: 'gpt-5.5',
+        ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-5.4-mini',
         ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
       },
     });
@@ -44,12 +45,14 @@ describe('buildLaunchSettingsOverlay', () => {
     const { settings, changed } = buildLaunchSettingsOverlay(settingsPath, {
       ANTHROPIC_BASE_URL: 'http://127.0.0.1:50118/api/provider/codex',
       ANTHROPIC_MODEL: 'gpt-5.5-high',
+      ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-5.4-mini-medium',
     } as NodeJS.ProcessEnv);
 
     expect(changed).toBe(true);
     const env = settings.env as Record<string, string>;
     expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:50118/api/provider/codex');
     expect(env.ANTHROPIC_MODEL).toBe('gpt-5.5-high');
+    expect(env.ANTHROPIC_DEFAULT_FABLE_MODEL).toBe('gpt-5.4-mini-medium');
     // Untouched keys are preserved.
     expect(env.ANTHROPIC_AUTH_TOKEN).toBe('ccs-internal-managed');
   });

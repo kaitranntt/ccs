@@ -24,6 +24,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { isTestFile } = require('./runtime-source-classifier.js');
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']);
 
@@ -77,14 +78,6 @@ function toPosixPath(filePath) {
 
 function isSourceFile(filePath) {
   return SOURCE_EXTENSIONS.has(path.extname(filePath));
-}
-
-function isTestFile(relPath) {
-  return (
-    /(?:^|\/)(?:__tests__|tests?)\//.test(relPath) ||
-    /\.test\./.test(relPath) ||
-    /\.spec\./.test(relPath)
-  );
 }
 
 function isCliUxExempt(relPath) {
@@ -350,6 +343,7 @@ module.exports = {
   classifyThrows: classifyThrows,
   countConsoleErrors: countConsoleErrors,
   hasCreateLogger: hasCreateLogger,
+  isTestFile: isTestFile,
   countLoc: countLoc,
   TYPED_ERROR_CLASSES: TYPED_ERROR_CLASSES,
   TYPED_ADOPTION_SUBDOMAINS: TYPED_ADOPTION_SUBDOMAINS,

@@ -1,29 +1,44 @@
-name: Docs – Quickstart Snippet Parity
+name: Docs – Parity and Freshness
 
 on:
   push:
     paths:
-      - "docs/quickstart-snippet.md"
-      - "README.md"
-      - "docker/README.md"
-      - "tests/docs/quickstart-parity.sh"
-      - ".github/workflows/docs-parity.yml"
+      - 'docs/quickstart-snippet.md'
+      - 'README.md'
+      - 'docker/README.md'
+      - 'macos-bar/README.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - 'src/**'
+      - 'scripts/hardening-inventory.js'
+      - 'scripts/maintainability-metrics.js'
+      - 'scripts/runtime-source-classifier.js'
+      - 'tests/docs/quickstart-parity.sh'
+      - 'tests/docs/documentation-freshness.js'
+      - '.github/workflows/docs-parity.yml'
   pull_request:
     paths:
-      - "docs/quickstart-snippet.md"
-      - "README.md"
-      - "docker/README.md"
-      - "tests/docs/quickstart-parity.sh"
-      - ".github/workflows/docs-parity.yml"
+      - 'docs/quickstart-snippet.md'
+      - 'README.md'
+      - 'docker/README.md'
+      - 'macos-bar/README.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - 'src/**'
+      - 'scripts/hardening-inventory.js'
+      - 'scripts/maintainability-metrics.js'
+      - 'scripts/runtime-source-classifier.js'
+      - 'tests/docs/quickstart-parity.sh'
+      - 'tests/docs/documentation-freshness.js'
+      - '.github/workflows/docs-parity.yml'
 
 jobs:
-  quickstart-parity:
-    name: Assert quickstart snippet matches in README.md and docker/README.md
+  docs-parity:
+    name: Assert documentation parity and freshness
     if: >-
       contains(fromJSON('["COLLABORATOR","MEMBER","OWNER"]'), github.event.pull_request.author_association)
       || github.event_name == 'push'
     runs-on: [self-hosted, linux, x64, cliproxy]
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,3 +47,9 @@ jobs:
 
       - name: Run quickstart parity check
         run: bash tests/docs/quickstart-parity.sh
+
+      - name: Validate documentation pointers and relative links
+        run: node tests/docs/documentation-freshness.js
+
+      - name: Validate generated hardening inventory
+        run: node scripts/hardening-inventory.js --check

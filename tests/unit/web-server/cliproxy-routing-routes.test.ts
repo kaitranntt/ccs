@@ -9,6 +9,8 @@ describe('cliproxy routing routes', () => {
   let applyStrategyMock: ReturnType<typeof mock>;
   let readAffinityStateMock: ReturnType<typeof mock>;
   let applyAffinityMock: ReturnType<typeof mock>;
+  let readRetryMock: ReturnType<typeof mock>;
+  let applyRetryMock: ReturnType<typeof mock>;
 
   beforeEach(async () => {
     readStateMock = mock(async () => ({
@@ -41,6 +43,23 @@ describe('cliproxy routing routes', () => {
       manageable: true,
       applied: 'config-only',
     }));
+    readRetryMock = mock(async () => ({
+      request_retry: 2,
+      max_retry_interval: 20,
+      source: 'live',
+      target: 'local',
+      reachable: true,
+      manageable: true,
+    }));
+    applyRetryMock = mock(async () => ({
+      request_retry: 3,
+      max_retry_interval: 30,
+      source: 'live',
+      target: 'local',
+      reachable: true,
+      manageable: true,
+      applied: 'live-and-config',
+    }));
 
     mock.module('../../../src/cliproxy/routing/routing-strategy', () => ({
       readCliproxyRoutingState: readStateMock,
@@ -61,6 +80,12 @@ describe('cliproxy routing routes', () => {
         if (value === '30m' || value === '1h') return value;
         return null;
       },
+    }));
+    mock.module('../../../src/cliproxy/routing/retry-settings', () => ({
+      readCliproxyRetryState: readRetryMock,
+      applyCliproxyRetrySettings: applyRetryMock,
+      normalizeCliproxyRetryValue: (value: unknown) =>
+        typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null,
     }));
 
     const { default: routingRoutes } = await import(
@@ -179,5 +204,38 @@ describe('cliproxy routing routes', () => {
       manageable: true,
       applied: 'config-only',
     });
+  });
+
+  it('returns and updates retry settings through the dedicated route', async () => {
+    const readResponse = await fetch(`${baseUrl}/api/cliproxy/retry`);
+    expect(readResponse.status).toBe(200);
+    expect((await readResponse.json()).request_retry).toBe(2);
+
+    const updateResponse = await fetch(`${baseUrl}/api/cliproxy/retry`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ request_retry: 3, max_retry_interval: 30 }),
+    });
+    expect(updateResponse.status).toBe(200);
+    expect(applyRetryMock).toHaveBeenCalledWith({
+      request_retry: 3,
+      max_retry_interval: 30,
+    });
+  });
+
+  it.each([
+    { request_retry: -1, max_retry_interval: 30 },
+    { request_retry: 1.5, max_retry_interval: 30 },
+    { request_retry: Number.MAX_SAFE_INTEGER + 1, max_retry_interval: 30 },
+    { request_retry: 1, max_retry_interval: '30' },
+  ])('rejects invalid retry payload %#', async (payload) => {
+    const response = await fetch(`${baseUrl}/api/cliproxy/retry`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    expect(response.status).toBe(400);
+    expect(applyRetryMock).not.toHaveBeenCalled();
   });
 });

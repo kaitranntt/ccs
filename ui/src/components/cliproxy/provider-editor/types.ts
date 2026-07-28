@@ -126,6 +126,7 @@ export interface ModelConfigSectionProps {
   opusModel?: string;
   sonnetModel?: string;
   haikuModel?: string;
+  fableModel?: string;
   providerModels: Array<{ id: string; owned_by: string }>;
   routing?: CliproxyProviderRoutingHints;
   /** Provider name for display */
@@ -154,6 +155,7 @@ export interface UseProviderEditorReturn {
   opusModel?: string;
   sonnetModel?: string;
   haikuModel?: string;
+  fableModel?: string;
   /** Whether extended context (1M tokens) is enabled */
   extendedContextEnabled: boolean;
   /** Toggle extended context on/off */

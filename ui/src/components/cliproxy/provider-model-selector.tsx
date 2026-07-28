@@ -10,16 +10,31 @@ import { useTranslation } from 'react-i18next';
 
 import { Badge } from '@/components/ui/badge';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import type { CliproxyProviderRoutingHints } from '@/lib/api-client';
 import type { CodexEffort, CodexServiceTier } from '@/lib/codex-effort';
 import {
+  applyCodexServiceTierSuffix,
   getCodexEffortDisplay,
   getCodexEffortVariants,
   parseCodexEffort,
   parseCodexServiceTier,
+  stripCodexEffortSuffix,
 } from '@/lib/codex-effort';
-import { getResolvedCatalogModels, getSupplementalCatalogModels } from '@/lib/model-catalogs';
+import {
+  findCatalogModel,
+  getResolvedCatalogModels,
+  getSupplementalCatalogModels,
+} from '@/lib/model-catalogs';
+import { getReasoningAdapter } from '@/lib/reasoning-control';
 import { cn } from '@/lib/utils';
 
 /** Model entry from catalog */
@@ -47,6 +62,8 @@ export interface ModelEntry {
   codexEfforts?: CodexEffort[];
   /** Additional Codex service-tier suffixes supported by this model in the dashboard UI. */
   codexServiceTiers?: CodexServiceTier[];
+  /** Reasoning-level suffixes this model supports via paren syntax in the dashboard UI. */
+  reasoningLevels?: string[];
 }
 
 /** Provider catalog */
@@ -561,6 +578,34 @@ export function FlexibleModelSelector({
       }
     : null;
   const hasAvailableModels = recommendedOptions.length + allModelOptions.length > 0;
+  const reasoningAdapter = getReasoningAdapter(catalog?.provider);
+  const currentReasoningLevel = reasoningAdapter?.parse(value);
+  const selectableReasoningLevels =
+    reasoningAdapter && catalog
+      ? reasoningAdapter.getOptions(
+          reasoningAdapter.strip(normalizeModelValue(value, routing)),
+          catalog
+        )
+      : null;
+  const reasoningOptions =
+    selectableReasoningLevels &&
+    currentReasoningLevel &&
+    !selectableReasoningLevels.includes(currentReasoningLevel)
+      ? [...selectableReasoningLevels, currentReasoningLevel]
+      : selectableReasoningLevels;
+  const currentServiceTier = isCodexProvider ? parseCodexServiceTier(value) : undefined;
+  const selectedCodexBaseModel =
+    isCodexProvider && catalog && value
+      ? findCatalogModel(
+          catalog.provider,
+          stripCodexEffortSuffix(normalizeModelValue(value, routing)),
+          catalog
+        )
+      : undefined;
+  const showFastToggle =
+    isCodexProvider &&
+    (selectedCodexBaseModel?.codexServiceTiers?.includes('fast') === true ||
+      currentServiceTier === 'fast');
 
   return (
     <div className="space-y-1.5">
@@ -568,87 +613,129 @@ export function FlexibleModelSelector({
         <label className="text-xs font-medium">{label}</label>
         {description && <p className="text-[10px] text-muted-foreground">{description}</p>}
       </div>
-      <SearchableSelect
-        value={value || undefined}
-        onChange={onChange}
-        disabled={disabled}
-        placeholder={t('providerModelSelector.selectModel')}
-        searchPlaceholder={t('searchableSelect.searchModels')}
-        emptyText={
-          hasAvailableModels
-            ? t('searchableSelect.noResults')
-            : t('providerModelSelector.noModelsAvailable')
-        }
-        triggerClassName="h-9"
-        createOption={createCustomModelOption}
-        groups={[
-          ...(selectedValueMissing && legacySelectedOption
-            ? [
-                {
-                  key: 'current',
-                  label: (
-                    <span className="text-xs text-muted-foreground">
-                      {t('providerModelSelector.currentValue')}
-                    </span>
-                  ),
-                },
-              ]
-            : []),
-          {
-            key: 'recommended',
-            label: (
-              <span className="text-xs text-primary">{t('providerModelSelector.recommended')}</span>
-            ),
-          },
-          ...(isCodexProvider
-            ? [
-                {
-                  key: 'codex-reasoning',
-                  label: (
-                    <span className="text-xs text-muted-foreground">
-                      {t('providerModelSelector.codexReasoningVariants')}
-                    </span>
-                  ),
-                },
-                {
-                  key: 'codex-fast',
-                  label: (
-                    <span className="text-xs text-amber-600">
-                      {t('providerModelSelector.codexFastVariants')}
-                    </span>
-                  ),
-                },
-              ]
-            : []),
-          ...(allModelOptions.length > 0
-            ? [
-                {
-                  key: 'all',
-                  label: (
-                    <span className="text-xs text-muted-foreground">
-                      {t('providerModelSelector.allModelsCount', {
-                        count: allModelOptions.length,
-                      })}
-                    </span>
-                  ),
-                },
-              ]
-            : []),
-          {
-            key: 'custom',
-            label: (
-              <span className="text-xs text-muted-foreground">
-                {t('providerModelSelector.customModel')}
-              </span>
-            ),
-          },
-        ]}
-        options={[
-          ...(selectedValueMissing && legacySelectedOption ? [legacySelectedOption] : []),
-          ...recommendedOptions,
-          ...allModelOptions,
-        ]}
-      />
+      <div className="flex gap-2">
+        <SearchableSelect
+          value={value || undefined}
+          onChange={onChange}
+          disabled={disabled}
+          placeholder={t('providerModelSelector.selectModel')}
+          searchPlaceholder={t('searchableSelect.searchModels')}
+          emptyText={
+            hasAvailableModels
+              ? t('searchableSelect.noResults')
+              : t('providerModelSelector.noModelsAvailable')
+          }
+          className="min-w-0 flex-1"
+          triggerClassName="h-9"
+          createOption={createCustomModelOption}
+          groups={[
+            ...(selectedValueMissing && legacySelectedOption
+              ? [
+                  {
+                    key: 'current',
+                    label: (
+                      <span className="text-xs text-muted-foreground">
+                        {t('providerModelSelector.currentValue')}
+                      </span>
+                    ),
+                  },
+                ]
+              : []),
+            {
+              key: 'recommended',
+              label: (
+                <span className="text-xs text-primary">
+                  {t('providerModelSelector.recommended')}
+                </span>
+              ),
+            },
+            ...(isCodexProvider
+              ? [
+                  {
+                    key: 'codex-reasoning',
+                    label: (
+                      <span className="text-xs text-muted-foreground">
+                        {t('providerModelSelector.codexReasoningVariants')}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: 'codex-fast',
+                    label: (
+                      <span className="text-xs text-amber-600">
+                        {t('providerModelSelector.codexFastVariants')}
+                      </span>
+                    ),
+                  },
+                ]
+              : []),
+            ...(allModelOptions.length > 0
+              ? [
+                  {
+                    key: 'all',
+                    label: (
+                      <span className="text-xs text-muted-foreground">
+                        {t('providerModelSelector.allModelsCount', {
+                          count: allModelOptions.length,
+                        })}
+                      </span>
+                    ),
+                  },
+                ]
+              : []),
+            {
+              key: 'custom',
+              label: (
+                <span className="text-xs text-muted-foreground">
+                  {t('providerModelSelector.customModel')}
+                </span>
+              ),
+            },
+          ]}
+          options={[
+            ...(selectedValueMissing && legacySelectedOption ? [legacySelectedOption] : []),
+            ...recommendedOptions,
+            ...allModelOptions,
+          ]}
+        />
+        {reasoningAdapter && reasoningOptions && (
+          <Select
+            value={currentReasoningLevel ?? 'auto'}
+            onValueChange={(level) =>
+              onChange(reasoningAdapter.apply(value, level === 'auto' ? undefined : level))
+            }
+            disabled={disabled || !value}
+          >
+            <SelectTrigger
+              className="h-9 w-28 shrink-0"
+              aria-label={t('providerModelSelector.effortLabel')}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">{t('providerModelSelector.effortAuto')}</SelectItem>
+              {reasoningOptions.map((level) => (
+                <SelectItem key={level} value={level}>
+                  {level}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {showFastToggle && (
+          <label className="flex h-9 shrink-0 items-center gap-1.5">
+            <Switch
+              checked={currentServiceTier === 'fast'}
+              onCheckedChange={(checked) => onChange(applyCodexServiceTierSuffix(value, checked))}
+              disabled={disabled || !value}
+              aria-label={t('providerModelSelector.fastTier')}
+            />
+            <span className="text-xs text-muted-foreground">
+              {t('providerModelSelector.fastTier')}
+            </span>
+          </label>
+        )}
+      </div>
       {selectedRoutingHint ? (
         <div
           className={cn(

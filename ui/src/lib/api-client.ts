@@ -550,6 +550,23 @@ export interface CliproxySessionAffinityApplyResult extends CliproxySessionAffin
   applied: 'config-and-live' | 'config-only' | 'unsupported';
 }
 
+export interface CliproxyRetryValues {
+  request_retry: number;
+  max_retry_interval: number;
+}
+
+export interface CliproxyRetryState extends CliproxyRetryValues {
+  source: 'live' | 'config';
+  target: 'local' | 'remote';
+  reachable: boolean;
+  manageable: boolean;
+  message?: string;
+}
+
+export interface CliproxyRetryApplyResult extends CliproxyRetryState {
+  applied: 'live' | 'live-and-config' | 'config-only';
+}
+
 /** Auth file info for Config tab */
 export interface AuthFile {
   name: string;
@@ -1324,6 +1341,12 @@ export const api = {
       request<CliproxySessionAffinityState>('/cliproxy/routing/session-affinity'),
     updateSessionAffinity: (data: { enabled: boolean; ttl?: string }) =>
       request<CliproxySessionAffinityApplyResult>('/cliproxy/routing/session-affinity', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    getRetrySettings: () => request<CliproxyRetryState>('/cliproxy/retry'),
+    updateRetrySettings: (data: CliproxyRetryValues) =>
+      request<CliproxyRetryApplyResult>('/cliproxy/retry', {
         method: 'PUT',
         body: JSON.stringify(data),
       }),

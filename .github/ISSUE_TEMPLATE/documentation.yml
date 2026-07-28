@@ -1,6 +1,6 @@
 name: Documentation improvement
 description: Report missing, outdated, or confusing docs.
-title: "docs: "
+title: 'docs: '
 labels:
   - documentation
 body:
@@ -24,7 +24,7 @@ body:
     attributes:
       label: File or page
       description: Path or URL if you know it.
-      placeholder: README.md or docs/cursor-integration.md
+      placeholder: README.md or https://docs.ccs.kaitran.ca/providers/oauth/cursor
   - type: textarea
     id: problem
     attributes:

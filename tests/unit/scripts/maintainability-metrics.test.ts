@@ -8,9 +8,30 @@ const {
   classifyThrows,
   countConsoleErrors,
   hasCreateLogger,
+  isTestFile,
   countLoc,
   collectMaintainabilityMetrics,
 } = require('../../../scripts/maintainability-metrics.js');
+
+describe('maintainability-metrics runtime file classification', () => {
+  test.each([
+    'src/cliproxy/__tests__/routing.test.ts',
+    'src/commands/fixtures/help-output.ts',
+    'src/auth/profile.spec.ts',
+    'tests/unit/commands/profile.test.ts',
+    'src\\auth\\__mocks__\\profile.ts',
+  ])('excludes %s from runtime metrics', (filePath) => {
+    expect(isTestFile(filePath)).toBe(true);
+  });
+
+  test.each([
+    'src/cliproxy/routing/retry-settings.ts',
+    'src/commands/help-command.ts',
+    'src/utils/browser/mcp-installer.ts',
+  ])('keeps %s in runtime metrics', (filePath) => {
+    expect(isTestFile(filePath)).toBe(false);
+  });
+});
 
 describe('maintainability-metrics.classifyThrows', () => {
   test('counts plain Error, typed, and other throws; ignores re-throws', () => {
@@ -94,14 +115,18 @@ describe('maintainability-metrics.collectMaintainabilityMetrics (fixtures tree)'
     fs.mkdirSync(path.join(root, 'src', 'commands'), { recursive: true });
     fs.writeFileSync(
       path.join(root, 'src', 'commands', 'b.ts'),
-      ['console.error(\'cli print\');', "throw new Error('plain');"].join('\n')
+      ["console.error('cli print');", "throw new Error('plain');"].join('\n')
     );
 
     // src/cliproxy/quota/q.ts: createLogger present, 1 plain throw, 0 console.error
     fs.mkdirSync(path.join(root, 'src', 'cliproxy', 'quota'), { recursive: true });
     fs.writeFileSync(
       path.join(root, 'src', 'cliproxy', 'quota', 'q.ts'),
-      ["import { createLogger } from '../../../services/logging';", 'const logger = createLogger();', "throw new Error('quota plain');"].join('\n')
+      [
+        "import { createLogger } from '../../../services/logging';",
+        'const logger = createLogger();',
+        "throw new Error('quota plain');",
+      ].join('\n')
     );
 
     // non-source file is ignored

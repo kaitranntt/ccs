@@ -264,6 +264,7 @@ describe('CLAUDECODE environment stripping', () => {
     delete process.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
     delete process.env.ANTHROPIC_DEFAULT_SONNET_MODEL;
     delete process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
+    delete process.env.ANTHROPIC_DEFAULT_FABLE_MODEL;
     delete process.env.ANTHROPIC_SMALL_FAST_MODEL;
     delete process.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS;
 
@@ -543,6 +544,7 @@ describe('CLAUDECODE environment stripping', () => {
     process.env.ANTHROPIC_API_KEY = 'parent-api-key';
     process.env.ANTHROPIC_MODEL = 'gpt-5.4';
     process.env.ANTHROPIC_DEFAULT_SONNET_MODEL = 'gpt-5.4';
+    process.env.ANTHROPIC_DEFAULT_FABLE_MODEL = 'gpt-5.4-mini';
 
     execClaude('claude', ['--help'], {
       CCS_PROFILE_TYPE: 'settings',
@@ -570,10 +572,18 @@ describe('CLAUDECODE environment stripping', () => {
         call.args[1] === 'ANTHROPIC_MODEL' &&
         call.args[2] === 'gpt-5.4'
     );
+    const fableModelCall = spawnSyncCalls.find(
+      (call) =>
+        call.command === 'tmux' &&
+        call.args[0] === 'setenv' &&
+        call.args[1] === 'ANTHROPIC_DEFAULT_FABLE_MODEL' &&
+        call.args[2] === 'gpt-5.4-mini'
+    );
 
     expect(unsetBaseUrlCall).toBeDefined();
     expect(unsetAuthTokenCall).toBeDefined();
     expect(modelCall).toBeDefined();
+    expect(fableModelCall).toBeDefined();
   });
 
   it('headless executor spawn path strips CLAUDECODE before spawn', async () => {

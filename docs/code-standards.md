@@ -1,749 +1,199 @@
 # CCS Code Standards
 
-Last Updated: 2026-04-07
-
-Code standards, modularization patterns, and conventions for the CCS codebase.
-
----
-
-## Core Principles
-
-### YAGNI (You Aren't Gonna Need It)
-- No features "just in case"
-- Only implement what is currently needed
-- Delete unused code rather than commenting it out
-
-### KISS (Keep It Simple, Stupid)
-- Prefer simple solutions over clever ones
-- Reduce complexity at every opportunity
-- Use established patterns over custom implementations
-
-### DRY (Don't Repeat Yourself)
-- One source of truth for configuration
-- Extract common logic into shared utilities
-- Use barrel exports to centralize imports
-
----
-
-## File Organization
-
-### Directory Structure Rules
-
-1. **Domain-based organization**: Group files by business domain, not by file type
-2. **Barrel exports required**: Every directory must have an `index.ts` aggregating exports
-3. **Flat within depth**: Keep nesting to 3 levels maximum
-4. **Co-location**: Keep related files together (component + hooks + utils)
-
-### File Naming Conventions
-
-| Convention | Example | When to Use |
-|------------|---------|-------------|
-| kebab-case | `cliproxy-executor.ts` | All TypeScript/TSX files |
-| kebab-case | `profile-detector.ts` | Multi-word file names |
-| *-adapter.ts | `claude-adapter.ts`, `droid-adapter.ts` | TargetAdapter implementations |
-| *-detector.ts | `droid-detector.ts` | Binary detection logic |
-| *-manager.ts | `droid-config-manager.ts` | Config/state management |
-| PascalCase | `BinaryManager` | Class exports only |
-| camelCase | `detectProfile` | Function exports |
-
-**File names should be descriptive**: LLMs should understand the file's purpose from its name alone without reading content.
-
-### Correct Examples
-
-```
-src/cliproxy/binary-manager.ts      # Binary management logic
-src/commands/doctor-command.ts      # Doctor CLI command handler
-ui/src/components/cliproxy/provider-editor/index.tsx
-```
-
-### Incorrect Examples
-
-```
-src/utils/helper.ts                 # Too vague
-src/cliproxy/manager.ts             # Which manager?
-ui/src/components/Editor.tsx        # Not kebab-case
-```
-
----
-
-## File Size Limit: 200 Lines
-
-**Target**: All code files should be under 200 lines.
-
-**Exceptions** (with justification):
-- Data files (model-pricing.ts, model-catalog.ts)
-- Entry points with routing logic (ccs.ts)
-- Complex transformation logic that cannot be meaningfully split
-
-### Why 200 Lines?
-
-1. **Context efficiency**: LLMs process smaller files faster
-2. **Single responsibility**: Forces focused, testable modules
-3. **Navigation**: Easier to scan and understand
-4. **Maintainability**: Reduces merge conflicts
-
-### When Files Exceed 200 Lines
-
-If a file grows beyond 200 lines:
-
-1. **Identify extraction candidates**:
-   - Helper functions that could be utilities
-   - Constants and type definitions
-   - Subcomponents within React components
-   - Related logic that forms a cohesive unit
-
-2. **Create subdirectory structure**:
-   ```
-   # Before
-   provider-editor.tsx (921 lines)
-
-   # After
-   provider-editor/
-   ├── index.tsx           # Main component (200 lines)
-   ├── model-mapping-form.tsx
-   ├── endpoint-config.tsx
-   ├── auth-section.tsx
-   ├── hooks.ts
-   ├── types.ts
-   └── utils.ts
-   ```
-
-3. **Preserve public API**: Main export remains the same through barrel export
-
----
-
-## Barrel Export Pattern
-
-### What is a Barrel Export?
-
-An `index.ts` file that aggregates and re-exports module contents:
-
-```typescript
-// src/cliproxy/index.ts
-
-// Types (with explicit type keyword)
-export type { PlatformInfo, BinaryInfo } from './types';
-
-// Functions
-export { detectPlatform } from './platform-detector';
-export { BinaryManager } from './binary-manager';
-
-// From subdirectories
-export * from './auth';
-export * from './services';
-```
-
-### Rules for Barrel Exports
-
-1. **Every domain directory must have `index.ts`**
-2. **Export types with `export type`** for tree-shaking
-3. **Re-export subdirectories** for deep access
-4. **Keep barrel exports flat** - no logic, only exports
-
-### Import Patterns
-
-```typescript
-// CORRECT: Import from domain barrel
-import { execClaudeWithCLIProxy, CLIProxyProvider } from '../cliproxy';
-import { Config, Settings } from '../types';
-
-// INCORRECT: Import from specific file (bypasses barrel)
-import { execClaudeWithCLIProxy } from '../cliproxy/cliproxy-executor';
-```
-
-### Exception: Deep Imports
-
-Allowed when:
-- Importing private utilities not exposed in barrel
-- Circular dependency avoidance
-- Performance-critical tree-shaking
-
----
-
-## Target Adapter Pattern
-
-The target adapter pattern enables pluggable support for multiple CLI implementations (Claude Code, Factory Droid, Codex CLI, etc.) while preserving a unified profile system.
-
-### Pattern Overview
-
-**Each CLI target implements a `TargetAdapter` interface:**
-
-```typescript
-interface TargetAdapter {
-  readonly type: TargetType;                                    // 'claude' | 'droid' | 'codex'
-  readonly displayName: string;                                 // Human-readable name
-
-  detectBinary(): TargetBinaryInfo | null;                      // Find CLI on system
-  prepareCredentials(creds: TargetCredentials): Promise<void>;  // Deliver credentials
-  buildArgs(profile: string, userArgs: string[]): string[];    // Build CLI args
-  buildEnv(creds: TargetCredentials, type: string): Env;       // Build env vars
-  exec(args: string[], env: Env): void;                        // Spawn CLI process
-  supportsProfileType(type: string): boolean;                  // Validate profile
-}
-```
-
-### Key Differences Per Target
-
-| Aspect | Claude | Droid | Codex |
-|--------|--------|-------|-------|
-| **Credential delivery** | Environment variables | Config file (~/.factory/settings.json) | Transient `-c` overrides + `CCS_CODEX_API_KEY` |
-| **Spawn args** | `claude <args>` | `droid -m custom:ccs-<profile> <args>` | `codex <args>` or `codex -c ... <args>` |
-| **Config write** | None (uses env) | `upsertCcsModel()` writes to settings | None at runtime; dashboard edits user-owned `~/.codex/config.toml` only |
-| **Binary detection** | `detectClaudeCli()` | `detectDroidCli()` with version check | `detectCodexCli()` plus `--config` capability probe |
-
-### Target Resolution Priority
-
-Resolves which adapter to use via `resolveTargetType()`:
-
-```
-1. --target <name> flag (highest priority)
-   ↓
-2. explicit runtime entrypoint (`CCS_INTERNAL_ENTRY_TARGET`):
-   - ccs-droid / ccsd → droid
-   - ccs-codex / ccsx → codex
-   - ccsxp → codex (native cliproxy shortcut)
-   ↓
-3. argv[0] detection (runtime alias pattern / custom alias map):
-   - ccs-droid → droid
-   - ccsd → droid
-   - ccs-codex → codex
-   - ccsx → codex
-   - ccs → default
-   ↓
-4. Profile config: profileConfig.target field
-   ↓
-5. Fallback: 'claude' (lowest priority)
-```
-
-### Registration Pattern
-
-At startup, adapters self-register into the runtime registry:
-
-```typescript
-// In ccs.ts or initialization
-registerTarget(new ClaudeAdapter());
-registerTarget(new DroidAdapter());
-registerTarget(new CodexAdapter());
-
-// Later, when executing
-const targetType = resolveTargetType(args, profileConfig);
-const adapter = getTarget(targetType);
-
-await adapter.prepareCredentials(credentials);
-const spawnArgs = adapter.buildArgs(profile, userArgs);
-adapter.exec(spawnArgs, adapter.buildEnv(credentials, profileType));
-```
-
-### Adding a New Target
-
-To add support for a new CLI (e.g., `newcli`):
-
-1. Create `src/targets/newcli-adapter.ts` implementing `TargetAdapter`
-2. Implement each required method (detection, credential delivery, spawning)
-3. Create `src/targets/newcli-detector.ts` for binary detection logic
-4. Export from `src/targets/index.ts`
-5. Register in `ccs.ts`: `registerTarget(new NewCliAdapter())`
-6. Update `TargetType` union to include `'newcli'`
-
----
-
-## Monster File Splitting Methodology
-
-When splitting large files (500+ lines), follow this process:
-
-### Step 1: Analyze Structure
-
-Identify logical boundaries:
-- Render sections in React components
-- Handler groups in route files
-- Related utility functions
-- Constants and types
-
-### Step 2: Extract Types First
-
-```typescript
-// types.ts
-export interface ProviderEditorProps {
-  providerId: string;
-  onSave: (config: ProviderConfig) => void;
-}
-
-export interface ModelMappingValues {
-  model: string;
-  endpoint: string;
-}
-```
-
-### Step 3: Extract Utilities
-
-```typescript
-// utils.ts
-export function validateEndpoint(url: string): boolean { ... }
-export function formatModelName(name: string): string { ... }
-```
-
-### Step 4: Extract Hooks
-
-```typescript
-// hooks.ts
-export function useProviderConfig(providerId: string) { ... }
-export function useModelValidation() { ... }
-```
-
-### Step 5: Extract Subcomponents
-
-```typescript
-// model-mapping-form.tsx
-export function ModelMappingForm({ values, onChange }: Props) { ... }
-```
-
-### Step 6: Compose in Index
-
-```typescript
-// index.tsx
-import { ModelMappingForm } from './model-mapping-form';
-import { useProviderConfig } from './hooks';
-import type { ProviderEditorProps } from './types';
-
-export function ProviderEditor({ providerId, onSave }: ProviderEditorProps) {
-  const config = useProviderConfig(providerId);
-  return (
-    <div>
-      <ModelMappingForm values={config.mapping} onChange={...} />
-    </div>
-  );
-}
-
-// Re-export types for consumers
-export type { ProviderEditorProps, ModelMappingValues } from './types';
-```
-
----
-
-## TypeScript Standards
-
-### Strict Mode Required
-
-All projects use TypeScript strict mode:
-
-```json
-{
-  "compilerOptions": {
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true
-  }
-}
-```
-
-### Type Annotations
-
-```typescript
-// CORRECT: Explicit return types for public functions
-export function detectProfile(args: string[]): DetectedProfile { ... }
-
-// CORRECT: Inferred types for internal functions
-const formatName = (name: string) => name.trim().toLowerCase();
-
-// INCORRECT: any type
-function processData(data: any) { ... }  // Use unknown or proper type
-```
-
-### Type Exports
-
-```typescript
-// CORRECT: Use type keyword for type-only exports
-export type { Config, Settings } from './config';
-
-// CORRECT: Group type exports in barrel
-export type {
-  PlatformInfo,
-  BinaryInfo,
-  DownloadProgress,
-} from './types';
-```
-
----
-
-## ESLint Rules (Enforced)
-
-| Rule | Level | Notes |
-|------|-------|-------|
-| `@typescript-eslint/no-unused-vars` | error | Ignore `_` prefix |
-| `@typescript-eslint/no-explicit-any` | error | Use proper types |
-| `@typescript-eslint/no-non-null-assertion` | error | No `!` assertions |
-| `prefer-const` | error | Immutable by default |
-| `no-var` | error | Use const/let |
-| `eqeqeq` | error | Strict equality |
-| `react-hooks/*` | recommended | (UI only) |
-
----
-
-## Terminal Output Standards
-
-### CCS Logging Standards
-
-- Use the shared logger from `src/services/logging/` for CCS-owned runtime diagnostics, request tracing, and structured events.
-- Keep `utils/ui` and deliberate `console.log`/`console.error` output for user-facing CLI UX only.
-- Redact secrets before persistence; never write raw tokens, cookies, API keys, or password hashes into CCS-owned logs.
-- Persist CCS-owned logs only under `getCcsDir()/logs`; do not invent per-feature log roots.
-- When adding dashboard polling or diagnostics routes, prevent them from recursively logging the log viewer itself.
-
-### ASCII Only
-
-```typescript
-// CORRECT
-console.log('[OK] Operation successful');
-console.log('[!] Warning message');
-console.log('[X] Error occurred');
-console.log('[i] Information');
-
-// INCORRECT - NO EMOJIS
-console.log('Operation successful');  // NO
-console.log('Warning message');       // NO
-```
-
-### Color Handling
-
-```typescript
-import { colors } from '../utils/ui';
-
-// Colors are TTY-aware and respect NO_COLOR
-console.log(colors.green('[OK]') + ' Operation successful');
-```
-
-### Box Borders
-
-Use ASCII box drawing for error displays:
-
-```
-+=====================================+
-|  [X] ERROR: Configuration failed    |
-|                                     |
-|  Details: Unable to parse config    |
-+=====================================+
-```
-
-### Cross-Platform Adapter Spawning
-
-When implementing target adapters, handle platform differences for binary spawning:
-
-```typescript
-// Window shell detection (.cmd, .bat, .ps1 require shell)
-const needsShell = isWindows && /\.(cmd|bat|ps1)$/i.test(binaryPath);
-
-if (needsShell) {
-  // Escape arguments and use shell: true
-  const cmdString = [binaryPath, ...args].map(escapeShellArg).join(' ');
-  spawn(cmdString, { shell: true, stdio: 'inherit' });
-} else {
-  // Direct spawn (Unix-like, unshelled Windows executables)
-  spawn(binaryPath, args, { stdio: 'inherit' });
-}
-```
-
-This pattern is used in both `ClaudeAdapter` and `DroidAdapter` to ensure cross-platform consistency.
-
-For all Claude child-process launches (delegation, adapters, proxies, helper spawners), sanitize env before spawn:
-
-```typescript
-const cleanEnv = stripClaudeCodeEnv(mergedEnv); // case-insensitive remove of CLAUDECODE
-spawn(binaryPath, args, { env: cleanEnv, stdio: 'inherit' });
-```
-
-This prevents Claude Code nested-session guard failures when CCS runs inside parent Claude sessions.
-
----
-
-## React Component Standards (UI)
-
-### Component Structure
-
-```typescript
-// component-name.tsx
-
-// 1. Imports (grouped: react, external, internal, relative)
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { useProfiles } from '@/hooks';
-import { formatName } from './utils';
-import type { ComponentProps } from './types';
-
-// 2. Types (if not in separate file)
-interface Props {
-  id: string;
-  onSave: () => void;
-}
-
-// 3. Component
-export function ComponentName({ id, onSave }: Props) {
-  // Hooks first
-  const profiles = useProfiles();
-  const [state, setState] = useState(null);
-
-  // Handlers
-  const handleClick = () => { ... };
-
-  // Render
-  return ( ... );
-}
-```
-
-### Naming Conventions
-
-| Item | Convention | Example |
-|------|------------|---------|
-| Component files | kebab-case.tsx | `provider-editor.tsx` |
-| Component exports | PascalCase | `ProviderEditor` |
-| Hook files | use-*.ts | `use-profiles.ts` |
-| Hook exports | useCamelCase | `useProfiles` |
-| Utility files | kebab-case.ts | `path-utils.ts` |
-| Utility exports | camelCase | `formatPath` |
-
----
-
-## Input State Persistence Patterns
-
-When building forms and editors that allow users to make changes, follow these patterns to prevent data loss.
-
-### Pattern 1: Key-Based Remounting
-
-**Use when**: Component has complex local state that should reset on prop changes.
-
-```typescript
-// Parent component
-<ProfileEditor
-  key={profileId}  // Forces remount when profile changes
-  profileId={profileId}
-  onSave={handleSave}
-/>
-```
-
-**Why**: Without `key`, React reuses the component instance. Local `useState` values persist even when props change, causing stale data bugs.
-
-### Pattern 2: Unsaved Changes Confirmation
-
-**Use when**: User might navigate away while editing.
-
-```typescript
-// Parent tracks dirty state
-const [editorHasChanges, setEditorHasChanges] = useState(false);
-const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
-
-// Child notifies parent of dirty state
-useEffect(() => {
-  onHasChangesUpdate?.(computedHasChanges);
-}, [computedHasChanges, onHasChangesUpdate]);
-
-// Intercept navigation
-const handleSelect = (id: string) => {
-  if (editorHasChanges && currentId !== id) {
-    setPendingSwitch(id);  // Show confirmation dialog
-  } else {
-    setCurrentId(id);
-  }
-};
-```
-
-**Flow**:
-1. Child computes `hasChanges` from local state vs saved data
-2. Child notifies parent via callback
-3. Parent intercepts navigation when dirty
-4. Show confirmation dialog: "Discard & Switch" or "Cancel"
-5. On confirm: reset dirty state, then switch
-
-### Pattern 3: Auto-Save with Visual Feedback
-
-**Use when**: Simple inputs that should save immediately.
-
-```typescript
-const [saved, setSaved] = useState(false);
-
-const handleBlur = async () => {
-  if (value !== savedValue) {
-    await saveToBackend(value);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }
-};
-
-return (
-  <div className="flex items-center gap-2">
-    <Input value={value} onChange={...} onBlur={handleBlur} />
-    {saved && (
-      <span className="text-green-600 text-xs flex items-center gap-1">
-        <Check className="w-3.5 h-3.5" /> Saved
-      </span>
-    )}
-  </div>
-);
-```
-
-**When to use which**:
-| Scenario | Pattern |
-|----------|---------|
-| Complex multi-field editor | Pattern 2 (confirmation dialog) |
-| Simple single input | Pattern 3 (auto-save + feedback) |
-| List item selection | Pattern 1 (key-based remount) + Pattern 2 |
-
----
-
-## Quality Gates
-
-### Pre-Commit Sequence
+These standards describe current repository practice. Enforced configuration
+and tests take precedence over prose.
+
+## Source of Truth
+
+| Contract | Authoritative source |
+| --- | --- |
+| TypeScript and CLI lint rules | [`eslint.config.mjs`](../eslint.config.mjs) |
+| Formatting | [`.prettierrc`](../.prettierrc) |
+| Root commands and test entry points | [`package.json`](../package.json) |
+| UI commands and dependencies | [`ui/package.json`](../ui/package.json) |
+| Commit syntax | [`commitlint.config.cjs`](../commitlint.config.cjs) |
+| Release effects | [`.releaserc.cjs`](../.releaserc.cjs) |
+| Repository workflow | [`CLAUDE.md`](../CLAUDE.md) and [`CONTRIBUTING.md`](../CONTRIBUTING.md) |
+
+Update this document when one of those contracts changes. Do not duplicate
+exhaustive rule, command, target, or dependency lists here.
+
+## Design Priorities
+
+Apply these in order:
+
+1. **YAGNI**: build only behavior required by the accepted scope.
+2. **KISS**: prefer a small local change over a new abstraction or dependency.
+3. **DRY**: share stable domain behavior, not incidental similarity.
+
+Preserve public contracts unless the change intentionally updates them. Error
+messages should explain recovery, and configuration changes should remain
+CLI-complete with dashboard parity where the feature supports both surfaces.
+
+## Organization and Imports
+
+- Keep code inside the domain that owns its behavior.
+- Split files at cohesive boundaries such as types, pure utilities, lifecycle
+  services, hooks, or view components.
+- Follow nearby naming and import patterns. New TypeScript files normally use
+  descriptive kebab-case names.
+- There is no universal maximum directory depth.
+- Barrel exports are optional compatibility boundaries, not a repository-wide
+  requirement. Preserve an existing barrel when consumers depend on it; use a
+  direct import when that is the local pattern or the symbol is intentionally
+  private.
+- Before creating a module, check whether the runtime, standard library,
+  installed dependencies, or an existing repository utility already owns the
+  behavior.
+
+## File Size
+
+Two different thresholds serve different purposes:
+
+- **200 lines is a review heuristic.** When a code file grows beyond roughly
+  200 lines, check whether it contains multiple responsibilities. A cohesive
+  file may remain larger.
+- **400 lines is the current CLI lint warning.**
+  [`eslint.config.mjs`](../eslint.config.mjs) configures `max-lines` as a
+  warning for `src/**/*.ts`, excluding blank lines and comments.
+
+Do not split mechanically to satisfy a number. Split when the result improves
+ownership, testing, reuse, or reviewability. Preserve existing exports and
+behavior when they are part of a consumed contract.
+
+## TypeScript and Linting
+
+The CLI uses strict TypeScript. Current enforced CLI rules include:
+
+- no explicit `any`
+- no non-null assertions
+- no unused variables, except names intentionally prefixed with `_`
+- `prefer-const`, `no-var`, and strict equality
+
+Use `unknown` at untrusted boundaries and narrow it before use. Keep types close
+to their owning domain; export types only when another module consumes them.
+
+New generic `throw new Error(...)` sites are blocked by the local
+`ccs/no-new-throw-error` rule. Use the typed errors in
+[`src/errors/error-types.ts`](../src/errors/error-types.ts) so
+[`src/errors/error-handler.ts`](../src/errors/error-handler.ts) can map failures
+consistently. The generated baseline in
+[`eslint-rules/throw-error-baseline.json`](../eslint-rules/throw-error-baseline.json)
+grandfathers existing sites; do not expand it to bypass a new error design.
+
+## Terminal and Process Behavior
+
+- CLI terminal output is ASCII only: `[OK]`, `[!]`, `[X]`, `[i]`.
+- Respect `NO_COLOR` and TTY-aware output.
+- Prefer argument arrays when spawning processes. When a platform wrapper
+  requires a shell, use the existing quoting and wrapper utilities rather than
+  interpolating untrusted input.
+- Preserve target-specific stdio, signal, and exit-code behavior. The adapter
+  contract lives in
+  [`src/targets/target-adapter.ts`](../src/targets/target-adapter.ts).
+
+## Target Adapters
+
+Runtime target behavior is divided across:
+
+| Concern | Source |
+| --- | --- |
+| Target names, aliases, persistence | [`src/targets/target-metadata.ts`](../src/targets/target-metadata.ts) |
+| Selection priority and flag parsing | [`src/targets/target-resolver.ts`](../src/targets/target-resolver.ts) |
+| Adapter contract | [`src/targets/target-adapter.ts`](../src/targets/target-adapter.ts) |
+| Registration and lookup | [`src/targets/target-registry.ts`](../src/targets/target-registry.ts) |
+| Startup registration | [`src/ccs.ts`](../src/ccs.ts) |
+
+A target change should update metadata, implementation, registration, tests,
+help text, and public documentation as applicable. Do not copy the target list
+into new guides; link to metadata when maintainers need the current set.
+
+## Configuration and Test Isolation
+
+- Treat persisted environment values as strings.
+- Route CCS paths through `getCcsDir()` in
+  [`src/utils/config-manager.ts`](../src/utils/config-manager.ts).
+- Never run tests against a contributor's real `~/.ccs/` or `~/.claude/`.
+  Set `CCS_HOME` to a temporary directory.
+- Preserve documented configuration and profile-resolution priority. Add a
+  focused test when changing precedence or fallback behavior.
+- Treat Docker service `ccs` and network `ccs-net` as public contracts; see
+  [`CONTRIBUTING.md`](../CONTRIBUTING.md#if-you-change-the-docker-network-or-service-name).
+
+## Dashboard Code
+
+- Keep page orchestration in `ui/src/pages/`, reusable UI in
+  `ui/src/components/`, server-state access in `ui/src/hooks/`, and shared
+  helpers in `ui/src/lib/` when that matches the owning domain.
+- Preserve unsaved input across background refreshes. Destructive replacement
+  of dirty state requires an explicit user action or confirmation.
+- Use the existing API and query helpers before adding a new data-access layer.
+- Keep accessibility, keyboard interaction, responsive layout, loading,
+  empty, and error states in scope for user-facing changes.
+- Locale codes and normalization are owned by
+  [`ui/src/lib/locales.ts`](../ui/src/lib/locales.ts); translations are wired
+  through [`ui/src/lib/i18n.ts`](../ui/src/lib/i18n.ts).
+
+The UI has its own ESLint, TypeScript, Prettier, and Vitest configuration.
+Verify commands against [`ui/package.json`](../ui/package.json).
+
+## Tests and Quality Gates
+
+The root TypeScript suites run with Bun's test runner. The dashboard uses
+Vitest. Native shell and PowerShell probes cover platform-specific behavior.
+See [`tests/README.md`](../tests/README.md) for ownership and commands.
+
+Run the smallest relevant test first, then the normal gate:
 
 ```bash
-# Main project
 bun run format
 bun run lint:fix
 bun run validate
-bun run validate:ci-parity
+```
 
-# UI project (if changed)
+Before review or merge confidence:
+
+```bash
+bun run validate:ci-parity
+```
+
+For dashboard changes:
+
+```bash
 cd ui
 bun run format
-bun run lint:fix
 bun run validate
+bun run test:run
 ```
 
-### Validate Runs
+Do not weaken or skip a failing check to make a change pass. If a full gate
+cannot run, report the exact focused checks completed and the blocker.
 
-| Project | Command | Checks |
-|---------|---------|--------|
-| Main | `bun run validate` | typecheck + lint + format:check + test:fast |
-| UI | `bun run validate` | typecheck + lint + format:check |
+## Commits and Releases
 
----
+Commitlint accepts conventional types defined in
+[`commitlint.config.cjs`](../commitlint.config.cjs), with a 100-character header
+limit. Use focused subjects such as:
 
-## Conventional Commits
-
-All commits must follow conventional commit format:
-
-```
-<type>(<scope>): <description>
+```text
+fix(doctor): handle missing config
+feat(cliproxy): add provider quota check
+docs(contributing): clarify validation
 ```
 
-### Types
+Semantic-release owns versions, changelog entries, tags, npm publishing, and
+GitHub releases. Do not bump versions, tag, or publish manually. Release effects
+for each branch and commit type are defined in
+[`.releaserc.cjs`](../.releaserc.cjs).
 
-| Type | When to Use | Version Bump |
-|------|-------------|--------------|
-| `feat` | New feature | MINOR |
-| `fix` | Bug fix | PATCH |
-| `perf` | Performance | PATCH |
-| `docs` | Documentation | None |
-| `style` | Formatting | None |
-| `refactor` | Code restructure | None |
-| `test` | Tests | None |
-| `chore` | Maintenance | None |
+## Documentation Triggers
 
-### Examples
+Update the owning guide when a change affects behavior, commands, setup,
+architecture, security posture, public contracts, or future maintainer
+decisions. Start at [`docs/README.md`](./README.md). Public CLI, provider,
+configuration, installation, or workflow changes also require the matching page
+in the separate `kaitranntt/ccs-docs` repository; see the docs index for
+checkout guidance.
 
-```bash
-# Correct
-git commit -m "feat(cliproxy): add OAuth token refresh"
-git commit -m "fix(doctor): handle missing config gracefully"
-git commit -m "refactor(ui): split provider-editor into modules"
-
-# Incorrect - REJECTED
-git commit -m "added new feature"
-git commit -m "Fixed bug"
-```
-
----
-
-## Anti-Patterns to Avoid
-
-### 1. God Files
-
-```typescript
-// BAD: One file doing everything
-// src/utils.ts (2000 lines with mixed concerns)
-
-// GOOD: Split by domain
-// src/utils/ui/colors.ts
-// src/utils/ui/boxes.ts
-// src/utils/shell-executor.ts
-// src/utils/config-manager.ts
-```
-
-### 2. Barrel Import Bypass
-
-```typescript
-// BAD: Direct import bypassing barrel
-import { detectPlatform } from '../cliproxy/platform-detector';
-
-// GOOD: Import from domain barrel
-import { detectPlatform } from '../cliproxy';
-```
-
-### 3. Inline Everything
-
-```typescript
-// BAD: Huge inline functions in components
-function Component() {
-  const handleComplexOperation = () => {
-    // 100 lines of logic...
-  };
-}
-
-// GOOD: Extract to hooks or utilities
-function Component() {
-  const { handleComplexOperation } = useComplexOperation();
-}
-```
-
-### 4. Type Duplication
-
-```typescript
-// BAD: Same types defined in multiple files
-// file1.ts
-interface Config { ... }
-// file2.ts
-interface Config { ... }
-
-// GOOD: Single source of truth
-// types/config.ts
-export interface Config { ... }
-```
-
-### 5. Config Priority Pattern
-
-When resolving configuration from multiple sources, follow this priority order:
-
-```typescript
-// proxy-config-resolver.ts pattern
-// Priority: CLI flags > Environment variables > config.yaml > defaults
-
-const resolved = {
-  ...DEFAULT_CONFIG,                    // 4. Defaults (lowest)
-  ...yamlConfig,                        // 3. config.yaml
-  ...envConfig,                         // 2. Environment variables
-  ...cliFlags,                          // 1. CLI flags (highest)
-};
-```
-
-This pattern is used in:
-- `src/cliproxy/proxy-config-resolver.ts` - Remote proxy config
-- `src/config/unified-config-loader.ts` - Main config loading
-
----
-
-## Lint Enforcement Gates
-
-Two ESLint gates (`eslint.config.mjs`) lock in the maintainability epic's gains:
-
-- **`ccs/no-new-throw-error`** (error): flags new `throw new Error(...)`. Use a typed error from `src/errors/error-types.ts` (`AuthError`, `ConfigError`, `ProfileError`, `ProviderError`, `NetworkError`, `ProxyError`, `MigrationError`, `ValidationError`, `RetryableError`) so `handleError` emits a differentiated exit code. Existing ~340 sites are grandfathered in `eslint-rules/throw-error-baseline.json`; only **new** violations error. Regenerate the baseline when intentionally grandfathering a new site, or quarterly to prune converted entries:
-  ```bash
-  node scripts/generate-throw-error-baseline.js
-  ```
-- **`max-lines`** (warn, 400): warns on source files over 400 lines (`skipBlankLines`, `skipComments`). Split via the Monster File Splitting methodology above (barrel `index.ts` preserves the public API).
-
-When the no-throw rule blocks a change, prefer converting to the matching typed error. Only add to the baseline when the throw is genuinely out of scope to convert (and regenerate the baseline so the entry is explicit, not silent).
-
-## Related Documentation
-
-- [Codebase Summary](./codebase-summary.md) - Full directory structure
-- [System Architecture](./system-architecture/index.md) - Architecture diagrams
-- [CLAUDE.md](../CLAUDE.md) - AI-facing development guidance
+Prefer source links over copied trees and metrics. Remove stale sections rather
+than leaving TODO markers.

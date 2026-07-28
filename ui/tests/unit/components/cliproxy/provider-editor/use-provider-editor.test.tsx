@@ -152,6 +152,44 @@ describe('useProviderEditor', () => {
     });
   });
 
+  it('derives fableModel and round-trips ANTHROPIC_DEFAULT_FABLE_MODEL updates', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+
+        if (url.includes('/api/settings/codex/raw')) {
+          return Promise.resolve(
+            createJsonResponse({
+              profile: 'codex',
+              settings: {
+                env: {
+                  ANTHROPIC_MODEL: 'gpt-5.3-codex-high',
+                  ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-5.6-sol-xhigh',
+                },
+              },
+              mtime: 1,
+              path: '~/.ccs/codex.settings.json',
+            })
+          );
+        }
+
+        return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+      })
+    );
+
+    const { result } = renderHook(() => useProviderEditor('codex'), { wrapper });
+
+    await waitFor(() => expect(result.current.fableModel).toBe('gpt-5.6-sol-xhigh'));
+
+    act(() => {
+      result.current.updateEnvValue('ANTHROPIC_DEFAULT_FABLE_MODEL', 'gpt-5.6-sol-max');
+    });
+
+    const nextSettings = JSON.parse(result.current.rawJsonContent);
+    expect(nextSettings.env.ANTHROPIC_DEFAULT_FABLE_MODEL).toBe('gpt-5.6-sol-max');
+  });
+
   it('preserves explicit codex effort suffixes in editor state updates', async () => {
     vi.stubGlobal(
       'fetch',

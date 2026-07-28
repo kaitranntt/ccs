@@ -1,178 +1,139 @@
 # Logging Contract
 
-Single source of truth for structured backend logging in CCS CLI. Companion to GitHub issues #1138 (umbrella) and #1141 (backend instrumentation).
+CCS structured logs are a machine-readable JSONL channel for backend and
+runtime events. They are separate from terminal UX output and must never be
+used as a substitute for user-facing recovery messages.
 
-## Overview
+The canonical schema is
+[`src/services/logging/log-types.ts`](../src/services/logging/log-types.ts).
+Defaults are defined in
+[`src/config/schemas/logging.ts`](../src/config/schemas/logging.ts).
 
-CCS emits structured JSONL log entries for backend behavior (proxy daemons, OAuth flows, target spawn lifecycle, executor errors, etc.). This document defines the canonical schema, request-correlation pattern, lifecycle stages, and redaction policy.
+## Entry Schema
 
-> CLI text output (`ok / info / warn / fail` from `src/utils/ui.ts`) is **NOT** affected by this contract. Logs are a separate channel — never printed to stdout/stderr.
+| Field | Type | Required | Contract |
+| --- | --- | --- | --- |
+| `id` | `string` | yes | Unique entry id. |
+| `timestamp` | `string` | yes | ISO 8601 emission time. |
+| `level` | `error`, `warn`, `info`, or `debug` | yes | Severity. |
+| `source` | `string` | yes | Stable module-scoped producer id. |
+| `event` | `string` | yes | Stable machine-readable event name. |
+| `message` | `string` | yes | Short human-readable summary. |
+| `processId` | `number` | yes | Emitting process id. |
+| `runId` | `string` | yes | Stable for the current process. |
+| `context` | object | no | Event fields after configured redaction. |
+| `requestId` | `string` | no | Cross-stage correlation id. |
+| `stage` | `LogStage` | no | Canonical lifecycle stage. |
+| `latencyMs` | `number` | no | Elapsed milliseconds, normally at completion. |
+| `error` | `LogErrorInfo` | no | Structured error metadata. |
 
-## Schema (`LogEntry`)
-
-Defined in `src/services/logging/log-types.ts`.
-
-| Field | Type | Required | Notes |
-|-------|------|----------|-------|
-| `id` | `string` | yes | UUID per entry. |
-| `timestamp` | `string` | yes | ISO 8601. |
-| `level` | `'error'\|'warn'\|'info'\|'debug'` | yes | |
-| `source` | `string` | yes | Module-scoped identifier (e.g. `proxy:openai-compat:messages`). |
-| `event` | `string` | yes | Dotted machine-readable event name (e.g. `request.received`). |
-| `message` | `string` | yes | Human-readable summary. |
-| `processId` | `number` | yes | `process.pid`. |
-| `runId` | `string` | yes | Stable per-process id. |
-| `context` | `object` | no | Free-form structured fields (redacted). |
-| `requestId` | `string` | no | Correlates entries belonging to one inbound request across stages. |
-| `stage` | `LogStage` | no | Lifecycle stage tag. |
-| `latencyMs` | `number` | no | Elapsed ms (typically on `respond` / `cleanup`). |
-| `error` | `{name, message, code?, stack?}` | no | Structured error metadata; never raw token strings. |
-
-Old free-form entries (no `requestId` / `stage`) are still valid; new fields are additive.
-
-### Example
-
-```jsonl
-{"id":"...","timestamp":"2026-04-30T12:34:56.000Z","level":"info","source":"proxy:openai-compat:messages","event":"request.received","message":"Proxy /v1/messages request received","processId":42,"runId":"r1","requestId":"a1b2...","stage":"intake","context":{"method":"POST"}}
-```
+Additive optional fields preserve compatibility with older readers. Consumers
+must not assume every event has a stage, request id, latency, or structured
+error.
 
 ## Lifecycle Stages
 
-`LogStage` is one of:
+Use `logger.stage()` for events that map to the canonical lifecycle:
 
-| Stage | When to emit |
-|-------|--------------|
-| `intake` | Inbound request received at an entry edge (HTTP handler, CLI dispatch). |
-| `route` | Destination/profile/target resolution. |
-| `auth` | Authentication / authorization (token exchange, profile auth). |
-| `dispatch` | Outbound request prepared / child process spawned. |
-| `upstream` | Upstream call in flight (provider HTTP / spawned child running). |
-| `transform` | Payload translation (request/response shape conversion). |
-| `respond` | Response written / dispatched (`latencyMs` typically populated). |
-| `cleanup` | Error path, abort, teardown. |
+| Stage | Meaning |
+| --- | --- |
+| `intake` | Request or command entered a CCS boundary. |
+| `route` | Profile, provider, target, or destination resolution. |
+| `auth` | Authentication or authorization work. |
+| `dispatch` | Outbound request or child launch prepared. |
+| `upstream` | Provider request or child operation in flight. |
+| `transform` | Request or response translation. |
+| `respond` | Result dispatched to the caller. |
+| `cleanup` | Failure, abort, or teardown path. |
 
-Stages may be skipped or repeated. Streaming responses tag `upstream` only at start/end (NOT per chunk).
+Stages can be skipped or repeated. Use `logger.info()`, `warn()`, or `error()`
+for events that do not represent a lifecycle stage. High-volume details,
+including streaming chunk metrics, belong at `debug`.
 
-## RequestId Propagation (AsyncLocalStorage)
-
-`requestId` is propagated implicitly via Node `AsyncLocalStorage`. Entry edges wrap their handler in `withRequestContext`; every `createLogger`-emitted entry inside the context auto-merges `requestId` from the active store.
+Example:
 
 ```ts
-import { withRequestContext, createLogger } from './services/logging';
-
-const logger = createLogger('proxy:my-edge');
-
-http.createServer((req, res) => {
-  const requestId = req.headers['x-ccs-request-id'] ?? randomUUID();
-  res.setHeader('x-ccs-request-id', requestId);
-  withRequestContext({ requestId }, async () => {
-    logger.stage('intake', 'request.received', 'inbound');
-    // ... downstream work emits with the same requestId
-  });
+logger.stage('respond', 'request.completed', 'Request completed', {
+  statusCode: 200,
+}, {
+  latencyMs: 42,
 });
 ```
 
-### Cross-daemon header
+See [`src/services/logging/logger.ts`](../src/services/logging/logger.ts) for the
+compiler-checked signature.
 
-`x-ccs-request-id` round-trips across the proxy edge:
-- Inbound: if the header is present and matches the UUID-ish guard (`/^[A-Za-z0-9._-]{8,128}$/`), it is reused; otherwise a fresh UUID is minted.
-- Outbound (response): the resolved id is echoed back via `res.setHeader('x-ccs-request-id', ...)`.
-- When CCS calls another daemon (copilot, cursor, glmt), forward the active id in the same header so that daemon can correlate.
+## Request Correlation
 
-### Ordering guarantee
+[`src/services/logging/log-context.ts`](../src/services/logging/log-context.ts)
+uses Node async-local storage within a process. Entry edges establish a
+context; loggers created downstream read its `requestId` automatically.
 
-Emit-time ordering of entries within a single `requestId` is monotonic — the active context is single-threaded relative to the request, so `timestamp` ordering reflects emit order. The UI layer (#1142) consumes this guarantee.
+Async-local context does not cross child processes or worker threads. A child
+process can inherit the active id through `CCS_REQUEST_ID` and establish a new
+local context. HTTP edges may use `x-ccs-request-id`; each edge owns whether it
+accepts an incoming id or mints a new one.
 
-### What NOT to put in the context
+Only the characters and length accepted by `REQUEST_ID_PATTERN` are valid for
+forwarded ids. Do not treat request ids as authentication or authorization
+material.
 
-The ALS context object is mixed into every downstream entry. Never store:
-- Raw tokens, API keys, refresh tokens, OAuth codes
-- Raw request/response bodies
-- User-supplied secrets
+There is no global ordering guarantee across concurrent async work or processes.
+Use `timestamp`, stage, event, and process/run identifiers together when
+reconstructing a request.
 
-Only benign correlation metadata: `requestId`, `method`, `path`, `command`, `profile`.
+## Redaction and Data Minimization
 
-### Worker threads / spawned children
+[`src/services/logging/log-redaction.ts`](../src/services/logging/log-redaction.ts)
+is the implementation source of truth. With the default `logging.redact: true`,
+the logger:
 
-ALS context is **not** inherited by worker threads or `child_process.spawn` stdio pipes. At those boundaries, mint a fresh `requestId` at the child entry and pass the parent id explicitly via env var or header for correlation.
+- replaces values under known credential-bearing keys;
+- masks common authorization schemes and credential token shapes in strings;
+- redacts sensitive CLI flag values, including inline assignments;
+- limits string length and nested object depth;
+- strips an `Error` object to safe structured fields.
 
-## Redaction
+The matcher evolves as credential surfaces change. Link to the implementation
+instead of copying its complete key or token-pattern list into other docs.
 
-`src/services/logging/log-redaction.ts` is the single source of truth.
+Redaction is defense in depth, not permission to log sensitive data. Never log:
 
-### Sensitive key matcher
+- tokens, passwords, cookies, OAuth codes, or authorization values;
+- raw request or response bodies;
+- raw prompts or prompt-bearing CLI arguments;
+- personal identifiers when a non-identifying account or profile label works.
 
-`SENSITIVE_KEY_PATTERN` matches (case-insensitive, with `_` / `-` / camelCase variants):
-`authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `password`, `password_hash`, `secret`, `client_secret`, `token`, `auth_token`, `access_token`, `refresh_token`, `id_token`, `bearer`, `assertion`, `api_key`, `x-api-key`, `x-goog-api-key`, `management_key`, `copilot_token`, `cursor_session_key`, `oauth_code`, `auth_code`.
+When a new secret-bearing field or flag is introduced, update the redactor and
+its tests under
+[`tests/unit/services/logging/`](../tests/unit/services/logging/).
 
-String/object values for matching keys are replaced with `[redacted]`. Numeric/boolean values pass through (e.g., `expires_at` epoch numbers stay readable).
+## Error Codes and Process Exit Codes
 
-### Auth-scheme value masking
+These are separate contracts:
 
-Raw string values whose prefix matches `^(Bearer|Basic|Token)\s+\S+` are rewritten to `<scheme> [redacted]` even when nested under non-sensitive keys.
+- `LogEntry.error.code` is an optional **string** supplied as part of structured
+  error metadata. It can carry a runtime, system, or provider error identifier.
+- `CCSError.code` is a numeric `ExitCode`. The centralized CLI error handler
+  writes it as `context.exitCode` and passes it to `process.exit`.
 
-### Argv redaction
+Do not put a numeric process exit code in `LogEntry.error.code`, and do not make
+log consumers derive process status from that string field.
 
-`redactArgv(argv)` redacts the value following any sensitive flag (`--token`, `--api-key`, `--auth`, `--bearer`, `--secret`, `--client-secret`, `--access-token`, `--refresh-token`, `--id-token`, `--password`).
+The numeric mapping lives in
+[`src/errors/exit-codes.ts`](../src/errors/exit-codes.ts). Typed error
+assignments live in
+[`src/errors/error-types.ts`](../src/errors/error-types.ts), and propagation is
+implemented by
+[`src/errors/error-handler.ts`](../src/errors/error-handler.ts).
 
-### Adding new sensitive keys
+## Configuration
 
-1. Extend `SENSITIVE_KEY_PATTERN` in `src/services/logging/log-redaction.ts`.
-2. Add a unit test in `tests/unit/services/logging/log-redaction-extended.test.ts`.
-3. Verify regex stays O(1) per key (no catastrophic backtracking).
+CCS-owned logging uses the `logging` section in the unified config. Its defaults
+enable logging and redaction at `info` level with bounded rotation, retention,
+and live-buffer settings. This is distinct from `cliproxy.logging`, which
+controls CLIProxy runtime logging.
 
-## Contributor Guide
-
-### When to use `logger.stage()` vs `logger.info()`
-
-Use `stage()` whenever the entry corresponds to one of the canonical lifecycle stages — this is what observability tooling and the dashboard rely on. Use `info()` / `warn()` / `error()` for one-off events that don't fit a stage.
-
-### What NOT to log
-
-- Token values (use metadata: `expires_at`, `scopes`, account display name).
-- Request/response bodies (sample lengths only).
-- Authorization headers (log header *names* present, not values).
-
-### Level guidance
-
-| Level | Use for |
-|-------|---------|
-| `error` | Failures requiring action (cleanup stage). |
-| `warn` | Recoverable issues (auth rejected, route fallback). |
-| `info` | Lifecycle stage entries by default. |
-| `debug` | High-volume detail (per-chunk stream metrics, lock acquire/release). |
-
-### Level config
-
-Default level is `info`. Configure via `logging.level` in `~/.ccs/config.yaml`. Streaming providers MUST gate per-chunk metrics behind `debug`.
-
-## `error.code` values (exit codes)
-
-Typed errors (`src/errors/error-types.ts`) carry an `ExitCode` that `handleError` propagates to `process.exit`. Log readers can branch on `error.code` for differentiated handling. The full mapping lives in `src/errors/exit-codes.ts`; the per-class assignment:
-
-| Typed class | ExitCode | Value |
-|---|---|---:|
-| `ConfigError` | `CONFIG_ERROR` | 2 |
-| `NetworkError` | `NETWORK_ERROR` | 3 (recoverable) |
-| `AuthError` | `AUTH_ERROR` | 4 |
-| `BinaryError` | `BINARY_ERROR` | 5 |
-| `ProviderError` | `PROVIDER_ERROR` | 6 (recoverable) |
-| `ProfileError` | `PROFILE_ERROR` | 7 |
-| `ProxyError` | `PROXY_ERROR` | 8 |
-| `MigrationError` | `MIGRATION_ERROR` | 9 |
-| `UserAbortError` | `USER_ABORT` | 130 |
-| `ValidationError`, `RetryableError` | `GENERAL_ERROR` | 1 |
-
-New throws must use a typed class (enforced by `ccs/no-new-throw-error`, see `docs/code-standards.md`). Redaction scrubs credential token shapes in both context values and message strings, so routing errors into the logger is safe — but keep messages clean prose and put sensitive data in context under a sensitive key (auto-redacted).
-
-## Backward Compatibility
-
-- All new `LogEntry` fields (`requestId`, `stage`, `latencyMs`, `error`) are optional. Old readers ignore them.
-- Existing `console.*` UX prints in `src/commands/`, `src/utils/ui.ts`, and similar user-facing paths are intentionally **not** converted to logger.
-- `/api/logs` reader unchanged in this PR; UI surfacing of new fields tracked under #1142.
-
-## Future Work
-
-- UI surfacing of `requestId` / `stage` / `latencyMs` in the dashboard (#1142).
-- `ccs logs` CLI improvements (filter by `requestId` / `stage`).
-- Per-stage performance budgets (see #1071).
+When adding a logging setting, update the schema/defaults, configuration loader,
+dashboard surface if applicable, and focused logging tests. Do not document a
+default that is not present in `DEFAULT_LOGGING_CONFIG`.

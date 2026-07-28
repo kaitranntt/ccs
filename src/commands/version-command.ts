@@ -17,7 +17,7 @@ import { getCcsDir } from '../config/config-loader-facade';
  */
 export async function handleVersionCommand(): Promise<void> {
   await initUI();
-  console.log(header(`CCS (Claude Code Switch) v${getVersion()}`));
+  console.log(header(`CCS (Claude Codex Switch) v${getVersion()}`));
   console.log('');
 
   console.log(subheader('Installation:'));

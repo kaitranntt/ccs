@@ -8,6 +8,11 @@ import {
   readCliproxyRoutingState,
   readCliproxySessionAffinityState,
 } from '../../cliproxy/routing/routing-strategy';
+import {
+  applyCliproxyRetrySettings,
+  normalizeCliproxyRetryValue,
+  readCliproxyRetryState,
+} from '../../cliproxy/routing/retry-settings';
 import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
 
 const router = Router();
@@ -79,6 +84,36 @@ router.put('/routing/session-affinity', async (req: Request, res: Response): Pro
       return;
     }
     res.json(result);
+  } catch (error) {
+    res.status(502).json({ error: (error as Error).message });
+  }
+});
+
+router.get('/retry', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    res.json(await readCliproxyRetryState());
+  } catch (error) {
+    res.status(502).json({ error: (error as Error).message });
+  }
+});
+
+router.put('/retry', async (req: Request, res: Response): Promise<void> => {
+  const requestRetry = normalizeCliproxyRetryValue(req.body?.request_retry);
+  const maxRetryInterval = normalizeCliproxyRetryValue(req.body?.max_retry_interval);
+  if (requestRetry === null || maxRetryInterval === null) {
+    res.status(400).json({
+      error: 'Invalid retry payload. Use non-negative safe integers for both retry fields.',
+    });
+    return;
+  }
+
+  try {
+    res.json(
+      await applyCliproxyRetrySettings({
+        request_retry: requestRetry,
+        max_retry_interval: maxRetryInterval,
+      })
+    );
   } catch (error) {
     res.status(502).json({ error: (error as Error).message });
   }

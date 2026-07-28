@@ -18,7 +18,7 @@ describe('integration: special commands', () => {
 
   it('shows version with --version', () => {
     const output = execSync(buildCliCommand('--version'), { encoding: 'utf8' });
-    assert(output.includes('CCS (Claude Code Switch)'));
+    assert(output.includes('CCS (Claude Codex Switch)'));
     assert(/v\d+\.\d+\.\d+/.test(output));
   });
 

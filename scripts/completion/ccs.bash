@@ -1,4 +1,4 @@
-# Bash completion for CCS (Claude Code Switch)
+# Bash completion for CCS (Claude Codex Switch)
 # Compatible with bash 3.2+
 
 _ccs_completion() {

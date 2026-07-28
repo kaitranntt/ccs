@@ -122,6 +122,7 @@ export function ProviderEditor({
     opusModel,
     sonnetModel,
     haikuModel,
+    fableModel,
     extendedContextEnabled,
     toggleExtendedContext,
     handleRawJsonChange,
@@ -271,6 +272,7 @@ export function ProviderEditor({
                     opusModel={opusModel}
                     sonnetModel={sonnetModel}
                     haikuModel={haikuModel}
+                    fableModel={fableModel}
                     providerModels={providerModels}
                     routing={routing}
                     extendedContextEnabled={extendedContextEnabled}

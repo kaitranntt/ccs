@@ -1,465 +1,246 @@
 # CCS System Architecture
 
-Last Updated: 2026-04-14
+CCS separates profile resolution, provider routing, and target execution. This
+document describes stable boundaries; source registries and tests own mutable
+provider and command inventories.
 
-High-level architecture overview for the CCS (Claude Code Switch) system.
+## System context
 
----
-
-## System Overview
-
-CCS is a multi-provider profile and runtime manager that enables seamless switching between multiple Claude accounts, alternative AI providers, and multiple CLI targets (Claude Code, Factory Droid, Codex CLI) for credential delivery.
-
-The system consists of two main components:
-
-1. **CLI Application** (`src/`) - Node.js TypeScript CLI
-2. **Dashboard UI** (`ui/`) - React web application served by Express
-
-Dashboard localization (i18n) architecture and contributor workflow are documented in [Dashboard i18n Guide](../i18n-dashboard.md).
-
-CCS v7.34 adds Image Analysis Hook for vision model proxying through CLIProxy with automatic injection for all profile types.
-CCS v7.67 adds a native structured logging lane for CCS-owned runtime events, backed by `src/services/logging/`, bounded JSONL files under `~/.ccs/logs/`, and a dedicated dashboard `/logs` route.
-CCS PR review now uses PR-Agent in GitHub Actions, with reviews running on the self-hosted `cliproxy` runner, existing `AI_REVIEW_*` workflow variables and secrets preserved as the runtime contract, and repo-level guidance stored in `.pr_agent.toml`.
-
-```
-+===========================================================================+
-|                              CCS System                                    |
-+===========================================================================+
-|                                                                           |
-|   +------------------+      +-----------------+      +----------------+   |
-|   |   User Terminal  | ---> |   CCS CLI       | ---> | Target CLI           |   |
-|   |   (ccs command)  |      |   (src/ccs.ts)  |      | (claude/droid/codex) |   |
-|   +------------------+      +-----------------+      +----------------+   |
-|                                    |                        |             |
-|                                    v                        v             |
-|   +------------------+      +-----------------+      +----------------+   |
-|   |   Dashboard UI   | <--> |   Express       | ---> | Provider APIs  |   |
-|   |   (React SPA)    |      |   Web Server    |      | (Claude/GLM/   |   |
-|   +------------------+      +-----------------+      |  Gemini/etc)   |   |
-|                                    |                 +----------------+   |
-|                                    v                                      |
-|                        +---------------------+                            |
-|                        |    CLIProxyAPI      |                            |
-|                        |  (Local or Remote)  |                            |
-|                        +---------------------+                            |
-|                                                                           |
-+===========================================================================+
-```
-
----
-
-## Component Architecture
-
-### Multi-Target Adapter System
-
-CCS v7.45 introduces the Target Adapter pattern, enabling seamless integration with different CLI implementations.
-
-**Key architecture:**
-
-```
-Profile Resolution (CLIProxy, Settings/API, Account-based)
+```text
+User or automation
         |
         v
-Target Resolution (--target flag > runtime entrypoint / argv[0] > config > default)
-        |
-        v
-Get Target Adapter (Claude, Droid, or Codex)
-        |
-        +---> detectBinary()     (find CLI on system)
-        |
-        +---> prepareCredentials() (write config or set env)
-        |
-        +---> buildArgs()        (construct CLI arguments)
-        |
-        +---> buildEnv()         (prepare environment variables)
-        |
-        v
-Spawn Target Process
+CCS CLI ------------------------> Target CLI
+   |                                |
+   | profile/provider state         | provider protocol
+   v                                v
+CCS local server <-----------> CLIProxy or direct API
+   |
+   v
+React dashboard
 ```
 
-**Each target adapter implements different credential delivery:**
+The main implementation surfaces are:
 
-- **Claude Adapter**: Env var delivery (existing behavior)
-  - `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL`
-  - No config files needed
+| Surface | Ownership |
+| --- | --- |
+| `src/` | CLI, dispatch, server, provider integration, target adapters |
+| `ui/src/` | Dashboard application |
+| `dist/` and `dist/ui/` | Build outputs |
+| `docker/` | Integrated and legacy container definitions |
+| `tests/` | Unit, integration, end-to-end, native, and Docker contracts |
 
-- **Droid Adapter**: Config file delivery to `~/.factory/settings.json`
-  - Writes custom model entry: `custom:ccs-<profile>`
-  - Spawns: `droid -m custom:ccs-<profile> <args>`
-  - Model config includes baseUrl, apiKey, provider
+Dashboard localization is documented in the
+[Dashboard i18n Guide](../i18n-dashboard.md).
 
-- **Codex Adapter**: Transient runtime overrides plus user-layer dashboard inspection
-  - Uses `codex -c key=value` only for CCS-routed launches
-  - Preserves native `~/.codex/config.toml` ownership
-  - Dashboard page reads/writes only the user config layer with explicit runtime-vs-provider warnings
+## Execution pipeline
 
-**Runtime entrypoints (built-in bins) and argv[0]-style aliases:**
-
-```
-ccs        → Target: claude (default)
-ccs-droid  → Target: droid (explicit alias)
-ccsd       → Target: droid (legacy shortcut)
-ccs-codex  → Target: codex (explicit alias)
-ccsx       → Target: codex (short alias)
-ccsxp      → Target: codex (native cliproxy shortcut; prepends `--config model_provider="cliproxy"`)
-```
-
-For details on the adapter architecture, see [Target Adapters](./target-adapters.md).
-
-### CLI Layer
-
-```
-+===========================================================================+
-|                           CLI Architecture                                |
-+===========================================================================+
-
-  User Input (ccs [--target <cli>] <profile> [args])
-        |
-        v
-  +-------------+
-  |   ccs.ts    |  Entry point, command routing
-  +-------------+
-        |
-        +---> [Version/Help/Doctor/etc.] ---> Exit
-        |
-        v
-  +------------------+
-  | Target Resolution | Determine which CLI to use
-  +------------------+
-        |
-        v
-  +-------------+
-  |  Profile    |  Determines execution path
-  |  Detection  |
-  +-------------+
-        |
-        +---> [Native Claude Account] ---> execClaude()
-        |                                       |
-        +---> [CLIProxy Provider] ---> execClaudeWithCLIProxy()
-        |                                       |
-        +---> [Settings/API Profile] ---> normalize legacy glmt if needed
-        |
-        v
-  +------------------+
-  | Target Adapter   |  Get appropriate adapter
-  +------------------+
-        |
-        v
-  +------------------+
-  | Prepare Creds    |  Deliver credentials
-  +------------------+
-        |
-        v
-  +------------------+
-  | Target CLI       |  Claude Code or Droid
-  +------------------+
-```
-
----
-
-## Data Flow Architecture
-
-### CLI Execution Flow
-
-```
-+===========================================================================+
-|                        CLI Execution Flow                                  |
-+===========================================================================+
-
-  1. Parse Arguments
-        |
-        v
-  2. Resolve Target Type
-        |
-        v
-  3. Detect Profile Type
-        |
-        +---> Native Claude ---> 3a. Load Account Settings
-        |                              |
-        |                              v
-        |                        4a. Set CLAUDE_CONFIG_DIR
-        |                              |
-        |                              v
-        |                        5a. Get Claude Target Adapter
-        |
-        +---> CLIProxy -------> 3b. Ensure Binary Installed
-        |                              |
-        |                              v
-        |                        4b. Generate Config
-        |                              |
-        |                              v
-        |                        5b. Resolve Target Adapter
-        |                              |
-        |                              v
-        |                        6b. Prepare Credentials
-        |                              |
-        |                              v
-        |                        7b. Spawn via Adapter
-        |
-        +---> Settings/API ---> 3c. Load settings env
-                                      |
-                                      v
-                                4c. Normalize legacy glmt if needed
-                                      |
-                                      v
-                                5c. Resolve Target Adapter
-                                      |
-                                      v
-                                6c. Spawn via Adapter
-```
-
----
-
-## Provider Integration Architecture
-
-For detailed provider flows (CLIProxyAPI, legacy GLMT compatibility, quota management), see [Provider Flows](./provider-flows.md).
-
----
-
-## Configuration Architecture
-
-### CCS Logging Architecture
-
-- Shared logging contract lives in `src/services/logging/` and is used for CCS-owned runtime diagnostics, request tracing, and bounded recent-entry reads.
-- Config lives at top-level `logging.*` in `~/.ccs/config.yaml`; `cliproxy.logging.*` still controls upstream CLIProxy runtime files only.
-- CCS-owned runtime logs write to `~/.ccs/logs/current.jsonl` and rotate into `~/.ccs/logs/archive/` based on policy.
-- Dashboard exposure uses native `/api/logs/config`, `/api/logs/sources`, and `/api/logs/entries` endpoints plus the `System -> Logs` React page.
-- Request logging explicitly skips `/api/logs` reads so the log viewer does not recursively log itself.
-
-### Config File Hierarchy
-
-```
-+===========================================================================+
-|                     Configuration Hierarchy                                |
-+===========================================================================+
-
-  ~/.ccs/
+```text
+Parse command
     |
-    +---> config.yaml              # Main CCS config (unified)
+Resolve command vs launch
     |
-    +---> profiles.json            # Claude account registry
+Resolve target
     |
-    +---> <profile>.settings.json  # Per-profile settings
+Resolve profile type
+    +-- account profile ------> isolated target config root
+    +-- settings profile -----> profile environment
+    +-- CLIProxy provider ----> local or remote proxy route
     |
-    +---> cliproxy/
-    |       |
-    |       +---> config.yaml      # CLIProxy configuration
-    |       +---> auth/            # OAuth tokens
-    |       +---> bin/             # CLIProxy binary
+Prepare target credentials
     |
-    +---> shared/                  # Symlinked resources
-            |
-            +---> commands/        # Claude Code commands
-            +---> skills/          # Custom skills
-            +---> agents/          # Agent configurations
-            +---> plugins/
-                    |
-                    +---> cache/               # Shared plugin payload/cache data
-                    +---> marketplaces/        # Shared marketplace payload directories
-                    +---> installed_plugins.json
-
-  ~/.ccs/instances/<profile>/
-    |
-    +---> plugins/
-            |
-            +---> known_marketplaces.json      # Instance-local registry for active CLAUDE_CONFIG_DIR validation
-
-  ~/.factory/ (Droid CLI)
-    |
-    +---> settings.json            # Droid config (custom models)
+Spawn target and forward lifecycle signals
 ```
 
-Plugin ownership note:
-- `commands/`, `skills/`, `agents/`, and `settings.json` remain shared through the existing symlink/copy flow.
-- Marketplace payload directories stay shared, but `known_marketplaces.json` is reconciled per instance so Claude Code can validate `installLocation` against that instance's `CLAUDE_CONFIG_DIR/plugins/marketplaces`.
+Command routing stops before profile execution for management commands such as
+configuration, diagnostics, proxy management, and environment export.
 
-### Config Loading Order
+### Profile resolution
 
-```
-  1. Environment Variables (highest priority)
-        |
-        v
-  2. CLI Arguments (including --target)
-        |
-        v
-  3. Profile-specific settings (~/.ccs/<profile>.settings.json)
-        |
-        v
-  4. Main config (~/.ccs/config.yaml)
-        |
-        v
-  5. Default values (lowest priority)
-```
+Profile resolution distinguishes:
 
----
+1. built-in CLIProxy provider shortcuts;
+2. user-defined CLIProxy profiles;
+3. settings/API profiles; and
+4. registered account profiles.
 
-## WebSocket Architecture
+Canonical provider IDs and aliases come from
+[`src/cliproxy/provider-capabilities.ts`](../../src/cliproxy/provider-capabilities.ts).
+The detector and dispatcher consume those registries; documentation must not
+maintain a second provider list.
 
-### Real-time Communication
+### Target resolution
 
-```
-+===========================================================================+
-|                     WebSocket Communication                                |
-+===========================================================================+
+Provider and target are independent axes. The selected target is resolved from
+explicit flags and runtime entry points before falling back to configuration
+and the default target.
 
-  Dashboard (React)                     Server (Express)
-        |                                      |
-        |<------ Connection Established ------>|
-        |                                      |
-        |<------ health:update ----------------|  Health status
-        |                                      |
-        |<------ auth:status ------------------|  Auth changes
-        |                                      |
-        |<------ usage:update -----------------|  Usage stats
-        |                                      |
-        |------- action:refresh -------------->|  User requests
-        |                                      |
-```
+Each adapter owns credential delivery:
 
----
+- **Claude Code:** launch environment and optional isolated
+  `CLAUDE_CONFIG_DIR`;
+- **Factory Droid:** CCS-managed custom-model entries in
+  `~/.factory/settings.json`; and
+- **Codex CLI:** transient `-c` overrides for CCS-routed launches while native
+  user configuration remains separately owned.
 
-## Security Architecture
+See [Target Adapters](./target-adapters.md) for the detailed compatibility
+contract.
 
-### Authentication Flow
+## Provider routing
 
-See [Provider Flows](./provider-flows.md) → Authentication Flow section.
+CCS supports three routing boundaries:
 
-### Security Boundaries
+| Route | Credential and transport owner |
+| --- | --- |
+| Direct settings/API profile | Target receives the selected provider's environment |
+| Local CLIProxy | CCS manages a local proxy binary, config, and auth directory |
+| Remote CLIProxy | CCS connects to the configured remote service and applies the selected fallback policy |
 
-```
-  +------------------+
-  | User Terminal    |
-  +------------------+
-        |
-        | Local only (no network exposure)
-        v
-  +------------------+
-  | CCS CLI          |
-  +------------------+
-        |
-        | Localhost only (127.0.0.1)
-        v
-  +------------------+
-  | CLIProxy/Legacy  |  Binds to localhost only
-  +------------------+
-        |
-        | TLS encrypted
-        v
-  +------------------+
-  | Target CLI       |  Spawned locally (claude/droid)
-  +------------------+
-        |
-        | TLS encrypted
-        v
-  +------------------+
-  | Provider APIs    |  External endpoints
-  +------------------+
+Local backend choice is explicit. `original` is the default. `plus` is an
+opt-in backend for provider capabilities unavailable in the original backend.
+Compatibility restrictions are defined in
+[`src/cliproxy/types/provider-types.ts`](../../src/cliproxy/types/provider-types.ts)
+and enforced before local execution.
+
+See [Provider Flows](./provider-flows.md).
+
+## Configuration ownership
+
+The effective CCS directory is resolved by
+[`src/utils/config-manager.ts`](../../src/utils/config-manager.ts). The normal
+default is `~/.ccs`; tests and scoped workflows can override it.
+
+```text
+CCS directory
+├── config.yaml
+├── profiles.json
+├── <profile>.settings.json
+├── instances/
+├── logs/
+└── cliproxy/
+    ├── config.yaml
+    ├── auth/
+    └── bin/
 ```
 
----
+### Settings-write contract
 
-## Build and Distribution
+Normal launches do not rewrite shared Claude settings. API profiles store
+string-valued launch environment in CCS-owned per-profile settings.
 
-### Build Pipeline
+Persistent shared configuration is explicit:
 
-```
-+===========================================================================+
-|                        Build Pipeline                                      |
-+===========================================================================+
+- `ccs persist` reads and validates `~/.claude/settings.json`;
+- it refuses unsafe symlink targets;
+- it preserves unrelated settings while updating the requested managed fields;
+- it creates a backup when an existing file is present; and
+- it writes the replacement atomically under a settings-directory lock.
 
-  src/ (TypeScript)                    ui/src/ (React TSX)
-        |                                      |
-        v                                      v
-  TypeScript Compiler                  Vite Build
-        |                                      |
-        v                                      v
-  dist/ (JavaScript)                   dist/ui/ (Static assets)
-        |                                      |
-        +---------------+---------------------+
-                        |
-                        v
-               npm package (@kaitranntt/ccs)
-                        |
-                        v
-               npm registry / GitHub releases
-```
+Target-owned writers follow their own boundary. For example, the Droid adapter
+manages CCS custom-model entries in `~/.factory/settings.json`, not arbitrary
+user settings.
 
-### Package Contents
+## Local server and dashboard
 
-```
-  @kaitranntt/ccs
-        |
-        +---> dist/           # Compiled CLI
-        +---> dist/ui/        # Built dashboard
-        +---> lib/            # Native scripts
-        |       +---> ccs     # Bash bootstrap
-        |       +---> ccs.ps1 # PowerShell bootstrap
-        +---> package.json
-```
+The Express server exposes APIs used by the React dashboard for supported
+configuration, auth, usage, health, and logging workflows. The dashboard is a
+management surface over shared services; it must not implement a competing
+configuration model.
 
----
+Real-time updates use server-owned WebSocket messages. Event names and payloads
+are code contracts and should be read from the server and UI implementations
+rather than copied into this overview.
 
-## Deployment Architecture
+## Logging
 
-### Local Installation
+CCS-owned structured runtime logging lives under `src/services/logging/`.
+Top-level `logging.*` configuration controls CCS JSONL logs under the CCS
+directory. `cliproxy.logging.*` controls upstream CLIProxy files and is a
+separate contract.
 
-```
-  npm install -g @kaitranntt/ccs
-        |
-        v
-  Global node_modules
-        |
-        +---> Creates symlink: ccs --> dist/ccs.js
-        |
-        +---> Runtime aliases: ccs-droid / ccsd → ccs (auto-select droid target)
-        |
-        +---> First run creates: ~/.ccs/
-```
+The dashboard log reader excludes its own log-read requests from request
+logging to prevent recursive noise. See [Logging Contract](../logging-contract.md).
 
-### PR Review Lane
+## Managed tool preparation
 
-Automated pull request review stays in `.github/workflows/ai-review.yml`, but the workflow now runs PR-Agent instead of the old Claude action. Reviews run on the existing self-hosted `cliproxy` runner, while the workflow preserves the existing `AI_REVIEW_BASE_URL`, `AI_REVIEW_MODEL`, and `AI_REVIEW_API_KEY` contract by mapping those values into PR-Agent env keys such as `OPENAI.*`, `config.*`, and `github_action_config.*`. Repo-specific reviewer guidance lives in `.pr_agent.toml`.
+WebSearch and image analysis are prepared before the target launch when the
+selected profile needs CCS-managed tooling. They use provider-aware routes but
+have different failure contracts: enabled third-party WebSearch fails closed if
+its managed MCP replacement cannot be prepared, while image analysis can use a
+compatible native path when available.
 
-```
-GitHub Actions `ai-review.yml`
-      |
-      v
-Self-hosted `cliproxy` runner
-      |
-      v
-PR-Agent action
-      |
-      v
-CLIProxy
-      |
-      v
-Configured model from `.pr_agent.toml`
-```
+- [WebSearch](../websearch.md)
+- [Provider Flows](./provider-flows.md)
 
-- `ai-review.yml` owns automation wiring such as runner selection, PR-Agent action usage, and runtime values mapped from `AI_REVIEW_*` into `OPENAI.*`, `config.*`, and `github_action_config.*`.
-- `.pr_agent.toml` in the repo root owns review instructions for this repository.
-- Contributors should treat PR-Agent comments and trusted `/review` reruns as the primary AI review path for PRs targeting CCS.
+## Security and trust boundaries
 
-### Runtime Dependencies
+### Local host
 
-```
-  +------------------+     +------------------+
-  |   Node.js 14+    |     |   Claude CLI     |
-  |   (required)     |     |   (required)     |
-  +------------------+     +------------------+
+CCS reads and writes user-authorized configuration and starts target processes.
+That local filesystem access is more privileged than a provider API request.
+Sensitive values must not enter logs or dashboard responses.
 
-  +------------------+     +------------------+
-  |   CLIProxyAPI    |     |   Droid CLI      |
-  |   (auto-managed) |     |   (optional)     |
-  +------------------+     +------------------+
+### Local proxy
+
+The host CLI uses loopback for locally managed CLIProxy traffic. Local auth
+files and the management API remain sensitive even when the transport never
+leaves the machine.
+
+### Remote proxy
+
+A remote CLIProxy crosses a network and administrative boundary. TLS,
+authentication, certificate policy, reachability, and local fallback are
+explicit configuration choices. Remote-only mode must not silently start a
+local proxy.
+
+### Container deployment
+
+The integrated container exposes dashboard and proxy ports through the
+operator's port mappings. The image therefore does not inherit the host
+installation's loopback-only assumption. Network exposure and access control
+belong to the deployment operator.
+
+## Build and distribution
+
+```text
+src/ -------- TypeScript --------> dist/
+ui/src/ ----- Vite --------------> dist/ui/
+                         |
+                         v
+                 npm package
+                         |
+                         v
+             integrated Docker image
 ```
 
----
+The package requires Node.js 18 or newer. Repository development supports Bun
+1.0 or newer. CI can pin newer tool versions independently; those workflow pins
+are not the minimum consumer runtime contract.
 
-## Related Documentation
+The integrated Docker image is built from
+[`docker/Dockerfile.integrated`](../../docker/Dockerfile.integrated). It layers
+CCS onto a digest-pinned CLIProxy base, runs CLIProxy and the dashboard under
+supervision, and health-checks both services. It does not bundle Claude Code,
+Gemini CLI, Codex CLI, Droid, or other target CLIs.
 
-- [Codebase Summary](../codebase-summary.md) - Detailed directory structure
-- [Code Standards](../code-standards.md) - Coding conventions & patterns
-- [Target Adapters](./target-adapters.md) - Multi-CLI adapter architecture
-- [Provider Flows](./provider-flows.md) - CLIProxy, legacy GLMT compatibility, authentication flows
-- [Project Roadmap](../project-roadmap.md) - Development phases
+Release lane details are in [Release Process](../release-process.md).
+
+## Architecture invariants
+
+- Provider identity comes from the provider registry.
+- Target compatibility is enforced at the adapter boundary.
+- Environment values persisted in settings are strings.
+- Shared target configuration changes require an explicit workflow.
+- Local and remote proxy modes do not silently cross trust boundaries.
+- Dashboard and CLI use the same domain services and configuration schema.
+- Volatile capability details remain source-owned.
+
+## Related documentation
+
+- [Codebase Summary](../codebase-summary.md)
+- [Code Standards](../code-standards.md)
+- [Target Adapters](./target-adapters.md)
+- [Provider Flows](./provider-flows.md)
+- [Release Process](../release-process.md)
+- [Project Roadmap](../project-roadmap.md)

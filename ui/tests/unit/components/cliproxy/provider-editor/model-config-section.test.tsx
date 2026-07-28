@@ -13,6 +13,29 @@ import { ModelConfigSection } from '@/components/cliproxy/provider-editor/model-
 import { MODEL_CATALOGS } from '@/lib/model-catalogs';
 
 describe('ModelConfigSection presets', () => {
+  it('renders five tier selectors including the fable row', () => {
+    render(
+      <ModelConfigSection
+        catalog={MODEL_CATALOGS.codex}
+        savedPresets={[]}
+        currentModel="gpt-5-codex"
+        opusModel="gpt-5-codex"
+        sonnetModel="gpt-5-codex"
+        haikuModel="gpt-5-codex-mini"
+        fableModel="gpt-5.6-sol-xhigh"
+        providerModels={[]}
+        provider="codex"
+        onExtendedContextToggle={vi.fn()}
+        onApplyPreset={vi.fn()}
+        onUpdateEnvValue={vi.fn()}
+        onOpenCustomPreset={vi.fn()}
+        onDeletePreset={vi.fn()}
+      />
+    );
+
+    expect(screen.getAllByTestId('flexible-model-selector')).toHaveLength(5);
+  });
+
   it('groups codex presets by free and paid tiers', async () => {
     const onApplyPreset = vi.fn();
 

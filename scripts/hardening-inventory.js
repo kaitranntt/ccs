@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { collectMaintainabilityMetrics } = require('./maintainability-metrics.js');
+const { isTestFile } = require('./runtime-source-classifier.js');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const SRC_DIR = path.join(ROOT_DIR, 'src');
@@ -98,7 +99,7 @@ function isSourceFile(filePath) {
 }
 
 function isHotpath(filePath) {
-  return HOTPATH_PATTERNS.some((pattern) => pattern.test(filePath));
+  return !isTestFile(filePath) && HOTPATH_PATTERNS.some((pattern) => pattern.test(filePath));
 }
 
 function walkFiles(dirPath) {
@@ -450,7 +451,9 @@ function renderMarkdown(report) {
   lines.push(`| Sync fs occurrences (all) | ${report.syncFs.totalOccurrences} |`);
   lines.push(`| Sync fs files affected (all) | ${report.syncFs.filesAffected} |`);
   lines.push(`| Sync fs occurrences (runtime hotpaths) | ${report.syncFs.hotpathOccurrences} |`);
-  lines.push(`| Sync fs files affected (runtime hotpaths) | ${report.syncFs.hotpathFilesAffected} |`);
+  lines.push(
+    `| Sync fs files affected (runtime hotpaths) | ${report.syncFs.hotpathFilesAffected} |`
+  );
   lines.push(`| Legacy shim markers | ${report.legacyShim.totalMarkers} |`);
   lines.push(`| Legacy shim files affected | ${report.legacyShim.filesAffected} |`);
   lines.push('');
@@ -547,10 +550,39 @@ function renderMarkdown(report) {
 
 function main() {
   const report = buildReport();
+  const jsonContent = JSON.stringify(report, null, 2) + '\n';
+  const markdownContent = renderMarkdown(report);
+  const checkOnly = process.argv.includes('--check');
+
+  if (checkOnly) {
+    const staleReports = [
+      [JSON_REPORT_PATH, jsonContent],
+      [MD_REPORT_PATH, markdownContent],
+    ].filter(([reportPath, expected]) => {
+      try {
+        return fs.readFileSync(reportPath, 'utf8') !== expected;
+      } catch {
+        return true;
+      }
+    });
+
+    if (staleReports.length > 0) {
+      console.error('[X] Hardening inventory does not match the current source tree:');
+      for (const [reportPath] of staleReports) {
+        console.error(`    ${relativePath(reportPath)}`);
+      }
+      console.error('    Regenerate with: bun run report:hardening');
+      process.exitCode = 1;
+      return;
+    }
+
+    console.log('[OK] Hardening inventory matches the current source tree.');
+    return;
+  }
 
   fs.mkdirSync(REPORT_DIR, { recursive: true });
-  fs.writeFileSync(JSON_REPORT_PATH, JSON.stringify(report, null, 2) + '\n', 'utf8');
-  fs.writeFileSync(MD_REPORT_PATH, renderMarkdown(report), 'utf8');
+  fs.writeFileSync(JSON_REPORT_PATH, jsonContent, 'utf8');
+  fs.writeFileSync(MD_REPORT_PATH, markdownContent, 'utf8');
 
   const relJson = relativePath(JSON_REPORT_PATH);
   const relMd = relativePath(MD_REPORT_PATH);
@@ -575,6 +607,7 @@ function main() {
 module.exports = {
   buildReport,
   collectSyncCallSites,
+  isTestFile,
   renderMarkdown,
   stripComments,
 };

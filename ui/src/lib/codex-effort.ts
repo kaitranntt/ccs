@@ -2,7 +2,7 @@ export type CodexEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 export type CodexServiceTier = 'fast';
 
 const CODEX_TUNING_SUFFIX_TOKEN_REGEX = /-(minimal|low|medium|high|xhigh|fast)$/i;
-const CODEX_EFFORTS_IN_ORDER: readonly CodexEffort[] = [
+export const CODEX_EFFORTS_IN_ORDER: readonly CodexEffort[] = [
   'minimal',
   'low',
   'medium',
@@ -66,6 +66,12 @@ export function applyCodexEffortSuffix(
   return [normalizedModelId, effort, parsed.serviceTier].filter(Boolean).join('-');
 }
 
+export function applyCodexServiceTierSuffix(modelId: string | undefined, enabled: boolean): string {
+  const parsed = parseCodexTuningSuffix(modelId);
+  if (!parsed.baseModel) return parsed.baseModel;
+  return [parsed.baseModel, parsed.effort, enabled ? 'fast' : undefined].filter(Boolean).join('-');
+}
+
 export function getCodexEffortVariants(
   modelId: string,
   maxEffort: CodexEffort | undefined,
@@ -100,6 +106,16 @@ export function getCodexEffortVariants(
   }
 
   return variantIds;
+}
+
+export function getSelectableCodexEfforts(
+  maxEffort: CodexEffort | undefined,
+  efforts?: readonly CodexEffort[]
+): CodexEffort[] {
+  if (efforts?.length) return [...efforts];
+  if (!maxEffort) return [...CODEX_EFFORTS_IN_ORDER];
+  const maxEffortIndex = CODEX_EFFORTS_IN_ORDER.indexOf(maxEffort);
+  return CODEX_EFFORTS_IN_ORDER.slice(0, maxEffortIndex + 1);
 }
 
 export function getCodexEffortDisplay(

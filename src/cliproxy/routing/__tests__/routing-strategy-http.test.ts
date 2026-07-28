@@ -104,4 +104,44 @@ describe('routing-strategy-http', () => {
       'https://proxy.example.com:443/v0/management/routing/strategy'
     );
   });
+
+  it('builds target-aware retry management URLs', async () => {
+    const { getCliproxyRetryManagementUrl } = await loadRoutingHttpModule();
+    const target: ProxyTarget = {
+      host: 'proxy.example.com',
+      port: 443,
+      protocol: 'https',
+      isRemote: true,
+    };
+
+    expect(getCliproxyRetryManagementUrl(target, 'request-retry')).toBe(
+      'https://proxy.example.com:443/v0/management/request-retry'
+    );
+    expect(getCliproxyRetryManagementUrl(target, 'max-retry-interval')).toBe(
+      'https://proxy.example.com:443/v0/management/max-retry-interval'
+    );
+  });
+
+  it('sends retry updates as an integer value payload', async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = mock(async () => new Response('{}'));
+    globalThis.fetch = fetchMock as typeof fetch;
+    const target: ProxyTarget = {
+      host: '127.0.0.1',
+      port: 8317,
+      protocol: 'http',
+      isRemote: false,
+    };
+
+    try {
+      const { fetchCliproxyRetryResponse } = await loadRoutingHttpModule();
+      await fetchCliproxyRetryResponse(target, 'request-retry', 'PUT', 4);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://127.0.0.1:8317/v0/management/request-retry',
+        expect.objectContaining({ method: 'PUT', body: JSON.stringify({ value: 4 }) })
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

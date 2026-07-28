@@ -135,6 +135,33 @@ export interface CLIProxyRoutingConfig {
 }
 
 /**
+ * CLIProxy request-retry configuration.
+ * Controls CLIProxy's own retry-on-transient-error behavior
+ * (403, 408, 500, 502, 503, 504). Defaults to disabled (0/0): retrying can
+ * burn quota on multi-account pools, so this is opt-in.
+ */
+export interface CLIProxyRetryConfig {
+  /** Number of times to retry a request on a transient error (integer >= 0, default: 0 = disabled) */
+  request_retry?: number;
+  /** Maximum wait time in seconds for a cooled-down credential before retrying (integer >= 0, default: 0) */
+  max_retry_interval?: number;
+}
+
+/** Lower bound (inclusive) accepted for CLIProxy retry config fields. */
+export const CLIPROXY_RETRY_MIN_VALUE = 0;
+
+/** Human-readable accepted-range description for CLIProxy retry config fields. */
+export const CLIPROXY_RETRY_RANGE_MESSAGE = `must be a whole number ${CLIPROXY_RETRY_MIN_VALUE} or greater`;
+
+/**
+ * Validate a single CLIProxy retry config field value (request_retry or
+ * max_retry_interval). Both fields share the same bounds: non-negative integer.
+ */
+export function isValidCliproxyRetryValue(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= CLIPROXY_RETRY_MIN_VALUE;
+}
+
+/**
  * Pool routing configuration for multi-account CLIProxy rotation.
  *
  * Pool routing is opt-in at the 1->2 account-add transition.
@@ -200,4 +227,6 @@ export interface CLIProxyConfig {
   routing?: CLIProxyRoutingConfig;
   /** Pool routing opt-in state and configuration */
   pool_routing?: CLIProxyPoolRoutingConfig;
+  /** Request-retry behavior for transient upstream errors (opt-in, default: disabled) */
+  retry?: CLIProxyRetryConfig;
 }

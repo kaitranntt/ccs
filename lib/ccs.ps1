@@ -1,4 +1,4 @@
-# CCS - Claude Code Switch (Bootstrap)
+# CCS - Claude Codex Switch (Bootstrap)
 # Delegates to Node.js implementation via npx
 # https://github.com/kaitranntt/ccs
 

@@ -1,10 +1,33 @@
+import type { ClientRequest, IncomingMessage } from 'node:http';
 import { defineConfig } from 'vite';
+import type { ProxyOptions } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 
 const UI_ROOT = __dirname;
 const REPO_ROOT = path.resolve(__dirname, '..');
+const BACKEND_ORIGIN = 'http://localhost:3000';
+const TRUSTED_VITE_DEV_ORIGINS = new Set([
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://[::1]:5173',
+]);
+
+function rewriteTrustedViteDevOrigin(proxyRequest: ClientRequest, request: IncomingMessage): void {
+  const origin = request.headers.origin;
+  if (origin && TRUSTED_VITE_DEV_ORIGINS.has(origin)) {
+    proxyRequest.setHeader('origin', BACKEND_ORIGIN);
+  }
+}
+
+const configureHttpProxy: NonNullable<ProxyOptions['configure']> = (proxy) => {
+  proxy.on('proxyReq', rewriteTrustedViteDevOrigin);
+};
+
+const configureWebSocketProxy: NonNullable<ProxyOptions['configure']> = (proxy) => {
+  proxy.on('proxyReqWs', rewriteTrustedViteDevOrigin);
+};
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -58,14 +81,23 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    strictPort: true,
     fs: {
       allow: [UI_ROOT, REPO_ROOT],
     },
     proxy: {
-      '/api': 'http://localhost:3000',
+      // Translate only trusted local Vite origins for the dashboard's CSRF guard.
+      // Preserve every other Origin so the backend can reject untrusted callers.
+      '/api': {
+        target: BACKEND_ORIGIN,
+        changeOrigin: true,
+        configure: configureHttpProxy,
+      },
       '/ws': {
         target: 'ws://localhost:3000',
         ws: true,
+        changeOrigin: true,
+        configure: configureWebSocketProxy,
       },
     },
   },

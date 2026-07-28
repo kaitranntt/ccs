@@ -9,8 +9,17 @@ import {
 const ROUTING_TIMEOUT_MS = 5000;
 const CLIPROXY_ROUTING_MANAGEMENT_PATH = '/v0/management/routing/strategy';
 
+export type CliproxyRetryManagementSetting = 'request-retry' | 'max-retry-interval';
+
 export function getCliproxyRoutingManagementUrl(target: ProxyTarget): string {
   return buildProxyUrl(target, CLIPROXY_ROUTING_MANAGEMENT_PATH);
+}
+
+export function getCliproxyRetryManagementUrl(
+  target: ProxyTarget,
+  setting: CliproxyRetryManagementSetting
+): string {
+  return buildProxyUrl(target, `/v0/management/${setting}`);
 }
 
 export async function fetchCliproxyRoutingResponse(
@@ -18,7 +27,20 @@ export async function fetchCliproxyRoutingResponse(
   method: 'GET' | 'PUT',
   body?: Record<string, string>
 ): Promise<Response> {
-  const url = getCliproxyRoutingManagementUrl(target);
+  return fetchCliproxyManagementResponse(
+    target,
+    getCliproxyRoutingManagementUrl(target),
+    method,
+    body
+  );
+}
+
+async function fetchCliproxyManagementResponse(
+  target: ProxyTarget,
+  url: string,
+  method: 'GET' | 'PUT',
+  body?: Record<string, string | number>
+): Promise<Response> {
   const headers = buildManagementHeaders(
     target,
     body ? { 'Content-Type': 'application/json' } : {}
@@ -113,6 +135,20 @@ export async function fetchCliproxyRoutingResponse(
     }
     request.end();
   });
+}
+
+export async function fetchCliproxyRetryResponse(
+  target: ProxyTarget,
+  setting: CliproxyRetryManagementSetting,
+  method: 'GET' | 'PUT',
+  value?: number
+): Promise<Response> {
+  return fetchCliproxyManagementResponse(
+    target,
+    getCliproxyRetryManagementUrl(target, setting),
+    method,
+    value === undefined ? undefined : { value }
+  );
 }
 
 export function getCliproxyRoutingTarget(): ProxyTarget {

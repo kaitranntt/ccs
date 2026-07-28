@@ -60,6 +60,7 @@ const MODEL_ENV_KEYS = [
   'ANTHROPIC_DEFAULT_OPUS_MODEL',
   'ANTHROPIC_DEFAULT_SONNET_MODEL',
   'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+  'ANTHROPIC_DEFAULT_FABLE_MODEL',
 ] as const;
 const PRESET_MODEL_KEYS = ['default', 'opus', 'sonnet', 'haiku'] as const;
 const SETTINGS_IDENTIFIER_PATTERN = /^[a-zA-Z][a-zA-Z0-9._-]*$/;

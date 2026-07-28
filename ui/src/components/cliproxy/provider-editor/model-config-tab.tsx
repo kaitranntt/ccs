@@ -27,6 +27,7 @@ interface ModelConfigTabProps {
   opusModel?: string;
   sonnetModel?: string;
   haikuModel?: string;
+  fableModel?: string;
   providerModels: Array<{ id: string; owned_by: string }>;
   routing?: CliproxyProviderRoutingHints;
   /** Whether extended context (1M tokens) is enabled */
@@ -72,6 +73,7 @@ export function ModelConfigTab({
   opusModel,
   sonnetModel,
   haikuModel,
+  fableModel,
   providerModels,
   routing,
   extendedContextEnabled,
@@ -163,6 +165,7 @@ export function ModelConfigTab({
           opusModel={opusModel}
           sonnetModel={sonnetModel}
           haikuModel={haikuModel}
+          fableModel={fableModel}
           providerModels={providerModels}
           routing={routing}
           provider={provider}

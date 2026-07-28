@@ -43,6 +43,7 @@ export function ModelConfigSection({
   opusModel,
   sonnetModel,
   haikuModel,
+  fableModel,
   providerModels,
   routing,
   provider,
@@ -67,7 +68,7 @@ export function ModelConfigSection({
   const extendedContextModels = useMemo(() => {
     if (!catalog) return [];
 
-    const selectedModels = [currentModel, opusModel, sonnetModel, haikuModel]
+    const selectedModels = [currentModel, opusModel, sonnetModel, haikuModel, fableModel]
       .filter((modelId): modelId is string => Boolean(modelId))
       .map((modelId) => stripExtendedContextSuffix(modelId));
 
@@ -75,7 +76,7 @@ export function ModelConfigSection({
     return uniqueIds
       .map((modelId) => findCatalogModel(catalog.provider, modelId, catalog))
       .filter((model): model is NonNullable<typeof model> => Boolean(model?.extendedContext));
-  }, [catalog, currentModel, opusModel, sonnetModel, haikuModel]);
+  }, [catalog, currentModel, opusModel, sonnetModel, haikuModel, fableModel]);
 
   const resolvedCatalogModels = useMemo(
     () => getResolvedCatalogModels(catalog, providerModels),
@@ -253,6 +254,15 @@ export function ModelConfigSection({
               onToggle={onExtendedContextToggle}
             />
           )}
+          <FlexibleModelSelector
+            label="Fable (Frontier)"
+            description="Maps the fable subagent tier; leave empty to keep the native Claude Fable model"
+            value={fableModel}
+            onChange={(model) => onUpdateEnvValue('ANTHROPIC_DEFAULT_FABLE_MODEL', model)}
+            catalog={catalog}
+            allModels={providerModels}
+            routing={routing}
+          />
           <FlexibleModelSelector
             label="Opus (Most capable)"
             description="For complex reasoning tasks"

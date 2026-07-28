@@ -1,374 +1,254 @@
-# CCS Product Development Requirements (PDR)
-
-Last Updated: 2026-05-07
+# CCS Product Development Requirements
 
 ## Product Overview
 
-**Product Name**: CCS (Claude Code Switch)
+**Product name:** CCS (Claude Codex Switch)
 
-**Tagline**: The multi-provider profile and runtime manager for Claude Code and compatible CLIs
+**Purpose:** Provide one profile and runtime-management surface for Claude Code,
+Codex CLI, Factory Droid, CLIProxy-backed OAuth providers, and compatible API
+profiles.
 
-**Description**: Multi-provider CLI/runtime manager enabling seamless switching between multiple Claude accounts, OAuth/API providers, and alternate targets such as Claude Code, Factory Droid, and Codex CLI. Includes a React-based dashboard for configuration management, plus support for local and remote CLIProxyAPI instances, hybrid quota management, and official Claude channel runtime setup for Telegram, Discord, and iMessage.
+CCS includes:
 
-**Current Version**: v7.34.x+ (First-class ImageAnalysis MCP tooling, WebSearch MCP, performance improvements)
+- a TypeScript CLI and local server;
+- a React dashboard for configuration, account, health, and usage workflows;
+- isolated account contexts and per-profile settings;
+- local or remote CLIProxy routing;
+- optional managed tools such as WebSearch and image analysis; and
+- an integrated Docker image containing CCS, CLIProxy, and the dashboard.
 
----
+Release versions and completed-release inventories belong in
+[`CHANGELOG.md`](../CHANGELOG.md), not this evergreen requirements document.
 
-## Problem Statement
+## Problem
 
-Developers using Claude Code face these challenges:
+Developers need to switch between accounts, providers, and compatible CLIs
+without repeatedly editing credentials or allowing one session's configuration
+to leak into another. They also need a visible, reversible way to manage local
+proxy state and diagnose provider readiness.
 
-1. **Single Account Limitation**: Cannot run multiple Claude subscriptions simultaneously
-2. **Provider Lock-in**: Stuck with Anthropic's API, cannot use alternatives
-3. **No Concurrent Sessions**: Cannot work on different projects with different accounts
-4. **Complex Configuration**: Manual env var and config file management
-5. **No Usage Analytics**: Lack visibility into token usage and costs across providers
+## Product Principles
 
----
+1. **CLI first:** Core configuration and launch behavior remains scriptable.
+2. **Explicit state:** Users can inspect which profile, provider, target, and
+   proxy mode CCS selected.
+3. **Isolation:** Account sessions use separate configuration roots where the
+   target supports them.
+4. **Compatibility:** CCS adapts provider credentials to a target without
+   redefining the provider or target protocol.
+5. **Reversibility:** Persistent writes are explicit and recoverable.
+6. **Local ownership:** Credentials and profile state remain on infrastructure
+   selected by the user.
 
-## Solution
+## Users
 
-CCS provides:
-
-1. **Multi-Account Claude**: Isolated instances via `CLAUDE_CONFIG_DIR`
-2. **OAuth Providers**: Zero-config Gemini, Codex, xAI/Grok, Antigravity, Kiro, and other active OAuth integrations, with deprecated Copilot compatibility for existing setups
-3. **AI Providers**: Dedicated CLIProxy dashboard for Gemini, Codex, Claude, Vertex, and OpenAI-compatible API-key families
-4. **API Profiles**: GLM, Kimi, OpenRouter, any Anthropic-compatible API
-5. **Visual Dashboard**: React SPA for configuration management
-6. **Automatic WebSearch**: First-class local WebSearch tool with deterministic provider chain for third-party providers
-7. **Automatic Image Analysis**: First-class local ImageAnalysis tool with direct provider routing for third-party profiles
-8. **Usage Analytics**: Token tracking, cost analysis, model breakdown
-9. **Official Claude Channels**: Runtime auto-enable plus dashboard token/config flow for Telegram, Discord, and macOS-only iMessage
-10. **Routing Strategy Guidance**: First-class `round-robin` vs `fill-first` controls in CLI and dashboard, with explicit opt-in changes and no account-based guessing
-
----
-
-## Target Users
-
-| User Type | Use Case | Primary Features |
-|-----------|----------|------------------|
-| Individual Developer | Work/personal separation | Multi-account Claude |
-| Agency/Contractor | Client account isolation | Profile switching |
-| Cost-conscious Dev | GLM for bulk operations | API profiles, analytics |
-| Enterprise | Custom LLM integration | OpenAI-compatible endpoints |
-| Power User | Multiple providers | OpenRouter 300+ models |
-
----
+| User | Primary need |
+| --- | --- |
+| Individual developer | Separate accounts, projects, and provider profiles |
+| Consultant or agency | Isolate client contexts |
+| API consumer | Reuse Anthropic-compatible and OpenAI-compatible providers |
+| Power user | Manage OAuth accounts, routing, health, and quota state |
+| Team operator | Run a shared remote CLIProxy or integrated Docker service |
 
 ## Functional Requirements
 
-### FR-001: Profile Switching
-- Switch between profiles with `ccs <profile>` command
-- Support default profile when no argument provided
-- Pass through all Claude CLI arguments
+### FR-001: Profile resolution and launch
 
-### FR-002: Multi-Account Claude
-- Create isolated Claude instances
-- Maintain separate sessions, todolists, logs per account
-- Share commands, skills, agents across accounts
+- Launch the default profile with `ccs`.
+- Launch named settings, account, and CLIProxy profiles.
+- Pass target-specific arguments without losing CCS-owned routing constraints.
+- Resolve provider and target aliases through canonical registries.
 
-### FR-003: OAuth Provider Integration
-- Support Gemini, Codex, xAI/Grok, Antigravity, Kiro, and deprecated Copilot compatibility OAuth flows
-- Browser-based authentication with provider-specific Authorization Code, Device Code, or polling flows
-- Token caching and refresh
+### FR-002: Account isolation
 
-### FR-004: API Profile Management
-- Configure custom API endpoints
-- Support Anthropic-compatible APIs
-- Model mapping and configuration
-- OpenRouter integration with 300+ models
+- Maintain an account registry.
+- Use isolated `CLAUDE_CONFIG_DIR` roots for Claude account profiles.
+- Keep shared resources and instance-owned state distinguishable.
+- Prevent one account's provider overrides from leaking into another launch.
 
-### FR-004A: CLIProxy AI Provider Management
-- Configure CLIProxy-managed Gemini, Codex, Claude, Vertex, and OpenAI-compatible API-key entries
-- Keep provider authoring separate from CCS API Profile creation
-- Support local config editing and remote CLIProxy management parity where available
+### FR-003: Provider integration
 
-### FR-005: Dashboard UI
-- Visual profile management
-- Real-time health monitoring
-- Usage analytics with cost tracking
-- Modular page architecture (settings, analytics, auth-monitor)
+- Support API-key profiles and OAuth-backed CLIProxy providers.
+- Support local and remote CLIProxy operation.
+- Keep original and Plus CLIProxy backends explicit; do not silently substitute
+  one when a requested provider requires the other.
+- Treat provider capability metadata as code-owned, not prose-owned. See
+  [`src/cliproxy/provider-capabilities.ts`](../src/cliproxy/provider-capabilities.ts)
+  and
+  [`src/cliproxy/types/provider-types.ts`](../src/cliproxy/types/provider-types.ts).
 
-### FR-006: Health Diagnostics
-- Verify Claude CLI installation
-- Check config file integrity
-- Validate symlinks and permissions
+### FR-004: Target adapters
 
-### FR-007: WebSearch Fallback
-- Expose a CCS-managed local WebSearch tool for third-party profiles that cannot reach Anthropic's native tool
-- Suppress native `WebSearch` on third-party launches and steer Claude toward the CCS-owned path when it is available
-- Support Exa, Tavily, Brave, and DuckDuckGo real search backends
-- Keep Gemini CLI, OpenCode, and Grok as optional legacy fallback
-- Graceful fallback chain
+- Support Claude Code, Factory Droid, and Codex CLI through target adapters.
+- Deliver credentials in the form owned by each target:
+  environment variables for Claude launches, managed custom-model state for
+  Droid, and transient configuration overrides for CCS-routed Codex launches.
+- Preserve user-owned target configuration outside the explicitly managed
+  fields.
 
-### FR-007A: First-Class Image Analysis
-- Expose a CCS-managed local `ImageAnalysis` MCP tool for third-party profiles that need provider-backed vision
-- Resolve the provider route before launch and send requests directly to `/api/provider/<backend>/v1/messages`
-- Use editable prompt templates for `default`, `screenshot`, and `document` analysis modes
-- Suppress the old CCS-managed `Read` hook during healthy MCP launches so it cannot compete with the primary path
-- Keep the old `Read` hook as compatibility fallback only when MCP provisioning fails but provider-backed analysis is still viable
-- Auto-heal stale CCS-managed image hooks and missing isolated MCP sync through launch-time cleanup, dashboard provisioning, and `ccs doctor --fix`
-- Fall back to native `Read` without failing the whole launch when managed runtime, auth, or proxy readiness is unavailable
+### FR-005: Configuration management
 
-### FR-008: Remote CLIProxy Support
-- Connect to remote CLIProxyAPI instances
-- CLI flags for proxy configuration (--proxy-host, --proxy-port, etc.)
-- Environment variable configuration (CCS_PROXY_HOST, etc.)
-- Fallback to local proxy when remote unreachable
-- Protocol-based default ports (443 for HTTPS, 8317 for HTTP)
-- Dashboard UI for remote server configuration and testing
+- Store CCS configuration under the directory resolved by
+  [`getCcsDir()`](../src/utils/config-manager.ts).
+- Store API profile launch settings in `<profile>.settings.json` files under
+  that directory.
+- Require all environment values written to settings files to be strings.
+- Keep shared Claude settings unchanged during normal profile launches.
+- Allow the explicit `ccs persist` workflow to merge a profile into
+  `~/.claude/settings.json`; back up the existing file and write atomically.
+- Reject unsafe settings-file targets such as symlinks.
 
-### FR-009: Quota Management (v7.14)
-- Pause/resume individual accounts via `ccs cliproxy pause/resume <account>`
-- Check quota status via `ccs cliproxy status [account]`
-- Inspect the current proxy-wide routing strategy via `ccs cliproxy routing`
-- Explicitly switch `round-robin` vs `fill-first` from CLI or dashboard
-- Keep `round-robin` as the default until the user explicitly changes it
-- Never infer routing strategy from account count, tier mix, or paused/default account state
-- Auto-failover when account exhausted
-- Tier detection: free/pro/ultra/unknown
-- Distinguish entitlement failures from temporary capacity exhaustion
-- Pre-flight quota checks before session start
-- Dashboard UI with pause/resume toggles, tier badges, and quota-detail guidance
+### FR-006: Dashboard and diagnostics
 
-### FR-010: Docker Deployment
-- Multi-stage Dockerfile with bun 1.2.21 and node:20-bookworm-slim
-- Docker Compose setup with resource limits and healthcheck
-- Persistent volumes for config, credentials, and CLI tools
-- Pre-installed CLIs: claude, gemini, grok, opencode, ccs
-- Ports: 3000 (Dashboard), 8317 (CLIProxy)
-- Entrypoint with privilege dropping and usage help
-- Environment variable configuration support
+- Provide local APIs and a React UI for supported configuration workflows.
+- Surface health, authentication, provider, routing, and usage state without
+  exposing credentials.
+- Keep dashboard changes aligned with the same configuration contracts used by
+  the CLI.
 
-### FR-011: Third-Party Tool Integration
-- Export shell-evaluable env vars via `ccs env` command
-- Support OpenAI, Anthropic, raw output formats
-- Auto-detect shell (bash/zsh, fish, PowerShell) from $SHELL
-- Security: single-quoted output, key sanitization, shell-specific escaping
-- Cross-platform compatibility (macOS, Linux, Windows)
+### FR-007: Managed tools
 
-### FR-012: Official Claude Channels
-- Support Telegram, Discord, and iMessage selection via `ccs config channels` and the dashboard
-- Auto-inject `--channels` only for native Claude `default` and `account` sessions
-- Store Telegram/Discord bot tokens in Claude's own `~/.claude/channels/<channel>/.env` state or the official `*_STATE_DIR` override path when one is configured
-- Treat iMessage as macOS-only, tokenless, and dependent on Claude-side install plus OS permissions
-- Require Bun, Claude Code v2.1.80+, and verified `claude.ai` auth before runtime auto-enable
-- Keep `--dangerously-skip-permissions` optional and never add it when the user already made an explicit permission choice
-- Surface platform/auth/version/setup blockers clearly in both CLI and dashboard flows
-- Preserve dashboard token drafts when save/refresh fails, and let already-selected unsupported iMessage entries be turned off without allowing re-enable on unsupported platforms
+- Provide WebSearch and image-analysis integration for profiles that need
+  CCS-managed alternatives.
+- Prefer explicit provider routes.
+- Fail closed when enabled third-party WebSearch cannot prepare its constrained
+  MCP replacement.
+- Allow image analysis to use compatible native behavior when its managed route
+  is unavailable.
 
----
+### FR-008: Remote proxy
+
+- Resolve remote proxy settings from supported CLI flags, environment
+  variables, and CCS configuration.
+- Verify reachability before use.
+- Fall back to a local proxy only when fallback is enabled.
+- Fail instead of falling back when remote-only mode is selected.
+
+### FR-009: Quota and account-pool management
+
+- Display supported quota and account health data.
+- Let users pause and resume accounts.
+- Keep routing-strategy changes explicit.
+- Temporarily remove exhausted accounts from rotation only under the
+  CCS-managed cooldown contract and restore only CCS-created pauses.
+
+### FR-010: Docker deployment
+
+- Publish an integrated multi-architecture image containing CCS, CLIProxy, and
+  the dashboard.
+- Persist CCS state and service logs in declared volumes.
+- Expose dashboard and CLIProxy service ports.
+- Health-check both services.
+- Do not bundle target AI CLIs into the integrated image; consumers that need
+  them run sibling containers or install them separately.
+
+### FR-011: Shell and editor integration
+
+- Export shell-safe environment values through `ccs env`.
+- Support the documented shell output formats.
+- Keep persistent shared settings behind `ccs persist`.
+- Keep editor-specific writes scoped to the selected editor and user layer.
 
 ## Non-Functional Requirements
 
-### NFR-001: Performance
-- CLI startup < 100ms
-- Dashboard load < 2s
-- Minimal memory footprint
+### NFR-001: Security
+
+- Do not print or log credentials.
+- Bind local proxy services to loopback unless the user explicitly selects a
+  deployment that exposes them.
+- Validate file types and use safe replacement semantics for managed sensitive
+  configuration.
+- Keep remote transport and authentication choices explicit.
 
 ### NFR-002: Reliability
-- Idempotent operations
-- Graceful error handling
-- Automatic recovery where possible
 
-### NFR-003: Security
-- Local-only proxy binding (127.0.0.1)
-- No credential exposure in logs
-- Secure token storage
+- Make setup and repair operations idempotent where practical.
+- Preserve existing user state when merging managed configuration.
+- Report recovery actions in actionable error messages.
+- Clean up child processes and temporary runtime state on exit.
 
-### NFR-004: Cross-Platform
-- Support Linux, macOS, Windows
-- Bash 3.2+, PowerShell 5.1+, Node.js 14+
-- Identical behavior across platforms
+### NFR-003: Portability
 
-### NFR-005: Maintainability
-- Files < 200 lines (with documented exceptions)
-- Domain-based organization
-- Barrel exports for clean imports
-- 90%+ test coverage
+- Support macOS, Linux, and Windows for the host CLI where target dependencies
+  allow.
+- Support Node.js 18 or newer, as declared by
+  [`package.json`](../package.json).
+- Support Bun 1.0 or newer for development and supported runtime workflows.
+- Keep terminal output ASCII-only and respect `NO_COLOR` and TTY detection.
 
----
+### NFR-004: Maintainability
 
-## Technical Requirements
+- Keep provider metadata centralized.
+- Use target adapters instead of target checks scattered through dispatch code.
+- Validate CLI, server, and dashboard contracts with focused tests.
+- Keep generated or volatile inventories out of evergreen architecture prose.
 
-### TR-001: Runtime Dependencies
-- Node.js 14+ or Bun 1.0+
-- Claude Code CLI installed
-- Internet access for OAuth/API calls
+## Runtime and Deployment Requirements
 
-### TR-002: Optional Dependencies
-- CLIProxyAPI binary (auto-managed)
-- Exa/Tavily/Brave API keys for higher-quality WebSearch
-- Gemini CLI for legacy WebSearch fallback
-- Bun plus Claude Code v2.1.80+ with `claude.ai` auth for Official Channels auto-enable
-
-### TR-003: Configuration
-- YAML-based config (`~/.ccs/config.yaml`)
-- JSON settings per profile
-- Environment variable overrides
-- Official channel bot tokens stored in Claude-managed `~/.claude/channels/<channel>/.env`
-
----
+| Surface | Requirement |
+| --- | --- |
+| Host npm install | Node.js 18+ |
+| Development and repository gates | Bun 1.0+ and Node.js 18+ |
+| Claude launches | Claude Code installed and authenticated as required by the selected profile |
+| Droid launches | Factory Droid installed |
+| Codex launches | Codex CLI installed |
+| Local OAuth proxy | CCS-managed CLIProxy binary |
+| Integrated Docker | Docker or compatible container runtime; target CLIs are not bundled |
 
 ## Architecture Constraints
 
-### AC-001: CLI-First Design
-- All features accessible via CLI
-- Dashboard is convenience layer, not required
-- Scriptable and automatable
+### AC-001: Profile state and shared settings are separate
 
-### AC-002: Non-Invasive
-- Never modify `~/.claude/settings.json`
-- Use environment variables for configuration
-- Reversible changes only
+Normal launches consume CCS-owned profile files and environment state.
+`~/.claude/settings.json` is written only through an explicit persistence or
+approved settings-management workflow.
 
-### AC-003: Proxy Pattern
-- Use local proxy for provider routing
-- Claude CLI communicates with localhost
-- Proxy handles upstream API calls
+### AC-002: Provider and target are independent axes
 
----
+A provider supplies credentials and routing. A target adapter determines how a
+compatible CLI receives them. Unsupported combinations must fail clearly.
 
-## Success Metrics
+### AC-003: Proxy trust boundary is visible
 
-| Metric | Target | Current |
-|--------|--------|---------|
-| Startup time | < 100ms | Achieved |
-| Dashboard load | < 2s | Achieved |
-| Error rate | < 1% | Achieved |
-| Test coverage | > 90% | 90% (1440 tests, 6 skipped) |
-| File size compliance | 100% < 200 lines | 95% |
+Local CLIProxy, remote CLIProxy, and direct API profiles have different
+transport and credential boundaries. CCS must not present them as equivalent or
+silently cross those boundaries.
 
----
+### AC-004: Source owns volatile capability data
 
-## Release Criteria
+Provider IDs, aliases, OAuth flow types, callback ports, refresh ownership,
+backend restrictions, and quota support must be read from the provider
+registries and tests. Documentation describes how to find them rather than
+copying a second mutable table.
 
-### v1.0 Release (Complete)
-- [x] Multi-account Claude support
-- [x] OAuth provider integration (Gemini, Codex, AGY)
-- [x] API profile management
-- [x] Dashboard UI
-- [x] Health diagnostics
-- [x] WebSearch fallback
-- [x] Cross-platform support
+## Acceptance Criteria
 
-### v7.0 Release (Complete)
-- [x] OpenRouter integration with 300+ models
-- [x] Interactive model picker
-- [x] Dynamic model discovery
-- [x] Tier mapping (opus/sonnet/haiku)
-- [x] Settings page modularization (20 files)
-- [x] Analytics page modularization (8 files)
-- [x] Auth monitor modularization (8 files)
-- [x] Comprehensive test infrastructure (539 CLI + 99 UI tests)
-
-### v7.1 Release (Complete)
-- [x] Remote CLIProxy routing support
-- [x] CLI flags for remote proxy (--proxy-host, --proxy-port, etc.)
-- [x] Environment variables for proxy config (CCS_PROXY_*)
-- [x] Dashboard remote proxy configuration UI
-- [x] Connection testing with latency display
-- [x] Fallback to local when remote unreachable
-- [x] Protocol-based default ports (HTTPS:443, HTTP:8317)
-
-### v7.2 Release (Complete)
-- [x] Kiro (AWS) OAuth provider support via CLIProxyAPIPlus
-- [x] GitHub Copilot (ghcp) OAuth provider via Device Code flow (deprecated compatibility)
-- [x] Authorization Code flow for Kiro (port 9876)
-- [x] Device Code flow for ghcp (no local port needed)
-
-### v7.14 Release (Complete)
-- [x] Hybrid quota management with auto-failover
-- [x] `ccs cliproxy pause/resume/status` commands
-- [x] API tier detection (free/pro/ultra/unknown)
-- [x] Dashboard pause/resume toggles and tier badges
-- [x] Pre-flight quota checks before session start
-
-### v7.23 Release (Complete)
-- [x] Docker deployment support (PR #345)
-- [x] Multi-stage Dockerfile with bun 1.2.21
-- [x] Docker Compose with resource limits and healthcheck
-- [x] Persistent volumes for config and credentials
-- [x] Pre-installed AI CLI tools (claude, gemini, grok, opencode)
-- [x] Entrypoint with privilege dropping
-
-### v7.34 Release (Complete)
-- [x] First-class `ImageAnalysis` MCP tool for third-party launches
-- [x] Direct provider-scoped routing for image analysis requests
-- [x] Prompt template selection for default / screenshot / document flows
-- [x] Hook fallback retained only for compatibility
-- [x] Non-fatal native `Read` fallback when managed runtime is unavailable
-- [x] `ccs config image-analysis` CLI command
-- [x] Doctor integration for hook validation
-- [x] 791-line E2E test suite for image analysis
-- [x] Performance: Replace busy-wait with Atomics.wait in config lock
-- [x] Network error handling with noRetryPatterns
-- [x] Quota 429 rate limit handling improvements
-- [x] WebSocket maxPayload limit (DoS prevention)
-
-### v7.39 Release (Complete)
-- [x] `ccs env` command for third-party tool integration (OpenCode, Cursor, Continue)
-- [x] Multi-format output: openai, anthropic, raw
-- [x] Multi-shell support: bash/zsh, fish, PowerShell (auto-detected)
-- [x] CLIProxy profile support (gemini, codex, agy, qwen)
-- [x] Settings profile support (glm, kimi, custom API)
-- [x] Security: single-quoted output, key sanitization, shell-specific escaping
-- [x] Shell completion updated (bash, zsh, fish, PowerShell)
-- [x] 34 unit tests for env command
-
-### v8.0 Release (Planned - Q1 2026)
-- [ ] Multiple CLIProxyAPI instances (load balancing, failover)
-- [ ] Native git worktree support
-- [ ] Critical bug fixes (#158, #155, #124)
-
-### v9.0 Release (Future - Q2 2026)
-- [ ] Team collaboration features
-- [ ] Cloud sync for profiles
-- [ ] Plugin system
-- [ ] CLI extension framework
-
----
-
-## Dependencies
-
-### External Services
-- Anthropic Claude API
-- Google Gemini API
-- GitHub Codex API
-- GitHub Copilot (ghcp - deprecated Device Code OAuth compatibility)
-- AWS Kiro (Authorization Code OAuth)
-- Z.AI GLM API
-- OpenRouter API
-- Moonshot Kimi API
-- DeepSeek API
-- Alibaba Qwen API
-- Minimax API
-- Azure Foundry API
-
-### Third-Party Libraries
-- Express.js (web server)
-- React (dashboard)
-- Vite (build tool)
-- shadcn/ui (UI components)
-- CLIProxyAPI (proxy binary)
-- Vitest (testing)
-
----
+- A user can create or select a supported profile and launch it on a compatible
+  target without manual credential-file editing.
+- Concurrent account profiles do not share target session state accidentally.
+- Local and remote proxy failures follow the configured fallback policy.
+- Persistent settings writes preserve unrelated keys and create a recovery
+  path.
+- Dashboard operations produce configuration compatible with CLI operations.
+- Release automation publishes only from the documented branches and lanes.
+- Documentation links resolve and architecture claims are traceable to source.
 
 ## Risks and Mitigations
 
-| Risk | Probability | Impact | Mitigation |
-|------|-------------|--------|------------|
-| Claude CLI API changes | Medium | High | Version pinning, compatibility layer |
-| Provider API deprecation | Low | High | Fallback chain, multiple providers |
-| OAuth token expiry | Medium | Medium | Auto-refresh, clear error messages |
-| Binary compatibility | Low | Medium | Multi-platform builds, fallback |
-
----
+| Risk | Mitigation |
+| --- | --- |
+| Provider auth contracts change | Central capability registry plus provider-specific tests |
+| Target CLI configuration changes | Adapter boundary and compatibility checks |
+| Credential leakage | Local storage, redaction, safe file handling, no secret logging |
+| Remote proxy outage | Reachability checks and explicit fallback policy |
+| Configuration corruption | Validation, backup, locking, and atomic replacement where supported |
+| Documentation drift | Link volatile details to code; keep this document version-neutral |
 
 ## Related Documentation
 
-- [Codebase Summary](./codebase-summary.md) - Technical structure
-- [Code Standards](./code-standards.md) - Development conventions
-- [System Architecture](./system-architecture/index.md) - Architecture diagrams
-- [Project Roadmap](./project-roadmap.md) - Development phases and GitHub issues
+- [Codebase Summary](./codebase-summary.md)
+- [Code Standards](./code-standards.md)
+- [System Architecture](./system-architecture/index.md)
+- [Provider Flows](./system-architecture/provider-flows.md)
+- [Release Process](./release-process.md)
+- [Project Roadmap](./project-roadmap.md)

@@ -20,7 +20,7 @@ If you are new to the project, start with a docs fix, a focused bug fix, or an i
 | CLI runtime | `src/`, `lib/`, `config/`, `scripts/` | Add or update tests in `tests/` |
 | Dashboard UI | `ui/src/` | Run `cd ui && bun run validate` |
 | Web server and config APIs | `src/web-server/`, `src/api/`, `src/config/` | Add unit or integration coverage |
-| Documentation | `https://docs.ccs.kaitran.ca`, `README.md`, `docs/`, `CONTRIBUTING.md` | Keep user-facing docs in sync |
+| Documentation | `https://docs.ccs.kaitran.ca`, `README.md`, [`docs/`](./docs/README.md), `CONTRIBUTING.md` | Update the owning source, not every page |
 | Static assets | `assets/` | Verify screenshots and references still match |
 
 Useful directories:
@@ -91,6 +91,21 @@ If `CI` or `Push CI` stays queued for a long time, it is a maintainer infrastruc
 ## AI Agent Rules
 
 `CONTRIBUTING.md` is the human entry point. For AI agents working in this repo, the authoritative automation and workflow rules live in [CLAUDE.md](./CLAUDE.md).
+
+## Documentation Ownership
+
+Documentation follows this truth order:
+
+1. Source, tests, package scripts, and workflows define implemented behavior.
+2. [CLAUDE.md](./CLAUDE.md) and this guide define repository workflow.
+3. [docs/README.md](./docs/README.md) maps maintainer documentation.
+4. [docs.ccs.kaitran.ca](https://docs.ccs.kaitran.ca) owns detailed user guides
+   and CLI reference.
+
+Update documentation when a change affects behavior, commands, setup,
+architecture, security posture, or contributor workflow. Prefer links to
+authoritative source files over copied trees, counts, and option lists that
+drift quickly.
 
 ## AI Review Lane
 

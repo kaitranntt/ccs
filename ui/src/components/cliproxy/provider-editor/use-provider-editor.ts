@@ -85,6 +85,7 @@ export function useProviderEditor(
   const opusModel = currentSettings?.env?.ANTHROPIC_DEFAULT_OPUS_MODEL;
   const sonnetModel = currentSettings?.env?.ANTHROPIC_DEFAULT_SONNET_MODEL;
   const haikuModel = currentSettings?.env?.ANTHROPIC_DEFAULT_HAIKU_MODEL;
+  const fableModel = currentSettings?.env?.ANTHROPIC_DEFAULT_FABLE_MODEL;
 
   // Extended context is enabled if any model has [1m] suffix
   const extendedContextEnabled = useMemo(() => {
@@ -224,6 +225,7 @@ export function useProviderEditor(
     opusModel,
     sonnetModel,
     haikuModel,
+    fableModel,
     extendedContextEnabled,
     toggleExtendedContext,
     handleRawJsonChange,

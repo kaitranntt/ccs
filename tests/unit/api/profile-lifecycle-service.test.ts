@@ -9,6 +9,7 @@ import {
   importApiProfileBundle,
   registerApiProfileOrphans,
 } from '../../../src/api/services/profile-lifecycle-service';
+import { validateApiProfileSettingsPayload } from '../../../src/api/services/profile-lifecycle-validation';
 import { createApiProfile } from '../../../src/api/services/profile-writer';
 import {
   loadConfigSafe,
@@ -67,6 +68,38 @@ describe('profile lifecycle service', () => {
     if (tempHome && fs.existsSync(tempHome)) {
       fs.rmSync(tempHome, { recursive: true, force: true });
     }
+  });
+
+  it('accepts ANTHROPIC_DEFAULT_FABLE_MODEL as a supported model mapping', () => {
+    const validation = validateApiProfileSettingsPayload({
+      env: {
+        ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/codex',
+        ANTHROPIC_AUTH_TOKEN: 'token',
+        ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-5.4-mini',
+      },
+    });
+
+    expect(validation.valid).toBe(true);
+    expect(validation.issues).toEqual([]);
+  });
+
+  it('enforces the provider denylist for ANTHROPIC_DEFAULT_FABLE_MODEL', () => {
+    const validation = validateApiProfileSettingsPayload({
+      env: {
+        ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/agy',
+        ANTHROPIC_AUTH_TOKEN: 'token',
+        ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-sonnet-4.5',
+      },
+    });
+
+    expect(validation.valid).toBe(false);
+    expect(validation.issues).toContainEqual(
+      expect.objectContaining({
+        level: 'error',
+        code: 'model_denylisted',
+        field: 'env.ANTHROPIC_DEFAULT_FABLE_MODEL',
+      })
+    );
   });
 
   it('discovers grandfathered xai/grok orphans while skipping other reserved names', async () => {

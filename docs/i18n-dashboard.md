@@ -1,7 +1,5 @@
 # Dashboard i18n Guide
 
-Last Updated: 2026-04-14
-
 This document describes the internationalization (i18n) architecture used by the CCS Dashboard (`ui/`), how locale selection works, and how to add new languages safely.
 
 ---
@@ -15,6 +13,7 @@ Dashboard i18n currently covers UI text rendered by React components.
   - `zh-CN` (Simplified Chinese)
   - `vi` (Vietnamese)
   - `ja` (Japanese)
+  - `ko` (Korean)
 - Locale state is persisted in browser localStorage using `ccs-ui-locale`.
 - Fallback language is `en`.
 
@@ -40,6 +39,7 @@ Out of scope:
   - `zh-CN.translation`
   - `vi.translation`
   - `ja.translation`
+  - `ko.translation`
 - Uses `initReactI18next` for React integration.
 
 ### Locale utilities
@@ -59,8 +59,11 @@ Out of scope:
 ### Test bootstrap
 
 - File: `ui/tests/setup/vitest-setup.ts`
-- Test setup must import `ui/src/lib/i18n.ts` so direct `useTranslation()` consumers resolve the same singleton instance as the app.
-- If a test mocks `useTranslation()`, keep the mocked key surface aligned with the component output or the assertions will drift.
+- Test setup must import `ui/src/lib/i18n.ts` so components using the
+  react-i18next translation hook resolve the same singleton instance as the
+  app.
+- If a test mocks the translation hook, keep the mocked key surface aligned
+  with the component output or the assertions will drift.
 
 ---
 
@@ -104,11 +107,8 @@ When adding a locale such as Thai (`th`):
 5. Run UI validation and i18n tests:
    - `cd ui && bun run validate`
    - `cd ui && bun run test:run tests/unit/ui/i18n/language-switcher.test.tsx`
-6. Add or update key-parity tests to catch locale drift.
-
-Current issue driving the Vietnamese rollout:
-
-- https://github.com/kaitranntt/ccs/issues/659
+6. Keep the key-parity test passing. It compares every non-English resource
+   against English and verifies interpolation placeholders match.
 
 ---
 
@@ -121,3 +121,14 @@ Before opening a PR that touches i18n:
 - [ ] No unsafe HTML injection path introduced for translated content.
 - [ ] `ui` validate/test commands pass.
 - [ ] This document is updated if architecture or conventions changed.
+
+## References
+
+- [`ui/src/lib/locales.ts`](../ui/src/lib/locales.ts) - supported locale ids,
+  normalization, persistence, and formatting locale
+- [`ui/src/lib/i18n.ts`](../ui/src/lib/i18n.ts) - translation resources and
+  i18next initialization
+- [`ui/src/components/layout/language-switcher.tsx`](../ui/src/components/layout/language-switcher.tsx)
+  - locale selection UI
+- [`ui/tests/unit/ui/i18n/language-switcher.test.tsx`](../ui/tests/unit/ui/i18n/language-switcher.test.tsx)
+  - selection, persistence, key-parity, and placeholder coverage

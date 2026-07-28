@@ -17,13 +17,13 @@ import {
 import { ExitCode } from '../exit-codes';
 
 /**
- * P4 behavior-lock: the typed-error -> exit-code mapping is the contract this
- * epic relies on. Migrating `throw new Error` to typed subclasses changes the
- * process exit code (via handleError -> getExitCode); these tests lock the
- * mapping so a future change is caught. See
+ * The typed-error -> exit-code mapping is a runtime compatibility contract.
+ * Migrating `throw new Error` to typed subclasses changes the process exit code
+ * through handleError; these tests lock the mapping so a future change is
+ * caught. See
  * docs/reports/typed-error-exit-code-compat-audit.md.
  */
-describe('typed-error taxonomy -> exit-code mapping (P4 contract)', () => {
+describe('typed-error taxonomy -> exit-code compatibility contract', () => {
   test('each typed class carries its documented ExitCode', () => {
     expect(new ConfigError('m').code).toBe(ExitCode.CONFIG_ERROR);
     expect(new NetworkError('m').code).toBe(ExitCode.NETWORK_ERROR);

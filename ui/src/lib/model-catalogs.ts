@@ -402,11 +402,13 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
         id: 'grok-4.5',
         name: 'Grok 4.5',
         description: 'Frontier model for coding, engineering, and agentic workflows',
+        reasoningLevels: ['low', 'medium', 'high'],
       },
       {
         id: 'grok-4.3',
         name: 'Grok 4.3',
         description: 'General-purpose Grok model with a one-million-token context window',
+        reasoningLevels: ['none', 'low', 'medium', 'high'],
       },
       {
         id: 'grok-4.20-0309-reasoning',
@@ -1147,6 +1149,10 @@ export function buildUiCatalog(
           ? undefined
           : (model.extendedContext ?? staticModel?.extendedContext),
       presetMapping: staticModel?.presetMapping,
+      reasoningLevels: model.reasoningLevels ?? staticModel?.reasoningLevels,
+      codexMaxEffort: model.codexMaxEffort ?? staticModel?.codexMaxEffort,
+      codexEfforts: model.codexEfforts ?? staticModel?.codexEfforts,
+      codexServiceTiers: model.codexServiceTiers ?? staticModel?.codexServiceTiers,
     };
   });
 

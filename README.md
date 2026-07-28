@@ -1,6 +1,6 @@
 <div align="center">
 
-# CCS - Claude Code Switch
+# CCS - Claude Codex Switch
 
 ![CCS Logo](assets/ccs-logo-medium.png)
 
@@ -94,7 +94,8 @@ The proxy also supports request-time `profile:model` selectors, scenario-based
 model routing through `proxy.routing`, and explicit activation helpers such as
 `ccs proxy activate --fish`.
 
-Guide: [OpenAI-Compatible Provider Routing](./docs/openai-compatible-providers.md)
+Guide:
+[OpenAI-Compatible Provider Routing](https://docs.ccs.kaitran.ca/features/proxy/openai-compatible-providers).
 
 ### Related Project: claude-code-router
 
@@ -166,7 +167,7 @@ CCS can provision first-class local tools like WebSearch and image analysis for
 third-party launches instead of leaving you to wire them by hand. Browser
 automation now has a first-class setup path as well. Deep dive:
 [WebSearch](https://docs.ccs.kaitran.ca/features/ai/websearch) |
-[Browser Automation](./docs/browser-automation.md).
+[Browser Automation](https://docs.ccs.kaitran.ca/features/workflow/browser-automation).
 
 ## Docs Matrix
 
@@ -183,7 +184,7 @@ reference material.
 | Compare OAuth providers, Claude accounts, and API profiles | [Provider Overview](https://docs.ccs.kaitran.ca/providers/concepts/overview) |
 | Learn the dashboard structure and feature pages | [Dashboard Overview](https://docs.ccs.kaitran.ca/features/dashboard/overview) |
 | Configure profiles, paths, and environment variables | [Configuration](https://docs.ccs.kaitran.ca/getting-started/configuration) |
-| Understand browser attach vs Codex browser tooling | [Browser Automation](./docs/browser-automation.md) |
+| Understand browser attach vs Codex browser tooling | [Browser Automation](https://docs.ccs.kaitran.ca/features/workflow/browser-automation) |
 | Keep OpenCode aligned with your live CCS setup | [OpenCode Sync Plugin](https://docs.ccs.kaitran.ca/features/workflow/opencode-sync) |
 | Browse every command and flag | [CLI Commands](https://docs.ccs.kaitran.ca/reference/cli-commands) |
 | Recover from install, auth, or provider failures | [Troubleshooting](https://docs.ccs.kaitran.ca/reference/troubleshooting) |

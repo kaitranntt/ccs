@@ -12,6 +12,8 @@ import {
   type CreatePreset,
   type RoutingStrategy,
   type CliproxySessionAffinityApplyResult,
+  type CliproxyRetryApplyResult,
+  type CliproxyRetryValues,
 } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -99,6 +101,30 @@ export function useUpdateCliproxySessionAffinity() {
       toast.success(
         result.message || t('toasts.sessionAffinityUpdated', { state: stateLabel.toLowerCase() })
       );
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+export function useCliproxyRetryConfig() {
+  return useQuery({
+    queryKey: ['cliproxy-retry-config'],
+    queryFn: () => api.cliproxy.getRetrySettings(),
+  });
+}
+
+export function useUpdateCliproxyRetryConfig() {
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
+
+  return useMutation({
+    mutationFn: (retry: CliproxyRetryValues) => api.cliproxy.updateRetrySettings(retry),
+    onSuccess: (result: CliproxyRetryApplyResult) => {
+      queryClient.setQueryData(['cliproxy-retry-config'], result);
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-retry-config'] });
+      toast.success(result.message || t('toasts.cliproxyRetryUpdated'));
     },
     onError: (error: Error) => {
       toast.error(error.message);

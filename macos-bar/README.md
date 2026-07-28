@@ -44,3 +44,29 @@ the first time via right-click then Open, or clear quarantine with
 `xattr -dr com.apple.quarantine "/Applications/CCS Bar.app"`. Developer ID
 signing + notarization (`CCS_BAR_SIGNING=developer-id`) is the public-launch
 path and is not required for ad-hoc distribution.
+
+The app ships as `CCS-Bar.app.zip` on the floating `ccs-bar-latest` GitHub
+release. `macos-bar/VERSION` is the single semver source; bump it in the same PR
+when a new app version is required.
+
+### Automatic release
+
+`.github/workflows/bar-release.yml` publishes the asset after a push to `main`
+that changes `macos-bar/**`, or from a manual `workflow_dispatch` run whose
+selected ref is `main`. It runs on the dedicated self-hosted macOS runner
+labelled `ccs-bar`.
+
+### Manual fallback
+
+From a macOS machine with Swift and `gh`:
+
+```bash
+cd macos-bar
+./Scripts/package_app.sh
+gh release upload ccs-bar-latest dist/CCS-Bar.app.zip --clobber
+```
+
+Pass a version to `package_app.sh` only when intentionally overriding
+`macos-bar/VERSION`. Ad-hoc signing is the default; use
+`CCS_BAR_SIGNING=developer-id` only with the configured Apple signing and
+notarization credentials.
