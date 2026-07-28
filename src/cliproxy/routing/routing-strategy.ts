@@ -13,6 +13,7 @@ import { getInstalledCliproxyVersion } from '../binary-manager';
 import { compareVersions } from '../../utils/update-checker';
 import { getConfigYamlPath } from '../../config/loader/io-locks';
 import { createLogger } from '../../services/logging';
+import { ConfigError } from '../../errors/error-types';
 
 // Diagnostic-only logger for internal binary-compatibility notices. The
 // user-facing result of enablePoolRouting is returned via the result
@@ -520,20 +521,42 @@ export async function readCliproxyRoutingState(): Promise<CliproxyRoutingState> 
     // its own routing/cooling. Surface manageable:false + a message so the
     // dashboard renders "local only / not applied" instead of claiming the
     // remote proxy is pool-managed. Mirrors readCliproxySessionAffinityState.
-    return {
-      strategy: await fetchLiveCliproxyRoutingStrategy(),
-      source: 'live',
-      target: 'remote',
-      reachable: true,
-      poolRouting: {
-        enabled: poolRouting.enabled,
-        maxRetryCredentials: poolRouting.maxRetryCredentials,
-        manageable: false,
+    // If the remote endpoint is unreachable, fall back to the saved startup
+    // default instead of throwing, so the capability message still renders
+    // (the message is the point of the remote branch).
+    try {
+      return {
+        strategy: await fetchLiveCliproxyRoutingStrategy(),
+        source: 'live',
+        target: 'remote',
+        reachable: true,
+        poolRouting: {
+          enabled: poolRouting.enabled,
+          maxRetryCredentials: poolRouting.maxRetryCredentials,
+          manageable: false,
+          message:
+            'Pool routing is managed from the local config only and does not affect this remote proxy. ' +
+            'Configure cooling and routing on the host running CLIProxy instead.',
+        },
+      };
+    } catch {
+      return {
+        strategy: getConfiguredCliproxyRoutingStrategy(),
+        source: 'config',
+        target: 'remote',
+        reachable: false,
         message:
-          'Pool routing is managed from the local config only and does not affect this remote proxy. ' +
-          'Configure cooling and routing on the host running CLIProxy instead.',
-      },
-    };
+          'Remote CLIProxy routing endpoint is not reachable. Showing the saved startup default; pool routing still applies to local config only.',
+        poolRouting: {
+          enabled: poolRouting.enabled,
+          maxRetryCredentials: poolRouting.maxRetryCredentials,
+          manageable: false,
+          message:
+            'Pool routing is managed from the local config only and does not affect this remote proxy. ' +
+            'Configure cooling and routing on the host running CLIProxy instead.',
+        },
+      };
+    }
   }
 
   try {
@@ -732,5 +755,104 @@ async function isLiveCliproxyRoutingReachable(): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+export interface CliproxyRouterCapabilityReport {
+  installedVersion: string;
+  poolRoutingMinVersion: string;
+  effective: {
+    routingStrategy: CliproxyRoutingStrategy;
+    sessionAffinity: boolean;
+    maxRetryCredentials?: number;
+    disableCooling: boolean;
+  };
+  target: 'local' | 'remote';
+  aliasPoolFallback: 'supported' | 'unsupported' | 'unknown';
+  message: string;
+}
+
+/**
+ * Build a fail-closed capability report for CLIProxy alias-pool ordered fallback.
+ *
+ * Workers must not assume a target CLIProxy supports native alias-pool fallback
+ * until this report returns `supported`. Unknown version, version below the minimum,
+ * and remote targets are all blocked with a clear message.
+ */
+export function getCliproxyRouterCapabilityReport(): CliproxyRouterCapabilityReport {
+  const target = getCliproxyRoutingTarget();
+  const poolRouting = getCliproxyPoolRoutingState();
+  const routingStrategy = getConfiguredCliproxyRoutingStrategy();
+  const sessionAffinity = getConfiguredCliproxySessionAffinitySettings();
+  const effective = {
+    routingStrategy,
+    sessionAffinity: sessionAffinity.enabled,
+    maxRetryCredentials: poolRouting.maxRetryCredentials,
+    disableCooling: !poolRouting.enabled,
+  };
+
+  if (target.isRemote) {
+    let installedVersion: string;
+    try {
+      installedVersion = getInstalledCliproxyVersion();
+    } catch {
+      installedVersion = 'unknown';
+    }
+    return {
+      installedVersion,
+      poolRoutingMinVersion: POOL_ROUTING_MIN_VERSION,
+      effective,
+      target: 'remote',
+      aliasPoolFallback: 'unsupported',
+      message:
+        'Alias-pool ordered fallback is blocked: remote CLIProxy targets are not pool-managed. ' +
+        'Configure the remote CLIProxy host directly.',
+    };
+  }
+
+  try {
+    const installedVersion = getInstalledCliproxyVersion();
+    if (compareVersions(installedVersion, POOL_ROUTING_MIN_VERSION) < 0) {
+      return {
+        installedVersion,
+        poolRoutingMinVersion: POOL_ROUTING_MIN_VERSION,
+        effective,
+        target: 'local',
+        aliasPoolFallback: 'unsupported',
+        message:
+          `Alias-pool ordered fallback is blocked: CLIProxy v${installedVersion} is below the ` +
+          `minimum required version v${POOL_ROUTING_MIN_VERSION}. Update CLIProxy before using ` +
+          'native pool fallback.',
+      };
+    }
+    return {
+      installedVersion,
+      poolRoutingMinVersion: POOL_ROUTING_MIN_VERSION,
+      effective,
+      target: 'local',
+      aliasPoolFallback: 'supported',
+      message: `CLIProxy v${installedVersion} supports alias-pool ordered fallback for local targets.`,
+    };
+  } catch {
+    return {
+      installedVersion: 'unknown',
+      poolRoutingMinVersion: POOL_ROUTING_MIN_VERSION,
+      effective,
+      target: 'local',
+      aliasPoolFallback: 'unknown',
+      message:
+        'Alias-pool ordered fallback is blocked: installed CLIProxy version is unknown. ' +
+        'Install or update CLIProxy before using native pool fallback.',
+    };
+  }
+}
+
+/**
+ * Fail-closed gate for alias-pool ordered fallback. Throws when the capability
+ * report is not `supported` so no downstream worker silently downgrades to a
+ * single-credential chain.
+ */
+export function assertAliasPoolFallbackSupported(report: CliproxyRouterCapabilityReport): void {
+  if (report.aliasPoolFallback !== 'supported') {
+    throw new ConfigError(report.message);
   }
 }

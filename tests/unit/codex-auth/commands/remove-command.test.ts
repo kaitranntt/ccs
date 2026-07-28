@@ -17,6 +17,10 @@ beforeEach(() => {
   fs.mkdirSync(path.join(ccsHome, '.ccs'), { recursive: true });
   process.env.CCS_HOME = ccsHome;
   delete process.env.CCS_CODEX_PROFILE;
+  // Clear ambient CODEX_HOME so commands resolve the fixture ccsHome instead
+  // of the operator's real ~/.codex. Hermetic under bun shared runner.
+  delete process.env.CODEX_HOME;
+  delete process.env.CCS_CODEX_PROFILE;
 });
 
 afterEach(() => {

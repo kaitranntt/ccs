@@ -30,6 +30,12 @@ beforeEach(async () => {
   ccsHome = path.join(tempDir, 'ccs-home');
   fs.mkdirSync(path.join(ccsHome, '.ccs'), { recursive: true, mode: 0o700 });
   process.env.CCS_HOME = ccsHome;
+  // Clear ambient CODEX_HOME/CCS_CODEX_PROFILE so the registry does not
+  // pick up the real ~/.codex from the outer shell. afterEach deletes these
+  // but beforeEach must also clear them to stay hermetic under bun's shared
+  // parallel runner.
+  delete process.env.CODEX_HOME;
+  delete process.env.CCS_CODEX_PROFILE;
   registryPath = path.join(ccsHome, '.ccs', 'codex-profiles.yaml');
 
   const mod = await import('../../../src/codex-auth/codex-profile-registry');

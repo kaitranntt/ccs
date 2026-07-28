@@ -54,9 +54,21 @@ export interface CompositeTierConfig {
     model: string;
     account?: string;
   };
+  /** Ordered cross-provider fallback hops after the primary provider+model. */
+  fallback_chain?: readonly CompositeFallbackEntry[];
   /** Per-tier thinking budget override (e.g. 'xhigh', 'medium', 'off') */
   thinking?: string;
 }
+
+export interface CompositeFallbackEntry {
+  readonly provider: CLIProxyProvider;
+  readonly model: string;
+  readonly account?: string;
+}
+
+export type OAuthModelAliasPoolCapability =
+  | { readonly kind: 'ordered' }
+  | { readonly kind: 'unsupported'; readonly runtimeVersion: string; readonly reason: string };
 
 /**
  * Composite variant configuration.

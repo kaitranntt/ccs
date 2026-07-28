@@ -192,6 +192,41 @@ message characters, tool payload size, and a `chars / 4` heuristic. Tune the
 threshold conservatively if your routing decision needs a sharper cutoff near
 the boundary.
 
+## Routing Capability: Local vs Remote Targets
+
+The `ccs cliproxy routing`, `ccs cliproxy pool`, and `ccs cliproxy routing
+affinity` commands edit LOCAL CLIProxy config files only. When CCS is pointed
+at a remote CLIProxy target (`~/.ccs/config.yaml` -> `cliproxy.remote.*`),
+the routing strategy, pool routing flag, and session-affinity settings shown in
+the CLI and dashboard reflect the local config and are NOT applied to the
+remote proxy.
+
+What this means in practice:
+
+- Local target: strategy / pool / affinity changes are written to the local
+  CLIProxy config and take effect on the next sync or restart of the local
+  proxy.
+- Remote target: `ccs cliproxy routing status` and the dashboard routing card
+  surface a `manageable: false` / local-only capability message. CCS does not
+  mutate the remote proxy's routing, cooling, or affinity settings. Configure
+  those directly on the host that runs the remote CLIProxy.
+- The CLI status command prints the capability message alongside strategy,
+  target, and session-affinity state, and `ccs cliproxy routing explain`
+  includes a Local vs Remote Targets guide.
+- The dashboard routing-guidance card renders the same message with
+  `role="status"` and `aria-live="polite"` accessibility semantics in both
+  compact and full layouts.
+
+Neutral examples:
+
+```bash
+ccs cliproxy routing status
+ccs cliproxy routing explain
+ccs cliproxy pool
+ccs <provider>
+```
+
+
 ## How Profile Detection Works
 
 CCS keeps these profiles in the normal API/settings-profile flow.

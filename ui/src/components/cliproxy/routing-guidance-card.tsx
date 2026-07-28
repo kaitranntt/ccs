@@ -189,7 +189,10 @@ export function RoutingGuidanceCard({
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/20 px-2 py-1.5">
+        <div
+          {...(poolLocalOnly ? { role: 'status', 'aria-live': 'polite' as const } : {})}
+          className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/20 px-2 py-1.5"
+        >
           <div className="min-w-0">
             <div className="text-[10px] font-medium text-foreground">
               {t('routingGuidance.poolRouting')}
@@ -374,6 +377,15 @@ export function RoutingGuidanceCard({
               className="max-w-xs text-[11px] leading-4 text-amber-700 dark:text-amber-400 xl:text-right"
             >
               {t('routingGuidance.poolRoutingApplyWarning')}
+            </p>
+          ) : null}
+          {poolLocalOnly ? (
+            <p
+              role="status"
+              aria-live="polite"
+              className="max-w-xs text-[11px] leading-4 text-amber-700 dark:text-amber-400 xl:text-right"
+            >
+              {poolLocalOnlyMessage}
             </p>
           ) : null}
         </div>

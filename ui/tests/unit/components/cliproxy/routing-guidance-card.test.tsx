@@ -193,3 +193,106 @@ describe('RoutingGuidanceCard', () => {
     expect(screen.queryByText(/ccs cliproxy pool --disable/i)).not.toBeInTheDocument();
   });
 });
+
+it('compact: remote pool capability message renders inside an accessible status region', () => {
+  render(
+    <RoutingGuidanceCard
+      compact
+      state={{
+        strategy: 'round-robin',
+        source: 'live',
+        target: 'remote',
+        reachable: true,
+        poolRouting: {
+          enabled: true,
+          manageable: false,
+          message: 'Pool routing is managed locally; this remote proxy may not reflect it.',
+        },
+      }}
+      sessionAffinityState={{
+        source: 'unsupported',
+        target: 'remote',
+        reachable: true,
+        manageable: false,
+      }}
+      isLoading={false}
+      isSaving={false}
+      onApply={() => undefined}
+      onApplyAffinity={() => undefined}
+    />
+  );
+
+  const status = screen.getByRole('status');
+  expect(status).toHaveAttribute('aria-live', 'polite');
+  expect(status).toHaveTextContent(
+    'Pool routing is managed locally; this remote proxy may not reflect it.'
+  );
+});
+
+it('full: remote pool capability message is rendered as visible accessible text (not tooltip-only)', () => {
+  render(
+    <RoutingGuidanceCard
+      state={{
+        strategy: 'round-robin',
+        source: 'live',
+        target: 'remote',
+        reachable: true,
+        poolRouting: {
+          enabled: true,
+          manageable: false,
+          message: 'Pool routing is managed locally; this remote proxy may not reflect it.',
+        },
+      }}
+      sessionAffinityState={{
+        source: 'unsupported',
+        target: 'remote',
+        reachable: true,
+        manageable: false,
+      }}
+      isLoading={false}
+      isSaving={false}
+      onApply={() => undefined}
+      onApplyAffinity={() => undefined}
+    />
+  );
+
+  // Full mode surfaces the remote-capability message as visible accessible text.
+  const statuses = screen.getAllByRole('status');
+  const statusesWithMessage = statuses.filter((node) =>
+    node.textContent?.includes(
+      'Pool routing is managed locally; this remote proxy may not reflect it.'
+    )
+  );
+  expect(statusesWithMessage.length).toBeGreaterThan(0);
+  expect(statusesWithMessage[0]).toHaveAttribute('aria-live', 'polite');
+});
+
+it('full: local target does not show a remote pool capability warning', () => {
+  render(
+    <RoutingGuidanceCard
+      state={{
+        strategy: 'round-robin',
+        source: 'live',
+        target: 'local',
+        reachable: true,
+        poolRouting: { enabled: false },
+      }}
+      sessionAffinityState={{
+        enabled: false,
+        ttl: '1h',
+        source: 'config',
+        target: 'local',
+        reachable: true,
+        manageable: true,
+      }}
+      isLoading={false}
+      isSaving={false}
+      onApply={() => undefined}
+      onApplyAffinity={() => undefined}
+    />
+  );
+
+  expect(
+    screen.queryByText(/Pool routing is managed locally; this remote proxy may not reflect it./i)
+  ).not.toBeInTheDocument();
+});

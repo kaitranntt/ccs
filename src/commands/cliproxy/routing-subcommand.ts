@@ -65,6 +65,22 @@ function printSessionRecognitionGuide(): void {
   console.log('');
 }
 
+function printLocalOnlyGuide(): void {
+  console.log(subheader('Local vs Remote Targets:'));
+  console.log(
+    `  ${color('ccs cliproxy routing|pool|affinity', 'command')} only edit LOCAL CLIProxy config files.`
+  );
+  console.log(
+    dim(
+      '  When you point CCS at a remote CLIProxy, the strategy / pool / affinity settings\n' +
+        '  shown here reflect the local config only and are not applied to the remote proxy.\n' +
+        '  Configure cooling, routing, and session affinity on the host that runs the remote\n' +
+        '  CLIProxy instead.'
+    )
+  );
+  console.log('');
+}
+
 export async function handleRoutingStatus(): Promise<void> {
   await initUI();
   console.log('');
@@ -83,6 +99,26 @@ export async function handleRoutingStatus(): Promise<void> {
   if (state.message) {
     console.log('');
     console.log(infoBox(state.message, state.reachable ? 'INFO' : 'WARNING'));
+  }
+  // Pool routing is local-only: enablePoolRouting only writes local config files,
+  // so a remote proxy is never affected. readCliproxyRoutingState surfaces
+  // poolRouting.manageable=false + a message for remote targets; print it here
+  // alongside strategy and affinity so the CLI shows the same "local only / not
+  // applied to remote" truth the dashboard card already renders.
+  const poolRouting = state.poolRouting;
+  if (poolRouting) {
+    const poolManageable = poolRouting.manageable ?? true;
+    const poolLabel = poolManageable
+      ? color(poolRouting.enabled ? 'on' : 'off', 'command')
+      : color('local only', 'warning');
+    console.log(`  Pool Routing:     ${poolLabel}`);
+    if (poolRouting.enabled && poolRouting.maxRetryCredentials !== undefined) {
+      console.log(`  Max Retry:        ${color(String(poolRouting.maxRetryCredentials), 'info')}`);
+    }
+    if (!poolManageable && poolRouting.message) {
+      console.log('');
+      console.log(infoBox(poolRouting.message, 'WARNING'));
+    }
   }
   console.log(
     `  Session Affinity: ${
@@ -106,6 +142,7 @@ export async function handleRoutingStatus(): Promise<void> {
   console.log('');
   printStrategyGuide();
   printSessionAffinityGuide();
+  printLocalOnlyGuide();
 }
 
 export async function handleRoutingExplain(): Promise<void> {
@@ -116,6 +153,7 @@ export async function handleRoutingExplain(): Promise<void> {
   printStrategyGuide();
   printSessionAffinityGuide();
   printSessionRecognitionGuide();
+  printLocalOnlyGuide();
 }
 
 export async function handleRoutingSet(args: string[]): Promise<void> {

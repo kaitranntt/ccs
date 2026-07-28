@@ -16,6 +16,12 @@ import { getAuthDir, getProviderAuthDir, getConfigPathForPort } from './path-res
 import { CLIPROXY_DEFAULT_PORT } from './port-manager';
 import { loadOrCreateUnifiedConfig } from '../../config/config-loader-facade';
 import { getActiveDockerLegacyApiKeys } from '../../docker/docker-key-rotation';
+import { getInstalledCliproxyVersion } from '../binary-manager';
+import type {
+  CompositeFallbackEntry,
+  CompositeTierConfig,
+  OAuthModelAliasPoolCapability,
+} from '../../config/schemas/cliproxy';
 
 /** Internal API key for CCS-managed requests */
 export const CCS_INTERNAL_API_KEY = 'ccs-internal-managed';
@@ -45,8 +51,9 @@ export const CCS_CONTROL_PANEL_SECRET = 'ccs';
  * v18: Persist routing.session-affinity and routing.session-affinity-ttl from CCS unified config
  * v19: Persist backend-aware management panel repository from CCS unified config
  * v20: Pool-gated cooling/routing/retry-cap block; disable-cooling flips to false for pool users
+ * v21: Fail-closed ordered OAuth alias-pool projection contract
  */
-export const CLIPROXY_CONFIG_VERSION = 20;
+export const CLIPROXY_CONFIG_VERSION = 21;
 
 export const ORIGINAL_MANAGEMENT_PANEL_REPOSITORY =
   'https://github.com/router-for-me/Cli-Proxy-API-Management-Center';
@@ -67,6 +74,106 @@ interface OAuthModelAliasEntry {
   name: string;
   alias: string;
   fork?: boolean;
+}
+
+type OrderedOAuthAliasHop = {
+  readonly channel: CLIProxyProvider;
+  readonly model: string;
+};
+
+type OrderedOAuthAliasPool = {
+  readonly alias: string;
+  readonly hops: readonly OrderedOAuthAliasHop[];
+};
+
+const ORDERED_OAUTH_ALIAS_POOL_UNSUPPORTED_REASON =
+  'OAuth aliases keep one model per alias within each channel, while multi-model OpenAI-compatible pools use request-by-request rotation';
+
+export class OrderedOAuthAliasPoolUnsupportedError extends Error {
+  readonly name = 'OrderedOAuthAliasPoolUnsupportedError';
+
+  constructor(
+    readonly capability: Extract<OAuthModelAliasPoolCapability, { kind: 'unsupported' }>
+  ) {
+    super(
+      `Ordered cross-channel OAuth fallback is unavailable in CLIProxyAPI ${capability.runtimeVersion}: ${capability.reason}`
+    );
+  }
+}
+
+export class DuplicateOAuthAliasPoolHopError extends Error {
+  readonly name = 'DuplicateOAuthAliasPoolHopError';
+
+  constructor(readonly hop: string) {
+    super(`duplicate fallback hop ${hop}`);
+  }
+}
+
+function fallbackHopKey(hop: OrderedOAuthAliasHop): string {
+  return `${hop.channel}/${hop.model}`;
+}
+
+export function buildOrderedOAuthAliasPool(
+  alias: string,
+  tier: CompositeTierConfig
+): OrderedOAuthAliasPool {
+  const hops: readonly OrderedOAuthAliasHop[] = [
+    { channel: tier.provider, model: tier.model },
+    ...(tier.fallback_chain ?? []).map((fallback: CompositeFallbackEntry) => ({
+      channel: fallback.provider,
+      model: fallback.model,
+    })),
+  ];
+  const seen = new Set<string>();
+  for (const hop of hops) {
+    const key = fallbackHopKey(hop);
+    if (seen.has(key)) {
+      throw new DuplicateOAuthAliasPoolHopError(key);
+    }
+    seen.add(key);
+  }
+  return { alias, hops };
+}
+
+export function generateOrderedOAuthAliasPoolYaml(
+  pool: OrderedOAuthAliasPool,
+  capability: OAuthModelAliasPoolCapability
+): string {
+  if (capability.kind === 'unsupported') {
+    throw new OrderedOAuthAliasPoolUnsupportedError(capability);
+  }
+  return pool.hops
+    .map(
+      (hop) =>
+        `  ${hop.channel}:\n    - name: ${hop.model}\n      alias: ${pool.alias}\n      fork: true`
+    )
+    .join('\n');
+}
+
+function getOrderedOAuthAliasPoolCapability(): OAuthModelAliasPoolCapability {
+  return {
+    kind: 'unsupported',
+    runtimeVersion: getInstalledCliproxyVersion(),
+    reason: ORDERED_OAUTH_ALIAS_POOL_UNSUPPORTED_REASON,
+  };
+}
+
+function getConfiguredOrderedOAuthAliasPools(): readonly OrderedOAuthAliasPool[] {
+  const variants = loadOrCreateUnifiedConfig().cliproxy?.variants ?? {};
+  const pools: OrderedOAuthAliasPool[] = [];
+  for (const [variantName, variant] of Object.entries(variants)) {
+    if (!('type' in variant) || variant.type !== 'composite') {
+      continue;
+    }
+    for (const tierName of ['opus', 'sonnet', 'haiku'] as const) {
+      const tier = variant.tiers[tierName];
+      if ((tier.fallback_chain?.length ?? 0) === 0) {
+        continue;
+      }
+      pools.push(buildOrderedOAuthAliasPool(`${variantName}-${tierName}`, tier));
+    }
+  }
+  return pools;
 }
 
 interface PreservedAntigravityAliasesResult {
@@ -632,7 +739,31 @@ function generateOAuthModelAliasSection(existingAliases?: string): string {
     })
     .join('\n');
 
-  return `oauth-model-alias:\n  antigravity:\n${entries}`;
+  const orderedPools = getConfiguredOrderedOAuthAliasPools();
+  const orderedPoolYaml = orderedPools
+    .map((pool) => generateOrderedOAuthAliasPoolYaml(pool, getOrderedOAuthAliasPoolCapability()))
+    .join('\n');
+  const preservedNonAntigravityAliases = extractNonAntigravityAliasChannels(existingAliases);
+  return `oauth-model-alias:\n  antigravity:\n${entries}${orderedPoolYaml ? `\n${orderedPoolYaml}` : ''}${preservedNonAntigravityAliases ? `\n${preservedNonAntigravityAliases}` : ''}`;
+}
+
+function extractNonAntigravityAliasChannels(existingAliases?: string): string {
+  if (!existingAliases) {
+    return '';
+  }
+  const lines = existingAliases.split('\n');
+  const kept: string[] = [];
+  let keepChannel = false;
+  for (const line of lines) {
+    const channelMatch = line.match(/^  ([a-z0-9-]+):\s*$/i);
+    if (channelMatch) {
+      keepChannel = channelMatch[1].toLowerCase() !== 'antigravity';
+    }
+    if (keepChannel) {
+      kept.push(line);
+    }
+  }
+  return kept.join('\n').trimEnd();
 }
 
 /**
@@ -931,15 +1062,13 @@ export function regenerateConfig(
             existingConfigVersion < LEGACY_GEMINI_STALE_ALIAS_MIGRATION_VERSION,
         }
       );
-      existingAliases = preservedAliases.yaml;
+      existingAliases = extractYamlSection(content, 'oauth-model-alias');
       if (preservedAliases.prunedLegacyAliasCount > 0) {
         writeLegacyGeminiAliasCleanupBackup(configPath, content);
       }
     } catch {
       // Use defaults if reading fails
     }
-    // Delete existing config
-    fs.unlinkSync(configPath);
   }
 
   // Ensure directories exist
@@ -954,6 +1083,9 @@ export function regenerateConfig(
     configContent += `${section.key}:\n${section.body}\n`;
   }
 
+  if (fs.existsSync(configPath)) {
+    fs.unlinkSync(configPath);
+  }
   fs.writeFileSync(configPath, configContent, { mode: 0o600 });
 
   return configPath;
