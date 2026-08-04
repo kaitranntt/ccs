@@ -173,4 +173,15 @@ provider presets for `opencode` / `opencode-go`.
 - `POST /zen/v1/messages` + `x-api-key` dummy → 401 `Invalid API key.`; + Bearer → 401 `Missing API key.`
 - `POST /zen/v1/models/gemini-3.6-flash:generateContent` + `x-goog-api-key` dummy → 401 `Invalid API key.`; + Bearer → 401 `Missing API key.`
 - `POST /zen/go/v1/messages` + `x-api-key` dummy → 401 `Invalid API key.`
+- Live e2e through the CCS proxy daemon against `https://opencode.ai/zen/go/v1`
+  with a real key (2026-08-04, run 8):
+  - `deepseek-v4-flash` (chat-completions family) → 200, real completion via
+    `<base>/chat/completions` + Bearer
+  - `qwen3.7-max` (Anthropic family) → 200, Anthropic-shaped response via
+    `<base>/messages` + `x-api-key` + `anthropic-version: 2023-06-01`
+  - `gpt-5.5` (Responses family) → local 400, no upstream dispatch
+  - `claude-sonnet-4-6` → gateway `ModelError: Model claude-sonnet-4-6 is not
+    supported` (auth accepted; the go tier catalog has no `claude-*` models —
+    use `qwen3*` / `minimax-m*` for the Anthropic protocol on `/zen/go/v1`).
+    `/zen/v1` remains the tier for Claude models.
 - Sources: opencode.ai/docs/zen, opencode.ai/docs/go, models.dev api.json, anomalyco/opencode issue #8228, GOST blog proxy example.
