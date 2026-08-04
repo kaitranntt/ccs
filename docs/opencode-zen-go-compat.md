@@ -184,4 +184,28 @@ provider presets for `opencode` / `opencode-go`.
     supported` (auth accepted; the go tier catalog has no `claude-*` models —
     use `qwen3*` / `minimax-m*` for the Anthropic protocol on `/zen/go/v1`).
     `/zen/v1` remains the tier for Claude models.
+- Local proxy daemon e2e against `https://opencode.ai/zen/go/v1` with a real
+  key (2026-08-04, task t_2be8f081, run 9, `scripts/verify-opencode-local-e2e.sh`):
+  - Claude Code contract `POST /v1/messages` + `qwen3.7-max`, non-streaming →
+    200, Anthropic `message` type with real content
+  - Claude Code contract `POST /v1/messages` + `qwen3.7-max`, `stream: true` →
+    200, 78 SSE events including `message_stop`
+  - OpenAI contract via `/v1/messages` + `deepseek-v4-flash` (translated to
+    `<base>/chat/completions` + Bearer), non-streaming → 200 Anthropic-shaped reply
+  - Same with `stream: true` → 200, 51 SSE events including `message_stop`
+  - `gpt-5.5` via `/v1/messages` → local 400, no upstream dispatch
+  - `claude-sonnet-4-6` via `/v1/messages` → routed upstream (not short-circuited),
+    gateway answered 401 `ModelError: Model claude-sonnet-4-6 is not supported`
+  - The daemon's local surface is Anthropic-shaped (`/v1/messages`, `/v1/models`),
+    so the OpenAI contract is exercised through `/v1/messages` with a
+    chat-completions-family model; `POST /v1/chat/completions` on the daemon is
+    intentionally 404 (this daemon is the Claude-Code-facing OpenAI-compat proxy).
+- OpenCode CLI (opencode-ai 1.18.12) e2e: attempted, blocked by the Hermes
+  sandbox guard — the 179 MB bun-bundled `opencode.exe` embeds gateway
+  management strings (llmgateway, cloudflare-ai-gateway, …) that trip the
+  "cannot restart/stop the gateway" guard, a false positive. Run `opencode run`
+  from a normal shell against `ANTHROPIC_BASE_URL=http://127.0.0.1:<port>`
+  with a config provider using `@ai-sdk/anthropic` + the local proxy token;
+  the wire contract it sends (`/v1/messages`, `x-api-key`,
+  `anthropic-version: 2023-06-01`) is exactly what the local e2e above verified.
 - Sources: opencode.ai/docs/zen, opencode.ai/docs/go, models.dev api.json, anomalyco/opencode issue #8228, GOST blog proxy example.
