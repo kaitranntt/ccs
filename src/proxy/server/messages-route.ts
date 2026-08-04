@@ -8,6 +8,7 @@ import {
   type ProxyOpenAIRequest,
 } from '../transformers/request-transformer';
 import { ProxySseStreamTransformer } from '../transformers/sse-stream-transformer';
+import { OPENCODE_ANTHROPIC_VERSION, resolveOpenCodeUpstreamMode } from '../opencode-protocol';
 import { isAnthropicPassthroughProfile, resolveOpenAIChatCompletionsUrl } from '../upstream-url';
 import { createLogger } from '../../services/logging';
 import {
@@ -40,13 +41,21 @@ class ProxyInputError extends Error {
 function buildUpstreamHeaders(
   profile: OpenAICompatProfileConfig,
   incomingHeaders: http.IncomingHttpHeaders,
-  options: { preserveUserAgent?: boolean } = {}
+  options: { preserveUserAgent?: boolean; openCodeAnthropic?: boolean } = {}
 ): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${profile.apiKey}`,
     'User-Agent': 'CCS-OpenAI-Compat-Proxy/1.0',
   };
+
+  if (options.openCodeAnthropic) {
+    // OpenCode's Anthropic shim (/messages) authenticates with x-api-key and
+    // requires the anthropic-version header; Bearer is rejected with 401.
+    headers['x-api-key'] = profile.apiKey;
+    headers['anthropic-version'] = OPENCODE_ANTHROPIC_VERSION;
+  } else {
+    headers['Authorization'] = `Bearer ${profile.apiKey}`;
+  }
 
   if (options.preserveUserAgent) {
     // Preserve the original User-Agent (or x-stainless-user-agent fallback) so
@@ -382,11 +391,15 @@ function buildFetchInit(
   signal: AbortSignal,
   incomingHeaders: http.IncomingHttpHeaders,
   preserveUserAgent: boolean,
-  dispatcher?: Dispatcher
+  dispatcher?: Dispatcher,
+  openCodeAnthropic?: boolean
 ): RequestInit {
   const init: RequestInit = {
     method: 'POST',
-    headers: buildUpstreamHeaders(profile, incomingHeaders, { preserveUserAgent }),
+    headers: buildUpstreamHeaders(profile, incomingHeaders, {
+      preserveUserAgent,
+      openCodeAnthropic,
+    }),
     body,
     signal,
   };
@@ -523,13 +536,34 @@ export async function handleProxyMessagesRequest(
     const rawBodyText = await readRawBody(req);
     const rawBody = parseJsonBodyText(rawBodyText);
     const initialRoute = resolveProxyRequestRoute(profile, buildRoutingRequest(rawBody));
-    const passthrough = isAnthropicPassthroughProfile(initialRoute.profile.baseUrl, {
-      forcePassthrough: initialRoute.profile.passthrough === true,
-    });
+    const initialOpenCodeMode = resolveOpenCodeUpstreamMode(
+      initialRoute.profile.baseUrl,
+      initialRoute.model || initialRoute.profile.model
+    );
+    if (initialOpenCodeMode?.mode === 'unsupported') {
+      await pipeWebResponseToNode(
+        transformer.error(400, 'invalid_request_error', initialOpenCodeMode.reason),
+        res
+      );
+      return;
+    }
+    // OpenCode gateways route by model family: Anthropic-protocol models must
+    // hit /messages with x-api-key, chat-completions models must stay on the
+    // OpenAI path. OpenCode hosts override the generic host-based passthrough
+    // (and the force-passthrough flag) so chat models are never sent to
+    // /messages, which the gateway rejects.
+    let passthrough: boolean;
+    passthrough = initialOpenCodeMode
+      ? initialOpenCodeMode.mode === 'anthropic'
+      : isAnthropicPassthroughProfile(initialRoute.profile.baseUrl, {
+          forcePassthrough: initialRoute.profile.passthrough === true,
+        });
     logger.stage('transform', 'request.transform.start', 'Transforming inbound proxy body', {
       passthrough,
+      openCodeMode: initialOpenCodeMode?.mode ?? null,
     });
-    const upstream = buildUpstreamRequest(profile, rawBody, {
+    let upstream: ReturnType<typeof buildUpstreamRequest>;
+    upstream = buildUpstreamRequest(profile, rawBody, {
       passthrough,
       rawBodyText,
       route: passthrough ? initialRoute : undefined,
@@ -585,6 +619,38 @@ export async function handleProxyMessagesRequest(
         insecureTls,
         passthrough,
       });
+      const routedOpenCodeMode = resolveOpenCodeUpstreamMode(
+        upstream.route.profile.baseUrl,
+        upstream.route.model || upstream.route.profile.model
+      );
+      if (routedOpenCodeMode?.mode === 'unsupported') {
+        await pipeWebResponseToNode(
+          transformer.error(400, 'invalid_request_error', routedOpenCodeMode.reason),
+          res
+        );
+        return;
+      }
+      const openCodeAnthropic = routedOpenCodeMode?.mode === 'anthropic';
+      if (openCodeAnthropic && !passthrough) {
+        // Scenario routing (think/webSearch/…) can land on an OpenCode
+        // profile after the body was already translated to OpenAI shape.
+        // Rebuild as a passthrough so the Anthropic-family model receives
+        // an Anthropic-shaped body on /messages.
+        logger.stage(
+          'transform',
+          'request.transform.reroute',
+          'Rebuilding request as OpenCode Anthropic passthrough',
+          {
+            routedProfileName: upstream.route.profile.profileName,
+          }
+        );
+        upstream = buildUpstreamRequest(profile, rawBody, {
+          passthrough: true,
+          rawBodyText,
+          route: upstream.route,
+        });
+        passthrough = true;
+      }
       const upstreamUrl = resolveOpenAIChatCompletionsUrl(upstream.route.profile.baseUrl, {
         passthrough,
       });
@@ -596,7 +662,8 @@ export async function handleProxyMessagesRequest(
           controller.signal,
           req.headers,
           passthrough,
-          dispatcher
+          dispatcher,
+          openCodeAnthropic
         )
       );
       logger.stage('upstream', 'upstream.response', 'Received upstream response', {

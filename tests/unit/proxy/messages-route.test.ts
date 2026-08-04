@@ -110,6 +110,12 @@ beforeEach(() => {
       ANTHROPIC_MODEL: 'kimi-k2p7-coding',
       CCS_DROID_PROVIDER: 'generic-chat-completion-api',
     }),
+    opencode: writeSettings('opencode', {
+      ANTHROPIC_BASE_URL: 'https://opencode.ai/zen/v1',
+      ANTHROPIC_AUTH_TOKEN: 'opencode_key',
+      ANTHROPIC_MODEL: 'deepseek-v4-flash',
+      CCS_DROID_PROVIDER: 'generic-chat-completion-api',
+    }),
   };
 
   fs.writeFileSync(
@@ -205,7 +211,12 @@ describe('handleProxyMessagesRequest', () => {
       'x-api-key': 'local-token',
     });
     const res = new FakeResponse();
-    const pending = handleProxyMessagesRequest(req as never, res as never, activeProfile, 'local-token');
+    const pending = handleProxyMessagesRequest(
+      req as never,
+      res as never,
+      activeProfile,
+      'local-token'
+    );
     req.end(
       JSON.stringify({
         model: 'hf-default',
@@ -546,5 +557,166 @@ describe('handleProxyMessagesRequest', () => {
     expect((capturedBody as { messages: Array<{ role: string }> }).messages).not.toContainEqual(
       expect.objectContaining({ role: 'system' })
     );
+  });
+
+  it('routes OpenCode Claude-family models to /messages with x-api-key auth and verbatim body', async () => {
+    const activeProfile = buildProfile('opencode');
+    let capturedInput: RequestInfo | URL | undefined;
+    let capturedInit: RequestInit | undefined;
+    const rawBody = JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 50,
+      messages: [{ role: 'user', content: 'Say hi' }],
+    });
+
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      capturedInput = input;
+      capturedInit = init;
+      return new Response(
+        JSON.stringify({
+          id: 'msg_opencode_1',
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Hello!' }],
+          model: 'claude-sonnet-4-6',
+          stop_reason: 'end_turn',
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    }) as typeof globalThis.fetch;
+
+    const req = new FakeRequest({
+      'x-api-key': 'local-token',
+      'user-agent': 'claude-cli/2.1.170',
+    });
+    const res = new FakeResponse();
+    const pending = handleProxyMessagesRequest(
+      req as never,
+      res as never,
+      activeProfile,
+      'local-token'
+    );
+    req.end(rawBody);
+    await pending;
+
+    expect(String(capturedInput)).toBe('https://opencode.ai/zen/v1/messages');
+    expect(capturedInit?.body).toBe(rawBody);
+    const headers = capturedInit?.headers as Record<string, string>;
+    expect(headers['x-api-key']).toBe('opencode_key');
+    expect(headers['anthropic-version']).toBe('2023-06-01');
+    expect(headers['Authorization']).toBeUndefined();
+    expect(headers['User-Agent']).toBe('claude-cli/2.1.170');
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('routes OpenCode chat-completions models to /chat/completions with Bearer auth', async () => {
+    const activeProfile = buildProfile('opencode');
+    let capturedInput: RequestInfo | URL | undefined;
+    let capturedInit: RequestInit | undefined;
+
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      capturedInput = input;
+      capturedInit = init;
+      return new Response(
+        JSON.stringify({
+          id: 'chatcmpl_opencode_1',
+          object: 'chat.completion',
+          created: 1,
+          model: 'deepseek-v4-flash',
+          choices: [{ index: 0, message: { role: 'assistant', content: 'ok' } }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    }) as typeof globalThis.fetch;
+
+    const req = new FakeRequest({
+      'x-api-key': 'local-token',
+    });
+    const res = new FakeResponse();
+    const pending = handleProxyMessagesRequest(
+      req as never,
+      res as never,
+      activeProfile,
+      'local-token'
+    );
+    req.end(
+      JSON.stringify({
+        model: 'deepseek-v4-flash',
+        messages: [{ role: 'user', content: 'stay translated' }],
+      })
+    );
+    await pending;
+
+    expect(String(capturedInput)).toBe('https://opencode.ai/zen/v1/chat/completions');
+    expect(JSON.parse(String(capturedInit?.body))).toMatchObject({
+      model: 'deepseek-v4-flash',
+      messages: [{ role: 'user', content: 'stay translated' }],
+    });
+    const headers = capturedInit?.headers as Record<string, string>;
+    expect(headers['Authorization']).toBe('Bearer opencode_key');
+    expect(headers['x-api-key']).toBeUndefined();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('rejects OpenCode Responses-protocol models with a 400 before dispatch', async () => {
+    const activeProfile = buildProfile('opencode');
+    let fetchCalled = false;
+
+    globalThis.fetch = (async () => {
+      fetchCalled = true;
+      return new Response('{}', { status: 500 });
+    }) as typeof globalThis.fetch;
+
+    const req = new FakeRequest({
+      'x-api-key': 'local-token',
+    });
+    const res = new FakeResponse();
+    const pending = handleProxyMessagesRequest(
+      req as never,
+      res as never,
+      activeProfile,
+      'local-token'
+    );
+    req.end(
+      JSON.stringify({
+        model: 'gpt-5.5',
+        messages: [{ role: 'user', content: 'hi' }],
+      })
+    );
+    await pending;
+
+    expect(fetchCalled).toBe(false);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects OpenCode Gemini models with a 400 before dispatch', async () => {
+    const activeProfile = buildProfile('opencode');
+    let fetchCalled = false;
+
+    globalThis.fetch = (async () => {
+      fetchCalled = true;
+      return new Response('{}', { status: 500 });
+    }) as typeof globalThis.fetch;
+
+    const req = new FakeRequest({
+      'x-api-key': 'local-token',
+    });
+    const res = new FakeResponse();
+    const pending = handleProxyMessagesRequest(
+      req as never,
+      res as never,
+      activeProfile,
+      'local-token'
+    );
+    req.end(
+      JSON.stringify({
+        model: 'gemini-3.6-flash',
+        messages: [{ role: 'user', content: 'hi' }],
+      })
+    );
+    await pending;
+
+    expect(fetchCalled).toBe(false);
+    expect(res.statusCode).toBe(400);
   });
 });
