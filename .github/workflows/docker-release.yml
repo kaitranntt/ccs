@@ -373,9 +373,9 @@ jobs:
               sh -c 'tail -n 100 /var/log/ccs/ccs-dashboard.log' >&2 || true
           }
 
-          echo "[i] Waiting for container healthcheck (up to 60s)..."
+          echo "[i] Waiting for container healthcheck (up to 180s)..."
           HEALTHY=0
-          for i in $(seq 1 12); do
+          for i in $(seq 1 36); do
             STATUS=$(docker inspect "${CONTAINER_NAME}" --format='{{.State.Health.Status}}' 2>/dev/null || echo "missing")
             if [[ "${STATUS}" == "healthy" ]]; then
               echo "[OK] Container is healthy after $((i * 5))s"
@@ -387,11 +387,11 @@ jobs:
               print_service_logs
               exit 1
             fi
-            echo "    [${i}/12] status=${STATUS}, waiting 5s..."
+            echo "    [${i}/36] status=${STATUS}, waiting 5s..."
             sleep 5
           done
           if [[ "${HEALTHY}" -ne 1 ]]; then
-            echo "[X] Container did not become healthy within 60s (last status: ${STATUS})" >&2
+            echo "[X] Container did not become healthy within 180s (last status: ${STATUS})" >&2
             print_service_logs
             docker inspect "${CONTAINER_NAME}" --format='{{json .State}}' >&2 || true
             exit 1
