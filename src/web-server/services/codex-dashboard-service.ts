@@ -50,7 +50,7 @@ export {
 const KNOWN_CODEX_FEATURES = new Set([
   'apps',
   'apply_patch_freeform',
-  'codex_hooks',
+  'hooks',
   'fast_mode',
   'js_repl',
   'multi_agent',

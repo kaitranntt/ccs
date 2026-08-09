@@ -463,6 +463,27 @@ bearer_token = "secret"
     expect(result.config?.features).toEqual({ multi_agent: true });
   });
 
+  it('uses the current hooks feature key and rejects the deprecated codex_hooks key', async () => {
+    const result = await patchCodexConfig({
+      kind: 'feature',
+      feature: 'hooks',
+      enabled: true,
+    });
+
+    expect(result.rawText).toContain('[features]');
+    expect(result.rawText).toContain('hooks = true');
+    expect(result.rawText).not.toContain('codex_hooks');
+
+    await expect(
+      patchCodexConfig({
+        kind: 'feature',
+        feature: 'codex_hooks',
+        enabled: true,
+        expectedMtime: result.mtime,
+      })
+    ).rejects.toThrow(CodexRawConfigValidationError);
+  });
+
   it('preserves unsupported approval_policy objects when structured saves touch other fields', async () => {
     fs.writeFileSync(
       path.join(codexHome, 'config.toml'),
