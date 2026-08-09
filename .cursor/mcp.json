@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "ai-hub": {
+      "command": "ai-hub",
+      "args": [
+        "mcp",
+        "--action",
+        "client",
+        "--agent",
+        "cursor"
+      ],
+      "env": {
+        "AIHUB_PROJECT_ROOT": "/home/marlonsc/ccs"
+      }
+    }
+  }
+}
