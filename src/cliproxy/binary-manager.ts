@@ -335,7 +335,6 @@ export async function installCliproxyVersion(
   const waitForPortFreeFn = deps.waitForPortFreeFn ?? waitForPortFree;
   const formatInfo = deps.formatInfo ?? info;
   const formatWarn = deps.formatWarn ?? warn;
-  const getInstalledVersion = deps.getInstalledVersion ?? getInstalledCliproxyVersion;
 
   // Always attempt a best-effort stop first so we also catch untracked proxies
   // that are running without a session lock.
@@ -352,14 +351,6 @@ export async function installCliproxyVersion(
     console.log(formatWarn(`Could not stop proxy: ${result.error}`));
   }
 
-  if (manager.isBinaryInstalled()) {
-    const label = effectiveBackend === 'plus' ? 'CLIProxy Plus' : 'CLIProxy';
-    if (verbose)
-      console.log(
-        formatInfo(`Removing existing ${label} v${getInstalledVersion(effectiveBackend)}`)
-      );
-    manager.deleteBinary();
-  }
   await manager.ensureBinary();
 
   if (verbose) {

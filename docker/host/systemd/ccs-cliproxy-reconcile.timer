@@ -1,0 +1,11 @@
+[Unit]
+Description=Continuously reconcile the CCS CLIProxy Docker service
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

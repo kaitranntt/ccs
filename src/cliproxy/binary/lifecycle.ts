@@ -11,7 +11,7 @@ import {
   isNewerVersion,
   isVersionFaulty,
 } from './version-checker';
-import { downloadAndInstall, deleteBinary, getBinaryPath } from './installer';
+import { downloadAndInstall, getBinaryPath } from './installer';
 import { info, warn } from '../../utils/ui';
 import { isCliproxyRunning } from '../services/stats-fetcher';
 import { resolveLifecyclePort } from '../config/port-manager';
@@ -93,7 +93,7 @@ async function handleAutoUpdate(config: BinaryManagerConfig, verbose: boolean): 
   } else {
     console.log(info(updateMsg));
     console.log(info(`Updating ${backendLabel}...`));
-    deleteBinary(config.binPath, verbose, backend);
+    // The installer stages and validates the replacement before atomically swapping it.
     config.version = targetVersion;
     await downloadAndInstall(config, verbose);
   }

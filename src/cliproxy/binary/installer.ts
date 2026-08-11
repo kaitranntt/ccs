@@ -19,63 +19,53 @@ import { extractArchive } from './extractor';
 import { writeInstalledVersion } from './version-cache';
 import { ProgressIndicator } from '../../utils/progress-indicator';
 import { ok } from '../../utils/ui';
+import { BinaryError, NetworkError } from '../../errors/error-types';
+
+interface DownloadAndInstallDeps {
+  downloadWithRetryFn?: typeof downloadWithRetry;
+  verifyChecksumFn?: typeof verifyChecksum;
+  extractArchiveFn?: typeof extractArchive;
+  renameSyncFn?: typeof fs.renameSync;
+}
 
 /**
  * Download and install the binary
  */
 export async function downloadAndInstall(
   config: BinaryManagerConfig,
-  verbose = false
+  verbose = false,
+  deps: DownloadAndInstallDeps = {}
 ): Promise<void> {
   const backend = config.backend ?? DEFAULT_BACKEND;
   const platform = detectPlatform(config.version, backend);
   const downloadUrl = getDownloadUrl(config.version, backend);
   const checksumsUrl = getChecksumsUrl(config.version, backend);
   const backendLabel = backend === 'plus' ? 'CLIProxy Plus' : 'CLIProxy';
+  const downloadWithRetryFn = deps.downloadWithRetryFn ?? downloadWithRetry;
+  const verifyChecksumFn = deps.verifyChecksumFn ?? verifyChecksum;
+  const extractArchiveFn = deps.extractArchiveFn ?? extractArchive;
+  const renameSyncFn = deps.renameSyncFn ?? fs.renameSync;
 
   fs.mkdirSync(config.binPath, { recursive: true });
-
-  // Delete existing binary before install to prevent mismatched binaries.
-  // Abort if binary is currently running (ETXTBSY) — cannot replace in-use binary.
-  // Happens in Docker when dashboard tries to update while bootstrap's instance is active.
-  const existingBinary = path.join(config.binPath, getExecutableName(backend));
-  if (fs.existsSync(existingBinary)) {
-    try {
-      fs.unlinkSync(existingBinary);
-      if (verbose) console.error(`[cliproxy] Removed existing binary: ${existingBinary}`);
-    } catch (error: unknown) {
-      const code =
-        error instanceof Error && 'code' in error ? (error as { code: string }).code : '';
-      // ETXTBSY: Linux-specific error when unlinking a running executable.
-      // EBUSY on Windows may mean something different (mount point, etc.),
-      // so only treat ETXTBSY as "binary in use" to avoid misleading messages.
-      if (code === 'ETXTBSY') {
-        if (verbose)
-          console.error(`[cliproxy] Binary is running, cannot replace: ${existingBinary}`);
-        throw new Error(
-          'CLIProxy binary is currently running and cannot be replaced. Restart the container to apply the update.'
-        );
-      }
-      throw error;
-    }
-  }
-
-  const archivePath = path.join(config.binPath, `cliproxy-archive.${platform.extension}`);
+  const stagingPath = fs.mkdtempSync(path.join(config.binPath, '.cliproxy-install-'));
+  const archivePath = path.join(stagingPath, `cliproxy-archive.${platform.extension}`);
+  const stagedBinary = path.join(stagingPath, getExecutableName(backend));
+  const installedBinary = path.join(config.binPath, getExecutableName(backend));
   const spinner = new ProgressIndicator(`Downloading ${backendLabel} v${config.version}`);
   spinner.start();
 
   try {
-    const result = await downloadWithRetry(downloadUrl, archivePath, {
+    const result = await downloadWithRetryFn(downloadUrl, archivePath, {
       maxRetries: config.maxRetries,
       verbose,
     });
     if (!result.success) {
       spinner.fail('Download failed');
-      throw new Error(result.error || 'Download failed after retries');
+      throw new NetworkError(result.error || 'Download failed after retries', downloadUrl);
     }
 
     spinner.update('Verifying checksum');
-    const checksumResult = await verifyChecksum(
+    const checksumResult = await verifyChecksumFn(
       archivePath,
       platform.binaryName,
       checksumsUrl,
@@ -84,29 +74,36 @@ export async function downloadAndInstall(
 
     if (!checksumResult.valid) {
       spinner.fail('Checksum mismatch');
-      fs.unlinkSync(archivePath);
-      throw new Error(
+      throw new BinaryError(
         `Checksum mismatch for ${platform.binaryName}\nExpected: ${checksumResult.expected}\n` +
-          `Actual:   ${checksumResult.actual}\n\nManual download: ${downloadUrl}`
+          `Actual:   ${checksumResult.actual}\n\nManual download: ${downloadUrl}`,
+        stagedBinary
       );
     }
 
     spinner.update('Extracting binary');
-    await extractArchive(archivePath, config.binPath, platform.extension, verbose, backend);
-    spinner.succeed(`${backendLabel} ready`);
-    fs.unlinkSync(archivePath);
-
-    const binaryPath = path.join(config.binPath, getExecutableName(backend));
-    if (platform.os !== 'windows' && fs.existsSync(binaryPath)) {
-      fs.chmodSync(binaryPath, 0o755);
-      if (verbose) console.error(`[cliproxy] Set executable permissions: ${binaryPath}`);
+    await extractArchiveFn(archivePath, stagingPath, platform.extension, verbose, backend);
+    if (!fs.existsSync(stagedBinary) || !fs.statSync(stagedBinary).isFile()) {
+      throw new BinaryError(
+        `Extracted archive did not contain ${getExecutableName(backend)}`,
+        stagedBinary
+      );
     }
 
+    if (platform.os !== 'windows') {
+      fs.chmodSync(stagedBinary, 0o755);
+      if (verbose) console.error(`[cliproxy] Set executable permissions: ${stagedBinary}`);
+    }
+
+    renameSyncFn(stagedBinary, installedBinary);
     writeInstalledVersion(config.binPath, config.version);
+    spinner.succeed(`${backendLabel} ready`);
     console.log(ok(`${backendLabel} v${config.version} installed successfully`));
   } catch (error) {
     spinner.fail('Installation failed');
     throw error;
+  } finally {
+    fs.rmSync(stagingPath, { recursive: true, force: true });
   }
 }
 
@@ -124,7 +121,10 @@ export function deleteBinary(binPath: string, verbose = false, backend?: CLIProx
       const code =
         error instanceof Error && 'code' in error ? (error as { code: string }).code : '';
       if (code === 'ETXTBSY') {
-        throw new Error('CLIProxy binary is currently running and cannot be deleted.');
+        throw new BinaryError(
+          'CLIProxy binary is currently running and cannot be deleted.',
+          binaryPath
+        );
       }
       throw error;
     }
