@@ -1,10 +1,10 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2514,
-    "filesAffected": 262,
-    "hotpathOccurrences": 1192,
-    "hotpathFilesAffected": 155,
+    "totalOccurrences": 2519,
+    "filesAffected": 263,
+    "hotpathOccurrences": 1193,
+    "hotpathFilesAffected": 156,
     "topHotpathFiles": [
       {
         "file": "src/management/shared-manager/diverged-file-adopter.ts",
@@ -229,6 +229,22 @@
         "markers": []
       },
       {
+        "file": "src/cliproxy/binary/__tests__/binary-installer-atomic.test.ts",
+        "count": 41,
+        "calls": [
+          "existsSync",
+          "mkdirSync",
+          "mkdtempSync",
+          "readdirSync",
+          "readFileSync",
+          "renameSync",
+          "rmdirSync",
+          "rmSync",
+          "writeFileSync"
+        ],
+        "markers": []
+      },
+      {
         "file": "src/management/shared-manager/diverged-file-adopter.ts",
         "count": 39,
         "calls": [
@@ -243,21 +259,6 @@
           "renameSync",
           "statSync",
           "unlinkSync",
-          "writeFileSync"
-        ],
-        "markers": []
-      },
-      {
-        "file": "src/cliproxy/binary/__tests__/binary-installer-atomic.test.ts",
-        "count": 37,
-        "calls": [
-          "existsSync",
-          "mkdirSync",
-          "mkdtempSync",
-          "readdirSync",
-          "readFileSync",
-          "renameSync",
-          "rmSync",
           "writeFileSync"
         ],
         "markers": []
@@ -578,8 +579,8 @@
     },
     "loggerCoverage": {
       "filesWithCreateLogger": 65,
-      "totalSourceFiles": 764,
-      "coverageRatio": 0.0851,
+      "totalSourceFiles": 765,
+      "coverageRatio": 0.085,
       "subdomainsWithZeroCreateLogger": [
         "api",
         "bin",
