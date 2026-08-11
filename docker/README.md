@@ -79,6 +79,32 @@ The `ccs docker` flow uses the integrated assets in this directory:
 - `docker/supervisord.conf`
 - `docker/entrypoint-integrated.sh`
 
+### Optional Host Continuity Timers
+
+For a persistent single-host stack, install the host reconciliation and safe-update scripts with
+their systemd units:
+
+```bash
+sudo install -d /opt/cliproxy
+sudo install -m 0755 docker/host/ccs-cliproxy-{reconcile,safe-update}.sh /opt/cliproxy/
+sudo install -m 0644 docker/host/systemd/ccs-cliproxy-{reconcile,update}.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now ccs-cliproxy-reconcile.timer ccs-cliproxy-update.timer
+
+systemctl list-timers 'ccs-cliproxy-*'
+journalctl -u ccs-cliproxy-reconcile.service -u ccs-cliproxy-update.service
+```
+
+By default, reconciliation expects `/opt/cliproxy/docker-compose.yml` with Compose project
+`docker`. Keep those defaults when adopting an existing stack so its `docker_ccs_home` and
+`docker_ccs_logs` volumes remain attached. The scripts support environment overrides for the
+container, Compose paths and project, lock file, and logs.
+
+The updater downloads and verifies a replacement while the current proxy remains online, then
+stops it only for the atomic swap and startup check. A failed update restores the previous binary
+and version. Reconciliation probes the dashboard on port 3000 and CLIProxy on port 8317, then
+escalates from supervised-process restart to container restart and finally Compose force-recreate.
+
 ### Network Binding and Dashboard Auth
 
 The integrated Docker stack publishes the dashboard and CLIProxy ports on `127.0.0.1` by default. This keeps the services reachable from the Docker host and SSH tunnels without exposing them on every host interface.
@@ -575,9 +601,11 @@ docker exec ccs-cliproxy supervisorctl -c /etc/supervisord.conf restart cliproxy
 docker exec ccs-cliproxy grep "client load complete" /var/log/ccs/cliproxy.log
 ```
 
-### ETXTBSY Error on First Boot
+### ETXTBSY During CLIProxy Update
 
-On first container start, you may see `ETXTBSY: text file is busy` in dashboard logs. This is a known race condition where the dashboard tries to update the CLIProxy binary while it's already running. The dashboard recovers automatically on the next attempt. No action needed.
+Current releases stage and verify CLIProxy updates before replacing the live binary atomically, so
+`ETXTBSY: text file is busy` is not an expected first-boot condition. Upgrade older installations
+that still report this error.
 
 ### Debug Mode
 
