@@ -33,6 +33,7 @@ describe('installCliproxyVersion', () => {
     );
 
     await binaryManager.installCliproxyVersion('6.7.1', false, 'plus', {
+      withInstallLifecycleLockFn: async (_backend, operation) => operation(),
       createManager: (_config: unknown, backend: string) => {
         seenBackend = backend;
         return {
@@ -147,6 +148,7 @@ describe('installCliproxyVersion', () => {
     const binaryManager = await import(`../../binary-manager?binary-manager-install=${Date.now()}`);
 
     await binaryManager.installCliproxyVersion('6.7.1', false, 'plus', {
+      withInstallLifecycleLockFn: async (_backend, operation) => operation(),
       createManager: () => ({
         isBinaryInstalled: () => false,
         deleteBinary: () => {
@@ -176,6 +178,39 @@ describe('installCliproxyVersion', () => {
     expect(calls.ensureBinary).toBe(1);
   });
 
+  it('keeps the installed binary in place while the replacement is prepared', async () => {
+    const calls = {
+      deleteBinary: 0,
+      ensureBinary: 0,
+    };
+
+    const binaryManager = await import(
+      `../../binary-manager?binary-manager-atomic-install=${Date.now()}`
+    );
+
+    await binaryManager.installCliproxyVersion('6.7.1', false, 'plus', {
+      withInstallLifecycleLockFn: async (_backend, operation) => operation(),
+      createManager: () => ({
+        isBinaryInstalled: () => true,
+        deleteBinary: () => {
+          calls.deleteBinary += 1;
+        },
+        ensureBinary: async () => {
+          calls.ensureBinary += 1;
+          return '/tmp/ccs-bin/plus/cli-proxy-api-plus';
+        },
+      }),
+      stopProxyFn: async () => ({ stopped: false, error: 'No active CLIProxy session found' }),
+      waitForPortFreeFn: async () => true,
+      formatInfo: (message: string) => message,
+      formatWarn: (message: string) => message,
+      getInstalledVersion: () => '6.6.80',
+    });
+
+    expect(calls.deleteBinary).toBe(0);
+    expect(calls.ensureBinary).toBe(1);
+  });
+
   it('waits for the port that was actually stopped before continuing install', async () => {
     let waitedPort: number | undefined;
 
@@ -184,6 +219,7 @@ describe('installCliproxyVersion', () => {
     );
 
     await binaryManager.installCliproxyVersion('6.7.1', false, 'plus', {
+      withInstallLifecycleLockFn: async (_backend, operation) => operation(),
       createManager: () => ({
         isBinaryInstalled: () => false,
         deleteBinary: () => undefined,

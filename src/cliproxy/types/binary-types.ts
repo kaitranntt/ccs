@@ -14,6 +14,7 @@ export interface BinaryManagerConfig {
   maxRetries: number;
   verbose: boolean;
   forceVersion: boolean;
+  replaceExisting?: boolean;
   skipAutoUpdate: boolean;
   allowInstall: boolean;
   backend?: CLIProxyBackend;

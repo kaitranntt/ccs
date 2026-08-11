@@ -1,0 +1,9 @@
+[Unit]
+Description=Safely update CLIProxy Plus in ccs-cliproxy
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/cliproxy/ccs-cliproxy-safe-update.sh
+TimeoutStartSec=10min

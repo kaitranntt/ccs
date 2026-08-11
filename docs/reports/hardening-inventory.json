@@ -1,10 +1,10 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2471,
-    "filesAffected": 261,
-    "hotpathOccurrences": 1186,
-    "hotpathFilesAffected": 155,
+    "totalOccurrences": 2519,
+    "filesAffected": 263,
+    "hotpathOccurrences": 1193,
+    "hotpathFilesAffected": 156,
     "topHotpathFiles": [
       {
         "file": "src/management/shared-manager/diverged-file-adopter.ts",
@@ -229,6 +229,22 @@
         "markers": []
       },
       {
+        "file": "src/cliproxy/binary/__tests__/binary-installer-atomic.test.ts",
+        "count": 41,
+        "calls": [
+          "existsSync",
+          "mkdirSync",
+          "mkdtempSync",
+          "readdirSync",
+          "readFileSync",
+          "renameSync",
+          "rmdirSync",
+          "rmSync",
+          "writeFileSync"
+        ],
+        "markers": []
+      },
+      {
         "file": "src/management/shared-manager/diverged-file-adopter.ts",
         "count": 39,
         "calls": [
@@ -282,22 +298,6 @@
           "mkdirSync",
           "readdirSync",
           "rmSync",
-          "unlinkSync",
-          "writeFileSync"
-        ],
-        "markers": []
-      },
-      {
-        "file": "src/utils/browser/mcp-installer.ts",
-        "count": 32,
-        "calls": [
-          "chmodSync",
-          "copyFileSync",
-          "existsSync",
-          "mkdirSync",
-          "readFileSync",
-          "renameSync",
-          "statSync",
           "unlinkSync",
           "writeFileSync"
         ],
@@ -497,16 +497,16 @@
   },
   "maintainability": {
     "typedErrors": {
-      "totalThrows": 454,
-      "typedThrows": 83,
-      "plainThrows": 311,
+      "totalThrows": 455,
+      "typedThrows": 89,
+      "plainThrows": 306,
       "otherThrows": 60,
-      "adoptionRatio": 0.1828,
+      "adoptionRatio": 0.1956,
       "topSubdomainsByThrows": [
         {
           "subdomain": "web-server",
-          "count": 103,
-          "typed": 16,
+          "count": 104,
+          "typed": 17,
           "plain": 45
         },
         {
@@ -579,8 +579,8 @@
     },
     "loggerCoverage": {
       "filesWithCreateLogger": 65,
-      "totalSourceFiles": 764,
-      "coverageRatio": 0.0851,
+      "totalSourceFiles": 765,
+      "coverageRatio": 0.085,
       "subdomainsWithZeroCreateLogger": [
         "api",
         "bin",
@@ -652,9 +652,9 @@
       ]
     },
     "hotpathConsoleErrors": {
-      "totalOccurrences": 592,
+      "totalOccurrences": 590,
       "exemptOccurrences": 326,
-      "hotpathOccurrences": 266,
+      "hotpathOccurrences": 264,
       "filesAffected": 81,
       "topFiles": [
         {

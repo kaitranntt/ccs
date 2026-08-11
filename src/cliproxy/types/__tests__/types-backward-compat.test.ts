@@ -56,6 +56,7 @@ describe('types.ts backward compatibility', () => {
       maxRetries: 3,
       verbose: false,
       forceVersion: false,
+      replaceExisting: false,
       skipAutoUpdate: false,
       allowInstall: true,
     };
