@@ -35,9 +35,15 @@ describe('CLIProxy Docker host continuity assets', () => {
   });
 
   it('recreates missing containers and escalates unhealthy recovery', () => {
-    expect(reconcileScript).toContain('docker compose -f "$compose_file" up -d --no-build');
+    expect(reconcileScript).toContain('CCS_CLIPROXY_COMPOSE_DIR:-/opt/cliproxy');
+    expect(reconcileScript).toContain('CCS_CLIPROXY_COMPOSE_PROJECT:-docker');
+    expect(reconcileScript).toContain('--project-name "$compose_project"');
+    expect(reconcileScript).toContain('-f "$compose_file" up -d --no-build');
     expect(reconcileScript).toContain('restart ccs-dashboard cliproxy');
     expect(reconcileScript).toContain('docker restart "$container_name"');
+    expect(reconcileScript.indexOf('docker restart "$container_name"')).toBeGreaterThan(
+      reconcileScript.indexOf('restart ccs-dashboard cliproxy')
+    );
   });
 
   it('installs executable services on bounded timers', () => {

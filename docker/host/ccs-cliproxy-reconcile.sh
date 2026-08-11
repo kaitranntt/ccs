@@ -3,8 +3,9 @@
 set -Eeuo pipefail
 
 container_name="${CCS_CLIPROXY_CONTAINER:-ccs-cliproxy}"
-compose_dir="${CCS_CLIPROXY_COMPOSE_DIR:-/root/.ccs/docker}"
-compose_file="${CCS_CLIPROXY_COMPOSE_FILE:-$compose_dir/docker-compose.integrated.yml}"
+compose_dir="${CCS_CLIPROXY_COMPOSE_DIR:-/opt/cliproxy}"
+compose_file="${CCS_CLIPROXY_COMPOSE_FILE:-$compose_dir/docker-compose.yml}"
+compose_project="${CCS_CLIPROXY_COMPOSE_PROJECT:-docker}"
 lock_file="${CCS_CLIPROXY_LOCK_FILE:-/run/lock/ccs-cliproxy-maintenance.lock}"
 log_file="${CCS_CLIPROXY_RECONCILE_LOG:-/var/log/ccs-cliproxy-reconcile.log}"
 
@@ -37,8 +38,10 @@ wait_for_health() {
 
 compose_up() {
   cd "$compose_dir"
-  docker compose -f "$compose_file" up -d --no-build || \
-    docker compose -f "$compose_file" up -d --build
+  docker compose --project-name "$compose_project" --project-directory "$compose_dir" \
+    -f "$compose_file" up -d --no-build || \
+    docker compose --project-name "$compose_project" --project-directory "$compose_dir" \
+      -f "$compose_file" up -d --build
 }
 
 if ! docker inspect "$container_name" >/dev/null 2>&1; then
@@ -67,10 +70,12 @@ if probe; then
 fi
 
 log 'Dashboard or proxy failed two consecutive probes; restarting supervised processes'
-docker exec "$container_name" supervisorctl -c /etc/supervisord.conf restart ccs-dashboard cliproxy
-if wait_for_health; then
-  log 'Supervised processes recovered and passed both health probes'
-  exit 0
+if docker exec "$container_name" \
+  supervisorctl -c /etc/supervisord.conf restart ccs-dashboard cliproxy; then
+  if wait_for_health; then
+    log 'Supervised processes recovered and passed both health probes'
+    exit 0
+  fi
 fi
 
 log 'Supervisor recovery failed; restarting the container'

@@ -10,6 +10,7 @@ function createDeps(
     sessionRunning?: boolean;
     remoteRunning?: boolean;
     startResult?: { started: boolean; alreadyRunning: boolean; port: number; error?: string };
+    installError?: Error;
   } = {}
 ) {
   const calls = {
@@ -30,6 +31,7 @@ function createDeps(
       _backend?: CLIProxyBackend
     ) => {
       calls.installCliproxyVersion += 1;
+      if (overrides.installError) throw overrides.installError;
     },
     ensureCliproxyService: async () => {
       calls.ensureCliproxyService += 1;
@@ -121,5 +123,17 @@ describe('installDashboardCliproxyVersion', () => {
       error: 'Installed CLIProxy Plus v6.7.1, but restart failed',
       message: 'Installed CLIProxy Plus v6.7.1, but failed to restart it',
     });
+  });
+
+  it('restores a previously running proxy when installation fails', async () => {
+    const { deps, calls } = createDeps({
+      sessionRunning: true,
+      installError: new Error('checksum mismatch'),
+    });
+
+    await expect(installDashboardCliproxyVersion('6.7.1', 'plus', deps)).rejects.toThrow(
+      'checksum mismatch'
+    );
+    expect(calls.ensureCliproxyService).toBe(1);
   });
 });

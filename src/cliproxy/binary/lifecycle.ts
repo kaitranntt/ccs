@@ -15,6 +15,7 @@ import { downloadAndInstall, getBinaryPath } from './installer';
 import { info, warn } from '../../utils/ui';
 import { isCliproxyRunning } from '../services/stats-fetcher';
 import { resolveLifecyclePort } from '../config/port-manager';
+import { BinaryError } from '../../errors/error-types';
 import {
   CLIPROXY_MAX_STABLE_VERSION,
   CLIPROXY_FAULTY_RANGE,
@@ -103,17 +104,26 @@ async function handleAutoUpdate(config: BinaryManagerConfig, verbose: boolean): 
  * Ensure binary is available (download if missing, update if outdated)
  * @returns Path to executable binary
  */
-export async function ensureBinary(config: BinaryManagerConfig): Promise<string> {
+interface EnsureBinaryDeps {
+  downloadAndInstallFn?: typeof downloadAndInstall;
+}
+
+export async function ensureBinary(
+  config: BinaryManagerConfig,
+  deps: EnsureBinaryDeps = {}
+): Promise<string> {
   const verbose = config.verbose;
   const backend: CLIProxyBackend = config.backend ?? DEFAULT_BACKEND;
   const binaryPath = getBinaryPath(config.binPath, backend);
+  const downloadAndInstallFn = deps.downloadAndInstallFn ?? downloadAndInstall;
 
   // Binary exists - check for updates unless forceVersion
   if (fs.existsSync(binaryPath)) {
     log(`Binary exists: ${binaryPath}`, verbose);
 
     if (config.forceVersion) {
-      log('Force version mode: skipping auto-update', verbose);
+      log(`Force version mode: installing specified version ${config.version}`, verbose);
+      await downloadAndInstallFn(config, verbose);
       return binaryPath;
     }
 
@@ -134,9 +144,10 @@ export async function ensureBinary(config: BinaryManagerConfig): Promise<string>
 
   // Binary missing
   if (!config.allowInstall) {
-    throw new Error(
+    throw new BinaryError(
       `${getBackendLabel(backend)} binary is not installed locally. ` +
-        'Run "ccs cliproxy install" when you have network access.'
+        'Run "ccs cliproxy install" when you have network access.',
+      binaryPath
     );
   }
 
@@ -161,6 +172,6 @@ export async function ensureBinary(config: BinaryManagerConfig): Promise<string>
     log(`Force version mode: using specified version ${config.version}`, verbose);
   }
 
-  await downloadAndInstall(config, verbose);
+  await downloadAndInstallFn(config, verbose);
   return binaryPath;
 }

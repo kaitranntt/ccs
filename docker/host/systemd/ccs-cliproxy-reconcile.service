@@ -6,4 +6,4 @@ Requires=docker.service
 [Service]
 Type=oneshot
 ExecStart=/opt/cliproxy/ccs-cliproxy-reconcile.sh
-TimeoutStartSec=5min
+TimeoutStartSec=10min

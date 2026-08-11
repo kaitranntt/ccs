@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { getExecutableName } from '../platform-detector';
 import { downloadAndInstall } from '../installer';
+import { ensureBinary } from '../lifecycle';
 
 describe('atomic binary installation', () => {
   let binPath: string;
@@ -146,6 +147,164 @@ describe('atomic binary installation', () => {
 
     expect(fs.readFileSync(binaryPath, 'utf8')).toBe('old-binary');
     expect(fs.readFileSync(versionPath, 'utf8')).toBe('6.6.80');
+    expect(stagingDirectories()).toEqual([]);
+  });
+
+  it('installs a forced version even when an older binary already exists', async () => {
+    const binaryPath = path.join(binPath, getExecutableName('original'));
+    fs.writeFileSync(binaryPath, 'old-binary');
+    let installs = 0;
+
+    const resolvedPath = await ensureBinary(
+      {
+        version: '6.7.1',
+        releaseUrl: 'https://example.invalid',
+        binPath,
+        maxRetries: 1,
+        verbose: false,
+        forceVersion: true,
+        skipAutoUpdate: false,
+        allowInstall: true,
+        backend: 'original',
+      },
+      {
+        downloadAndInstallFn: async () => {
+          installs += 1;
+        },
+      }
+    );
+
+    expect(resolvedPath).toBe(binaryPath);
+    expect(installs).toBe(1);
+  });
+
+  it('restores the previous binary when publishing the version marker fails', async () => {
+    const binaryName = getExecutableName('original');
+    const binaryPath = path.join(binPath, binaryName);
+    const versionPath = path.join(binPath, '.version');
+    fs.writeFileSync(binaryPath, 'old-binary');
+    fs.writeFileSync(versionPath, '6.6.80');
+    let renames = 0;
+
+    await expect(
+      downloadAndInstall(
+        {
+          version: '6.7.1',
+          releaseUrl: 'https://example.invalid',
+          binPath,
+          maxRetries: 1,
+          verbose: false,
+          forceVersion: true,
+          skipAutoUpdate: false,
+          allowInstall: true,
+          backend: 'original',
+        },
+        false,
+        {
+          downloadWithRetryFn: async (_url, archivePath) => {
+            fs.writeFileSync(archivePath, 'downloaded-archive');
+            return { success: true, filePath: archivePath, retries: 0 };
+          },
+          verifyChecksumFn: async () => ({
+            valid: true,
+            expected: 'checksum',
+            actual: 'checksum',
+          }),
+          extractArchiveFn: async (_archivePath, destination) => {
+            fs.writeFileSync(path.join(destination, binaryName), 'new-binary');
+          },
+          renameSyncFn: (source, destination) => {
+            renames += 1;
+            if (renames === 2) throw new Error('version marker blocked');
+            fs.renameSync(source, destination);
+          },
+        }
+      )
+    ).rejects.toThrow('version marker blocked');
+
+    expect(fs.readFileSync(binaryPath, 'utf8')).toBe('old-binary');
+    expect(fs.readFileSync(versionPath, 'utf8')).toBe('6.6.80');
+    expect(stagingDirectories()).toEqual([]);
+  });
+
+  it('serializes concurrent installs so the binary and version stay paired', async () => {
+    const binaryName = getExecutableName('original');
+    const binaryPath = path.join(binPath, binaryName);
+    const versionPath = path.join(binPath, '.version');
+
+    const install = (version: string) =>
+      downloadAndInstall(
+        {
+          version,
+          releaseUrl: 'https://example.invalid',
+          binPath,
+          maxRetries: 1,
+          verbose: false,
+          forceVersion: true,
+          skipAutoUpdate: false,
+          allowInstall: true,
+          backend: 'original',
+        },
+        false,
+        {
+          downloadWithRetryFn: async (_url, archivePath) => {
+            fs.writeFileSync(archivePath, 'downloaded-archive');
+            return { success: true, filePath: archivePath, retries: 0 };
+          },
+          verifyChecksumFn: async () => ({
+            valid: true,
+            expected: 'checksum',
+            actual: 'checksum',
+          }),
+          extractArchiveFn: async (_archivePath, destination) => {
+            fs.writeFileSync(path.join(destination, binaryName), `binary-${version}`);
+          },
+        }
+      );
+
+    await Promise.all([install('6.7.1'), install('6.7.2')]);
+
+    const installedVersion = fs.readFileSync(versionPath, 'utf8');
+    expect(fs.readFileSync(binaryPath, 'utf8')).toBe(`binary-${installedVersion}`);
+    expect(stagingDirectories()).toEqual([]);
+  });
+
+  it('removes staging residue left by an interrupted prior install', async () => {
+    const stalePath = path.join(binPath, '.cliproxy-install-stale');
+    fs.mkdirSync(stalePath);
+    fs.writeFileSync(path.join(stalePath, 'partial-archive'), 'partial');
+    const binaryName = getExecutableName('original');
+
+    await downloadAndInstall(
+      {
+        version: '6.7.1',
+        releaseUrl: 'https://example.invalid',
+        binPath,
+        maxRetries: 1,
+        verbose: false,
+        forceVersion: true,
+        skipAutoUpdate: false,
+        allowInstall: true,
+        backend: 'original',
+      },
+      false,
+      {
+        downloadWithRetryFn: async (_url, archivePath) => {
+          fs.writeFileSync(archivePath, 'downloaded-archive');
+          return { success: true, filePath: archivePath, retries: 0 };
+        },
+        verifyChecksumFn: async () => ({
+          valid: true,
+          expected: 'checksum',
+          actual: 'checksum',
+        }),
+        extractArchiveFn: async (_archivePath, destination) => {
+          fs.writeFileSync(path.join(destination, binaryName), 'new-binary');
+        },
+      }
+    );
+
+    expect(fs.existsSync(stalePath)).toBe(false);
     expect(stagingDirectories()).toEqual([]);
   });
 });

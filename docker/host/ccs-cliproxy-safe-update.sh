@@ -26,10 +26,15 @@ if [ "$(docker inspect --format '{{.State.Running}}' "$container_name")" != 'tru
   exit 1
 fi
 
-status_output="$(docker exec "$container_name" ccs cliproxy --version --backend plus 2>&1)" || {
+status_output="$(docker exec "$container_name" ccs cliproxy --version --backend plus --verbose 2>&1)" || {
   log "Unable to inspect the installed CLIProxy version: $status_output"
   exit 1
 }
+
+if grep -qi 'Could not fetch' <<<"$status_output"; then
+  log "Unable to check the latest CLIProxy version: $(grep -im1 'Could not fetch' <<<"$status_output" | xargs)"
+  exit 1
+fi
 
 if ! grep -qi 'update available' <<<"$status_output"; then
   exit 0
@@ -50,7 +55,7 @@ stage_binary="$stage_dir/cli-proxy-api-plus"
 stage_version="$stage_dir/.version"
 backup_binary="$stage_root/previous-binary"
 backup_version="$stage_root/previous-version"
-swap_started=0
+maintenance_started=0
 
 supervisorctl_cmd() {
   supervisorctl -c /etc/supervisord.conf "$@"
@@ -73,26 +78,40 @@ wait_for_proxy() {
 }
 
 rollback() {
+  rollback_ok=1
   supervisorctl_cmd stop cliproxy >/dev/null 2>&1 || true
   if [ -f "$backup_binary" ]; then
-    install -m 0755 "$backup_binary" "$live_binary.rollback"
-    mv -f "$live_binary.rollback" "$live_binary"
+    install -m 0755 "$backup_binary" "$live_binary.rollback" && \
+      mv -f "$live_binary.rollback" "$live_binary" || rollback_ok=0
+  else
+    rollback_ok=0
   fi
   if [ -f "$backup_version" ]; then
-    install -m 0644 "$backup_version" "$live_version.rollback"
-    mv -f "$live_version.rollback" "$live_version"
+    install -m 0644 "$backup_version" "$live_version.rollback" && \
+      mv -f "$live_version.rollback" "$live_version" || rollback_ok=0
+  else
+    rollback_ok=0
   fi
-  supervisorctl_cmd start cliproxy >/dev/null
-  wait_for_proxy
+  supervisorctl_cmd start cliproxy >/dev/null || rollback_ok=0
+  wait_for_proxy || rollback_ok=0
+  [ "$rollback_ok" -eq 1 ]
 }
 
 on_exit() {
   rc=$?
   trap - EXIT INT TERM HUP
-  if [ "$rc" -ne 0 ] && [ "$swap_started" -eq 1 ]; then
-    rollback || true
+  rollback_failed=0
+  if [ "$rc" -ne 0 ] && [ "$maintenance_started" -eq 1 ]; then
+    if ! rollback; then
+      rollback_failed=1
+      printf '[X] CLIProxy rollback failed; recovery files preserved at %s\n' "$stage_root" >&2
+    fi
   fi
-  cleanup
+  if [ "$rollback_failed" -eq 0 ]; then
+    cleanup
+  else
+    rc=70
+  fi
   exit "$rc"
 }
 
@@ -107,17 +126,17 @@ test -s "$stage_version"
 cp -p "$live_binary" "$backup_binary"
 cp -p "$live_version" "$backup_version"
 
+maintenance_started=1
 supervisorctl_cmd stop cliproxy >/dev/null
-swap_started=1
 mv -f "$stage_binary" "$live_binary"
 mv -f "$stage_version" "$live_version"
 chmod 0755 "$live_binary"
 supervisorctl_cmd start cliproxy >/dev/null
 wait_for_proxy
-swap_started=0
+maintenance_started=0
 CONTAINER_UPDATE
 then
-  log 'CLIProxy Plus update failed; previous binary was restored and restarted'
+  log 'CLIProxy Plus update failed; rollback was attempted and reconciliation will verify service health'
   exit 1
 fi
 

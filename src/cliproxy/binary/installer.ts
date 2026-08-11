@@ -5,6 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as lockfile from 'proper-lockfile';
 import { BinaryManagerConfig } from '../types';
 import {
   detectPlatform,
@@ -16,7 +17,6 @@ import {
 import { downloadWithRetry } from './downloader';
 import { verifyChecksum, computeChecksum } from './verifier';
 import { extractArchive } from './extractor';
-import { writeInstalledVersion } from './version-cache';
 import { ProgressIndicator } from '../../utils/progress-indicator';
 import { ok } from '../../utils/ui';
 import { BinaryError, NetworkError } from '../../errors/error-types';
@@ -47,14 +47,29 @@ export async function downloadAndInstall(
   const renameSyncFn = deps.renameSyncFn ?? fs.renameSync;
 
   fs.mkdirSync(config.binPath, { recursive: true });
-  const stagingPath = fs.mkdtempSync(path.join(config.binPath, '.cliproxy-install-'));
-  const archivePath = path.join(stagingPath, `cliproxy-archive.${platform.extension}`);
-  const stagedBinary = path.join(stagingPath, getExecutableName(backend));
-  const installedBinary = path.join(config.binPath, getExecutableName(backend));
+  const releaseLock = await lockfile.lock(config.binPath, {
+    stale: 10 * 60 * 1000,
+    retries: { retries: 60, factor: 1, minTimeout: 250, maxTimeout: 250 },
+  });
+  let stagingPath: string | undefined;
   const spinner = new ProgressIndicator(`Downloading ${backendLabel} v${config.version}`);
-  spinner.start();
 
   try {
+    for (const entry of fs.readdirSync(config.binPath)) {
+      if (entry.startsWith('.cliproxy-install-')) {
+        fs.rmSync(path.join(config.binPath, entry), { recursive: true, force: true });
+      }
+    }
+    stagingPath = fs.mkdtempSync(path.join(config.binPath, '.cliproxy-install-'));
+    const archivePath = path.join(stagingPath, `cliproxy-archive.${platform.extension}`);
+    const stagedBinary = path.join(stagingPath, getExecutableName(backend));
+    const stagedVersion = path.join(stagingPath, '.version');
+    const installedBinary = path.join(config.binPath, getExecutableName(backend));
+    const installedVersion = path.join(config.binPath, '.version');
+    const backupBinary = path.join(stagingPath, '.previous-binary');
+    const hadInstalledBinary = fs.existsSync(installedBinary);
+    spinner.start();
+
     const result = await downloadWithRetryFn(downloadUrl, archivePath, {
       maxRetries: config.maxRetries,
       verbose,
@@ -95,15 +110,31 @@ export async function downloadAndInstall(
       if (verbose) console.error(`[cliproxy] Set executable permissions: ${stagedBinary}`);
     }
 
+    fs.writeFileSync(stagedVersion, config.version, 'utf8');
+    if (hadInstalledBinary) {
+      fs.copyFileSync(installedBinary, backupBinary);
+      if (platform.os !== 'windows') fs.chmodSync(backupBinary, 0o755);
+    }
+
     renameSyncFn(stagedBinary, installedBinary);
-    writeInstalledVersion(config.binPath, config.version);
+    try {
+      renameSyncFn(stagedVersion, installedVersion);
+    } catch (error) {
+      if (hadInstalledBinary) {
+        renameSyncFn(backupBinary, installedBinary);
+      } else {
+        fs.unlinkSync(installedBinary);
+      }
+      throw error;
+    }
     spinner.succeed(`${backendLabel} ready`);
     console.log(ok(`${backendLabel} v${config.version} installed successfully`));
   } catch (error) {
     spinner.fail('Installation failed');
     throw error;
   } finally {
-    fs.rmSync(stagingPath, { recursive: true, force: true });
+    if (stagingPath) fs.rmSync(stagingPath, { recursive: true, force: true });
+    await releaseLock();
   }
 }
 
