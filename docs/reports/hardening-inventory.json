@@ -1,9 +1,9 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2471,
-    "filesAffected": 261,
-    "hotpathOccurrences": 1186,
+    "totalOccurrences": 2514,
+    "filesAffected": 262,
+    "hotpathOccurrences": 1192,
     "hotpathFilesAffected": 155,
     "topHotpathFiles": [
       {
@@ -248,6 +248,21 @@
         "markers": []
       },
       {
+        "file": "src/cliproxy/binary/__tests__/binary-installer-atomic.test.ts",
+        "count": 37,
+        "calls": [
+          "existsSync",
+          "mkdirSync",
+          "mkdtempSync",
+          "readdirSync",
+          "readFileSync",
+          "renameSync",
+          "rmSync",
+          "writeFileSync"
+        ],
+        "markers": []
+      },
+      {
         "file": "src/cliproxy/executor/__tests__/variant-port-integration.test.js",
         "count": 36,
         "calls": [
@@ -282,22 +297,6 @@
           "mkdirSync",
           "readdirSync",
           "rmSync",
-          "unlinkSync",
-          "writeFileSync"
-        ],
-        "markers": []
-      },
-      {
-        "file": "src/utils/browser/mcp-installer.ts",
-        "count": 32,
-        "calls": [
-          "chmodSync",
-          "copyFileSync",
-          "existsSync",
-          "mkdirSync",
-          "readFileSync",
-          "renameSync",
-          "statSync",
           "unlinkSync",
           "writeFileSync"
         ],
@@ -497,16 +496,16 @@
   },
   "maintainability": {
     "typedErrors": {
-      "totalThrows": 454,
-      "typedThrows": 83,
-      "plainThrows": 311,
+      "totalThrows": 455,
+      "typedThrows": 89,
+      "plainThrows": 306,
       "otherThrows": 60,
-      "adoptionRatio": 0.1828,
+      "adoptionRatio": 0.1956,
       "topSubdomainsByThrows": [
         {
           "subdomain": "web-server",
-          "count": 103,
-          "typed": 16,
+          "count": 104,
+          "typed": 17,
           "plain": 45
         },
         {
@@ -652,9 +651,9 @@
       ]
     },
     "hotpathConsoleErrors": {
-      "totalOccurrences": 592,
+      "totalOccurrences": 590,
       "exemptOccurrences": 326,
-      "hotpathOccurrences": 266,
+      "hotpathOccurrences": 264,
       "filesAffected": 81,
       "topFiles": [
         {
