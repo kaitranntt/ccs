@@ -3,8 +3,8 @@
 set -Eeuo pipefail
 
 container_name="${CCS_CLIPROXY_CONTAINER:-ccs-cliproxy}"
-compose_dir="${CCS_CLIPROXY_COMPOSE_DIR:-/opt/cliproxy}"
-compose_file="${CCS_CLIPROXY_COMPOSE_FILE:-$compose_dir/docker-compose.yml}"
+compose_dir="${CCS_CLIPROXY_COMPOSE_DIR:-/root/.ccs/docker}"
+compose_file="${CCS_CLIPROXY_COMPOSE_FILE:-$compose_dir/docker-compose.integrated.yml}"
 compose_project="${CCS_CLIPROXY_COMPOSE_PROJECT:-docker}"
 lock_file="${CCS_CLIPROXY_LOCK_FILE:-/run/lock/ccs-cliproxy-maintenance.lock}"
 log_file="${CCS_CLIPROXY_RECONCILE_LOG:-/var/log/ccs-cliproxy-reconcile.log}"
@@ -52,7 +52,9 @@ compose_recreate() {
       -f "$compose_file" up -d --force-recreate --build
 }
 
-if ! docker inspect "$container_name" >/dev/null 2>&1; then
+running_state="$(docker inspect --format '{{.State.Running}}' "$container_name" 2>/dev/null || true)"
+
+if [ -z "$running_state" ]; then
   log "Container $container_name is missing; recreating from $compose_file"
   compose_up
   wait_for_health
@@ -60,7 +62,7 @@ if ! docker inspect "$container_name" >/dev/null 2>&1; then
   exit 0
 fi
 
-if [ "$(docker inspect --format '{{.State.Running}}' "$container_name")" != 'true' ]; then
+if [ "$running_state" != 'true' ]; then
   log "Container $container_name is stopped; restoring the Compose service"
   compose_up
   wait_for_health

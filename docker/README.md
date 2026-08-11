@@ -95,7 +95,7 @@ systemctl list-timers 'ccs-cliproxy-*'
 journalctl -u ccs-cliproxy-reconcile.service -u ccs-cliproxy-update.service
 ```
 
-By default, reconciliation expects `/opt/cliproxy/docker-compose.yml` with Compose project
+By default, reconciliation expects `/root/.ccs/docker/docker-compose.integrated.yml` with Compose project
 `docker`. Keep those defaults when adopting an existing stack so its `docker_ccs_home` and
 `docker_ccs_logs` volumes remain attached. The scripts support environment overrides for the
 container, Compose paths and project, lock file, and logs.

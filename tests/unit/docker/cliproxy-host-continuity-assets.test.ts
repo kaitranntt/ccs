@@ -86,10 +86,13 @@ release_install_lock`,
   });
 
   it('recreates missing containers and escalates unhealthy recovery', () => {
-    expect(reconcileScript).toContain('CCS_CLIPROXY_COMPOSE_DIR:-/opt/cliproxy');
+    expect(reconcileScript).toContain('CCS_CLIPROXY_COMPOSE_DIR:-/root/.ccs/docker');
+    expect(reconcileScript).toContain('$compose_dir/docker-compose.integrated.yml');
     expect(reconcileScript).toContain('CCS_CLIPROXY_COMPOSE_PROJECT:-docker');
     expect(reconcileScript).toContain('--project-name "$compose_project"');
     expect(reconcileScript).toContain('-f "$compose_file" up -d --no-build');
+    expect(reconcileScript).toContain("2>/dev/null || true");
+    expect(reconcileScript).toContain('if [ -z "$running_state" ]');
     expect(reconcileScript).toContain('restart ccs-dashboard cliproxy');
     expect(reconcileScript).toContain('docker restart "$container_name"');
     expect(reconcileScript).toContain('up -d --force-recreate --no-build');
