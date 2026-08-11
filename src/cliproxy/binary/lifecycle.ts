@@ -121,9 +121,14 @@ export async function ensureBinary(
   if (fs.existsSync(binaryPath)) {
     log(`Binary exists: ${binaryPath}`, verbose);
 
-    if (config.forceVersion) {
+    if (config.replaceExisting) {
       log(`Force version mode: installing specified version ${config.version}`, verbose);
       await downloadAndInstallFn(config, verbose);
+      return binaryPath;
+    }
+
+    if (config.forceVersion) {
+      log(`Pinned version mode: using installed version ${config.version}`, verbose);
       return binaryPath;
     }
 

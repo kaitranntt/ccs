@@ -19,6 +19,7 @@ import {
   clearPinnedVersion,
   isVersionPinned,
   resolveLocalBackend,
+  withCliproxyInstallLifecycleLock,
 } from '../binary-manager';
 import { BACKEND_CONFIG, DEFAULT_BACKEND } from '../binary/platform-detector';
 import { CLIProxyBackend } from '../types';
@@ -127,14 +128,16 @@ export async function installVersion(
   const effectiveBackend = resolveLocalBackend(configuredBackend, { notifyOnPlus: true });
 
   try {
-    await installCliproxyVersion(version, verbose, effectiveBackend);
-    savePinnedVersion(version, effectiveBackend);
+    return await withCliproxyInstallLifecycleLock(effectiveBackend, async () => {
+      await installCliproxyVersion(version, verbose, effectiveBackend);
+      savePinnedVersion(version, effectiveBackend);
 
-    return {
-      success: true,
-      version,
-      wasPinned: true,
-    };
+      return {
+        success: true,
+        version,
+        wasPinned: true,
+      };
+    });
   } catch (error) {
     return {
       success: false,
@@ -156,26 +159,28 @@ export async function installLatest(
   const effectiveBackend = resolveLocalBackend(configuredBackend, { notifyOnPlus: true });
 
   try {
-    const latestVersion = await fetchLatestCliproxyVersion(effectiveBackend);
-    const currentVersion = getInstalledCliproxyVersion(effectiveBackend);
-    const wasPinned = isVersionPinned(effectiveBackend);
+    return await withCliproxyInstallLifecycleLock(effectiveBackend, async () => {
+      const latestVersion = await fetchLatestCliproxyVersion(effectiveBackend);
+      const currentVersion = getInstalledCliproxyVersion(effectiveBackend);
+      const wasPinned = isVersionPinned(effectiveBackend);
 
-    if (isCLIProxyInstalled(effectiveBackend) && latestVersion === currentVersion && !wasPinned) {
+      if (isCLIProxyInstalled(effectiveBackend) && latestVersion === currentVersion && !wasPinned) {
+        return {
+          success: true,
+          version: latestVersion,
+          error: `Already running latest version: v${latestVersion}`,
+        };
+      }
+
+      await installCliproxyVersion(latestVersion, verbose, effectiveBackend);
+      clearPinnedVersion(effectiveBackend);
+
       return {
         success: true,
         version: latestVersion,
-        error: `Already running latest version: v${latestVersion}`,
+        wasPinned,
       };
-    }
-
-    await installCliproxyVersion(latestVersion, verbose, effectiveBackend);
-    clearPinnedVersion(effectiveBackend);
-
-    return {
-      success: true,
-      version: latestVersion,
-      wasPinned,
-    };
+    });
   } catch (error) {
     return {
       success: false,

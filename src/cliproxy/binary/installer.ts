@@ -53,6 +53,7 @@ export async function downloadAndInstall(
   });
   let stagingPath: string | undefined;
   const spinner = new ProgressIndicator(`Downloading ${backendLabel} v${config.version}`);
+  let installError: unknown;
 
   try {
     for (const entry of fs.readdirSync(config.binPath)) {
@@ -130,11 +131,23 @@ export async function downloadAndInstall(
     spinner.succeed(`${backendLabel} ready`);
     console.log(ok(`${backendLabel} v${config.version} installed successfully`));
   } catch (error) {
+    installError = error;
     spinner.fail('Installation failed');
     throw error;
   } finally {
-    if (stagingPath) fs.rmSync(stagingPath, { recursive: true, force: true });
-    await releaseLock();
+    let cleanupError: unknown;
+    try {
+      if (stagingPath) fs.rmSync(stagingPath, { recursive: true, force: true });
+    } catch (error) {
+      cleanupError = error;
+    } finally {
+      try {
+        await releaseLock();
+      } catch (error) {
+        cleanupError ??= error;
+      }
+    }
+    if (!installError && cleanupError) throw cleanupError;
   }
 }
 

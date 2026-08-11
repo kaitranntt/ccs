@@ -55,6 +55,10 @@ stage_binary="$stage_dir/cli-proxy-api-plus"
 stage_version="$stage_dir/.version"
 backup_binary="$stage_root/previous-binary"
 backup_version="$stage_root/previous-version"
+install_lock_target='/root/.ccs/cliproxy/bin/.install-lifecycle-plus'
+install_lock_dir="$install_lock_target.lock"
+install_lock_stale_seconds=600
+install_lock_owned=0
 maintenance_started=0
 
 supervisorctl_cmd() {
@@ -63,6 +67,40 @@ supervisorctl_cmd() {
 
 cleanup() {
   rm -rf -- "$stage_root"
+}
+
+remove_stale_install_lock() {
+  lock_mtime="$(
+    stat -c %Y "$install_lock_dir" 2>/dev/null || stat -f %m "$install_lock_dir" 2>/dev/null
+  )" || return 0
+  current_time="$(date +%s)"
+  lock_age=$((current_time - lock_mtime))
+  if [ "$lock_age" -gt "$install_lock_stale_seconds" ]; then
+    rmdir "$install_lock_dir" 2>/dev/null || true
+  fi
+}
+
+acquire_install_lock() {
+  mkdir -p "$install_lock_target"
+  attempts=0
+  while ! mkdir "$install_lock_dir" 2>/dev/null; do
+    attempts=$((attempts + 1))
+    if [ "$attempts" -ge 240 ]; then
+      printf '[X] Timed out waiting for CLIProxy install lifecycle lock\n' >&2
+      return 1
+    fi
+    remove_stale_install_lock
+    sleep 0.25
+  done
+  install_lock_owned=1
+  touch "$install_lock_dir"
+}
+
+release_install_lock() {
+  if [ "$install_lock_owned" -eq 1 ]; then
+    rmdir "$install_lock_dir" 2>/dev/null || true
+    install_lock_owned=0
+  fi
 }
 
 wait_for_proxy() {
@@ -107,6 +145,7 @@ on_exit() {
       printf '[X] CLIProxy rollback failed; recovery files preserved at %s\n' "$stage_root" >&2
     fi
   fi
+  release_install_lock
   if [ "$rollback_failed" -eq 0 ]; then
     cleanup
   else
@@ -115,7 +154,10 @@ on_exit() {
   exit "$rc"
 }
 
-trap on_exit EXIT INT TERM HUP
+trap on_exit EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 
 mkdir -p "$stage_ccs_dir"
 CCS_DIR="$stage_ccs_dir" ccs cliproxy --latest --backend plus
@@ -123,6 +165,7 @@ test -x "$stage_binary"
 test -s "$stage_version"
 "$stage_binary" --version >/dev/null
 
+acquire_install_lock
 cp -p "$live_binary" "$backup_binary"
 cp -p "$live_version" "$backup_version"
 

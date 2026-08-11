@@ -5,6 +5,7 @@ import * as path from 'path';
 import { getExecutableName } from '../platform-detector';
 import { downloadAndInstall } from '../installer';
 import { ensureBinary } from '../lifecycle';
+import { withInstallLifecycleLock } from '../install-lifecycle-lock';
 
 describe('atomic binary installation', () => {
   let binPath: string;
@@ -78,6 +79,7 @@ describe('atomic binary installation', () => {
         maxRetries: 1,
         verbose: false,
         forceVersion: true,
+        replaceExisting: true,
         skipAutoUpdate: false,
         allowInstall: true,
         backend: 'original',
@@ -163,6 +165,7 @@ describe('atomic binary installation', () => {
         maxRetries: 1,
         verbose: false,
         forceVersion: true,
+        replaceExisting: true,
         skipAutoUpdate: false,
         allowInstall: true,
         backend: 'original',
@@ -176,6 +179,52 @@ describe('atomic binary installation', () => {
 
     expect(resolvedPath).toBe(binaryPath);
     expect(installs).toBe(1);
+  });
+
+  it('reuses an existing pinned binary during runtime bootstrap', async () => {
+    const binaryPath = path.join(binPath, getExecutableName('original'));
+    fs.writeFileSync(binaryPath, 'pinned-binary');
+    let installs = 0;
+
+    const resolvedPath = await ensureBinary(
+      {
+        version: '6.6.80',
+        releaseUrl: 'https://example.invalid',
+        binPath,
+        maxRetries: 1,
+        verbose: false,
+        forceVersion: true,
+        replaceExisting: false,
+        skipAutoUpdate: false,
+        allowInstall: false,
+        backend: 'original',
+      },
+      {
+        downloadAndInstallFn: async () => {
+          installs += 1;
+        },
+      }
+    );
+
+    expect(resolvedPath).toBe(binaryPath);
+    expect(installs).toBe(0);
+  });
+
+  it('waits for an externally held compatible install lifecycle lock', async () => {
+    const lockTarget = path.join(binPath, '.install-lifecycle-plus');
+    fs.mkdirSync(lockTarget, { recursive: true });
+    fs.mkdirSync(`${lockTarget}.lock`);
+    let entered = false;
+
+    const operation = withInstallLifecycleLock(lockTarget, async () => {
+      entered = true;
+    });
+
+    await Bun.sleep(50);
+    expect(entered).toBe(false);
+    fs.rmdirSync(`${lockTarget}.lock`);
+    await operation;
+    expect(entered).toBe(true);
   });
 
   it('restores the previous binary when publishing the version marker fails', async () => {

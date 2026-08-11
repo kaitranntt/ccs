@@ -44,6 +44,14 @@ compose_up() {
       -f "$compose_file" up -d --build
 }
 
+compose_recreate() {
+  cd "$compose_dir"
+  docker compose --project-name "$compose_project" --project-directory "$compose_dir" \
+    -f "$compose_file" up -d --force-recreate --no-build || \
+    docker compose --project-name "$compose_project" --project-directory "$compose_dir" \
+      -f "$compose_file" up -d --force-recreate --build
+}
+
 if ! docker inspect "$container_name" >/dev/null 2>&1; then
   log "Container $container_name is missing; recreating from $compose_file"
   compose_up
@@ -79,6 +87,14 @@ if docker exec "$container_name" \
 fi
 
 log 'Supervisor recovery failed; restarting the container'
-docker restart "$container_name" >/dev/null
+if docker restart "$container_name" >/dev/null; then
+  if wait_for_health; then
+    log "Container $container_name recovered and passed both health probes"
+    exit 0
+  fi
+fi
+
+log "Container $container_name is still unhealthy; recreating it from $compose_file"
+compose_recreate
 wait_for_health
-log "Container $container_name recovered and passed both health probes"
+log "Container $container_name was recreated and passed both health probes"

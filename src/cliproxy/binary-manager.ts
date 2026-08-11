@@ -41,6 +41,7 @@ import {
 import type { CLIProxyBackend } from './types';
 import { getVersionListCachePath } from './binary/version-cache';
 import { loadOrCreateUnifiedConfig } from '../config/config-loader-facade';
+import { withInstallLifecycleLock } from './binary/install-lifecycle-lock';
 
 export const CLIPROXY_DELETED_PLUS_REPO = 'router-for-me/CLIProxyAPIPlus';
 export const CLIPROXY_PLUS_FALLBACK_TRACKING_URL = 'https://github.com/kaitranntt/ccs/issues/1062';
@@ -176,6 +177,14 @@ function getBackendBinDir(backend: CLIProxyBackend = DEFAULT_BACKEND): string {
   return `${baseDir}/${backend}`;
 }
 
+export async function withCliproxyInstallLifecycleLock<T>(
+  backend: CLIProxyBackend,
+  operation: () => Promise<T>
+): Promise<T> {
+  const lockTarget = path.join(getBinDir(), `.install-lifecycle-${backend}`);
+  return withInstallLifecycleLock(lockTarget, operation);
+}
+
 /** Default configuration (uses backend from config.yaml or defaults to `DEFAULT_BACKEND`) */
 function createDefaultConfig(backend: CLIProxyBackend = DEFAULT_BACKEND): BinaryManagerConfig {
   const backendConfig = BACKEND_CONFIG[backend];
@@ -186,6 +195,7 @@ function createDefaultConfig(backend: CLIProxyBackend = DEFAULT_BACKEND): Binary
     maxRetries: 3,
     verbose: false,
     forceVersion: false,
+    replaceExisting: false,
     skipAutoUpdate: false,
     allowInstall: true,
     backend, // Pass backend for installer to use correct download URL
@@ -317,6 +327,7 @@ interface InstallCliproxyVersionDeps {
   formatInfo?: typeof info;
   formatWarn?: typeof warn;
   getInstalledVersion?: typeof getInstalledCliproxyVersion;
+  withInstallLifecycleLockFn?: typeof withCliproxyInstallLifecycleLock;
 }
 
 /** Install a specific version of CLIProxyAPI */
@@ -329,33 +340,41 @@ export async function installCliproxyVersion(
   const configuredBackend = backend ?? getConfiguredOrDefaultBackend();
   const effectiveBackend = resolveLocalBackend(configuredBackend, { notifyOnPlus: true });
   const manager =
-    deps.createManager?.({ version, verbose, forceVersion: true }, effectiveBackend) ??
-    new BinaryManager({ version, verbose, forceVersion: true }, effectiveBackend);
+    deps.createManager?.(
+      { version, verbose, forceVersion: true, replaceExisting: true },
+      effectiveBackend
+    ) ??
+    new BinaryManager(
+      { version, verbose, forceVersion: true, replaceExisting: true },
+      effectiveBackend
+    );
   const stopProxyFn = deps.stopProxyFn ?? stopProxy;
   const waitForPortFreeFn = deps.waitForPortFreeFn ?? waitForPortFree;
   const formatInfo = deps.formatInfo ?? info;
   const formatWarn = deps.formatWarn ?? warn;
+  const withLifecycleLock = deps.withInstallLifecycleLockFn ?? withCliproxyInstallLifecycleLock;
 
-  // Always attempt a best-effort stop first so we also catch untracked proxies
-  // that are running without a session lock.
-  if (verbose) console.log(formatInfo('Stopping running CLIProxy before update...'));
-  const result = await stopProxyFn();
-  if (result.stopped) {
-    const stoppedPort = result.port ?? resolveLifecyclePort();
-    // Wait for port to be fully released
-    const portFree = await waitForPortFreeFn(stoppedPort, 5000);
-    if (!portFree && verbose) {
-      console.log(formatWarn('Port did not free up in time, proceeding anyway...'));
+  await withLifecycleLock(effectiveBackend, async () => {
+    // Always attempt a best-effort stop first so we also catch untracked proxies
+    // that are running without a session lock.
+    if (verbose) console.log(formatInfo('Stopping running CLIProxy before update...'));
+    const result = await stopProxyFn();
+    if (result.stopped) {
+      const stoppedPort = result.port ?? resolveLifecyclePort();
+      const portFree = await waitForPortFreeFn(stoppedPort, 5000);
+      if (!portFree && verbose) {
+        console.log(formatWarn('Port did not free up in time, proceeding anyway...'));
+      }
+    } else if (verbose && result.error && result.error !== 'No active CLIProxy session found') {
+      console.log(formatWarn(`Could not stop proxy: ${result.error}`));
     }
-  } else if (verbose && result.error && result.error !== 'No active CLIProxy session found') {
-    console.log(formatWarn(`Could not stop proxy: ${result.error}`));
-  }
 
-  await manager.ensureBinary();
+    await manager.ensureBinary();
 
-  if (verbose) {
-    console.log(formatInfo('New version will be active on next CLIProxy command'));
-  }
+    if (verbose) {
+      console.log(formatInfo('New version will be active on next CLIProxy command'));
+    }
+  });
 }
 
 /** Fetch the latest CLIProxyAPI version from GitHub API */

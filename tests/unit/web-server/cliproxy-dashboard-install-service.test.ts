@@ -43,6 +43,10 @@ function createDeps(
         }
       );
     },
+    withInstallLifecycleLock: async (
+      _backend: CLIProxyBackend,
+      operation: () => Promise<unknown>
+    ) => operation(),
   };
 
   return { deps, calls };
@@ -135,5 +139,56 @@ describe('installDashboardCliproxyVersion', () => {
       'checksum mismatch'
     );
     expect(calls.ensureCliproxyService).toBe(1);
+  });
+
+  it('serializes concurrent dashboard stop-install-restore transactions', async () => {
+    let running = true;
+    let queue = Promise.resolve();
+    let activeTransactions = 0;
+    let maxActiveTransactions = 0;
+    let restores = 0;
+
+    const deps = {
+      getProxyStatus: () => ({ running }),
+      isCliproxyRunning: async () => running,
+      installCliproxyVersion: async () => {
+        running = false;
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      },
+      ensureCliproxyService: async () => {
+        running = true;
+        restores += 1;
+        return { started: true, alreadyRunning: false, port: 8317 };
+      },
+      withInstallLifecycleLock: <T>(
+        _backend: CLIProxyBackend,
+        operation: () => Promise<T>
+      ): Promise<T> => {
+        const result = queue.then(async () => {
+          activeTransactions += 1;
+          maxActiveTransactions = Math.max(maxActiveTransactions, activeTransactions);
+          try {
+            return await operation();
+          } finally {
+            activeTransactions -= 1;
+          }
+        });
+        queue = result.then(
+          () => undefined,
+          () => undefined
+        );
+        return result;
+      },
+    };
+
+    const results = await Promise.all([
+      installDashboardCliproxyVersion('6.7.1', 'plus', deps),
+      installDashboardCliproxyVersion('6.7.2', 'plus', deps),
+    ]);
+
+    expect(maxActiveTransactions).toBe(1);
+    expect(restores).toBe(2);
+    expect(results.every((result) => result.restarted)).toBe(true);
+    expect(running).toBe(true);
   });
 });
