@@ -10,6 +10,7 @@ export type ProviderPresetTarget = 'claude' | 'droid';
 
 export const PROVIDER_PRESET_IDS = [
   'openrouter',
+  'orcarouter',
   'alibaba-coding-plan',
   'huggingface',
   'tuningengines',
@@ -53,6 +54,7 @@ export interface ProviderPresetDefinition {
 }
 
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+export const ORCAROUTER_BASE_URL = 'https://api.orcarouter.ai/v1';
 
 /**
  * Legacy aliases mapped to canonical preset IDs.
@@ -83,6 +85,21 @@ const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
     badge: '349+ models',
     featured: true,
     icon: '/icons/openrouter.svg',
+  },
+  {
+    id: 'orcarouter',
+    name: 'OrcaRouter',
+    description: '188+ models from OpenAI, Anthropic, Google, Meta via auto-routing gateway',
+    baseUrl: ORCAROUTER_BASE_URL,
+    defaultProfileName: 'orcarouter',
+    defaultModel: 'openai/gpt-5.5',
+    apiKeyPlaceholder: 'sk-orca-...',
+    apiKeyHint: 'Get your API key at orcarouter.ai/console',
+    category: 'recommended',
+    requiresApiKey: true,
+    badge: '188+ models',
+    featured: true,
+    icon: '/icons/orcarouter.svg',
   },
   {
     id: 'alibaba-coding-plan',
