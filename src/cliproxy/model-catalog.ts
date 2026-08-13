@@ -324,6 +324,18 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
         contextWindow: 256000,
       },
       {
+        id: 'grok-4.6',
+        name: 'Grok 4.6',
+        description:
+          "SpaceXAI's smartest model built for long-running agents, interactive and visual work.",
+        contextWindow: 500000,
+        thinking: {
+          type: 'levels',
+          levels: ['low', 'medium', 'high', 'xhigh'],
+          zeroAllowed: false,
+        },
+      },
+      {
         id: 'grok-4.5',
         name: 'Grok 4.5',
         description: 'Frontier model for coding, engineering, and agentic workflows',

@@ -11,6 +11,7 @@ describe('xAI model catalog defaults', () => {
     expect(catalog.defaultModel).toBe('grok-build-0.1');
     expect(ids).toEqual([
       'grok-build-0.1',
+      'grok-4.6',
       'grok-4.5',
       'grok-4.3',
       'grok-4.20-0309-reasoning',
@@ -19,6 +20,12 @@ describe('xAI model catalog defaults', () => {
       'grok-3-mini',
       'grok-3-mini-fast',
       'grok-composer-2.5-fast',
+    ]);
+    expect(catalog.models.find((model) => model.id === 'grok-4.6')?.reasoningLevels).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
     ]);
     expect(defaultModel?.presetMapping).toEqual({
       default: 'grok-build-0.1',

@@ -13,6 +13,11 @@ const xaiCatalog: ProviderCatalog = {
   defaultModel: 'grok-build-0.1',
   models: [
     { id: 'grok-build-0.1', name: 'Grok Build 0.1' },
+    {
+      id: 'grok-4.6',
+      name: 'Grok 4.6',
+      reasoningLevels: ['low', 'medium', 'high', 'xhigh'],
+    },
     { id: 'grok-4.5', name: 'Grok 4.5', reasoningLevels: ['low', 'medium', 'high'] },
     { id: 'grok-4.3', name: 'Grok 4.3', reasoningLevels: ['none', 'low', 'medium', 'high'] },
   ],
@@ -96,6 +101,7 @@ describe('xai adapter', () => {
   const adapter = requireAdapter('xai');
 
   it('returns per-model levels from catalog metadata', () => {
+    expect(adapter.getOptions('grok-4.6', xaiCatalog)).toEqual(['low', 'medium', 'high', 'xhigh']);
     expect(adapter.getOptions('grok-4.5', xaiCatalog)).toEqual(['low', 'medium', 'high']);
     expect(adapter.getOptions('grok-4.3', xaiCatalog)).toEqual(['none', 'low', 'medium', 'high']);
   });
@@ -107,6 +113,7 @@ describe('xai adapter', () => {
   });
 
   it('writes and clears suffixed values through apply', () => {
+    expect(adapter.apply('grok-4.6', 'xhigh')).toBe('grok-4.6(xhigh)');
     expect(adapter.apply('grok-4.5', 'high')).toBe('grok-4.5(high)');
     expect(adapter.apply('grok-4.5(high)', undefined)).toBe('grok-4.5');
     expect(adapter.apply('grok-4.3', 'none')).toBe('grok-4.3(none)');
