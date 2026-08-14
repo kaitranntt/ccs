@@ -35,6 +35,17 @@ function isFlag(arg: string): boolean {
   return arg.startsWith('-');
 }
 
+/**
+ * Write to stdout and wait for the flush to complete.
+ * process.exit() right after a large piped write truncates output at the
+ * pipe buffer (~64 KiB), so delegation results must be drained first.
+ */
+function writeStdoutAndFlush(text: string): Promise<void> {
+  return new Promise((resolve) => {
+    process.stdout.write(text + '\n', () => resolve());
+  });
+}
+
 function isInlineCcsValueFlag(arg: string): boolean {
   return Array.from(CCS_FLAGS_WITH_VALUE).some(
     (flag) => flag.startsWith('--') && arg.startsWith(`${flag}=`)
@@ -147,7 +158,7 @@ export class DelegationHandler {
 
       // 5. Format and display results
       const formatted = await ResultFormatter.format(result);
-      console.log(formatted);
+      await writeStdoutAndFlush(formatted);
 
       // 6. Exit with proper code
       process.exit(result.exitCode || 0);
@@ -192,7 +203,7 @@ export class DelegationHandler {
     });
 
     const formatted = await ResultFormatter.format(result);
-    console.log(formatted);
+    await writeStdoutAndFlush(formatted);
 
     process.exit(result.exitCode || 0);
   }
