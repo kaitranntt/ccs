@@ -89,8 +89,15 @@ describe('image-analysis-runtime-status circular dependency regression', () => {
       '../../cliproxy/services/stats-fetcher': {
         isCliproxyRunning: async () => true,
       },
-      '../../config/unified-config-types': {
-        DEFAULT_IMAGE_ANALYSIS_CONFIG: {},
+      '../../config/unified-config-types': {},
+      '../../config/config-loader-facade': {
+        getImageAnalysisConfig: () => ({
+          enabled: true,
+          timeout: 60,
+          provider_models: { ghcp: 'claude-haiku-4.5' },
+          fallback_backend: 'ghcp',
+          profile_backends: {},
+        }),
       },
       './image-analysis-backend-resolver': {
         resolveImageAnalysisStatus: () => createStatus(),
