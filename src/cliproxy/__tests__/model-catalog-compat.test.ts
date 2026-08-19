@@ -46,21 +46,62 @@ describe('model-catalog compatibility lookups', () => {
     expect(PROVIDER_TO_CHANNEL.xai).toBe('xai');
   });
 
-  it('merges live xAI model metadata while preserving the static coding default', () => {
+  it('merges live Grok 4.6 metadata while preserving the static coding default', () => {
     const catalog = mergeCatalog('xai', [
       { id: 'grok-build-0.1', display_name: 'Grok Build 0.1' },
       {
-        id: 'grok-4.5',
-        display_name: 'Grok 4.5',
-        thinking: { levels: ['low', 'medium', 'high'] },
+        id: 'grok-4.6',
+        display_name: 'Grok 4.6',
+        context_length: 500_000,
+        thinking: {
+          levels: ['low', 'medium', 'high', 'xhigh'],
+          zero_allowed: false,
+        },
       },
     ]);
 
     expect(catalog?.defaultModel).toBe('grok-build-0.1');
-    expect(catalog?.models[1]?.thinking).toMatchObject({
-      type: 'levels',
-      levels: ['low', 'medium', 'high'],
+    expect(catalog?.models[1]).toMatchObject({
+      id: 'grok-4.6',
+      contextWindow: 500_000,
+      thinking: {
+        type: 'levels',
+        levels: ['low', 'medium', 'high', 'xhigh'],
+        zeroAllowed: false,
+      },
     });
+    expect(catalog?.models[1]?.extendedContext).toBeUndefined();
+  });
+
+  it('preserves static zeroAllowed when live level metadata omits it', () => {
+    const catalog = mergeCatalog('xai', [
+      {
+        id: 'grok-4.3',
+        display_name: 'Grok 4.3',
+        thinking: { levels: ['none', 'low', 'medium', 'high'] },
+      },
+    ]);
+
+    expect(catalog?.models[0]?.thinking).toMatchObject({
+      type: 'levels',
+      levels: ['none', 'low', 'medium', 'high'],
+      zeroAllowed: true,
+    });
+  });
+
+  it('prefers explicit live zeroAllowed over static level metadata', () => {
+    const catalog = mergeCatalog('xai', [
+      {
+        id: 'grok-4.3',
+        display_name: 'Grok 4.3',
+        thinking: {
+          levels: ['low', 'medium', 'high'],
+          zero_allowed: false,
+        },
+      },
+    ]);
+
+    expect(catalog?.models[0]?.thinking?.zeroAllowed).toBe(false);
   });
 
   it('does not export extended-context capability from live xAI context length', () => {

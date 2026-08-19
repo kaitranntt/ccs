@@ -77,6 +77,7 @@ describe('Model Catalog', () => {
       const ids = MODEL_CATALOG.xai.models.map((model) => model.id);
       assert.deepStrictEqual(ids, [
         'grok-build-0.1',
+        'grok-4.6',
         'grok-4.5',
         'grok-4.3',
         'grok-4.20-0309-reasoning',
@@ -86,6 +87,18 @@ describe('Model Catalog', () => {
         'grok-3-mini-fast',
         'grok-composer-2.5-fast',
       ]);
+    });
+
+    it('includes Grok 4.6 with upstream reasoning metadata', () => {
+      const { MODEL_CATALOG } = modelCatalog;
+      const grok46 = MODEL_CATALOG.xai.models.find((model) => model.id === 'grok-4.6');
+
+      assert(grok46, 'Should include grok-4.6');
+      assert.strictEqual(grok46.name, 'Grok 4.6');
+      assert.strictEqual(grok46.contextWindow, 500000);
+      assert.strictEqual(grok46.thinking.type, 'levels');
+      assert.deepStrictEqual(grok46.thinking.levels, ['low', 'medium', 'high', 'xhigh']);
+      assert.strictEqual(grok46.thinking.zeroAllowed, false);
     });
 
     it('does not expose Claude [1m] suffix support for xAI model IDs', () => {

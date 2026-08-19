@@ -198,6 +198,7 @@ function mapThinking(remote?: RemoteThinkingSupport): ThinkingSupport | undefine
     return {
       type: 'levels',
       levels: remote.levels,
+      zeroAllowed: remote.zero_allowed,
       dynamicAllowed: remote.dynamic_allowed,
     };
   }
@@ -279,6 +280,7 @@ export function mergeCatalog(
       const mergedThinking = remoteEntry.thinking
         ? {
             ...remoteEntry.thinking,
+            zeroAllowed: remoteEntry.thinking.zeroAllowed ?? staticEntry.thinking?.zeroAllowed,
             maxLevel: remoteEntry.thinking.maxLevel ?? staticEntry.thinking?.maxLevel,
           }
         : staticEntry.thinking;
