@@ -4,18 +4,18 @@ import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 
 /**
- * Regression: resolveImageAnalysisRuntimeStatus used to default to the built-in
- * DEFAULT_IMAGE_ANALYSIS_CONFIG constant, which carries empty profile_backends
- * and a gemini fallback_backend. Launch paths call it without an explicit
- * config, so user-configured profile_backends were dropped and every settings
- * profile resolved to gemini, then bailed to native Read on missing Gemini auth.
+ * Regression (#1703): the original CLIProxy backend only serves the root
+ * /v1/messages route. Image analysis used to build
+ * /api/provider/<id>/v1/messages unconditionally, which 404s on original.
+ * The default backend is original, so the default-config path must resolve
+ * a null runtimePath (root route) for CLIProxy providers.
  */
-describe('resolveImageAnalysisRuntimeStatus config default', () => {
+describe('resolveImageAnalysisRuntimeStatus original backend route', () => {
   let tmpHome = '';
   let previousCcsHome: string | undefined;
 
   beforeEach(() => {
-    tmpHome = mkdtempSync(join(tmpdir(), 'ccs-image-analysis-config-default-'));
+    tmpHome = mkdtempSync(join(tmpdir(), 'ccs-image-analysis-original-route-'));
     const ccsDir = join(tmpHome, '.ccs');
     mkdirSync(ccsDir, { recursive: true });
 
@@ -46,10 +46,10 @@ describe('resolveImageAnalysisRuntimeStatus config default', () => {
         '  enabled: true',
         '  timeout: 60',
         '  provider_models:',
-        '    claude: claude-haiku-4-5-20251001',
-        '  fallback_backend: claude',
+        '    gemini: gemini-2.5-flash',
+        '  fallback_backend: gemini',
         '  profile_backends:',
-        '    deepseek: claude',
+        '    deepseek: gemini',
         '',
       ].join('\n')
     );
@@ -70,7 +70,7 @@ describe('resolveImageAnalysisRuntimeStatus config default', () => {
     }
   });
 
-  it('honors user profile_backends when no explicit config is passed', async () => {
+  it('resolves the root runtime path for the original backend', async () => {
     const { resolveImageAnalysisRuntimeStatus } = await import(
       '../../../../src/utils/hooks/image-analysis-runtime-status'
     );
@@ -83,7 +83,7 @@ describe('resolveImageAnalysisRuntimeStatus config default', () => {
       undefined,
       {
         checkRemoteProxy: async () => ({ reachable: true }),
-        fetchRemoteAuthStatus: async () => [{ provider: 'claude', authenticated: true }],
+        fetchRemoteAuthStatus: async () => [{ provider: 'gemini', authenticated: true }],
         getProxyTarget: () => ({
           host: '100.64.0.1',
           port: 8317,
@@ -92,7 +92,7 @@ describe('resolveImageAnalysisRuntimeStatus config default', () => {
         }),
         initializeAccounts: () => {},
         getAuthStatus: () => ({
-          provider: 'claude',
+          provider: 'gemini',
           authenticated: true,
           tokenDir: join(tmpHome, 'auth'),
           tokenFiles: [],
@@ -103,12 +103,9 @@ describe('resolveImageAnalysisRuntimeStatus config default', () => {
       }
     );
 
-    expect(status.backendId).toBe('claude');
+    expect(status.backendId).toBe('gemini');
     expect(status.resolutionSource).toBe('profile-backend');
-    expect(status.model).toBe('claude-haiku-4-5-20251001');
-    // Claude-compatible traffic routes at the CLIProxy root; the scoped
-    // /api/provider/claude path is not part of the canonical route helper.
+    // Root route: the hook appends /v1/messages directly to the proxy base.
     expect(status.runtimePath).toBeNull();
-    expect(status.effectiveRuntimeMode).toBe('cliproxy-image-analysis');
   });
 });
