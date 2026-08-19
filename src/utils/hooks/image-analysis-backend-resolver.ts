@@ -8,6 +8,7 @@ import {
   mapExternalProviderName,
 } from '../../cliproxy/provider-capabilities';
 import { getProviderCatalog, supportsNativeImageInput } from '../../cliproxy/model-catalog';
+import { buildCliproxyProviderPath } from '../../cliproxy/config/provider-route';
 import { extractProviderFromPathname } from '../../cliproxy/ai-providers/model-id-normalizer';
 import type { CliproxyBridgeMetadata } from '../../api/services/profile-types';
 import type { Settings } from '../../types/config';
@@ -249,6 +250,12 @@ function getBackendDisplayName(backendId: string | null): string | null {
 function getRuntimePath(backendId: string | null): string | null {
   if (!backendId) {
     return null;
+  }
+
+  if (isCLIProxyProvider(backendId)) {
+    // Claude-compatible traffic and the original backend route at the
+    // CLIProxy root; /api/provider/<id> scoped routes are Plus-only.
+    return buildCliproxyProviderPath(backendId) || null;
   }
 
   return `/api/provider/${backendId}`;
