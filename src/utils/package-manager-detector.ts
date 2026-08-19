@@ -125,9 +125,15 @@ function inferInstallFromPath(
     normalizedPath.includes('/global/') &&
     normalizedPath.includes('/node_modules/@kaitranntt/ccs')
   ) {
-    const pnpmFlatMatch = normalizedPath.match(/\/global\/([^/]+)\/node_modules\/@kaitranntt\/ccs/);
+    // pnpm v9+ nests a version segment plus a store-hash segment under
+    // global/ (e.g. global/v11/139e7-1a00df73ffb.../node_modules), while
+    // older pnpm uses a single segment (global/5/node_modules). Accept one
+    // or more segments but keep excluding yarn's global/lib/node_modules.
+    const pnpmFlatMatch = normalizedPath.match(
+      /\/global\/([^/]+(?:\/[^/]+)*)\/node_modules\/@kaitranntt\/ccs/
+    );
 
-    if (!pnpmFlatMatch || pnpmFlatMatch[1] === 'lib') {
+    if (!pnpmFlatMatch || pnpmFlatMatch[1].split('/')[0] === 'lib') {
       return null;
     }
 

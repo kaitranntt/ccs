@@ -186,6 +186,45 @@ describe('package-manager-detector', () => {
     expect(install.prefix).toBe(join(tempRoot, 'custom-pnpm-root'));
   });
 
+  it('detects pnpm v9+ global store layouts with version and hash segments', () => {
+    const tempRoot = makeTempDir('ccs-install-detector-pnpm-global-v11-');
+    const packageRoot = join(
+      tempRoot,
+      'Library',
+      'pnpm',
+      'global',
+      'v11',
+      '139e7-1a00df73ffb-064d180929716eff',
+      'node_modules',
+      '@kaitranntt',
+      'ccs'
+    );
+
+    writePackage(packageRoot, '7.67.0-dev.9');
+
+    const install = detectCurrentInstall(join(packageRoot, 'dist', 'ccs.js'));
+
+    expect(install.manager).toBe('pnpm');
+    expect(install.prefix).toBe(join(tempRoot, 'Library', 'pnpm'));
+  });
+
+  it('detects Windows pnpm v10 global store layouts with nested segments', () => {
+    const install = detectCurrentInstall(
+      'C:/Users/dev/AppData/Local/pnpm/global/v10/b3b1c2de-9f88-4a7e/node_modules/@kaitranntt/ccs/dist/ccs.js'
+    );
+
+    expect(install.manager).toBe('pnpm');
+    expect(install.prefix).toBe('C:/Users/dev/AppData/Local/pnpm');
+  });
+
+  it('still excludes yarn global/lib/node_modules from pnpm detection', () => {
+    const install = detectCurrentInstall(
+      '/Users/dev/.yarn/global/lib/node_modules/@kaitranntt/ccs/dist/ccs.js'
+    );
+
+    expect(install.manager).not.toBe('pnpm');
+  });
+
   it('detects Windows npm globals without a lib directory', () => {
     const install = detectCurrentInstall(
       'C:/Program Files/node-prefix/node_modules/@kaitranntt/ccs/dist/ccs.js'
