@@ -16,10 +16,8 @@ import { getProxyTarget, type ProxyTarget } from '../../cliproxy/proxy/proxy-tar
 import { getProviderDisplayName, isCLIProxyProvider } from '../../cliproxy/provider-capabilities';
 import { isCliproxyRunning } from '../../cliproxy/services/stats-fetcher';
 import type { CLIProxyProvider } from '../../cliproxy/types';
-import {
-  DEFAULT_IMAGE_ANALYSIS_CONFIG,
-  type ImageAnalysisConfig,
-} from '../../config/unified-config-types';
+import { getImageAnalysisConfig } from '../../config/config-loader-facade';
+import { type ImageAnalysisConfig } from '../../config/unified-config-types';
 import {
   resolveImageAnalysisStatus,
   type ImageAnalysisResolutionContext,
@@ -191,9 +189,14 @@ export async function hydrateImageAnalysisRuntimeStatus(
 
 export async function resolveImageAnalysisRuntimeStatus(
   context: ImageAnalysisResolutionContext,
-  config: ImageAnalysisConfig = DEFAULT_IMAGE_ANALYSIS_CONFIG,
+  config?: ImageAnalysisConfig,
   deps: Partial<ImageAnalysisRuntimeStatusDeps> = {}
 ): Promise<ImageAnalysisStatus> {
-  const baseStatus = resolveImageAnalysisStatus(context, config);
+  // Fall back to the user's saved image_analysis config, not the built-in
+  // constant. Launch paths call this without an explicit config, and the
+  // constant carries empty profile_backends plus a gemini fallback_backend,
+  // so user mappings were dropped and every profile resolved to gemini.
+  const resolvedConfig = config ?? getImageAnalysisConfig();
+  const baseStatus = resolveImageAnalysisStatus(context, resolvedConfig);
   return hydrateImageAnalysisRuntimeStatus(baseStatus, deps);
 }
