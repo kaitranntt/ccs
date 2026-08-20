@@ -19,6 +19,9 @@
     "url": "git+https://github.com/kaitranntt/ccs.git"
   },
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "author": {
     "name": "Tam Nhu Tran (Kai)",
     "email": "kaitranntt@users.noreply.github.com"

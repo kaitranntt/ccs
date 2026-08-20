@@ -115,7 +115,7 @@ PACKAGE_NAME=$(jq -r '.name' package.json)
 if npm view "${PACKAGE_NAME}@${VERSION}" version >/dev/null 2>&1; then
   log_info "npm already has ${PACKAGE_NAME}@${VERSION}, skipping publish"
 else
-  npm publish --tag dev
+  npm publish --tag dev --access public
   log_info "Published to npm with @dev tag"
 fi
 

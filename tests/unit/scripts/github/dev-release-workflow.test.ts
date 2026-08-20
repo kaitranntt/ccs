@@ -60,4 +60,16 @@ describe('dev release workflow', () => {
     expect(script).toContain('git commit -m "chore(release): ${VERSION}"');
     expect(script).not.toContain('git commit -m "chore(release): ${VERSION} [skip ci]"');
   });
+
+  test('publishes dev releases with explicit public access for scoped package', () => {
+    const packageJsonPath = resolvePath('../../../../package.json');
+    const scriptPath = resolvePath('../../../../scripts/dev-release.sh');
+
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+    const script = fs.readFileSync(scriptPath, 'utf8');
+
+    expect(packageJson.name).toBe('@kaitranntt/ccs');
+    expect(packageJson.publishConfig).toEqual({ access: 'public' });
+    expect(script).toContain('npm publish --tag dev --access public');
+  });
 });
