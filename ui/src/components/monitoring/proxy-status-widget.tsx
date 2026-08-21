@@ -27,6 +27,8 @@ import {
   FileDown,
   Check,
   AlertCircle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -74,6 +76,26 @@ import {
 import { RoutingGuidanceCard } from '@/components/cliproxy/routing-guidance-card';
 
 type PendingInstallRisk = 'faulty' | 'experimental';
+
+const WIDGET_COLLAPSED_STORAGE_KEY = 'cliproxy-status-widget-collapsed';
+
+function readCollapsedPreference(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(WIDGET_COLLAPSED_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function persistCollapsedPreference(collapsed: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(WIDGET_COLLAPSED_STORAGE_KEY, String(collapsed));
+  } catch {
+    // Ignore storage errors (private mode, quota, etc.)
+  }
+}
 
 function formatUptime(startedAt?: string): string {
   if (!startedAt) return '';
@@ -135,6 +157,7 @@ function IconButton({
           )}
           onClick={onClick}
           disabled={disabled}
+          aria-label={tooltip}
         >
           {isPending ? (
             <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -181,6 +204,31 @@ export function ProxyStatusWidget() {
   // Version picker state (expanded section)
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedVersion, setSelectedVersion] = useState<string>('');
+
+  // Whole-widget collapse so the sidebar provider list keeps the vertical space
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(readCollapsedPreference);
+
+  const handleToggleCollapsed = () => {
+    const next = !isCollapsed;
+    setIsCollapsed(next);
+    // Collapsing also closes version management so it cannot stay open but hidden
+    if (next) setIsExpanded(false);
+    persistCollapsedPreference(next);
+  };
+
+  // Opening version settings from a collapsed widget must reveal the section
+  const handleToggleVersionSettings = () => {
+    const next = !isExpanded;
+    setIsExpanded(next);
+    if (next && isCollapsed) {
+      setIsCollapsed(false);
+      persistCollapsedPreference(false);
+    }
+  };
+
+  const collapseTooltip = isCollapsed
+    ? t('proxyStatusWidget.tooltipExpandWidget')
+    : t('proxyStatusWidget.tooltipCollapseWidget');
 
   // Confirmation dialog state for risky versions
   const [showUnstableConfirm, setShowUnstableConfirm] = useState(false);
@@ -325,30 +373,50 @@ export function ProxyStatusWidget() {
               {t('proxyStatusWidget.active')}
             </Badge>
           </div>
-          <Activity className="w-3 h-3 text-blue-600" />
-        </div>
-
-        <div className="mt-2 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1 mb-1">
-            <span className="font-mono">{remoteDisplayHost}</span>
+          <div className="flex items-center gap-1">
+            <Activity className="w-3 h-3 text-blue-600" />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={handleToggleCollapsed}
+              title={collapseTooltip}
+              aria-label={collapseTooltip}
+            >
+              {isCollapsed ? (
+                <ChevronDown className="w-3.5 h-3.5" />
+              ) : (
+                <ChevronUp className="w-3.5 h-3.5" />
+              )}
+            </Button>
           </div>
-          <p className="text-[10px] text-muted-foreground/70 leading-tight">
-            {t('proxyStatusWidget.trafficAutoRouted')}
-          </p>
         </div>
 
-        <RoutingGuidanceCard
-          key={`remote:${routingState?.strategy ?? 'round-robin'}:${effectiveSessionAffinityState?.enabled ?? 'na'}:${effectiveSessionAffinityState?.ttl ?? 'na'}:${effectiveSessionAffinityState?.manageable ?? 'na'}`}
-          compact
-          className="mt-3"
-          state={routingState}
-          sessionAffinityState={effectiveSessionAffinityState}
-          isLoading={routingLoading || sessionAffinityLoading}
-          isSaving={isSavingRoutingConfig}
-          error={routingConfigError}
-          onApply={(strategy) => updateRouting.mutate(strategy)}
-          onApplyAffinity={(data) => updateSessionAffinity.mutate(data)}
-        />
+        {!isCollapsed && (
+          <>
+            <div className="mt-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1 mb-1">
+                <span className="font-mono">{remoteDisplayHost}</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground/70 leading-tight">
+                {t('proxyStatusWidget.trafficAutoRouted')}
+              </p>
+            </div>
+
+            <RoutingGuidanceCard
+              key={`remote:${routingState?.strategy ?? 'round-robin'}:${effectiveSessionAffinityState?.enabled ?? 'na'}:${effectiveSessionAffinityState?.ttl ?? 'na'}:${effectiveSessionAffinityState?.manageable ?? 'na'}`}
+              compact
+              className="mt-3"
+              state={routingState}
+              sessionAffinityState={effectiveSessionAffinityState}
+              isLoading={routingLoading || sessionAffinityLoading}
+              isSaving={isSavingRoutingConfig}
+              error={routingConfigError}
+              onApply={(strategy) => updateRouting.mutate(strategy)}
+              onApplyAffinity={(data) => updateSessionAffinity.mutate(data)}
+            />
+          </>
+        )}
       </div>
     );
   }
@@ -413,8 +481,13 @@ export function ProxyStatusWidget() {
                   ? t('proxyStatusWidget.tooltipClose')
                   : t('proxyStatusWidget.tooltipVersionSettings')
               }
-              onClick={() => setIsExpanded(!isExpanded)}
+              onClick={handleToggleVersionSettings}
               className={isExpanded ? 'bg-muted' : undefined}
+            />
+            <IconButton
+              icon={isCollapsed ? ChevronDown : ChevronUp}
+              tooltip={collapseTooltip}
+              onClick={handleToggleCollapsed}
             />
           </div>
         </div>
@@ -458,7 +531,7 @@ export function ProxyStatusWidget() {
         )}
 
         {/* Stats row when running */}
-        {isRunning && status && (
+        {!isCollapsed && isRunning && status && (
           <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               {t('proxyStatusWidget.port', { port: status.port })}
@@ -478,35 +551,39 @@ export function ProxyStatusWidget() {
           </div>
         )}
 
-        {/* Sync status row */}
-        <div className="mt-2 flex items-center gap-1.5 text-xs">
-          {isSyncConfigured ? (
-            <Check className="w-3 h-3 text-green-600 dark:text-green-400" />
-          ) : (
-            <AlertCircle className="w-3 h-3 text-muted-foreground" />
-          )}
-          <span
-            className={cn(
-              'text-xs',
-              isSyncConfigured ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'
-            )}
-          >
-            {syncStatusText}
-          </span>
-        </div>
+        {!isCollapsed && (
+          <>
+            {/* Sync status row */}
+            <div className="mt-2 flex items-center gap-1.5 text-xs">
+              {isSyncConfigured ? (
+                <Check className="w-3 h-3 text-green-600 dark:text-green-400" />
+              ) : (
+                <AlertCircle className="w-3 h-3 text-muted-foreground" />
+              )}
+              <span
+                className={cn(
+                  'text-xs',
+                  isSyncConfigured ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'
+                )}
+              >
+                {syncStatusText}
+              </span>
+            </div>
 
-        <RoutingGuidanceCard
-          key={`local:${routingState?.strategy ?? 'round-robin'}:${effectiveSessionAffinityState?.enabled ?? 'na'}:${effectiveSessionAffinityState?.ttl ?? 'na'}:${effectiveSessionAffinityState?.manageable ?? 'na'}`}
-          compact
-          className="mt-3"
-          state={routingState}
-          sessionAffinityState={effectiveSessionAffinityState}
-          isLoading={routingLoading || sessionAffinityLoading}
-          isSaving={isSavingRoutingConfig}
-          error={routingConfigError}
-          onApply={(strategy) => updateRouting.mutate(strategy)}
-          onApplyAffinity={(data) => updateSessionAffinity.mutate(data)}
-        />
+            <RoutingGuidanceCard
+              key={`local:${routingState?.strategy ?? 'round-robin'}:${effectiveSessionAffinityState?.enabled ?? 'na'}:${effectiveSessionAffinityState?.ttl ?? 'na'}:${effectiveSessionAffinityState?.manageable ?? 'na'}`}
+              compact
+              className="mt-3"
+              state={routingState}
+              sessionAffinityState={effectiveSessionAffinityState}
+              isLoading={routingLoading || sessionAffinityLoading}
+              isSaving={isSavingRoutingConfig}
+              error={routingConfigError}
+              onApply={(strategy) => updateRouting.mutate(strategy)}
+              onApplyAffinity={(data) => updateSessionAffinity.mutate(data)}
+            />
+          </>
+        )}
 
         {/* Expanded section: Version Management (available even when not running) */}
         <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
