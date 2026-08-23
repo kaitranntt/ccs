@@ -264,6 +264,9 @@ function publishCanonicalContent(
     const currentStats = getLstatSync(writePath);
     const current = currentStats?.isFile() ? canonicalIdentityOf(currentStats) : null;
     if (!canonicalIdentityMatches(expected, current)) {
+      // EEXIST is this file's marker for "a race was detected", the same code
+      // the reappeared-path and concurrent-replacement guards raise. It does
+      // not mean a no-replace link() or open('wx') hit an existing path.
       throw Object.assign(new TypeError(`Canonical file changed during adoption: ${writePath}`), {
         code: 'EEXIST',
       });
