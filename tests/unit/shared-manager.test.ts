@@ -686,6 +686,10 @@ describe('SharedManager', () => {
           foreignWriter.restore();
         }
 
+        // The writer only fires when the canonical path is observed empty, so
+        // zero writes is the invariant itself: adoption never left the path
+        // without a regular file.
+        expect(foreignWriter.placeholderWrites()).toBe(0);
         expect(fs.existsSync(canonicalPath)).toBe(true);
         expect(fs.readFileSync(canonicalPath, 'utf8')).not.toBe(placeholder);
         expect([divergedSettings, previousSettings]).toContainEqual(readJson(canonicalPath));

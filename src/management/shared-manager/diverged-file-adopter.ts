@@ -148,9 +148,7 @@ interface CanonicalIdentity {
   size: number;
 }
 
-function readCanonicalIdentity(writePath: string): CanonicalIdentity | null {
-  const stats = getLstatSync(writePath);
-  if (!stats?.isFile()) return null;
+function canonicalIdentityOf(stats: fs.Stats): CanonicalIdentity {
   return { ino: stats.ino, mtimeMs: stats.mtimeMs, size: stats.size };
 }
 
@@ -246,9 +244,7 @@ function publishCanonicalContent(
     descriptor = null;
 
     const currentStats = getLstatSync(writePath);
-    const current = currentStats?.isFile()
-      ? { ino: currentStats.ino, mtimeMs: currentStats.mtimeMs, size: currentStats.size }
-      : null;
+    const current = currentStats?.isFile() ? canonicalIdentityOf(currentStats) : null;
     if (!canonicalIdentityMatches(expected, current)) {
       throw Object.assign(new TypeError(`Canonical file changed during adoption: ${writePath}`), {
         code: 'EEXIST',
@@ -297,12 +293,12 @@ function getCanonicalFile(canonicalPath: string): {
     });
   }
 
-  // Identity first: a write landing between the two reads leaves us holding
-  // newer bytes than the identity describes, and publication fails closed.
-  const identity = readCanonicalIdentity(writePath);
+  // The identity describes the inode as of the stat above, taken before the
+  // content read: a write landing in between leaves us holding newer bytes
+  // than the identity describes, and publication fails closed.
   return {
     content: fs.readFileSync(writePath),
-    identity,
+    identity: canonicalIdentityOf(canonicalStats),
     mode: canonicalStats.mode & 0o777,
     mtimeMs: canonicalStats.mtimeMs,
     writePath,
