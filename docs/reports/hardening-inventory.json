@@ -1,31 +1,11 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2516,
+    "totalOccurrences": 2509,
     "filesAffected": 263,
-    "hotpathOccurrences": 1190,
+    "hotpathOccurrences": 1183,
     "hotpathFilesAffected": 156,
     "topHotpathFiles": [
-      {
-        "file": "src/management/shared-manager/diverged-file-adopter.ts",
-        "count": 36,
-        "calls": [
-          "chmodSync",
-          "closeSync",
-          "fsyncSync",
-          "linkSync",
-          "lstatSync",
-          "openSync",
-          "readdirSync",
-          "readFileSync",
-          "readlinkSync",
-          "renameSync",
-          "statSync",
-          "unlinkSync",
-          "writeFileSync"
-        ],
-        "markers": []
-      },
       {
         "file": "src/utils/browser/mcp-installer.ts",
         "count": 32,
@@ -51,6 +31,26 @@
           "existsSync",
           "mkdirSync",
           "readFileSync",
+          "renameSync",
+          "statSync",
+          "unlinkSync",
+          "writeFileSync"
+        ],
+        "markers": []
+      },
+      {
+        "file": "src/management/shared-manager/diverged-file-adopter.ts",
+        "count": 29,
+        "calls": [
+          "chmodSync",
+          "closeSync",
+          "fsyncSync",
+          "linkSync",
+          "lstatSync",
+          "openSync",
+          "readdirSync",
+          "readFileSync",
+          "readlinkSync",
           "renameSync",
           "statSync",
           "unlinkSync",
@@ -260,26 +260,6 @@
         "markers": []
       },
       {
-        "file": "src/management/shared-manager/diverged-file-adopter.ts",
-        "count": 36,
-        "calls": [
-          "chmodSync",
-          "closeSync",
-          "fsyncSync",
-          "linkSync",
-          "lstatSync",
-          "openSync",
-          "readdirSync",
-          "readFileSync",
-          "readlinkSync",
-          "renameSync",
-          "statSync",
-          "unlinkSync",
-          "writeFileSync"
-        ],
-        "markers": []
-      },
-      {
         "file": "src/cliproxy/executor/__tests__/composite-variant-service.test.ts",
         "count": 33,
         "calls": [
@@ -300,6 +280,22 @@
           "mkdirSync",
           "readdirSync",
           "rmSync",
+          "unlinkSync",
+          "writeFileSync"
+        ],
+        "markers": []
+      },
+      {
+        "file": "src/utils/browser/mcp-installer.ts",
+        "count": 32,
+        "calls": [
+          "chmodSync",
+          "copyFileSync",
+          "existsSync",
+          "mkdirSync",
+          "readFileSync",
+          "renameSync",
+          "statSync",
           "unlinkSync",
           "writeFileSync"
         ],

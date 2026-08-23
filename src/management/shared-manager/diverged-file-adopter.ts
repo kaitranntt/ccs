@@ -164,6 +164,36 @@ function canonicalIdentityMatches(
   );
 }
 
+function tempWritePath(targetPath: string): string {
+  return `${targetPath}.ccs-write-${process.pid}-${Date.now()}-${adoptionClaimSequence++}`;
+}
+
+/**
+ * Write content into a fresh temp file and make it durable, so whatever
+ * publishes it under its final name publishes complete bytes.
+ */
+function writeDurableTempFile(tempPath: string, content: Buffer, mode: number): void {
+  let descriptor: number | null = null;
+  try {
+    descriptor = fs.openSync(tempPath, 'wx', mode);
+    fs.fchmodSync(descriptor, mode);
+    fs.writeFileSync(descriptor, content);
+    fs.fsyncSync(descriptor);
+  } finally {
+    if (descriptor !== null) {
+      fs.closeSync(descriptor);
+    }
+  }
+}
+
+function discardTempFile(tempPath: string): void {
+  try {
+    fs.unlinkSync(tempPath);
+  } catch {
+    // The temp file may not have been created or may already have been renamed.
+  }
+}
+
 /**
  * Create a file only if the path is free, writing the content atomically.
  *
@@ -171,26 +201,13 @@ function canonicalIdentityMatches(
  * cannot overwrite each other's sidecar artifacts.
  */
 function createFileNoReplace(targetPath: string, content: Buffer, mode: number): void {
-  const tempPath = `${targetPath}.ccs-write-${process.pid}-${Date.now()}-${adoptionClaimSequence++}`;
-  let descriptor: number | null = null;
+  const tempPath = tempWritePath(targetPath);
   try {
-    descriptor = fs.openSync(tempPath, 'wx', mode);
-    fs.fchmodSync(descriptor, mode);
-    fs.writeFileSync(descriptor, content);
-    fs.fsyncSync(descriptor);
-    fs.closeSync(descriptor);
-    descriptor = null;
+    writeDurableTempFile(tempPath, content, mode);
     fs.linkSync(tempPath, targetPath);
     fs.unlinkSync(tempPath);
   } catch (err) {
-    if (descriptor !== null) {
-      fs.closeSync(descriptor);
-    }
-    try {
-      fs.unlinkSync(tempPath);
-    } catch {
-      // The temp file may not have been created or may already have been renamed.
-    }
+    discardTempFile(tempPath);
     throw err;
   }
 }
@@ -226,6 +243,13 @@ function publishSidecarNoReplace(basePath: string, content: Buffer, mode: number
  * that got there first; the adopted bytes stay in the sidecars the caller
  * published. A pure chmod is not a content change, so the mode the inode
  * carries at publication time wins.
+ *
+ * The guard is read-then-act, not atomic: POSIX offers no compare-and-swap
+ * rename, so a writer landing between the check and the rename is still
+ * overwritten. That is a narrowing, not a guarantee - the window shrinks from
+ * the ~100 ms the old claim-and-republish path left open to two adjacent
+ * syscalls, and the pre-image sidecar the caller published keeps even that
+ * outcome recoverable. Do not build stricter guarantees on top of it.
  */
 function publishCanonicalContent(
   writePath: string,
@@ -233,15 +257,9 @@ function publishCanonicalContent(
   mode: number,
   expected: CanonicalIdentity | null
 ): void {
-  const tempPath = `${writePath}.ccs-write-${process.pid}-${Date.now()}-${adoptionClaimSequence++}`;
-  let descriptor: number | null = null;
+  const tempPath = tempWritePath(writePath);
   try {
-    descriptor = fs.openSync(tempPath, 'wx', mode);
-    fs.fchmodSync(descriptor, mode);
-    fs.writeFileSync(descriptor, content);
-    fs.fsyncSync(descriptor);
-    fs.closeSync(descriptor);
-    descriptor = null;
+    writeDurableTempFile(tempPath, content, mode);
 
     const currentStats = getLstatSync(writePath);
     const current = currentStats?.isFile() ? canonicalIdentityOf(currentStats) : null;
@@ -257,14 +275,7 @@ function publishCanonicalContent(
     }
     fs.renameSync(tempPath, writePath);
   } catch (err) {
-    if (descriptor !== null) {
-      fs.closeSync(descriptor);
-    }
-    try {
-      fs.unlinkSync(tempPath);
-    } catch {
-      // The temp file may not have been created or may already have been renamed.
-    }
+    discardTempFile(tempPath);
     throw err;
   }
 }
