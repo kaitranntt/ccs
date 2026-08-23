@@ -544,7 +544,18 @@ describe('SharedManager', () => {
       });
     });
 
-    it('preserves a canonical write that lands during no-replace publication', () => {
+    /**
+     * Replaces 'preserves a canonical write that lands during no-replace
+     * publication', which locked in the outcome of the CCS-4 incident.
+     *
+     * The intent it encoded - never clobber a writer that got to the canonical
+     * file first - is kept, but it is now enforced by the compare-and-swap
+     * guard instead of by an EEXIST from a no-replace link. The difference
+     * that matters: the canonical path is no longer emptied first, so only a
+     * genuinely concurrent write can land here, and it is preserved without
+     * costing the user the settings that were already there.
+     */
+    it('refuses to publish when the canonical file changes before publication', () => {
       const manager = new SharedManager();
       const instancePath = instanceDir('canonical-race');
       const canonicalPath = path.join(claudeDir(), 'settings.json');
@@ -555,23 +566,131 @@ describe('SharedManager', () => {
       writeJson(divergedPath, { generation: 1 });
       setMtime(divergedPath, fs.statSync(canonicalPath).mtimeMs + 2_000);
 
-      const originalLinkSync = fs.linkSync;
-      const linkSpy = spyOn(fs, 'linkSync').mockImplementation(((
-        existingPath: fs.PathLike,
-        newPath: fs.PathLike
+      // Land the competing write while the publication temp file is being
+      // prepared, i.e. after the canonical bytes were read but before the
+      // compare-and-swap guard re-checks the inode.
+      const originalOpenSync = fs.openSync;
+      const openSpy = spyOn(fs, 'openSync').mockImplementation(((
+        openPath: fs.PathLike,
+        flags: number | string,
+        mode?: fs.Mode
       ) => {
-        if (String(newPath) === canonicalPath && String(existingPath).includes('.ccs-write-')) {
+        if (String(openPath).startsWith(`${canonicalPath}.ccs-write-`)) {
           writeJson(canonicalPath, { generation: 99 });
         }
-        return originalLinkSync(existingPath, newPath);
-      }) as typeof fs.linkSync);
+        return originalOpenSync(openPath, flags, mode);
+      }) as typeof fs.openSync);
 
-      expect(() => manager.linkSharedDirectories(instancePath)).toThrow();
-      linkSpy.mockRestore();
+      expect(() => manager.linkSharedDirectories(instancePath)).toThrow(
+        'Canonical file changed during adoption'
+      );
+      openSpy.mockRestore();
       expect(readJson(canonicalPath)).toEqual({ generation: 99 });
       expect(readJson(divergedPath)).toEqual({ generation: 1 });
       expect(readJson(`${canonicalPath}.bak-ccs-adopt`)).toEqual({ generation: 0 });
+      expect(readJson(`${divergedPath}.ccs-adopted-recovery`)).toEqual({ generation: 1 });
     });
+
+    /**
+     * Model a foreign writer that shares ownership of the canonical
+     * settings.json: the instant the path is left without a file, it lands an
+     * empty-settings placeholder there. Claude Code does exactly this on
+     * startup, and a second concurrent `ccs` does the same through
+     * shared-dir-linker.ts:127.
+     *
+     * The writer reacts to the path becoming empty rather than to one specific
+     * call site, so it keeps modelling the race no matter which fs primitive
+     * the adopter uses to move the canonical file out of the way.
+     */
+    function installForeignCanonicalWriter(
+      canonicalPath: string,
+      placeholder: string
+    ): { placeholderWrites: () => number; restore: () => void } {
+      let placeholderWrites = 0;
+      const claimEmptyCanonicalPath = (): void => {
+        if (fs.existsSync(canonicalPath)) return;
+        fs.writeFileSync(canonicalPath, placeholder, 'utf8');
+        placeholderWrites++;
+      };
+
+      const originalRenameSync = fs.renameSync;
+      const renameSpy = spyOn(fs, 'renameSync').mockImplementation(((
+        oldPath: fs.PathLike,
+        newPath: fs.PathLike
+      ) => {
+        originalRenameSync(oldPath, newPath);
+        claimEmptyCanonicalPath();
+      }) as typeof fs.renameSync);
+
+      const originalUnlinkSync = fs.unlinkSync;
+      const unlinkSpy = spyOn(fs, 'unlinkSync').mockImplementation(((targetPath: fs.PathLike) => {
+        originalUnlinkSync(targetPath);
+        claimEmptyCanonicalPath();
+      }) as typeof fs.unlinkSync);
+
+      return {
+        placeholderWrites: () => placeholderWrites,
+        restore: () => {
+          renameSpy.mockRestore();
+          unlinkSpy.mockRestore();
+        },
+      };
+    }
+
+    /**
+     * Reproduce the 2026-08-20 incident: adoption moves the canonical
+     * settings.json aside, a foreign writer fills the empty path, and the user
+     * ends up with neither the adopted nor the previous settings on the live
+     * path.
+     *
+     * The opposite outcome used to be pinned by 'preserves a canonical write
+     * that lands during no-replace publication'; that test was rewritten as
+     * 'refuses to publish when the canonical file changes before publication'
+     * once publication stopped emptying the canonical path.
+     */
+    const foreignWriterCases: ReadonlyArray<{ writer: string; placeholder: string }> = [
+      // Claude Code starts, finds no settings file and writes empty settings.
+      { writer: 'Claude Code', placeholder: '{}\n' },
+      // A second concurrent `ccs` provisions the same placeholder without the
+      // trailing newline (shared-dir-linker.ts:127).
+      { writer: 'a concurrent ccs run', placeholder: JSON.stringify({}, null, 2) },
+    ];
+
+    for (const { writer, placeholder } of foreignWriterCases) {
+      it(`keeps live settings when ${writer} fills the canonical path during adoption`, () => {
+        const manager = new SharedManager();
+        const canonicalPath = path.join(claudeDir(), 'settings.json');
+        const sharedSettingsPath = path.join(ccsDir(), 'shared', 'settings.json');
+        const previousSettings = {
+          model: 'opus',
+          permissions: { allow: ['Bash(git status:*)'] },
+        };
+        const divergedSettings = {
+          model: 'opus',
+          permissions: { allow: ['Bash(git status:*)', 'Bash(git diff:*)'] },
+        };
+
+        fs.mkdirSync(claudeDir(), { recursive: true });
+        fs.mkdirSync(path.join(ccsDir(), 'shared'), { recursive: true });
+        writeJson(canonicalPath, previousSettings);
+        writeJson(sharedSettingsPath, divergedSettings);
+        setMtime(sharedSettingsPath, fs.statSync(canonicalPath).mtimeMs + 2_000);
+
+        const foreignWriter = installForeignCanonicalWriter(canonicalPath, placeholder);
+        try {
+          manager.ensureSharedDirectories();
+        } catch {
+          // Losing the race may abort reconciliation; the user's live settings
+          // must survive either way.
+        } finally {
+          foreignWriter.restore();
+        }
+
+        expect(fs.existsSync(canonicalPath)).toBe(true);
+        expect(fs.readFileSync(canonicalPath, 'utf8')).not.toBe(placeholder);
+        expect([divergedSettings, previousSettings]).toContainEqual(readJson(canonicalPath));
+      });
+    }
 
     it('keeps adopted bytes recoverable when canonical changes after verification', () => {
       const manager = new SharedManager();
@@ -584,10 +703,12 @@ describe('SharedManager', () => {
       writeJson(divergedPath, { generation: 1 });
       setMtime(divergedPath, fs.statSync(canonicalPath).mtimeMs + 2_000);
 
+      // The diverged claim is dropped only after publication was verified, so
+      // a write injected there lands strictly after adoption completed.
       const originalUnlinkSync = fs.unlinkSync;
       let injected = false;
       const unlinkSpy = spyOn(fs, 'unlinkSync').mockImplementation(((targetPath: fs.PathLike) => {
-        if (!injected && String(targetPath).includes('.ccs-canonical-claim-')) {
+        if (!injected && String(targetPath).includes('.ccs-adopt-claim-')) {
           injected = true;
           writeJson(canonicalPath, { generation: 99 });
         }
@@ -596,6 +717,7 @@ describe('SharedManager', () => {
 
       manager.linkSharedDirectories(instancePath);
       unlinkSpy.mockRestore();
+      expect(injected).toBe(true);
       expect(readJson(canonicalPath)).toEqual({ generation: 99 });
       expect(readJson(`${divergedPath}.ccs-adopted-recovery`)).toEqual({ generation: 1 });
     });
@@ -611,20 +733,30 @@ describe('SharedManager', () => {
       writeJson(divergedPath, { generation: 1 });
       setMtime(divergedPath, fs.statSync(canonicalPath).mtimeMs + 2_000);
 
-      const originalUnlinkSync = fs.unlinkSync;
+      // Recreate the managed source right after the canonical file was
+      // replaced, while the adopter is still cleaning up.
+      const originalRenameSync = fs.renameSync;
       let injected = false;
-      const unlinkSpy = spyOn(fs, 'unlinkSync').mockImplementation(((targetPath: fs.PathLike) => {
-        if (!injected && String(targetPath).includes('.ccs-canonical-claim-')) {
+      const renameSpy = spyOn(fs, 'renameSync').mockImplementation(((
+        oldPath: fs.PathLike,
+        newPath: fs.PathLike
+      ) => {
+        originalRenameSync(oldPath, newPath);
+        if (
+          !injected &&
+          String(newPath) === canonicalPath &&
+          String(oldPath).startsWith(`${canonicalPath}.ccs-write-`)
+        ) {
           injected = true;
           writeJson(divergedPath, { generation: 2 });
         }
-        return originalUnlinkSync(targetPath);
-      }) as typeof fs.unlinkSync);
+      }) as typeof fs.renameSync);
 
       expect(() => manager.linkSharedDirectories(instancePath)).toThrow(
         'Concurrent replacement detected'
       );
-      unlinkSpy.mockRestore();
+      renameSpy.mockRestore();
+      expect(injected).toBe(true);
       expect(readJson(divergedPath)).toEqual({ generation: 2 });
     });
 
@@ -694,7 +826,7 @@ describe('SharedManager', () => {
       }
     });
 
-    it('uses the mode of the canonical inode actually claimed for publication', () => {
+    it('publishes with the mode the canonical inode carries at publication time', () => {
       const manager = new SharedManager();
       const instancePath = instanceDir('concurrent-mode');
       const canonicalPath = path.join(claudeDir(), 'settings.json');
@@ -706,23 +838,24 @@ describe('SharedManager', () => {
       writeJson(divergedPath, { generation: 1 });
       setMtime(divergedPath, fs.statSync(canonicalPath).mtimeMs + 2_000);
 
-      const originalRenameSync = fs.renameSync;
-      const renameSpy = spyOn(fs, 'renameSync').mockImplementation(((
-        oldPath: fs.PathLike,
-        newPath: fs.PathLike
+      // A chmod between reading the canonical file and publishing it leaves
+      // the content untouched, so publication proceeds with the newer mode.
+      const originalOpenSync = fs.openSync;
+      const openSpy = spyOn(fs, 'openSync').mockImplementation(((
+        openPath: fs.PathLike,
+        flags: number | string,
+        mode?: fs.Mode
       ) => {
-        if (
-          String(oldPath) === canonicalPath &&
-          String(newPath).includes('.ccs-canonical-claim-')
-        ) {
+        if (String(openPath).startsWith(`${canonicalPath}.ccs-write-`)) {
           fs.chmodSync(canonicalPath, 0o664);
         }
-        return originalRenameSync(oldPath, newPath);
-      }) as typeof fs.renameSync);
+        return originalOpenSync(openPath, flags, mode);
+      }) as typeof fs.openSync);
 
       manager.linkSharedDirectories(instancePath);
-      renameSpy.mockRestore();
+      openSpy.mockRestore();
       expect(fs.statSync(canonicalPath).mode & 0o777).toBe(0o664);
+      expect(readJson(canonicalPath)).toEqual({ generation: 1 });
     });
 
     it('recovers an interrupted canonical claim before provisioning defaults', () => {

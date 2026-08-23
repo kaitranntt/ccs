@@ -1,15 +1,16 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2519,
+    "totalOccurrences": 2516,
     "filesAffected": 263,
-    "hotpathOccurrences": 1193,
+    "hotpathOccurrences": 1190,
     "hotpathFilesAffected": 156,
     "topHotpathFiles": [
       {
         "file": "src/management/shared-manager/diverged-file-adopter.ts",
-        "count": 39,
+        "count": 36,
         "calls": [
+          "chmodSync",
           "closeSync",
           "fsyncSync",
           "linkSync",
@@ -245,9 +246,24 @@
         "markers": []
       },
       {
-        "file": "src/management/shared-manager/diverged-file-adopter.ts",
-        "count": 39,
+        "file": "src/cliproxy/executor/__tests__/variant-port-integration.test.js",
+        "count": 36,
         "calls": [
+          "existsSync",
+          "mkdirSync",
+          "readdirSync",
+          "readFileSync",
+          "rmSync",
+          "unlinkSync",
+          "writeFileSync"
+        ],
+        "markers": []
+      },
+      {
+        "file": "src/management/shared-manager/diverged-file-adopter.ts",
+        "count": 36,
+        "calls": [
+          "chmodSync",
           "closeSync",
           "fsyncSync",
           "linkSync",
@@ -258,20 +274,6 @@
           "readlinkSync",
           "renameSync",
           "statSync",
-          "unlinkSync",
-          "writeFileSync"
-        ],
-        "markers": []
-      },
-      {
-        "file": "src/cliproxy/executor/__tests__/variant-port-integration.test.js",
-        "count": 36,
-        "calls": [
-          "existsSync",
-          "mkdirSync",
-          "readdirSync",
-          "readFileSync",
-          "rmSync",
           "unlinkSync",
           "writeFileSync"
         ],
@@ -720,7 +722,7 @@
       ]
     },
     "largeFiles": {
-      "countOver400": 92,
+      "countOver400": 93,
       "countOver600": 42,
       "topOver400": [
         {
