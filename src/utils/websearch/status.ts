@@ -113,13 +113,23 @@ function applyCooldownStatus(
   };
 }
 
-function getLegacyProviderStatuses(wsConfig: WebSearchConfigSnapshot): WebSearchCliInfo[] {
-  const agyStatus = getAgyCliStatus();
-  const geminiStatus = getGeminiCliStatus();
-  const grokStatus = getGrokCliStatus();
-  const opencodeStatus = getOpenCodeCliStatus();
-  const geminiAuthed = geminiStatus.installed && isGeminiAuthenticated();
+function getLegacyProviderStatuses(
+  wsConfig: WebSearchConfigSnapshot,
+  options?: { includeVersions?: boolean }
+): WebSearchCliInfo[] {
+  const fetchVersion = options?.includeVersions !== false;
+  const agyEnabled = wsConfig.providers?.agy?.enabled ?? false;
+  const geminiEnabled = wsConfig.providers?.gemini?.enabled ?? false;
+  const grokEnabled = wsConfig.providers?.grok?.enabled ?? false;
+  const opencodeEnabled = wsConfig.providers?.opencode?.enabled ?? false;
 
+  const agyStatus = agyEnabled ? getAgyCliStatus({ fetchVersion }) : { installed: false };
+  const geminiStatus = geminiEnabled ? getGeminiCliStatus({ fetchVersion }) : { installed: false };
+  const grokStatus = grokEnabled ? getGrokCliStatus({ fetchVersion }) : { installed: false };
+  const opencodeStatus = opencodeEnabled
+    ? getOpenCodeCliStatus({ fetchVersion })
+    : { installed: false };
+  const geminiAuthed = geminiEnabled && geminiStatus.installed && isGeminiAuthenticated();
   return [
     {
       id: 'agy',
@@ -198,7 +208,8 @@ function getLegacyProviderStatuses(wsConfig: WebSearchConfigSnapshot): WebSearch
  * Get all WebSearch providers with their current status.
  */
 export function getWebSearchCliProviders(
-  wsConfig: WebSearchConfigSnapshot = getWebSearchConfig()
+  wsConfig: WebSearchConfigSnapshot = getWebSearchConfig(),
+  options?: { includeVersions?: boolean }
 ): WebSearchCliInfo[] {
   const apiKeyStates = getWebSearchApiKeyStates();
   const cooldowns = readProviderCooldowns();
@@ -284,7 +295,7 @@ export function getWebSearchCliProviders(
     },
   ];
 
-  return [...providers, ...getLegacyProviderStatuses(wsConfig)].map((provider) =>
+  return [...providers, ...getLegacyProviderStatuses(wsConfig, options)].map((provider) =>
     applyCooldownStatus(provider, cooldowns)
   );
 }
@@ -359,7 +370,7 @@ export function buildWebSearchReadiness(
 export function getWebSearchReadiness(
   wsConfig: WebSearchConfigSnapshot = getWebSearchConfig()
 ): WebSearchStatus {
-  const providers = getWebSearchCliProviders(wsConfig);
+  const providers = getWebSearchCliProviders(wsConfig, { includeVersions: false });
   return buildWebSearchReadiness(wsConfig.enabled, providers);
 }
 

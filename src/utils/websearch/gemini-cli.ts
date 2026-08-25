@@ -23,35 +23,47 @@ let geminiCliCache: GeminiCliStatus | null = null;
  *
  * @returns Gemini CLI status with path and version
  */
-export function getGeminiCliStatus(): GeminiCliStatus {
-  // Return cached result if available
-  if (geminiCliCache) {
+export function getGeminiCliStatus(options?: { fetchVersion?: boolean }): GeminiCliStatus {
+  const fetchVersion = options?.fetchVersion !== false;
+
+  if (
+    geminiCliCache &&
+    (!fetchVersion || geminiCliCache.version !== undefined || !geminiCliCache.installed)
+  ) {
+    if (!fetchVersion) {
+      return { ...geminiCliCache, version: undefined };
+    }
     return geminiCliCache;
   }
 
-  const result: GeminiCliStatus = {
-    installed: false,
-    path: undefined,
-    version: undefined,
-  };
+  const result: GeminiCliStatus = geminiCliCache
+    ? { ...geminiCliCache }
+    : {
+        installed: false,
+        path: undefined,
+        version: undefined,
+      };
 
   try {
-    const isWindows = process.platform === 'win32';
-    const whichCmd = isWindows ? 'where gemini' : 'which gemini';
+    if (!geminiCliCache) {
+      const isWindows = process.platform === 'win32';
+      const whichCmd = isWindows ? 'where gemini' : 'which gemini';
 
-    const pathResult = execSync(whichCmd, {
-      encoding: 'utf8',
-      timeout: 5000,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+      const pathResult = execSync(whichCmd, {
+        encoding: 'utf8',
+        timeout: 5000,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
 
-    const geminiPath = pathResult.trim().split('\n')[0]; // First result on Windows
+      const geminiPath = pathResult.trim().split('\n')[0];
 
-    if (geminiPath) {
-      result.installed = true;
-      result.path = geminiPath;
+      if (geminiPath) {
+        result.installed = true;
+        result.path = geminiPath;
+      }
+    }
 
-      // Try to get version
+    if (result.installed && fetchVersion && result.version === undefined) {
       try {
         const versionResult = execSync('gemini --version', {
           encoding: 'utf8',
@@ -60,17 +72,17 @@ export function getGeminiCliStatus(): GeminiCliStatus {
         });
         result.version = versionResult.trim();
       } catch {
-        // Version check failed, but CLI is installed
         result.version = 'unknown';
       }
+    } else if (!fetchVersion) {
+      result.version = undefined;
     }
   } catch {
     // Command not found - Gemini CLI not installed
   }
 
-  // Cache result
   geminiCliCache = result;
-  return result;
+  return fetchVersion ? result : { ...result, version: undefined };
 }
 
 /**

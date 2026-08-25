@@ -301,6 +301,113 @@ describe('websearch readiness', () => {
     }
   });
 
+  it('does not invoke legacy CLI status probes when those providers are disabled', () => {
+    const getConfigSpy = spyOn(unifiedConfigLoader, 'getWebSearchConfig').mockReturnValue({
+      enabled: true,
+      providers: {
+        exa: { enabled: false, max_results: 5 },
+        tavily: { enabled: false, max_results: 5 },
+        brave: { enabled: false, max_results: 5 },
+        searxng: { enabled: false, url: '', max_results: 5 },
+        duckduckgo: { enabled: true, max_results: 5 },
+        agy: { enabled: false },
+        gemini: { enabled: false },
+        grok: { enabled: false },
+        opencode: { enabled: false },
+      },
+    } as any);
+    const apiKeySpy = spyOn(providerSecrets, 'getWebSearchApiKeyStates').mockReturnValue({
+      exa: { envVar: 'EXA_API_KEY', configured: false, available: false, source: 'none' },
+      tavily: { envVar: 'TAVILY_API_KEY', configured: false, available: false, source: 'none' },
+      brave: { envVar: 'BRAVE_API_KEY', configured: false, available: false, source: 'none' },
+    });
+    const agyStatusSpy = spyOn(agyCli, 'getAgyCliStatus').mockReturnValue({
+      installed: false,
+    } as any);
+    const geminiStatusSpy = spyOn(geminiCli, 'getGeminiCliStatus').mockReturnValue({
+      installed: false,
+    } as any);
+    const geminiAuthSpy = spyOn(geminiCli, 'isGeminiAuthenticated').mockReturnValue(false);
+    const grokStatusSpy = spyOn(grokCli, 'getGrokCliStatus').mockReturnValue({
+      installed: false,
+    } as any);
+    const opencodeStatusSpy = spyOn(opencodeCli, 'getOpenCodeCliStatus').mockReturnValue({
+      installed: false,
+    } as any);
+
+    try {
+      getWebSearchCliProviders();
+      expect(agyStatusSpy).not.toHaveBeenCalled();
+      expect(geminiStatusSpy).not.toHaveBeenCalled();
+      expect(geminiAuthSpy).not.toHaveBeenCalled();
+      expect(grokStatusSpy).not.toHaveBeenCalled();
+      expect(opencodeStatusSpy).not.toHaveBeenCalled();
+    } finally {
+      getConfigSpy.mockRestore();
+      apiKeySpy.mockRestore();
+      agyStatusSpy.mockRestore();
+      geminiStatusSpy.mockRestore();
+      geminiAuthSpy.mockRestore();
+      grokStatusSpy.mockRestore();
+      opencodeStatusSpy.mockRestore();
+    }
+  });
+  it('does not spawn --version when includeVersions is false', () => {
+    const wsConfig = {
+      enabled: true,
+      providers: {
+        exa: { enabled: false, max_results: 5 },
+        tavily: { enabled: false, max_results: 5 },
+        brave: { enabled: false, max_results: 5 },
+        searxng: { enabled: false, url: '', max_results: 5 },
+        duckduckgo: { enabled: false, max_results: 5 },
+        agy: { enabled: true, model: 'gemini-2.5-flash', timeout: 90 },
+        gemini: { enabled: true },
+        grok: { enabled: true },
+        opencode: { enabled: true },
+      },
+    };
+    const apiKeySpy = spyOn(providerSecrets, 'getWebSearchApiKeyStates').mockReturnValue({
+      exa: { envVar: 'EXA_API_KEY', configured: false, available: false, source: 'none' },
+      tavily: { envVar: 'TAVILY_API_KEY', configured: false, available: false, source: 'none' },
+      brave: { envVar: 'BRAVE_API_KEY', configured: false, available: false, source: 'none' },
+    });
+    const agyStatusSpy = spyOn(agyCli, 'getAgyCliStatus').mockReturnValue({
+      installed: true,
+      version: undefined,
+    });
+    const geminiStatusSpy = spyOn(geminiCli, 'getGeminiCliStatus').mockReturnValue({
+      installed: false,
+      version: undefined,
+    });
+    const geminiAuthSpy = spyOn(geminiCli, 'isGeminiAuthenticated').mockReturnValue(false);
+    const grokStatusSpy = spyOn(grokCli, 'getGrokCliStatus').mockReturnValue({
+      installed: false,
+      version: undefined,
+    });
+    const opencodeStatusSpy = spyOn(opencodeCli, 'getOpenCodeCliStatus').mockReturnValue({
+      installed: false,
+      version: undefined,
+    });
+
+    try {
+      getWebSearchCliProviders(wsConfig as Parameters<typeof getWebSearchCliProviders>[0], {
+        includeVersions: false,
+      });
+      expect(agyStatusSpy).toHaveBeenCalledWith({ fetchVersion: false });
+      expect(geminiStatusSpy).toHaveBeenCalledWith({ fetchVersion: false });
+      expect(grokStatusSpy).toHaveBeenCalledWith({ fetchVersion: false });
+      expect(opencodeStatusSpy).toHaveBeenCalledWith({ fetchVersion: false });
+    } finally {
+      apiKeySpy.mockRestore();
+      agyStatusSpy.mockRestore();
+      geminiStatusSpy.mockRestore();
+      geminiAuthSpy.mockRestore();
+      grokStatusSpy.mockRestore();
+      opencodeStatusSpy.mockRestore();
+    }
+  });
+
   it('treats cooled-down providers as temporarily unavailable in readiness status', () => {
     const tempHome = mkdtempSync(join(tmpdir(), 'websearch-status-cooldown-'));
     const statePath = join(tempHome, '.ccs', 'cache', 'websearch-provider-state.json');
