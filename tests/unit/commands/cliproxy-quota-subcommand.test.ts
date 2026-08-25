@@ -1,8 +1,16 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, spyOn } from 'bun:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { displayClaudeQuotaSection } from '../../../src/commands/cliproxy/quota-subcommand/sections/claude';
 import { displayCodexQuotaSection } from '../../../src/commands/cliproxy/quota-subcommand/sections/codex';
 import { displayGeminiCliQuotaSection } from '../../../src/commands/cliproxy/quota-subcommand/sections/gemini-cli';
-
+import { formatQuotaBar } from '../../../src/commands/cliproxy/quota-subcommand/format-helpers';
+import { handleDoctor } from '../../../src/commands/cliproxy/quota-subcommand/handlers';
+import type { AccountInfo } from '../../../src/cliproxy/accounts/types';
+import type { AllAccountsQuotaResult } from '../../../src/cliproxy/quota/quota-fetcher';
+import * as quotaFetcher from '../../../src/cliproxy/quota/quota-fetcher';
+import * as accountManager from '../../../src/cliproxy/accounts/account-manager';
 async function loadQuotaCommandTestExports() {
   const moduleId = Date.now() + Math.random();
   const mod = await import(
@@ -182,8 +190,29 @@ function captureConsoleLog(fn: () => void): string {
   return output.join('\n');
 }
 
-describe('cliproxy quota remaining percent labels', () => {
-  it('renders Claude remaining percent with a remaining suffix', () => {
+describe('cliproxy quota remaining percent labels and ASCII compliance', () => {
+  it('renders formatQuotaBar with pure ASCII characters', () => {
+    const bar100 = formatQuotaBar(100);
+    const bar50 = formatQuotaBar(50);
+    const bar25 = formatQuotaBar(25);
+    const bar5 = formatQuotaBar(5);
+    const bar0 = formatQuotaBar(0);
+
+    expect(bar100).toBe(`[${'#'.repeat(20)}]`);
+    expect(bar50).toBe(`[${'+'.repeat(10)}${' '.repeat(10)}]`);
+    expect(bar25).toBe(`[${'+'.repeat(5)}${' '.repeat(15)}]`);
+    expect(bar5).toBe(`[${'-'.repeat(1)}${' '.repeat(19)}]`);
+    expect(bar0).toBe(`[${' '.repeat(20)}]`);
+
+    // Strict ASCII verification
+    expect(bar100).toMatch(/^[\x00-\x7F]+$/);
+    expect(bar50).toMatch(/^[\x00-\x7F]+$/);
+    expect(bar25).toMatch(/^[\x00-\x7F]+$/);
+    expect(bar5).toMatch(/^[\x00-\x7F]+$/);
+    expect(bar0).toMatch(/^[\x00-\x7F]+$/);
+  });
+
+  it('renders Claude remaining percent with a remaining suffix and pure ASCII', () => {
     const text = captureConsoleLog(() => {
       displayClaudeQuotaSection([
         {
@@ -210,9 +239,10 @@ describe('cliproxy quota remaining percent labels', () => {
     });
 
     expect(text).toContain('72% remaining');
+    expect(text).toMatch(/^[\x00-\x7F\n\r]+$/);
   });
 
-  it('renders Codex remaining percent with a remaining suffix', () => {
+  it('renders Codex remaining percent with a remaining suffix and pure ASCII', () => {
     const text = captureConsoleLog(() => {
       displayCodexQuotaSection([
         {
@@ -239,9 +269,10 @@ describe('cliproxy quota remaining percent labels', () => {
     });
 
     expect(text).toContain('72% remaining');
+    expect(text).toMatch(/^[\x00-\x7F\n\r]+$/);
   });
 
-  it('renders Gemini CLI remaining percent with a remaining suffix', () => {
+  it('renders Gemini CLI remaining percent with a remaining suffix and pure ASCII', () => {
     const text = captureConsoleLog(() => {
       displayGeminiCliQuotaSection([
         {
@@ -268,5 +299,71 @@ describe('cliproxy quota remaining percent labels', () => {
     });
 
     expect(text).toContain('72% remaining');
+    expect(text).toMatch(/^[\x00-\x7F\n\r]+$/);
+  });
+  it('renders Doctor Antigravity quota with remaining suffix and pure ASCII', async () => {
+    const tempHome = mkdtempSync(join(tmpdir(), 'ccs-doctor-test-'));
+    const originalCcsHome = process.env.CCS_HOME;
+    process.env.CCS_HOME = tempHome;
+
+    const mockAccount: AccountInfo = {
+      id: 'agy@example.com',
+      email: 'agy@example.com',
+      provider: 'agy',
+      isDefault: true,
+      tokenFile: 'agy-token.json',
+      createdAt: new Date().toISOString(),
+    };
+
+    const mockQuotaResult: AllAccountsQuotaResult = {
+      accounts: [
+        {
+          account: mockAccount,
+          quota: {
+            success: true,
+            models: [
+              {
+                name: 'gemini-2.5-flash',
+                percentage: 85,
+                resetTime: null,
+              },
+            ],
+            projectId: 'proj-123',
+            lastUpdated: 1,
+            accountId: 'agy@example.com',
+          },
+        },
+      ],
+      projectGroups: {},
+    };
+
+    const accountsSpy = spyOn(accountManager, 'getProviderAccounts').mockReturnValue([mockAccount]);
+    const fetchSpy = spyOn(quotaFetcher, 'fetchAllProviderQuotas').mockResolvedValue(
+      mockQuotaResult
+    );
+
+    try {
+      const output: string[] = [];
+      const originalLog = console.log;
+      console.log = (...args: unknown[]) => output.push(args.map(String).join(' '));
+      try {
+        await handleDoctor(false);
+      } finally {
+        console.log = originalLog;
+      }
+      const text = output.join('\n');
+      expect(text).toContain('gemini-2.5-flash');
+      expect(text).toContain('85% remaining');
+      expect(text).toMatch(/^[\x00-\x7F\n\r]+$/);
+    } finally {
+      accountsSpy.mockRestore();
+      fetchSpy.mockRestore();
+      if (originalCcsHome !== undefined) {
+        process.env.CCS_HOME = originalCcsHome;
+      } else {
+        delete process.env.CCS_HOME;
+      }
+      rmSync(tempHome, { recursive: true, force: true });
+    }
   });
 });

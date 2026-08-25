@@ -14,7 +14,7 @@ export function formatQuotaBar(percentage: number): string {
   const clampedPct = Math.max(0, Math.min(100, percentage));
   const filled = Math.round((clampedPct / 100) * width);
   const empty = width - filled;
-  const filledChar = clampedPct > 50 ? '█' : clampedPct > 10 ? '▓' : '░';
+  const filledChar = clampedPct > 50 ? '#' : clampedPct > 10 ? '+' : '-';
   return `[${filledChar.repeat(filled)}${' '.repeat(empty)}]`;
 }
 
