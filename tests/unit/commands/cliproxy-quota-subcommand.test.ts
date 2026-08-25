@@ -193,12 +193,14 @@ function captureConsoleLog(fn: () => void): string {
 describe('cliproxy quota remaining percent labels and ASCII compliance', () => {
   it('renders formatQuotaBar with pure ASCII characters', () => {
     const bar100 = formatQuotaBar(100);
+    const bar75 = formatQuotaBar(75);
     const bar50 = formatQuotaBar(50);
     const bar25 = formatQuotaBar(25);
     const bar5 = formatQuotaBar(5);
     const bar0 = formatQuotaBar(0);
 
     expect(bar100).toBe(`[${'#'.repeat(20)}]`);
+    expect(bar75).toBe(`[${'#'.repeat(15)}${' '.repeat(5)}]`);
     expect(bar50).toBe(`[${'+'.repeat(10)}${' '.repeat(10)}]`);
     expect(bar25).toBe(`[${'+'.repeat(5)}${' '.repeat(15)}]`);
     expect(bar5).toBe(`[${'-'.repeat(1)}${' '.repeat(19)}]`);
@@ -206,6 +208,7 @@ describe('cliproxy quota remaining percent labels and ASCII compliance', () => {
 
     // Strict ASCII verification
     expect(bar100).toMatch(/^[\x00-\x7F]+$/);
+    expect(bar75).toMatch(/^[\x00-\x7F]+$/);
     expect(bar50).toMatch(/^[\x00-\x7F]+$/);
     expect(bar25).toMatch(/^[\x00-\x7F]+$/);
     expect(bar5).toMatch(/^[\x00-\x7F]+$/);
