@@ -20,35 +20,47 @@ let grokCliCache: GrokCliStatus | null = null;
  *
  * @returns Grok CLI status with path and version
  */
-export function getGrokCliStatus(): GrokCliStatus {
-  // Return cached result if available
-  if (grokCliCache) {
+export function getGrokCliStatus(options?: { fetchVersion?: boolean }): GrokCliStatus {
+  const fetchVersion = options?.fetchVersion !== false;
+
+  if (
+    grokCliCache &&
+    (!fetchVersion || grokCliCache.version !== undefined || !grokCliCache.installed)
+  ) {
+    if (!fetchVersion) {
+      return { ...grokCliCache, version: undefined };
+    }
     return grokCliCache;
   }
 
-  const result: GrokCliStatus = {
-    installed: false,
-    path: undefined,
-    version: undefined,
-  };
+  const result: GrokCliStatus = grokCliCache
+    ? { ...grokCliCache }
+    : {
+        installed: false,
+        path: undefined,
+        version: undefined,
+      };
 
   try {
-    const isWindows = process.platform === 'win32';
-    const whichCmd = isWindows ? 'where grok' : 'which grok';
+    if (!grokCliCache) {
+      const isWindows = process.platform === 'win32';
+      const whichCmd = isWindows ? 'where grok' : 'which grok';
 
-    const pathResult = execSync(whichCmd, {
-      encoding: 'utf8',
-      timeout: 5000,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+      const pathResult = execSync(whichCmd, {
+        encoding: 'utf8',
+        timeout: 5000,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
 
-    const grokPath = pathResult.trim().split('\n')[0]; // First result on Windows
+      const grokPath = pathResult.trim().split('\n')[0];
 
-    if (grokPath) {
-      result.installed = true;
-      result.path = grokPath;
+      if (grokPath) {
+        result.installed = true;
+        result.path = grokPath;
+      }
+    }
 
-      // Try to get version
+    if (result.installed && fetchVersion && result.version === undefined) {
       try {
         const versionResult = execSync('grok --version', {
           encoding: 'utf8',
@@ -57,17 +69,17 @@ export function getGrokCliStatus(): GrokCliStatus {
         });
         result.version = versionResult.trim();
       } catch {
-        // Version check failed, but CLI is installed
         result.version = 'unknown';
       }
+    } else if (!fetchVersion) {
+      result.version = undefined;
     }
   } catch {
     // Command not found - Grok CLI not installed
   }
 
-  // Cache result
   grokCliCache = result;
-  return result;
+  return fetchVersion ? result : { ...result, version: undefined };
 }
 
 /**

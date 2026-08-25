@@ -22,35 +22,47 @@ let agyCliCache: AgyCliStatus | null = null;
  *
  * @returns Antigravity CLI status with path and version
  */
-export function getAgyCliStatus(): AgyCliStatus {
-  // Return cached result if available
-  if (agyCliCache) {
+export function getAgyCliStatus(options?: { fetchVersion?: boolean }): AgyCliStatus {
+  const fetchVersion = options?.fetchVersion !== false;
+
+  if (
+    agyCliCache &&
+    (!fetchVersion || agyCliCache.version !== undefined || !agyCliCache.installed)
+  ) {
+    if (!fetchVersion) {
+      return { ...agyCliCache, version: undefined };
+    }
     return agyCliCache;
   }
 
-  const result: AgyCliStatus = {
-    installed: false,
-    path: undefined,
-    version: undefined,
-  };
+  const result: AgyCliStatus = agyCliCache
+    ? { ...agyCliCache }
+    : {
+        installed: false,
+        path: undefined,
+        version: undefined,
+      };
 
   try {
-    const isWindows = process.platform === 'win32';
-    const whichCmd = isWindows ? 'where agy' : 'which agy';
+    if (!agyCliCache) {
+      const isWindows = process.platform === 'win32';
+      const whichCmd = isWindows ? 'where agy' : 'which agy';
 
-    const pathResult = execSync(whichCmd, {
-      encoding: 'utf8',
-      timeout: 5000,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+      const pathResult = execSync(whichCmd, {
+        encoding: 'utf8',
+        timeout: 5000,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
 
-    const agyPath = pathResult.trim().split('\n')[0]; // First result on Windows
+      const agyPath = pathResult.trim().split('\n')[0];
 
-    if (agyPath) {
-      result.installed = true;
-      result.path = agyPath;
+      if (agyPath) {
+        result.installed = true;
+        result.path = agyPath;
+      }
+    }
 
-      // Try to get version
+    if (result.installed && fetchVersion && result.version === undefined) {
       try {
         const versionResult = execSync('agy --version', {
           encoding: 'utf8',
@@ -59,17 +71,17 @@ export function getAgyCliStatus(): AgyCliStatus {
         });
         result.version = versionResult.trim();
       } catch {
-        // Version check failed, but CLI is installed
         result.version = 'unknown';
       }
+    } else if (!fetchVersion) {
+      result.version = undefined;
     }
   } catch {
     // Command not found - Antigravity CLI not installed
   }
 
-  // Cache result
   agyCliCache = result;
-  return result;
+  return fetchVersion ? result : { ...result, version: undefined };
 }
 
 /**
