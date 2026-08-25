@@ -137,41 +137,92 @@ function validateManagedJson(filePath: string, content: Buffer): boolean {
   }
 }
 
-function atomicWriteFile(targetPath: string, content: Buffer, mode: number): void {
-  const tempPath = `${targetPath}.ccs-write-${process.pid}-${Date.now()}-${adoptionClaimSequence++}`;
+/**
+ * Identity of the canonical inode as it was read. Publication compares it
+ * again immediately before replacing the file, so a concurrent writer is
+ * detected instead of silently overwritten.
+ */
+interface CanonicalIdentity {
+  ino: number;
+  mtimeMs: number;
+  size: number;
+}
+
+function canonicalIdentityOf(stats: fs.Stats): CanonicalIdentity {
+  return { ino: stats.ino, mtimeMs: stats.mtimeMs, size: stats.size };
+}
+
+function canonicalIdentityMatches(
+  expected: CanonicalIdentity | null,
+  current: CanonicalIdentity | null
+): boolean {
+  if (!expected || !current) return expected === current;
+  return (
+    expected.ino === current.ino &&
+    expected.mtimeMs === current.mtimeMs &&
+    expected.size === current.size
+  );
+}
+
+function tempWritePath(targetPath: string): string {
+  return `${targetPath}.ccs-write-${process.pid}-${Date.now()}-${adoptionClaimSequence++}`;
+}
+
+/**
+ * Write content into a fresh temp file and make it durable, so whatever
+ * publishes it under its final name publishes complete bytes.
+ */
+function writeDurableTempFile(tempPath: string, content: Buffer, mode: number): void {
   let descriptor: number | null = null;
   try {
     descriptor = fs.openSync(tempPath, 'wx', mode);
     fs.fchmodSync(descriptor, mode);
     fs.writeFileSync(descriptor, content);
     fs.fsyncSync(descriptor);
-    fs.closeSync(descriptor);
-    descriptor = null;
-    fs.linkSync(tempPath, targetPath);
-    fs.unlinkSync(tempPath);
-  } catch (err) {
+  } finally {
     if (descriptor !== null) {
       fs.closeSync(descriptor);
     }
-    try {
-      fs.unlinkSync(tempPath);
-    } catch {
-      // The temp file may not have been created or may already have been renamed.
-    }
+  }
+}
+
+function discardTempFile(tempPath: string): void {
+  try {
+    fs.unlinkSync(tempPath);
+  } catch {
+    // The temp file may not have been created or may already have been renamed.
+  }
+}
+
+/**
+ * Create a file only if the path is free, writing the content atomically.
+ *
+ * link() is an atomic no-replace operation, so concurrent CCS processes
+ * cannot overwrite each other's sidecar artifacts.
+ */
+function createFileNoReplace(targetPath: string, content: Buffer, mode: number): void {
+  const tempPath = tempWritePath(targetPath);
+  try {
+    writeDurableTempFile(tempPath, content, mode);
+    fs.linkSync(tempPath, targetPath);
+    fs.unlinkSync(tempPath);
+  } catch (err) {
+    discardTempFile(tempPath);
     throw err;
   }
 }
 
-function publishBackupNoReplace(sourcePath: string, canonicalPath: string): string {
-  const basePath = `${canonicalPath}.bak-ccs-adopt`;
-  const content = fs.readFileSync(sourcePath);
-  const mode = fs.statSync(sourcePath).mode & 0o777;
+/**
+ * Publish a sidecar next to a managed file, never replacing an existing one.
+ * Numbered suffixes keep every concurrent writer's artifact recoverable.
+ */
+function publishSidecarNoReplace(basePath: string, content: Buffer, mode: number): string {
   let sequence = 0;
   while (true) {
-    const backupPath = sequence === 0 ? basePath : `${basePath}-${sequence}`;
+    const sidecarPath = sequence === 0 ? basePath : `${basePath}-${sequence}`;
     try {
-      atomicWriteFile(backupPath, content, mode);
-      return backupPath;
+      createFileNoReplace(sidecarPath, content, mode);
+      return sidecarPath;
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
       sequence++;
@@ -179,43 +230,69 @@ function publishBackupNoReplace(sourcePath: string, canonicalPath: string): stri
   }
 }
 
-function publishAdoptedRecoveryNoReplace(sourcePath: string, divergedPath: string): string {
-  const basePath = `${divergedPath}.ccs-adopted-recovery`;
-  const content = fs.readFileSync(sourcePath);
-  const mode = fs.statSync(sourcePath).mode & 0o777;
-  let sequence = 0;
-  while (true) {
-    const recoveryPath = sequence === 0 ? basePath : `${basePath}-${sequence}`;
-    try {
-      atomicWriteFile(recoveryPath, content, mode);
-      return recoveryPath;
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
-      sequence++;
-    }
-  }
-}
-
-function restoreCanonicalClaim(claimPath: string, writePath: string, canonicalPath: string): void {
+/**
+ * Publish adopted content onto the canonical path by replacement.
+ *
+ * The canonical path is never emptied: a fully written temp file is renamed
+ * over it, so no window exists in which Claude Code or a second `ccs` can
+ * observe the path as missing and seed an empty placeholder there.
+ *
+ * A compare-and-swap guard runs as late as possible - after the temp file is
+ * durable, immediately before the rename. When the canonical inode changed
+ * since it was read, publication is refused rather than clobbering a writer
+ * that got there first; the adopted bytes stay in the sidecars the caller
+ * published. A pure chmod is not a content change, so the mode the inode
+ * carries at publication time wins.
+ *
+ * The guard is read-then-act, not atomic: POSIX offers no compare-and-swap
+ * rename, so a writer landing between the check and the rename is still
+ * overwritten. That is a narrowing, not a guarantee - the window shrinks from
+ * the ~100 ms the old claim-and-republish path left open to two adjacent
+ * syscalls, and the pre-image sidecar the caller published keeps even that
+ * outcome recoverable. Do not build stricter guarantees on top of it.
+ */
+function publishCanonicalContent(
+  writePath: string,
+  content: Buffer,
+  mode: number,
+  expected: CanonicalIdentity | null
+): void {
+  const tempPath = tempWritePath(writePath);
   try {
-    fs.linkSync(claimPath, writePath);
-    fs.unlinkSync(claimPath);
+    writeDurableTempFile(tempPath, content, mode);
+
+    const currentStats = getLstatSync(writePath);
+    const current = currentStats?.isFile() ? canonicalIdentityOf(currentStats) : null;
+    if (!canonicalIdentityMatches(expected, current)) {
+      // EEXIST is this file's marker for "a race was detected", the same code
+      // the reappeared-path and concurrent-replacement guards raise. It does
+      // not mean a no-replace link() or open('wx') hit an existing path.
+      throw Object.assign(new TypeError(`Canonical file changed during adoption: ${writePath}`), {
+        code: 'EEXIST',
+      });
+    }
+
+    const publishMode = currentStats ? currentStats.mode & 0o777 : mode;
+    if (publishMode !== mode) {
+      fs.chmodSync(tempPath, publishMode);
+    }
+    fs.renameSync(tempPath, writePath);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
-    publishBackupNoReplace(claimPath, canonicalPath);
-    fs.unlinkSync(claimPath);
+    discardTempFile(tempPath);
+    throw err;
   }
 }
 
 function getCanonicalFile(canonicalPath: string): {
   content: Buffer | null;
+  identity: CanonicalIdentity | null;
   mode: number;
   mtimeMs: number | null;
   writePath: string;
 } {
   const canonicalLstat = getLstatSync(canonicalPath);
   if (!canonicalLstat) {
-    return { content: null, mode: 0o600, mtimeMs: null, writePath: canonicalPath };
+    return { content: null, identity: null, mode: 0o600, mtimeMs: null, writePath: canonicalPath };
   }
 
   let writePath = canonicalPath;
@@ -230,8 +307,12 @@ function getCanonicalFile(canonicalPath: string): {
     });
   }
 
+  // The identity describes the inode as of the stat above, taken before the
+  // content read: a write landing in between leaves us holding newer bytes
+  // than the identity describes, and publication fails closed.
   return {
-    content: fs.readFileSync(canonicalPath),
+    content: fs.readFileSync(writePath),
+    identity: canonicalIdentityOf(canonicalStats),
     mode: canonicalStats.mode & 0o777,
     mtimeMs: canonicalStats.mtimeMs,
     writePath,
@@ -260,8 +341,6 @@ export function adoptDivergedFileContent(
     throw err;
   }
 
-  let canonicalClaimPath: string | null = null;
-  let canonicalWritePath: string | null = null;
   let divergencePreserved = false;
   try {
     const claimedStats = fs.lstatSync(claimPath);
@@ -288,24 +367,12 @@ export function adoptDivergedFileContent(
     }
 
     const canonical = getCanonicalFile(canonicalPath);
-    let current = canonical.content;
-    let publishMode = canonical.mode;
-    if (current) {
-      canonicalWritePath = canonical.writePath;
-      canonicalClaimPath = `${canonical.writePath}.ccs-canonical-claim-${process.pid}-${Date.now()}-${adoptionClaimSequence++}`;
-      fs.renameSync(canonical.writePath, canonicalClaimPath);
-      const currentStats = fs.statSync(canonicalClaimPath);
-      publishMode = currentStats.mode & 0o777;
-      current = fs.readFileSync(canonicalClaimPath);
-      if (diverged.equals(current)) {
-        restoreCanonicalClaim(canonicalClaimPath, canonical.writePath, canonicalPath);
-        canonicalClaimPath = null;
+    if (canonical.content) {
+      if (diverged.equals(canonical.content)) {
         fs.unlinkSync(claimPath);
         return 'claimed';
       }
-      if (claimedStats.mtimeMs <= currentStats.mtimeMs) {
-        restoreCanonicalClaim(canonicalClaimPath, canonical.writePath, canonicalPath);
-        canonicalClaimPath = null;
+      if (claimedStats.mtimeMs <= (canonical.mtimeMs ?? 0)) {
         preserveClaim(
           claimPath,
           divergedPath,
@@ -313,14 +380,17 @@ export function adoptDivergedFileContent(
         );
         return 'claimed';
       }
+      // Publish the pre-image before the canonical file is replaced, so an
+      // interruption mid-publication still leaves the old content recoverable.
+      publishSidecarNoReplace(`${canonicalPath}.bak-ccs-adopt`, canonical.content, canonical.mode);
     }
+    publishSidecarNoReplace(
+      `${divergedPath}.ccs-adopted-recovery`,
+      diverged,
+      claimedStats.mode & 0o777
+    );
 
-    if (canonicalClaimPath) {
-      publishBackupNoReplace(canonicalClaimPath, canonicalPath);
-    }
-    publishAdoptedRecoveryNoReplace(claimPath, divergedPath);
-
-    atomicWriteFile(canonical.writePath, diverged, publishMode);
+    publishCanonicalContent(canonical.writePath, diverged, canonical.mode, canonical.identity);
     if (!fs.readFileSync(canonicalPath).equals(diverged)) {
       throw Object.assign(
         new TypeError(`Canonical adoption postcondition failed: ${canonicalPath}`),
@@ -328,10 +398,6 @@ export function adoptDivergedFileContent(
           code: 'EAGAIN',
         }
       );
-    }
-    if (canonicalClaimPath) {
-      fs.unlinkSync(canonicalClaimPath);
-      canonicalClaimPath = null;
     }
     if (getLstatSync(divergedPath)) {
       preserveClaim(claimPath, divergedPath, `Concurrent replacement detected at ${divergedPath}`);
@@ -346,10 +412,6 @@ export function adoptDivergedFileContent(
     );
     return 'claimed';
   } catch (err) {
-    if (canonicalClaimPath && canonicalWritePath) {
-      restoreCanonicalClaim(canonicalClaimPath, canonicalWritePath, canonicalPath);
-      canonicalClaimPath = null;
-    }
     if (divergencePreserved) {
       throw err;
     }
