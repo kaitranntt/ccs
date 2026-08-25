@@ -138,7 +138,7 @@ export async function handleDoctor(verbose = false): Promise<void> {
 
     for (const model of quota.models) {
       const bar = formatQuotaBar(model.percentage);
-      console.log(`    ${model.name.padEnd(20)} ${bar} ${model.percentage.toFixed(0)}%`);
+      console.log(`    ${model.name.padEnd(20)} ${bar} ${model.percentage.toFixed(0)}% remaining`);
     }
     console.log('');
   }

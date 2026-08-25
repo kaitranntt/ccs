@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { displayClaudeQuotaSection } from '../../../src/commands/cliproxy/quota-subcommand/sections/claude';
+import { displayCodexQuotaSection } from '../../../src/commands/cliproxy/quota-subcommand/sections/codex';
+import { displayGeminiCliQuotaSection } from '../../../src/commands/cliproxy/quota-subcommand/sections/gemini-cli';
 
 async function loadQuotaCommandTestExports() {
   const moduleId = Date.now() + Math.random();
@@ -165,5 +167,106 @@ describe('cliproxy quota subcommand Codex label formatting', () => {
     expect(label).toBe('Codex Spark (weekly)');
     expect(label).not.toContain('\u001b');
     expect(label).not.toContain('\u0007');
+  });
+});
+
+function captureConsoleLog(fn: () => void): string {
+  const output: string[] = [];
+  const originalLog = console.log;
+  console.log = (...args: unknown[]) => output.push(args.map(String).join(' '));
+  try {
+    fn();
+  } finally {
+    console.log = originalLog;
+  }
+  return output.join('\n');
+}
+
+describe('cliproxy quota remaining percent labels', () => {
+  it('renders Claude remaining percent with a remaining suffix', () => {
+    const text = captureConsoleLog(() => {
+      displayClaudeQuotaSection([
+        {
+          account: 'claude@example.com',
+          quota: {
+            success: true,
+            windows: [
+              {
+                rateLimitType: 'five_hour',
+                label: '5h usage limit',
+                status: 'allowed',
+                utilization: 0.28,
+                usedPercent: 28,
+                remainingPercent: 72,
+                resetAt: null,
+              },
+            ],
+            coreUsage: { fiveHour: null, weekly: null },
+            lastUpdated: 1,
+            accountId: 'claude@example.com',
+          },
+        },
+      ]);
+    });
+
+    expect(text).toContain('72% remaining');
+  });
+
+  it('renders Codex remaining percent with a remaining suffix', () => {
+    const text = captureConsoleLog(() => {
+      displayCodexQuotaSection([
+        {
+          account: 'codex@example.com',
+          quota: {
+            success: true,
+            windows: [
+              {
+                label: 'Primary',
+                usedPercent: 28,
+                remainingPercent: 72,
+                resetAfterSeconds: null,
+                resetAt: null,
+                category: 'usage',
+                cadence: '5h',
+              },
+            ],
+            planType: 'pro',
+            lastUpdated: 1,
+            accountId: 'codex@example.com',
+          },
+        },
+      ]);
+    });
+
+    expect(text).toContain('72% remaining');
+  });
+
+  it('renders Gemini CLI remaining percent with a remaining suffix', () => {
+    const text = captureConsoleLog(() => {
+      displayGeminiCliQuotaSection([
+        {
+          account: 'gemini@example.com',
+          quota: {
+            success: true,
+            buckets: [
+              {
+                id: 'gemini-flash-series',
+                label: 'Gemini Flash Series',
+                tokenType: null,
+                remainingFraction: 0.72,
+                remainingPercent: 72,
+                resetTime: null,
+                modelIds: ['gemini-flash'],
+              },
+            ],
+            projectId: null,
+            lastUpdated: 1,
+            accountId: 'gemini@example.com',
+          },
+        },
+      ]);
+    });
+
+    expect(text).toContain('72% remaining');
   });
 });

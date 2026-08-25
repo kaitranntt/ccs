@@ -94,7 +94,7 @@ export function displayCodexQuotaSection(
       const resetValue = formatCodexWindowReset(window);
       const resetLabel = resetValue ? dim(` Resets ${resetValue}`) : '';
       console.log(
-        `    ${getCodexWindowDisplayLabel(window, orderedWindows).padEnd(24)} ${bar} ${window.remainingPercent.toFixed(0)}%${resetLabel}`
+        `    ${getCodexWindowDisplayLabel(window, orderedWindows).padEnd(24)} ${bar} ${window.remainingPercent.toFixed(0)}% remaining${resetLabel}`
       );
     }
     console.log('');
