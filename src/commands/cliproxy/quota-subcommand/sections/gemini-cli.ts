@@ -67,7 +67,7 @@ export function displayGeminiCliQuotaSection(
         ? dim(` Resets ${formatResetTimeISO(bucket.resetTime)}`)
         : '';
       console.log(
-        `    ${bucket.label.padEnd(24)} ${bar} ${bucket.remainingPercent.toFixed(0)}%${tokenLabel}${amountLabel}${resetLabel}`
+        `    ${bucket.label.padEnd(24)} ${bar} ${bucket.remainingPercent.toFixed(0)}% remaining${tokenLabel}${amountLabel}${resetLabel}`
       );
     }
     console.log('');

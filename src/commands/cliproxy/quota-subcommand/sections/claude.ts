@@ -93,7 +93,7 @@ export function displayClaudeQuotaSection(
             ? dim(' [warning]')
             : '';
       console.log(
-        `    ${getClaudeWindowDisplayLabel(window).padEnd(24)} ${bar} ${window.remainingPercent.toFixed(0)}%${statusLabel}${resetLabel}`
+        `    ${getClaudeWindowDisplayLabel(window).padEnd(24)} ${bar} ${window.remainingPercent.toFixed(0)}% remaining${statusLabel}${resetLabel}`
       );
     }
     console.log('');
