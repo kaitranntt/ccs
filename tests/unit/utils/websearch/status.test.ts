@@ -336,7 +336,7 @@ describe('websearch readiness', () => {
     } as any);
 
     try {
-      getWebSearchCliProviders();
+      getWebSearchCliProviders(undefined, { probeDisabled: false });
       expect(agyStatusSpy).not.toHaveBeenCalled();
       expect(geminiStatusSpy).not.toHaveBeenCalled();
       expect(geminiAuthSpy).not.toHaveBeenCalled();
@@ -394,7 +394,7 @@ describe('websearch readiness', () => {
       getWebSearchCliProviders(wsConfig as Parameters<typeof getWebSearchCliProviders>[0], {
         includeVersions: false,
       });
-      expect(agyStatusSpy).toHaveBeenCalledWith({ fetchVersion: false });
+      expect(agyStatusSpy).toHaveBeenCalledWith({ fetchVersion: true });
       expect(geminiStatusSpy).toHaveBeenCalledWith({ fetchVersion: false });
       expect(grokStatusSpy).toHaveBeenCalledWith({ fetchVersion: false });
       expect(opencodeStatusSpy).toHaveBeenCalledWith({ fetchVersion: false });

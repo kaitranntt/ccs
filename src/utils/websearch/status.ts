@@ -115,15 +115,17 @@ function applyCooldownStatus(
 
 function getLegacyProviderStatuses(
   wsConfig: WebSearchConfigSnapshot,
-  options?: { includeVersions?: boolean }
+  options?: { includeVersions?: boolean; probeDisabled?: boolean }
 ): WebSearchCliInfo[] {
-  const fetchVersion = options?.includeVersions !== false;
-  const agyEnabled = wsConfig.providers?.agy?.enabled ?? false;
-  const geminiEnabled = wsConfig.providers?.gemini?.enabled ?? false;
-  const grokEnabled = wsConfig.providers?.grok?.enabled ?? false;
-  const opencodeEnabled = wsConfig.providers?.opencode?.enabled ?? false;
+  const probeAll = options?.probeDisabled ?? true;
+  const fetchVersion = options?.includeVersions ?? true;
+  const agyEnabled = probeAll || (wsConfig.providers?.agy?.enabled ?? false);
+  const geminiEnabled = probeAll || (wsConfig.providers?.gemini?.enabled ?? false);
+  const grokEnabled = probeAll || (wsConfig.providers?.grok?.enabled ?? false);
+  const opencodeEnabled = probeAll || (wsConfig.providers?.opencode?.enabled ?? false);
 
-  const agyStatus = agyEnabled ? getAgyCliStatus({ fetchVersion }) : { installed: false };
+  // agy detail renders its version on launch and in dashboard, so always fetch version when probed
+  const agyStatus = agyEnabled ? getAgyCliStatus({ fetchVersion: true }) : { installed: false };
   const geminiStatus = geminiEnabled ? getGeminiCliStatus({ fetchVersion }) : { installed: false };
   const grokStatus = grokEnabled ? getGrokCliStatus({ fetchVersion }) : { installed: false };
   const opencodeStatus = opencodeEnabled
@@ -143,11 +145,13 @@ function getLegacyProviderStatuses(
       docsUrl: 'https://antigravity.google/cli',
       requiresApiKey: false,
       description: 'Recommended LLM CLI fallback with Google web search (Gemini CLI successor).',
-      detail: agyStatus.installed
-        ? agyStatus.version
-          ? `Installed (${agyStatus.version})`
-          : 'Installed'
-        : 'Not installed',
+      detail: !agyEnabled
+        ? 'Disabled'
+        : agyStatus.installed
+          ? agyStatus.version
+            ? `Installed (${agyStatus.version})`
+            : 'Installed'
+          : 'Not installed',
     },
     {
       id: 'gemini',
@@ -162,11 +166,13 @@ function getLegacyProviderStatuses(
       requiresApiKey: false,
       description:
         'Deprecated legacy fallback (Google retired the gemini CLI). Prefer Antigravity.',
-      detail: geminiStatus.installed
-        ? geminiAuthed
-          ? 'Authenticated'
-          : "Run 'gemini' to login"
-        : 'Not installed (retired - use Antigravity)',
+      detail: !geminiEnabled
+        ? 'Disabled'
+        : geminiStatus.installed
+          ? geminiAuthed
+            ? 'Authenticated'
+            : "Run 'gemini' to login"
+          : 'Not installed (retired - use Antigravity)',
     },
     {
       id: 'opencode',
@@ -180,7 +186,11 @@ function getLegacyProviderStatuses(
       docsUrl: 'https://github.com/sst/opencode',
       requiresApiKey: false,
       description: 'Optional legacy LLM fallback via OpenCode.',
-      detail: opencodeStatus.installed ? 'Installed' : 'Not installed',
+      detail: !opencodeEnabled
+        ? 'Disabled'
+        : opencodeStatus.installed
+          ? 'Installed'
+          : 'Not installed',
     },
     {
       id: 'grok',
@@ -195,11 +205,13 @@ function getLegacyProviderStatuses(
       requiresApiKey: true,
       apiKeyEnvVar: 'GROK_API_KEY',
       description: 'Optional legacy LLM fallback with xAI Grok.',
-      detail: grokStatus.installed
-        ? hasEnvValue('GROK_API_KEY')
-          ? 'Ready'
-          : 'Set GROK_API_KEY'
-        : 'Not installed',
+      detail: !grokEnabled
+        ? 'Disabled'
+        : grokStatus.installed
+          ? hasEnvValue('GROK_API_KEY')
+            ? 'Ready'
+            : 'Set GROK_API_KEY'
+          : 'Not installed',
     },
   ];
 }
@@ -209,7 +221,7 @@ function getLegacyProviderStatuses(
  */
 export function getWebSearchCliProviders(
   wsConfig: WebSearchConfigSnapshot = getWebSearchConfig(),
-  options?: { includeVersions?: boolean }
+  options?: { includeVersions?: boolean; probeDisabled?: boolean }
 ): WebSearchCliInfo[] {
   const apiKeyStates = getWebSearchApiKeyStates();
   const cooldowns = readProviderCooldowns();
@@ -370,7 +382,10 @@ export function buildWebSearchReadiness(
 export function getWebSearchReadiness(
   wsConfig: WebSearchConfigSnapshot = getWebSearchConfig()
 ): WebSearchStatus {
-  const providers = getWebSearchCliProviders(wsConfig, { includeVersions: false });
+  const providers = getWebSearchCliProviders(wsConfig, {
+    includeVersions: false,
+    probeDisabled: false,
+  });
   return buildWebSearchReadiness(wsConfig.enabled, providers);
 }
 
