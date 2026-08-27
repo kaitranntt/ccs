@@ -1,6 +1,6 @@
 {
   "name": "@kaitranntt/ccs",
-  "version": "8.9.0-dev.8",
+  "version": "8.9.0-dev.9",
   "description": "Claude Codex Switch - Instant profile switching between Claude, GLM, Kimi, and more",
   "keywords": [
     "cli",
