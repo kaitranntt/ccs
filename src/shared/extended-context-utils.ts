@@ -34,21 +34,15 @@ const ANTHROPIC_MODEL_ENV_KEY_SET = new Set<string>(ANTHROPIC_MODEL_ENV_KEYS);
 
 const EXTENDED_CONTEXT_MODEL_ENV_KEY_SET = new Set<string>(EXTENDED_CONTEXT_MODEL_ENV_KEYS);
 
-/**
- * Keys whose value Claude Code resolves through a resolver that removes [1m]
- * before use. ANTHROPIC_DEFAULT_FABLE_MODEL is the only one today: its resolver
- * strips the suffix (unlike the opus/sonnet resolvers, which pass the value
- * through), and the stripped env-supplied default is then held to the standard
- * 200k window instead of the model's native 1M. Writing [1m] here therefore
- * costs the long context window rather than granting it, and Fable models are
- * natively 1M, so the suffix is never needed on this key.
+/*
+ * Why every key, including ANTHROPIC_DEFAULT_FABLE_MODEL, carries the suffix:
+ * Claude Code only grants a natively-1M model (Fable, Opus 5) its full window
+ * without the suffix when ANTHROPIC_BASE_URL is unset or points at
+ * api.anthropic.com. Behind any proxy (CLIProxy, headroom, ...) a bare id is
+ * clamped to 200k even when the backend advertises 1M, and the fable alias
+ * resolver passes the env value through untouched in that case. The [1m]
+ * suffix is therefore the only thing that turns the long window on for CCS.
  */
-const SUFFIX_STRIPPING_MODEL_ENV_KEYS = new Set<string>(['ANTHROPIC_DEFAULT_FABLE_MODEL']);
-
-/** True when writing an explicit [1m] suffix into this env key is meaningful. */
-export function envKeyAcceptsExtendedContextSuffix(key: string): boolean {
-  return !SUFFIX_STRIPPING_MODEL_ENV_KEYS.has(key);
-}
 
 /** Check if model is a native Gemini model (auto-enabled behavior). */
 export function isNativeGeminiModel(modelId: string): boolean {
@@ -117,9 +111,7 @@ export function applyExtendedContextPreferenceToAnthropicModels<
     }
 
     const modelId = stripModelConfigurationSuffixes(value);
-    const supported =
-      envKeyAcceptsExtendedContextSuffix(key) &&
-      (options.supportsExtendedContext?.(modelId, key) ?? true);
+    const supported = options.supportsExtendedContext?.(modelId, key) ?? true;
     nextEnv[key] =
       enabled && supported ? applyExtendedContextSuffix(value) : stripExtendedContextSuffix(value);
   }

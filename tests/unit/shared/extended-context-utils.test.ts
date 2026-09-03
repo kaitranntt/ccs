@@ -4,7 +4,6 @@ import {
   ANTHROPIC_MODEL_ENV_KEYS,
   EXTENDED_CONTEXT_MODEL_ENV_KEYS,
   applyExtendedContextPreferenceToAnthropicModels,
-  envKeyAcceptsExtendedContextSuffix,
   hasAnthropicExtendedContextEnabled,
   isAnthropicModelEnvKey,
   isExtendedContextModelEnvKey,
@@ -37,22 +36,17 @@ describe('extended-context model env keys', () => {
     expect(isExtendedContextModelEnvKey('CLAUDE_CODE_SUBAGENT_MODEL')).toBe(true);
     expect(isAnthropicModelEnvKey('CLAUDE_CODE_SUBAGENT_MODEL')).toBe(false);
   });
-
-  it('marks the fable tier key as suffix-stripping', () => {
-    expect(envKeyAcceptsExtendedContextSuffix('ANTHROPIC_DEFAULT_FABLE_MODEL')).toBe(false);
-    expect(envKeyAcceptsExtendedContextSuffix('ANTHROPIC_MODEL')).toBe(true);
-    expect(envKeyAcceptsExtendedContextSuffix('ANTHROPIC_DEFAULT_OPUS_MODEL')).toBe(true);
-    expect(envKeyAcceptsExtendedContextSuffix('CLAUDE_CODE_SUBAGENT_MODEL')).toBe(true);
-  });
 });
 
 describe('applyExtendedContextPreferenceToAnthropicModels', () => {
-  it('never writes [1m] into the fable tier key and strips a saved one', () => {
+  it('writes [1m] into every managed key, the fable tier included', () => {
+    // Behind a proxy base URL Claude Code clamps a bare Fable id to 200k, so the
+    // fable tier needs the suffix exactly like the opus/sonnet tiers do.
     const env = applyExtendedContextPreferenceToAnthropicModels(
       {
         ANTHROPIC_MODEL: 'claude-fable-5-1',
         ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5',
-        ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5-1[1m]',
+        ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5-1',
         CLAUDE_CODE_SUBAGENT_MODEL: 'claude-fable-5-1',
       },
       true
@@ -61,7 +55,7 @@ describe('applyExtendedContextPreferenceToAnthropicModels', () => {
     expect(env).toEqual({
       ANTHROPIC_MODEL: 'claude-fable-5-1[1m]',
       ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5[1m]',
-      ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5-1',
+      ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5-1[1m]',
       CLAUDE_CODE_SUBAGENT_MODEL: 'claude-fable-5-1[1m]',
     });
   });
@@ -83,7 +77,7 @@ describe('applyExtendedContextPreferenceToAnthropicModels', () => {
     });
   });
 
-  it('honors a caller compatibility predicate on top of the key guard', () => {
+  it('honors a caller compatibility predicate', () => {
     const env = applyExtendedContextPreferenceToAnthropicModels(
       {
         ANTHROPIC_MODEL: 'claude-opus-5',
@@ -99,9 +93,12 @@ describe('applyExtendedContextPreferenceToAnthropicModels', () => {
     });
   });
 
-  it('reads saved intent from the subagent key too', () => {
+  it('reads saved intent from any managed key', () => {
     expect(
       hasAnthropicExtendedContextEnabled({ CLAUDE_CODE_SUBAGENT_MODEL: 'claude-fable-5-1[1m]' })
+    ).toBe(true);
+    expect(
+      hasAnthropicExtendedContextEnabled({ ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5-1[1m]' })
     ).toBe(true);
     expect(
       hasAnthropicExtendedContextEnabled({ ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5-1' })

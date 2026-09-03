@@ -867,6 +867,17 @@ export function supportsExtendedContext(provider: CLIProxyProvider, modelId: str
 }
 
 /**
+ * Catalog model that backs the Claude Code `fable` tier for a provider.
+ * The catalog lists the newest Fable first, so the first match is the default.
+ * Returns undefined for providers that serve no Fable model.
+ */
+export function getDefaultFableTierModel(provider: CLIProxyProvider): string | undefined {
+  const catalog = MODEL_CATALOG[provider];
+  if (!catalog) return undefined;
+  return catalog.models.find((model) => model.id.toLowerCase().startsWith('claude-fable-'))?.id;
+}
+
+/**
  * Check if a model can read image inputs natively.
  */
 export function supportsNativeImageInput(provider: CLIProxyProvider, modelId: string): boolean {
