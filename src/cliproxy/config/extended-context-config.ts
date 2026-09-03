@@ -13,9 +13,10 @@ import type { CLIProxyProvider } from '../types';
 import { supportsExtendedContext } from '../model-catalog';
 import { warn } from '../../utils/ui';
 import {
-  ANTHROPIC_MODEL_ENV_KEYS,
+  EXTENDED_CONTEXT_MODEL_ENV_KEYS,
   applyExtendedContextPreferenceToAnthropicModels,
   applyExtendedContextSuffix as applyExtendedContextSuffixShared,
+  envKeyAcceptsExtendedContextSuffix,
   hasExtendedContextSuffix,
   isNativeGeminiModel,
   stripExtendedContextSuffix,
@@ -95,12 +96,19 @@ export function applyExtendedContextConfig(
   // previously saved [1m] preference just because the model is Claude — only
   // strip when the model no longer supports extended context. Native Gemini
   // models still get auto-toggled based on catalog support.
-  for (const key of ANTHROPIC_MODEL_ENV_KEYS) {
+  for (const key of EXTENDED_CONTEXT_MODEL_ENV_KEYS) {
     const value = envVars[key];
     if (typeof value !== 'string' || value.trim().length === 0) {
       continue;
     }
     const modelId = stripModelConfigurationSuffixes(value);
+
+    // Keys whose resolver strips [1m] must never keep a saved suffix: the
+    // stripped value loses the model's native long context window.
+    if (!envKeyAcceptsExtendedContextSuffix(key)) {
+      envVars[key] = stripExtendedContextSuffix(value);
+      continue;
+    }
 
     if (isNativeGeminiModel(modelId)) {
       envVars[key] = supportsExtendedContext(provider, modelId)

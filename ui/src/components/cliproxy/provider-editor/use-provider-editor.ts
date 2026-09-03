@@ -12,7 +12,7 @@ import type { ProviderCatalog } from '../provider-model-selector';
 import {
   applyExtendedContextPreferenceToAnthropicModels,
   hasAnthropicExtendedContextEnabled,
-  isAnthropicModelEnvKey,
+  isExtendedContextModelEnvKey,
 } from '@/lib/extended-context-utils';
 import { supportsExtendedContext } from '@/lib/model-catalogs';
 import { isValidProvider } from '@/lib/provider-config';
@@ -104,7 +104,7 @@ export function useProviderEditor(
   const updateEnvValue = useCallback(
     (key: string, value: string) => {
       const newEnv = { ...(currentSettings?.env || {}), [key]: value };
-      const envWithIntent = isAnthropicModelEnvKey(key)
+      const envWithIntent = isExtendedContextModelEnvKey(key)
         ? applySavedLongContextIntent(newEnv, extendedContextEnabled)
         : newEnv;
       delete envWithIntent['CCS_EXTENDED_CONTEXT'];
@@ -132,7 +132,7 @@ export function useProviderEditor(
   const updateEnvValues = useCallback(
     (updates: Record<string, string>) => {
       const newEnv = { ...(currentSettings?.env || {}), ...updates };
-      const touchesAnthropicModel = Object.keys(updates).some(isAnthropicModelEnvKey);
+      const touchesAnthropicModel = Object.keys(updates).some(isExtendedContextModelEnvKey);
       const envWithIntent = touchesAnthropicModel
         ? applySavedLongContextIntent(newEnv, extendedContextEnabled)
         : newEnv;

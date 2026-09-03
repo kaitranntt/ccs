@@ -14,7 +14,41 @@ export const ANTHROPIC_MODEL_ENV_KEYS = [
 
 export type AnthropicModelEnvKey = (typeof ANTHROPIC_MODEL_ENV_KEYS)[number];
 
+/**
+ * Model env keys outside the Anthropic tier mappings that still carry a plain
+ * model id, so the extended-context preference has to cover them too. Kept
+ * separate from ANTHROPIC_MODEL_ENV_KEYS, which also drives routing, model-id
+ * normalization and profile validation.
+ */
+export const EXTRA_EXTENDED_CONTEXT_MODEL_ENV_KEYS = ['CLAUDE_CODE_SUBAGENT_MODEL'] as const;
+
+/** Every model env key the [1m] preference is applied to. */
+export const EXTENDED_CONTEXT_MODEL_ENV_KEYS = [
+  ...ANTHROPIC_MODEL_ENV_KEYS,
+  ...EXTRA_EXTENDED_CONTEXT_MODEL_ENV_KEYS,
+] as const;
+
+export type ExtendedContextModelEnvKey = (typeof EXTENDED_CONTEXT_MODEL_ENV_KEYS)[number];
+
 const ANTHROPIC_MODEL_ENV_KEY_SET = new Set<string>(ANTHROPIC_MODEL_ENV_KEYS);
+
+const EXTENDED_CONTEXT_MODEL_ENV_KEY_SET = new Set<string>(EXTENDED_CONTEXT_MODEL_ENV_KEYS);
+
+/**
+ * Keys whose value Claude Code resolves through a resolver that removes [1m]
+ * before use. ANTHROPIC_DEFAULT_FABLE_MODEL is the only one today: its resolver
+ * strips the suffix (unlike the opus/sonnet resolvers, which pass the value
+ * through), and the stripped env-supplied default is then held to the standard
+ * 200k window instead of the model's native 1M. Writing [1m] here therefore
+ * costs the long context window rather than granting it, and Fable models are
+ * natively 1M, so the suffix is never needed on this key.
+ */
+const SUFFIX_STRIPPING_MODEL_ENV_KEYS = new Set<string>(['ANTHROPIC_DEFAULT_FABLE_MODEL']);
+
+/** True when writing an explicit [1m] suffix into this env key is meaningful. */
+export function envKeyAcceptsExtendedContextSuffix(key: string): boolean {
+  return !SUFFIX_STRIPPING_MODEL_ENV_KEYS.has(key);
+}
 
 /** Check if model is a native Gemini model (auto-enabled behavior). */
 export function isNativeGeminiModel(modelId: string): boolean {
@@ -44,6 +78,11 @@ export function isAnthropicModelEnvKey(key: string): key is AnthropicModelEnvKey
   return ANTHROPIC_MODEL_ENV_KEY_SET.has(key);
 }
 
+/** True when key holds a model id the [1m] preference is applied to. */
+export function isExtendedContextModelEnvKey(key: string): key is ExtendedContextModelEnvKey {
+  return EXTENDED_CONTEXT_MODEL_ENV_KEY_SET.has(key);
+}
+
 /** Strip transient config suffixes so model IDs can be checked against catalogs. */
 export function stripModelConfigurationSuffixes(modelId: string): string {
   return stripExtendedContextSuffix(modelId.trim()).replace(/\([^)]+\)$/, '');
@@ -53,7 +92,7 @@ export function stripModelConfigurationSuffixes(modelId: string): string {
 export function hasAnthropicExtendedContextEnabled(
   env: Partial<Record<string, string | undefined>>
 ): boolean {
-  return ANTHROPIC_MODEL_ENV_KEYS.some((key) => {
+  return EXTENDED_CONTEXT_MODEL_ENV_KEYS.some((key) => {
     const value = env[key];
     return typeof value === 'string' && hasExtendedContextSuffix(value);
   });
@@ -66,19 +105,21 @@ export function applyExtendedContextPreferenceToAnthropicModels<
   env: T,
   enabled: boolean,
   options: {
-    supportsExtendedContext?: (modelId: string, key: AnthropicModelEnvKey) => boolean;
+    supportsExtendedContext?: (modelId: string, key: ExtendedContextModelEnvKey) => boolean;
   } = {}
 ): T {
   const nextEnv: Record<string, string | undefined> = { ...env };
 
-  for (const key of ANTHROPIC_MODEL_ENV_KEYS) {
+  for (const key of EXTENDED_CONTEXT_MODEL_ENV_KEYS) {
     const value = nextEnv[key];
     if (typeof value !== 'string' || value.trim().length === 0) {
       continue;
     }
 
     const modelId = stripModelConfigurationSuffixes(value);
-    const supported = options.supportsExtendedContext?.(modelId, key) ?? true;
+    const supported =
+      envKeyAcceptsExtendedContextSuffix(key) &&
+      (options.supportsExtendedContext?.(modelId, key) ?? true);
     nextEnv[key] =
       enabled && supported ? applyExtendedContextSuffix(value) : stripExtendedContextSuffix(value);
   }

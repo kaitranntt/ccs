@@ -4,10 +4,14 @@
 
 export {
   ANTHROPIC_MODEL_ENV_KEYS,
+  EXTENDED_CONTEXT_MODEL_ENV_KEYS,
   EXTENDED_CONTEXT_SUFFIX,
+  EXTRA_EXTENDED_CONTEXT_MODEL_ENV_KEYS,
   applyExtendedContextPreferenceToAnthropicModels,
+  envKeyAcceptsExtendedContextSuffix,
   isNativeGeminiModel,
   isAnthropicModelEnvKey,
+  isExtendedContextModelEnvKey,
   hasAnthropicExtendedContextEnabled,
   hasExtendedContextSuffix,
   applyExtendedContextSuffix,
