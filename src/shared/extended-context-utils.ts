@@ -19,8 +19,15 @@ export type AnthropicModelEnvKey = (typeof ANTHROPIC_MODEL_ENV_KEYS)[number];
  * model id, so the extended-context preference has to cover them too. Kept
  * separate from ANTHROPIC_MODEL_ENV_KEYS, which also drives routing, model-id
  * normalization and profile validation.
+ *
+ * ANTHROPIC_DEFAULT_MODEL is Claude Code's lowest-priority startup model
+ * (after --model, ANTHROPIC_MODEL and the settings `model` field), so it needs
+ * the same [1m] treatment whenever a profile carries it.
  */
-export const EXTRA_EXTENDED_CONTEXT_MODEL_ENV_KEYS = ['CLAUDE_CODE_SUBAGENT_MODEL'] as const;
+export const EXTRA_EXTENDED_CONTEXT_MODEL_ENV_KEYS = [
+  'CLAUDE_CODE_SUBAGENT_MODEL',
+  'ANTHROPIC_DEFAULT_MODEL',
+] as const;
 
 /** Every model env key the [1m] preference is applied to. */
 export const EXTENDED_CONTEXT_MODEL_ENV_KEYS = [

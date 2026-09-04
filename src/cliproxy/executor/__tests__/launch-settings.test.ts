@@ -57,6 +57,30 @@ describe('buildLaunchSettingsOverlay', () => {
     expect(env.ANTHROPIC_AUTH_TOKEN).toBe('ccs-internal-managed');
   });
 
+  it('overlays the extended-context extra model keys so a saved bare value cannot clobber --1m/--no-1m', () => {
+    writePersisted({
+      env: {
+        ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/claude',
+        ANTHROPIC_MODEL: 'claude-opus-5[1m]',
+        ANTHROPIC_DEFAULT_MODEL: 'claude-opus-5[1m]',
+        CLAUDE_CODE_SUBAGENT_MODEL: 'claude-sonnet-5[1m]',
+      },
+    });
+
+    const { settings, changed } = buildLaunchSettingsOverlay(settingsPath, {
+      ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/claude',
+      ANTHROPIC_MODEL: 'claude-opus-5',
+      ANTHROPIC_DEFAULT_MODEL: 'claude-opus-5',
+      CLAUDE_CODE_SUBAGENT_MODEL: 'claude-sonnet-5',
+    } as NodeJS.ProcessEnv);
+
+    expect(changed).toBe(true);
+    const env = settings.env as Record<string, string>;
+    expect(env.ANTHROPIC_MODEL).toBe('claude-opus-5');
+    expect(env.ANTHROPIC_DEFAULT_MODEL).toBe('claude-opus-5');
+    expect(env.CLAUDE_CODE_SUBAGENT_MODEL).toBe('claude-sonnet-5');
+  });
+
   it('preserves non-env settings (permissions, hooks, etc.)', () => {
     writePersisted({
       env: { ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/codex' },

@@ -26,6 +26,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 import { ANTHROPIC_MODEL_ENV_KEYS, ANTHROPIC_ROUTING_ENV_KEYS } from '../../utils/shell-executor';
+import { EXTRA_EXTENDED_CONTEXT_MODEL_ENV_KEYS } from '../../shared/extended-context-utils';
 
 // SIBLING HELPER: src/utils/openai-compat-launch-settings.ts solves the same
 // "persisted --settings env clobbers runtime routing env" problem by STRIPPING
@@ -38,9 +39,15 @@ import { ANTHROPIC_MODEL_ENV_KEYS, ANTHROPIC_ROUTING_ENV_KEYS } from '../../util
  * Environment keys that control provider routing/model selection and are read
  * by Claude from the settings `env` block. These must reflect the resolved
  * proxy-chain environment, not the persisted on-disk values. Reuses the
- * canonical routing/model key lists from shell-executor.
+ * canonical routing/model key lists from shell-executor, plus the extra model
+ * keys the [1m] preference manages (subagent + startup default): a saved bare
+ * value there would otherwise clobber the resolved --1m/--no-1m result.
  */
-const ROUTING_ENV_KEYS = [...ANTHROPIC_ROUTING_ENV_KEYS, ...ANTHROPIC_MODEL_ENV_KEYS];
+const ROUTING_ENV_KEYS = [
+  ...ANTHROPIC_ROUTING_ENV_KEYS,
+  ...ANTHROPIC_MODEL_ENV_KEYS,
+  ...EXTRA_EXTENDED_CONTEXT_MODEL_ENV_KEYS,
+];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

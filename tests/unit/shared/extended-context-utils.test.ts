@@ -28,13 +28,16 @@ describe('Anthropic model env keys', () => {
 });
 
 describe('extended-context model env keys', () => {
-  it('covers the Anthropic tiers plus the subagent model key', () => {
+  it('covers the Anthropic tiers plus the subagent and startup-default model keys', () => {
     expect([...EXTENDED_CONTEXT_MODEL_ENV_KEYS]).toEqual([
       ...ANTHROPIC_MODEL_ENV_KEYS,
       'CLAUDE_CODE_SUBAGENT_MODEL',
+      'ANTHROPIC_DEFAULT_MODEL',
     ]);
     expect(isExtendedContextModelEnvKey('CLAUDE_CODE_SUBAGENT_MODEL')).toBe(true);
+    expect(isExtendedContextModelEnvKey('ANTHROPIC_DEFAULT_MODEL')).toBe(true);
     expect(isAnthropicModelEnvKey('CLAUDE_CODE_SUBAGENT_MODEL')).toBe(false);
+    expect(isAnthropicModelEnvKey('ANTHROPIC_DEFAULT_MODEL')).toBe(false);
   });
 });
 
@@ -64,6 +67,7 @@ describe('applyExtendedContextPreferenceToAnthropicModels', () => {
     const env = applyExtendedContextPreferenceToAnthropicModels(
       {
         ANTHROPIC_MODEL: 'claude-opus-5[1m]',
+        ANTHROPIC_DEFAULT_MODEL: 'claude-opus-5[1m]',
         ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5-1[1m]',
         CLAUDE_CODE_SUBAGENT_MODEL: 'claude-fable-5-1[1m]',
       },
@@ -72,9 +76,19 @@ describe('applyExtendedContextPreferenceToAnthropicModels', () => {
 
     expect(env).toEqual({
       ANTHROPIC_MODEL: 'claude-opus-5',
+      ANTHROPIC_DEFAULT_MODEL: 'claude-opus-5',
       ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5-1',
       CLAUDE_CODE_SUBAGENT_MODEL: 'claude-fable-5-1',
     });
+  });
+
+  it('suffixes the startup-default model key when the preference is on', () => {
+    const env = applyExtendedContextPreferenceToAnthropicModels(
+      { ANTHROPIC_DEFAULT_MODEL: 'claude-opus-5' },
+      true
+    );
+
+    expect(env).toEqual({ ANTHROPIC_DEFAULT_MODEL: 'claude-opus-5[1m]' });
   });
 
   it('honors a caller compatibility predicate', () => {
