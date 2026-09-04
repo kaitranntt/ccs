@@ -216,20 +216,21 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
     cacheCreationPerMillion: 3.75,
     cacheReadPerMillion: 0.3,
   },
-  // Claude Sonnet 5 ($3/$15) — latest Sonnet; shares the standard Sonnet rates.
+  // Claude Sonnet 5 ($2/$10) — the launch introductory rate is now the standard
+  // price; Anthropic cancelled the scheduled 2026-09-01 increase to $3/$15.
   // Registered explicitly so it is a known model rather than relying on the
-  // unknown-model fallback that coincidentally matches these rates.
+  // unknown-model fallback.
   'claude-sonnet-5': {
-    inputPerMillion: 3.0,
-    outputPerMillion: 15.0,
-    cacheCreationPerMillion: 3.75,
-    cacheReadPerMillion: 0.3,
+    inputPerMillion: 2.0,
+    outputPerMillion: 10.0,
+    cacheCreationPerMillion: 2.5,
+    cacheReadPerMillion: 0.2,
   },
   'claude-sonnet-5-thinking': {
-    inputPerMillion: 3.0,
-    outputPerMillion: 15.0,
-    cacheCreationPerMillion: 3.75,
-    cacheReadPerMillion: 0.3,
+    inputPerMillion: 2.0,
+    outputPerMillion: 10.0,
+    cacheCreationPerMillion: 2.5,
+    cacheReadPerMillion: 0.2,
   },
   // Claude 4 Opus ($15/$75)
   'claude-4-opus-20250514': {
@@ -359,6 +360,16 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
     outputPerMillion: 50.0,
     cacheCreationPerMillion: 12.5,
     cacheReadPerMillion: 1.0,
+  },
+  // Claude Fable 5.1 ($10/$50) — same tier and base rates as Fable 5, but cache
+  // hits are billed at 0.025x base input ($0.25/MTok) instead of the usual 0.1x.
+  // Anthropic applies that reduced multiplier only to Fable 5.1 and Mythos 5.1,
+  // so this entry cannot use CACHE_READ_MULTIPLIER-derived rates.
+  'claude-fable-5-1': {
+    inputPerMillion: 10.0,
+    outputPerMillion: 50.0,
+    cacheCreationPerMillion: 12.5,
+    cacheReadPerMillion: 0.25,
   },
 
   // ---------------------------------------------------------------------------

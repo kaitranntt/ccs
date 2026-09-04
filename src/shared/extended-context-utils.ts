@@ -14,7 +14,42 @@ export const ANTHROPIC_MODEL_ENV_KEYS = [
 
 export type AnthropicModelEnvKey = (typeof ANTHROPIC_MODEL_ENV_KEYS)[number];
 
+/**
+ * Model env keys outside the Anthropic tier mappings that still carry a plain
+ * model id, so the extended-context preference has to cover them too. Kept
+ * separate from ANTHROPIC_MODEL_ENV_KEYS, which also drives routing, model-id
+ * normalization and profile validation.
+ *
+ * ANTHROPIC_DEFAULT_MODEL is Claude Code's lowest-priority startup model
+ * (after --model, ANTHROPIC_MODEL and the settings `model` field), so it needs
+ * the same [1m] treatment whenever a profile carries it.
+ */
+export const EXTRA_EXTENDED_CONTEXT_MODEL_ENV_KEYS = [
+  'CLAUDE_CODE_SUBAGENT_MODEL',
+  'ANTHROPIC_DEFAULT_MODEL',
+] as const;
+
+/** Every model env key the [1m] preference is applied to. */
+export const EXTENDED_CONTEXT_MODEL_ENV_KEYS = [
+  ...ANTHROPIC_MODEL_ENV_KEYS,
+  ...EXTRA_EXTENDED_CONTEXT_MODEL_ENV_KEYS,
+] as const;
+
+export type ExtendedContextModelEnvKey = (typeof EXTENDED_CONTEXT_MODEL_ENV_KEYS)[number];
+
 const ANTHROPIC_MODEL_ENV_KEY_SET = new Set<string>(ANTHROPIC_MODEL_ENV_KEYS);
+
+const EXTENDED_CONTEXT_MODEL_ENV_KEY_SET = new Set<string>(EXTENDED_CONTEXT_MODEL_ENV_KEYS);
+
+/*
+ * Why every key, including ANTHROPIC_DEFAULT_FABLE_MODEL, carries the suffix:
+ * Claude Code only grants a natively-1M model (Fable, Opus 5) its full window
+ * without the suffix when ANTHROPIC_BASE_URL is unset or points at
+ * api.anthropic.com. Behind any proxy (CLIProxy, headroom, ...) a bare id is
+ * clamped to 200k even when the backend advertises 1M, and the fable alias
+ * resolver passes the env value through untouched in that case. The [1m]
+ * suffix is therefore the only thing that turns the long window on for CCS.
+ */
 
 /** Check if model is a native Gemini model (auto-enabled behavior). */
 export function isNativeGeminiModel(modelId: string): boolean {
@@ -44,6 +79,11 @@ export function isAnthropicModelEnvKey(key: string): key is AnthropicModelEnvKey
   return ANTHROPIC_MODEL_ENV_KEY_SET.has(key);
 }
 
+/** True when key holds a model id the [1m] preference is applied to. */
+export function isExtendedContextModelEnvKey(key: string): key is ExtendedContextModelEnvKey {
+  return EXTENDED_CONTEXT_MODEL_ENV_KEY_SET.has(key);
+}
+
 /** Strip transient config suffixes so model IDs can be checked against catalogs. */
 export function stripModelConfigurationSuffixes(modelId: string): string {
   return stripExtendedContextSuffix(modelId.trim()).replace(/\([^)]+\)$/, '');
@@ -53,7 +93,7 @@ export function stripModelConfigurationSuffixes(modelId: string): string {
 export function hasAnthropicExtendedContextEnabled(
   env: Partial<Record<string, string | undefined>>
 ): boolean {
-  return ANTHROPIC_MODEL_ENV_KEYS.some((key) => {
+  return EXTENDED_CONTEXT_MODEL_ENV_KEYS.some((key) => {
     const value = env[key];
     return typeof value === 'string' && hasExtendedContextSuffix(value);
   });
@@ -66,12 +106,12 @@ export function applyExtendedContextPreferenceToAnthropicModels<
   env: T,
   enabled: boolean,
   options: {
-    supportsExtendedContext?: (modelId: string, key: AnthropicModelEnvKey) => boolean;
+    supportsExtendedContext?: (modelId: string, key: ExtendedContextModelEnvKey) => boolean;
   } = {}
 ): T {
   const nextEnv: Record<string, string | undefined> = { ...env };
 
-  for (const key of ANTHROPIC_MODEL_ENV_KEYS) {
+  for (const key of EXTENDED_CONTEXT_MODEL_ENV_KEYS) {
     const value = nextEnv[key];
     if (typeof value !== 'string' || value.trim().length === 0) {
       continue;
