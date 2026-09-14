@@ -103,5 +103,5 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 | `src/cliproxy/quota/quota-manager.ts` | 954 |
 | `src/web-server/services/codex-dashboard-service.ts` | 940 |
 | `src/glmt/glmt-proxy.ts` | 939 |
-| `src/cliproxy/model-catalog.ts` | 895 |
+| `src/cliproxy/model-catalog.ts` | 908 |
 

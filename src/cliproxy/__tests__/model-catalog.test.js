@@ -310,6 +310,19 @@ describe('Model Catalog', () => {
   });
 
   describe('Codex models', () => {
+    it('includes Astra with supported CCS efforts, fast mode, and its context window', () => {
+      const astra = modelCatalog.MODEL_CATALOG.codex.models.find((m) => m.id === 'gpt-6-astra');
+      assert(astra, 'Should include GPT-6 Astra');
+      assert.strictEqual(astra.contextWindow, 272000);
+      assert.deepStrictEqual(astra.thinking, {
+        type: 'levels',
+        levels: ['low', 'medium', 'high', 'xhigh'],
+        maxLevel: 'xhigh',
+        dynamicAllowed: false,
+      });
+      assert.deepStrictEqual(astra.codexServiceTiers, ['fast']);
+    });
+
     it('has correct default model', () => {
       const { MODEL_CATALOG } = modelCatalog;
       assert.strictEqual(MODEL_CATALOG.codex.defaultModel, 'gpt-5.4');
@@ -319,6 +332,7 @@ describe('Model Catalog', () => {
       const { MODEL_CATALOG } = modelCatalog;
       const ids = MODEL_CATALOG.codex.models.map((m) => m.id);
       assert.deepStrictEqual(ids, [
+        'gpt-6-astra',
         'gpt-5.6-sol',
         'gpt-5.6-terra',
         'gpt-5.6-luna',

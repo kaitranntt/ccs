@@ -260,6 +260,20 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
     defaultModel: 'gpt-5.4',
     models: [
       {
+        id: 'gpt-6-astra',
+        name: 'GPT-6 Astra',
+        description: 'Most capable model for complex, demanding work.',
+        codexMaxEffort: 'xhigh',
+        codexEfforts: ['low', 'medium', 'high', 'xhigh'],
+        codexServiceTiers: ['fast'],
+        presetMapping: {
+          default: 'gpt-6-astra',
+          opus: 'gpt-6-astra',
+          sonnet: 'gpt-6-astra',
+          haiku: 'gpt-5.4-mini',
+        },
+      },
+      {
         id: 'gpt-5.6-sol',
         name: 'GPT-5.6 Sol',
         description: 'Latest frontier agentic coding model.',
