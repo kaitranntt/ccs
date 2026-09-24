@@ -10,8 +10,8 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 | Sync fs files affected (all) | 263 |
 | Sync fs occurrences (runtime hotpaths) | 1190 |
 | Sync fs files affected (runtime hotpaths) | 156 |
-| Legacy shim markers | 465 |
-| Legacy shim files affected | 176 |
+| Legacy shim markers | 469 |
+| Legacy shim files affected | 178 |
 
 ## Top Runtime Hotpath Sync fs Files
 
@@ -49,6 +49,7 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 - `src/cliproxy/ai-providers/__tests__/codex-plan-compatibility.test.ts`
 - `src/cliproxy/ai-providers/__tests__/openai-compat-manager.test.js`
 - `src/cliproxy/ai-providers/openai-compat-manager.ts`
+- `src/cliproxy/services/usage-compatibility-transformer.ts`
 - `src/cliproxy/types/__tests__/types-backward-compat.test.ts`
 - `src/utils/profile-compat.ts`
 - `src/web-server/services/compatible-cli-docs-registry.ts`
@@ -56,14 +57,14 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 
 | Metric | Value |
 |---|---:|
-| typed-error adoption (typed/total throws) | 19.6% (89/455) |
+| typed-error adoption (typed/total throws) | 19.9% (91/457) |
 | typed-error adoption (P4 locked subdomains) | 93.3% (28/30), target 40% |
-| hotpath console.error/warn occurrences | 264 (590 total, 326 CLI-UX exempt) |
-| hotpath console.error/warn files | 81 |
+| hotpath console.error/warn occurrences | 265 (591 total, 326 CLI-UX exempt) |
+| hotpath console.error/warn files | 82 |
 | files with createLogger | 65/765 |
 | subdomains with zero createLogger | 15 (api, bin, channels, cliproxy, cliproxy/accounts, cliproxy/ai-providers, cliproxy/binary, cliproxy/config, cliproxy/management, cliproxy/sync, cliproxy/types, config, dispatcher, shared, types) |
 | files > 400 LOC | 94 |
-| files > 600 LOC | 42 |
+| files > 600 LOC | 43 |
 
 ### Top Hotpath console.error/warn Files
 

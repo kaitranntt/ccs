@@ -1,3 +1,6 @@
+import { createHash } from 'crypto';
+import { mapExternalProviderName, PROVIDER_CAPABILITIES } from '../provider-capabilities';
+import { ConfigError } from '../../errors/error-types';
 import type { CliproxyRequestDetail, CliproxyUsageApiResponse } from './stats-fetcher';
 
 interface CliproxyUsageQueueRecord {
@@ -8,6 +11,7 @@ interface CliproxyUsageQueueRecord {
   source?: string;
   auth_index?: string | number;
   request_id?: string;
+  client_key_id?: string;
   tokens?: Partial<CliproxyRequestDetail['tokens']>;
   failed?: boolean;
 }
@@ -50,6 +54,60 @@ function asBoolean(value: unknown): boolean {
   return value === true;
 }
 
+/** Legacy snapshots group by client API key, whereas queue snapshots group by provider.
+ * Confirm keys against the management API rather than treating every bucket label as a key.
+ * Do not consume the destructive queue when a populated snapshot is available.
+ */
+export function attributeSnapshotClientKeys(
+  response: CliproxyUsageApiResponse,
+  clientKeys: string[]
+): CliproxyUsageApiResponse {
+  const knownKeys = new Set(clientKeys.filter((key) => key.length > 0));
+  const normalized: CliproxyUsageApiResponse = {
+    ...response,
+    usage: { ...response.usage, apis: {} },
+  };
+  for (const [label, api] of Object.entries(response.usage?.apis ?? {})) {
+    const usageBucketId = createHash('sha256').update(label).digest('hex');
+    const clientKeyId = knownKeys.has(label) ? usageBucketId : undefined;
+    // A caller credential is not a provider name and must not enter persisted analytics.
+    // Unrecognized/rotated keys stay unattributed, not exposed as provider labels.
+    // Preserve only recognized provider names, never arbitrary snapshot labels.
+    // A registered credential takes precedence even if it resembles a provider.
+    const isProvider =
+      mapExternalProviderName(label) !== null ||
+      Object.values(PROVIDER_CAPABILITIES).some((capability) =>
+        capability.authFilePrefixes.includes(`${label}-`)
+      );
+    if (clientKeyId && isProvider) {
+      throw new ConfigError(
+        'Legacy usage has a client key matching a recognized provider label. ' +
+          'Rotate it to a high-entropy key and establish a non-overlapping collection cutoff; attribution is ambiguous.'
+      );
+    }
+    // Preserve the existing alias: local-log duplicate keys use the same label.
+    // Provider buckets already have stable identity; adding a new bucket ID
+    // would make their pre-upgrade history appear to be different requests.
+    const provider = isProvider ? label : 'unknown';
+    const bucket = ensureProviderBucket(normalized, provider);
+    bucket.total_requests = (bucket.total_requests ?? 0) + (api.total_requests ?? 0);
+    bucket.total_tokens = (bucket.total_tokens ?? 0) + (api.total_tokens ?? 0);
+    for (const [model, stats] of Object.entries(api.models ?? {})) {
+      const modelBucket = ensureModelBucket(bucket, model);
+      modelBucket.total_requests = (modelBucket.total_requests ?? 0) + (stats.total_requests ?? 0);
+      modelBucket.total_tokens = (modelBucket.total_tokens ?? 0) + (stats.total_tokens ?? 0);
+      (modelBucket.details ??= []).push(
+        ...(stats.details ?? []).map((detail) => ({
+          ...detail,
+          ...(!isProvider && { usage_bucket_id: usageBucketId }),
+          ...(clientKeyId && { client_key_id: clientKeyId }),
+        }))
+      );
+    }
+  }
+  return normalized;
+}
+
 function normalizeTokens(rawTokens: unknown): CliproxyRequestDetail['tokens'] {
   const tokens = asRecord(rawTokens) ?? {};
   const input = asNumber(tokens.input_tokens);
@@ -77,6 +135,9 @@ function normalizeQueueRecord(record: unknown): CliproxyUsageQueueRecord | null 
   const provider = asString(raw.provider, 'unknown');
   const model = asString(raw.model, asString(raw.alias, 'unknown'));
   const source = asString(raw.source, 'unknown');
+  // Hash at the ingestion boundary: analytics must not retain bearer credentials.
+  const clientKey = asString(raw.api_key, '');
+  const clientKeyId = clientKey ? createHash('sha256').update(clientKey).digest('hex') : undefined;
   const authIndex =
     typeof raw.auth_index === 'string' || typeof raw.auth_index === 'number'
       ? raw.auth_index
@@ -90,6 +151,7 @@ function normalizeQueueRecord(record: unknown): CliproxyUsageQueueRecord | null 
     source,
     auth_index: authIndex,
     request_id: asString(raw.request_id, ''),
+    ...(clientKeyId && { client_key_id: clientKeyId }),
     tokens: normalizeTokens(raw.tokens),
     failed: asBoolean(raw.failed),
   };
@@ -148,6 +210,7 @@ function createDetailSignature(
     provider,
     model,
     detail.request_id?.trim() ?? '',
+    detail.client_key_id ?? '',
     detail.timestamp,
     detail.source,
     String(detail.auth_index),
@@ -197,6 +260,7 @@ export function buildUsageResponseFromQueueRecords(records: unknown[]): Cliproxy
       source: record.source ?? 'unknown',
       auth_index: record.auth_index ?? record.source ?? 'unknown',
       request_id: record.request_id || undefined,
+      ...(record.client_key_id && { client_key_id: record.client_key_id }),
       tokens: normalizeTokens(record.tokens),
       failed: record.failed === true,
     });
@@ -274,6 +338,7 @@ function createMissingDetailMergeKey(
     provider,
     model,
     detail.request_id?.trim() ?? '',
+    detail.client_key_id ?? '',
     detail.timestamp,
     detail.source?.trim() ?? '',
     String(detail.auth_index ?? '').trim(),
@@ -346,12 +411,15 @@ function createLikelyLogDuplicateKey(
 }
 
 function createRequestIdDuplicateKey(
-  provider: string,
+  _provider: string,
   model: string,
   detail: CliproxyRequestDetail
 ): string {
   const requestId = detail.request_id?.trim();
-  return requestId ? [provider, model, requestId, detail.failed ? '1' : '0'].join('|') : '';
+  // A request ID identifies the same proxy request even when its snapshot is
+  // credential-bucketed and its local log is provider-bucketed. This is used
+  // only to suppress tokenless log supplements, never complete usage records.
+  return requestId ? [model, requestId, detail.failed ? '1' : '0'].join('|') : '';
 }
 
 function parseDetailTimestamp(detail: CliproxyRequestDetail): number | null {

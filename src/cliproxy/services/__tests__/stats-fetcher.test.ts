@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { createHash } from 'crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { runWithScopedConfigDir } from '../../../utils/config-manager';
 import { __testExports, fetchCliproxyStats, fetchCliproxyUsageRaw } from '../stats-fetcher';
@@ -66,6 +67,131 @@ afterEach(() => {
 });
 
 describe('fetchCliproxyUsageRaw', () => {
+  it('returns null for a provider-named client key without consuming the queue', async () => {
+    let queueReads = 0;
+    let metadataReads = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url.endsWith('/v0/management/usage')) {
+        return jsonResponse({
+          usage: {
+            total_requests: 1,
+            total_tokens: 23,
+            apis: {
+              codex: {
+                total_requests: 1,
+                total_tokens: 23,
+                models: {
+                  'gpt-5.5': {
+                    total_requests: 1,
+                    total_tokens: 23,
+                    details: [createCodexQueueRecord()],
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+      if (url.endsWith('/v0/management/api-keys')) {
+        metadataReads++;
+        return jsonResponse({ 'api-keys': ['codex'] });
+      }
+      if (url.includes('/usage-queue')) queueReads++;
+      throw new Error('Unexpected management request');
+    }) as typeof fetch;
+
+    const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19224));
+
+    expect(raw).toBeNull();
+    expect(metadataReads).toBe(1);
+    expect(queueReads).toBe(0);
+  });
+
+  it('does not append a local OAuth log already present in a credential-bucketed snapshot', async () => {
+    writeCliproxyMainLog([
+      '2026-05-05T18:44:59.000Z INFO request_id=req-snapshot Use OAuth provider=codex auth_file=codex-user@example.com-pro.json for model gpt-5.5',
+      '2026-05-05T18:45:00.000Z INFO request_id=req-snapshot POST "/api/provider/codex/v1/messages?beta=true" status=200',
+    ]);
+    let queueReads = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url.endsWith('/v0/management/usage'))
+        return jsonResponse({
+          usage: {
+            total_requests: 1,
+            total_tokens: 23,
+            apis: {
+              'synthetic-key': {
+                total_requests: 1,
+                total_tokens: 23,
+                models: {
+                  'gpt-5.5': {
+                    total_requests: 1,
+                    total_tokens: 23,
+                    details: [{ ...createCodexQueueRecord(), request_id: 'req-snapshot' }],
+                  },
+                },
+              },
+            },
+          },
+        });
+      if (url.endsWith('/v0/management/api-keys'))
+        return jsonResponse({ 'api-keys': ['synthetic-key'] });
+      if (url.includes('/usage-queue')) queueReads++;
+      throw new Error('Unexpected management request');
+    }) as typeof fetch;
+    const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19223));
+    expect(raw?.usage?.total_requests).toBe(1);
+    expect(raw?.usage?.total_tokens).toBe(23);
+    expect(queueReads).toBe(0);
+  });
+  it('attributes populated snapshots without consuming the queue, including unavailable key metadata', async () => {
+    const key = 'synthetic-client-key';
+    let metadataAvailable = true;
+    let queueReads = 0;
+    const record = createCodexQueueRecord();
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url.endsWith('/v0/management/usage')) {
+        return jsonResponse({
+          usage: {
+            total_requests: 1,
+            total_tokens: 23,
+            apis: {
+              [key]: {
+                total_requests: 1,
+                total_tokens: 23,
+                models: {
+                  'gpt-5.5': { total_requests: 1, total_tokens: 23, details: [record] },
+                },
+              },
+            },
+          },
+        });
+      }
+      if (url.endsWith('/v0/management/api-keys')) {
+        return metadataAvailable ? jsonResponse({ 'api-keys': [key] }) : jsonResponse({}, 503);
+      }
+      if (url.includes('/usage-queue')) queueReads++;
+      throw new Error('Unexpected management request');
+    }) as typeof fetch;
+    const first = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19222));
+    const second = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19222));
+    expect(second).toEqual(first);
+    expect(first?.usage?.apis?.unknown.models?.['gpt-5.5'].details?.[0].client_key_id).toBe(
+      createHash('sha256').update(key).digest('hex')
+    );
+    expect(JSON.stringify(first)).not.toContain(key);
+    metadataAvailable = false;
+    const unavailable = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19222));
+    expect(unavailable?.usage?.total_requests).toBe(1);
+    expect(
+      unavailable?.usage?.apis?.unknown.models?.['gpt-5.5'].details?.[0].client_key_id
+    ).toBeUndefined();
+    expect(JSON.stringify(unavailable)).not.toContain(key);
+    expect(queueReads).toBe(0);
+  });
   it('falls back to CLIProxy usage-queue when the legacy aggregate endpoint is unavailable', async () => {
     const requestedUrls: string[] = [];
     globalThis.fetch = (async (input: RequestInfo | URL) => {

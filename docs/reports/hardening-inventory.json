@@ -304,8 +304,8 @@
     ]
   },
   "legacyShim": {
-    "totalMarkers": 465,
-    "filesAffected": 176,
+    "totalMarkers": 469,
+    "filesAffected": 178,
     "topFiles": [
       {
         "file": "src/auth/profile-detector.ts",
@@ -488,6 +488,7 @@
       "src/cliproxy/ai-providers/__tests__/codex-plan-compatibility.test.ts",
       "src/cliproxy/ai-providers/__tests__/openai-compat-manager.test.js",
       "src/cliproxy/ai-providers/openai-compat-manager.ts",
+      "src/cliproxy/services/usage-compatibility-transformer.ts",
       "src/cliproxy/types/__tests__/types-backward-compat.test.ts",
       "src/utils/profile-compat.ts",
       "src/web-server/services/compatible-cli-docs-registry.ts"
@@ -495,16 +496,16 @@
   },
   "maintainability": {
     "typedErrors": {
-      "totalThrows": 455,
-      "typedThrows": 89,
+      "totalThrows": 457,
+      "typedThrows": 91,
       "plainThrows": 306,
       "otherThrows": 60,
-      "adoptionRatio": 0.1956,
+      "adoptionRatio": 0.1991,
       "topSubdomainsByThrows": [
         {
           "subdomain": "web-server",
-          "count": 104,
-          "typed": 17,
+          "count": 105,
+          "typed": 18,
           "plain": 45
         },
         {
@@ -650,10 +651,10 @@
       ]
     },
     "hotpathConsoleErrors": {
-      "totalOccurrences": 590,
+      "totalOccurrences": 591,
       "exemptOccurrences": 326,
-      "hotpathOccurrences": 264,
-      "filesAffected": 81,
+      "hotpathOccurrences": 265,
+      "filesAffected": 82,
       "topFiles": [
         {
           "file": "src/errors/error-handler.ts",
@@ -719,7 +720,7 @@
     },
     "largeFiles": {
       "countOver400": 94,
-      "countOver600": 42,
+      "countOver600": 43,
       "topOver400": [
         {
           "file": "src/web-server/usage/native-quota-collector.ts",
