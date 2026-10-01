@@ -27,6 +27,7 @@ export const PROVIDER_PRESET_IDS = [
   'novita',
   'fireworks',
   'requesty',
+  'cheaperinference',
 ] as const;
 
 export type ProviderPresetId = (typeof PROVIDER_PRESET_IDS)[number];
@@ -324,6 +325,19 @@ const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
     defaultModel: 'openai/gpt-4o-mini',
     apiKeyPlaceholder: 'rqsty-sk-...',
     apiKeyHint: 'Create an API key at app.requesty.ai/api-keys',
+    category: 'alternative',
+    requiresApiKey: true,
+    badge: 'OpenAI-compatible',
+  },
+  {
+    id: 'cheaperinference',
+    name: 'Cheaper Inference',
+    description: 'OpenAI-compatible LLM gateway (bare model ids, e.g. gpt-5.4-mini)',
+    baseUrl: 'https://api.cheaperinference.com/v1',
+    defaultProfileName: 'cheaperinference',
+    defaultModel: 'gpt-5.4-mini',
+    apiKeyPlaceholder: 'ci_live_...',
+    apiKeyHint: 'Create an API key at cheaperinference.com/signup',
     category: 'alternative',
     requiresApiKey: true,
     badge: 'OpenAI-compatible',
