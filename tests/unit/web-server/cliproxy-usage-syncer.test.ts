@@ -7,6 +7,7 @@ import type {
   CliproxyManagementAuthFile,
 } from '../../../src/cliproxy/services/stats-fetcher';
 import { runWithScopedConfigDir } from '../../../src/utils/config-manager';
+import { buildUsageResponseFromQueueRecords } from '../../../src/cliproxy/services/usage-compatibility-transformer';
 import {
   loadCachedCliproxyData,
   startCliproxySync,
@@ -138,6 +139,41 @@ describe('cliproxy usage syncer', () => {
     expect(cached.daily[0].inputTokens).toBe(100);
     expect(cached.hourly).toHaveLength(1);
     expect(cached.monthly).toHaveLength(1);
+  });
+
+  it('persists client fingerprints across syncs without saving the inbound keys', async () => {
+    const response = buildUsageResponseFromQueueRecords(
+      ['synthetic-client-a', 'synthetic-client-b'].map((api_key) => ({
+        api_key,
+        provider: 'gemini',
+        model: 'gemini-2.5-pro',
+        timestamp: new Date().toISOString(),
+        source: 'shared-provider-account',
+        auth_index: 0,
+        tokens: { input_tokens: 10, output_tokens: 2 },
+      }))
+    );
+    await runWithScopedConfigDir(ccsDir, async () => {
+      await syncCliproxyUsage(
+        async () => response,
+        async () => []
+      );
+      await syncCliproxyUsage(
+        async () => response,
+        async () => []
+      );
+    });
+    const contents = fs.readFileSync(
+      path.join(ccsDir, 'cache', 'cliproxy-usage', 'latest.json'),
+      'utf8'
+    );
+    expect(contents).not.toContain('synthetic-client');
+    const snapshot = JSON.parse(contents);
+    expect(snapshot.details).toHaveLength(2);
+    expect(
+      new Set(snapshot.details.map((detail: { clientKeyId: string }) => detail.clientKeyId)).size
+    ).toBe(2);
+    for (const detail of snapshot.details) expect(detail.clientKeyId).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it('startCliproxySync is idempotent and starts only one interval', async () => {

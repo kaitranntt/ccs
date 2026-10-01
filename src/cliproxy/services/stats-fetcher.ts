@@ -6,6 +6,7 @@
  */
 
 import { getEffectiveApiKey, getEffectiveManagementSecret } from '../auth/auth-token-manager';
+import { ConfigError } from '../../errors/error-types';
 import {
   getProxyTarget,
   buildProxyUrl,
@@ -15,6 +16,7 @@ import {
 import { buildCliproxyStatsFromUsageResponse } from './stats-transformer';
 import { buildUsageResponseFromCliproxyMainLog } from './oauth-usage-log-transformer';
 import {
+  attributeSnapshotClientKeys,
   buildUsageResponseFromApiKeyUsage,
   buildUsageResponseFromQueueRecords,
   hasUsageDetails,
@@ -78,10 +80,14 @@ export interface CliproxyStats {
 
 /** Request detail from CLIProxyAPI */
 export interface CliproxyRequestDetail {
+  /** Stable hashed snapshot bucket identity, independent of key metadata availability. */
+  usage_bucket_id?: string;
   timestamp: string;
   source: string;
   auth_index: string | number;
   request_id?: string;
+  /** SHA-256 of the inbound client key; never the provider credential or raw key. */
+  client_key_id?: string;
   tokens: {
     input_tokens: number;
     output_tokens: number;
@@ -189,7 +195,21 @@ export async function fetchCliproxyUsageRaw(
   );
   if (legacyUsage?.ok && legacyUsage.data) {
     if (hasUsageDetails(legacyUsage.data)) {
-      return mergeLocalLogUsage(legacyUsage.data);
+      const keys = await fetchManagementJson<{ 'api-keys'?: string[] }>(
+        '/v0/management/api-keys',
+        port
+      );
+      const clientKeys =
+        keys?.ok && Array.isArray(keys.data?.['api-keys'])
+          ? keys.data['api-keys'].filter((key): key is string => typeof key === 'string')
+          : [];
+      try {
+        return mergeLocalLogUsage(attributeSnapshotClientKeys(legacyUsage.data, clientKeys));
+      } catch (error) {
+        if (!(error instanceof ConfigError)) throw error;
+        console.warn(error.message);
+        return null;
+      }
     }
     legacyAggregateUsage = legacyUsage.data;
   }
