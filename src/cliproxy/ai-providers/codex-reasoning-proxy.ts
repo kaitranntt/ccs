@@ -6,13 +6,13 @@ import {
   parseCodexUnsupportedModelError,
   resolveRuntimeCodexFallbackModel,
 } from './codex-plan-compatibility';
-import { getModelMaxLevel } from '../model-catalog';
+import { getModelMaxLevel, getModelThinkingSupport } from '../model-catalog';
 import {
   attachUpstreamResponseTimeout,
   writeForwardResponseHead,
 } from '../proxy/upstream-response-timeout';
 
-export type CodexReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+export type CodexReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export type CodexServiceTier = 'fast';
 type CodexServiceTierRequestValue = 'priority';
 
@@ -52,7 +52,7 @@ interface ForwardJsonContext {
 }
 
 const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
-const CODEX_TUNING_SUFFIX_TOKEN_REGEX = /-(minimal|low|medium|high|xhigh|max|fast)$/i;
+const CODEX_TUNING_SUFFIX_TOKEN_REGEX = /-(none|minimal|low|medium|high|xhigh|max|fast)$/i;
 const CODEX_SERVICE_TIER_REQUEST_VALUE: Record<CodexServiceTier, CodexServiceTierRequestValue> = {
   fast: 'priority',
 };
@@ -111,7 +111,8 @@ function isKnownCodexModelId(
   return getModelMaxLevel('codex', model) !== undefined;
 }
 
-const EFFORT_RANK: Record<CodexReasoningEffort, number> = {
+export const EFFORT_RANK: Record<CodexReasoningEffort, number> = {
+  none: 0,
   minimal: 1,
   low: 2,
   medium: 3,
@@ -121,27 +122,69 @@ const EFFORT_RANK: Record<CodexReasoningEffort, number> = {
 };
 
 /** All valid codex effort levels in rank order */
-const EFFORT_BY_RANK: CodexReasoningEffort[] = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+export const EFFORT_BY_RANK: CodexReasoningEffort[] = [
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+];
 function minEffort(a: CodexReasoningEffort, b: CodexReasoningEffort): CodexReasoningEffort {
   return EFFORT_RANK[a] <= EFFORT_RANK[b] ? a : b;
 }
 
 /**
- * Cap effort at model's max level from catalog.
- * Returns the capped effort (or original if no cap applies).
+ * Normalize codex effort for a specific model based on its catalog capabilities.
+ * - Unsupported lower efforts (e.g. `none` or `minimal` on `gpt-6.1-sol`) clamp UP to lowest supported (`low`).
+ * - Unsupported higher efforts (e.g. `max` on `gpt-5.4`) clamp DOWN to maxLevel (`xhigh`).
+ * - Supported efforts (e.g. `none` on `gpt-6-sol` / `gpt-6-luna`) remain unchanged.
  */
-function capEffortAtModelMax(model: string, effort: CodexReasoningEffort): CodexReasoningEffort {
-  const maxLevel = getModelMaxLevel('codex', model);
-  if (!maxLevel) return effort;
+export function normalizeCodexEffortForModel(
+  model: string,
+  effort: CodexReasoningEffort
+): CodexReasoningEffort {
+  const thinking = getModelThinkingSupport('codex', model);
+  const levels = thinking?.levels ?? [];
 
-  // Map maxLevel to CodexReasoningEffort.
-  const maxEffort = EFFORT_BY_RANK.find((e) => e === maxLevel);
-  if (!maxEffort) return effort;
-
-  // Cap if effort exceeds max
-  if (EFFORT_RANK[effort] > EFFORT_RANK[maxEffort]) {
-    return maxEffort;
+  const normalizedModel = model.trim().toLowerCase();
+  if (normalizedModel === 'gpt-6.1-sol') {
+    if (effort === 'none' || effort === 'minimal') {
+      return 'low';
+    }
+  } else if (normalizedModel === 'gpt-6-sol' || normalizedModel === 'gpt-6-luna') {
+    if (effort === 'none') {
+      return 'none';
+    }
+    if (effort === 'minimal') {
+      return 'low';
+    }
   }
+  // Cap at model maxLevel if defined
+  const maxLevel = thinking?.maxLevel ?? getModelMaxLevel('codex', model);
+  if (maxLevel) {
+    const maxEffort = EFFORT_BY_RANK.find((e) => e === maxLevel);
+    if (maxEffort && EFFORT_RANK[effort] > EFFORT_RANK[maxEffort]) {
+      return maxEffort;
+    }
+  }
+
+  // If the model explicitly supports this effort, return it
+  if (levels.includes(effort) || (effort === 'none' && thinking?.zeroAllowed)) {
+    return effort;
+  }
+
+  // For non-GPT-6 models, if minimal was requested, minimal is allowed for legacy models
+  if (effort === 'minimal') {
+    return 'minimal';
+  }
+
+  // If none was requested for a model that doesn't allow zero, clamp up to lowest supported
+  if (effort === 'none' && !thinking?.zeroAllowed) {
+    return (levels[0] as CodexReasoningEffort | undefined) ?? 'low';
+  }
+
   return effort;
 }
 
@@ -180,7 +223,7 @@ export function getEffortForModel(
   const normalizedModel = stripExtendedContextSuffix(model);
   const effort = modelEffort.get(normalizedModel) ?? defaultEffort;
   // Apply model-specific cap from catalog
-  return capEffortAtModelMax(normalizedModel, effort);
+  return normalizeCodexEffortForModel(normalizedModel, effort);
 }
 
 export function injectReasoningEffortIntoBody(
@@ -245,6 +288,7 @@ export class CodexReasoningProxy {
     path: string;
   }> = [];
   private readonly counts: Record<CodexReasoningEffort, number> = {
+    none: 0,
     minimal: 0,
     low: 0,
     medium: 0,
@@ -510,7 +554,7 @@ export class CodexReasoningProxy {
         getEffortForModel(normalizedRequestModel, this.modelEffort, this.config.defaultEffort);
       const effort =
         !this.config.disableEffort && upstreamModel
-          ? capEffortAtModelMax(upstreamModel, requestedEffort)
+          ? normalizeCodexEffortForModel(upstreamModel, requestedEffort)
           : !this.config.disableEffort
             ? requestedEffort
             : null;
@@ -779,7 +823,7 @@ export class CodexReasoningProxy {
               if (unsupportedError && fallbackModel && context.requestedModel) {
                 const retryEffort =
                   !this.config.disableEffort && context.effort
-                    ? capEffortAtModelMax(fallbackModel, context.effort)
+                    ? normalizeCodexEffortForModel(fallbackModel, context.effort)
                     : null;
                 const retryBody = this.buildForwardBody(body, fallbackModel, {
                   effort: retryEffort,

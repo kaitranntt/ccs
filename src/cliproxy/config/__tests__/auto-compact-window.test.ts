@@ -18,6 +18,15 @@ describe('applyClaudeAutoCompactWindow', () => {
     );
     expect(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW).toBe('272000');
   });
+  it('injects 1.05M window for GPT-6.1 Sol with tuning suffixes', () => {
+    const env = applyClaudeAutoCompactWindow(
+      {
+        ANTHROPIC_MODEL: 'gpt-6.1-sol-max-fast',
+      },
+      'codex'
+    );
+    expect(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW).toBe('1050000');
+  });
 
   it('uses the selected provider when the same model family exists in multiple catalogs', () => {
     const env = applyClaudeAutoCompactWindow(

@@ -26,6 +26,11 @@ describe('codex plan compatibility', () => {
     expect(getFreePlanFallbackCodexModel('gpt-5.3-codex-xhigh')).toBe('gpt-5.4');
     expect(getFreePlanFallbackCodexModel('gpt-5.3-codex(high)')).toBe('gpt-5.4');
     expect(getFreePlanFallbackCodexModel('gpt-5.3-codex-spark')).toBe('gpt-5.4-mini');
+    expect(getFreePlanFallbackCodexModel('gpt-6.1-sol')).toBe('gpt-5.4');
+    expect(getFreePlanFallbackCodexModel('gpt-6.1-sol-max-fast')).toBe('gpt-5.4');
+    expect(getFreePlanFallbackCodexModel('gpt-6-sol')).toBe('gpt-5.4');
+    expect(getFreePlanFallbackCodexModel('gpt-6-sol-none')).toBe('gpt-5.4');
+    expect(getFreePlanFallbackCodexModel('gpt-6-sol-fast')).toBe('gpt-5.4');
   });
 
   it('keeps Astra routing direct without a predefined free-plan fallback', () => {
@@ -42,6 +47,9 @@ describe('codex plan compatibility', () => {
     expect(getFreePlanFallbackCodexModel('gpt-5.4')).toBeNull();
     expect(getFreePlanFallbackCodexModel('gpt-5.4-mini')).toBeNull();
     expect(getFreePlanFallbackCodexModel('gpt-5.2')).toBeNull();
+    expect(getFreePlanFallbackCodexModel('gpt-6-luna')).toBeNull();
+    expect(getFreePlanFallbackCodexModel('gpt-6-luna-none')).toBeNull();
+    expect(getFreePlanFallbackCodexModel('gpt-6-luna-fast')).toBeNull();
   });
 
   it('detects upstream Codex model_not_supported responses', () => {

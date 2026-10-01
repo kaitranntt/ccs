@@ -232,6 +232,27 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
     cacheCreationPerMillion: 2.5,
     cacheReadPerMillion: 0.2,
   },
+  // Claude Sonnet 5.5 ($2/$10) — same rates as Sonnet 5 (released 2026-09-28).
+  // Standard 0.1x cache-read multiplier, no fast mode. Without these entries the
+  // id falls through to the $3/$15 unknown-model fallback and overstates cost 1.5x.
+  'claude-sonnet-5-5': {
+    inputPerMillion: 2.0,
+    outputPerMillion: 10.0,
+    cacheCreationPerMillion: 2.5,
+    cacheReadPerMillion: 0.2,
+  },
+  'claude-sonnet-5-5-thinking': {
+    inputPerMillion: 2.0,
+    outputPerMillion: 10.0,
+    cacheCreationPerMillion: 2.5,
+    cacheReadPerMillion: 0.2,
+  },
+  'claude-sonnet-5.5': {
+    inputPerMillion: 2.0,
+    outputPerMillion: 10.0,
+    cacheCreationPerMillion: 2.5,
+    cacheReadPerMillion: 0.2,
+  },
   // Claude 4 Opus ($15/$75)
   'claude-4-opus-20250514': {
     inputPerMillion: 15.0,
@@ -530,6 +551,38 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
     ...buildRates(10.0, 50.0),
     serviceTiers: {
       fast: buildRates(20.0, 100.0),
+    },
+  },
+  // GPT-6.1 Sol — Official pricing: ≤272k: $2/$10, 50% cheaper cache read $0.10, fast 2x ($4/$20).
+  // Using standard ≤272k pricing as default (per-request >272k long-context billed at 2x input / 1.5x output).
+  'gpt-6.1-sol': {
+    inputPerMillion: 2.0,
+    outputPerMillion: 10.0,
+    cacheCreationPerMillion: 2.5,
+    cacheReadPerMillion: 0.1,
+    serviceTiers: {
+      fast: {
+        inputPerMillion: 4.0,
+        outputPerMillion: 20.0,
+        cacheCreationPerMillion: 5.0,
+        cacheReadPerMillion: 0.2,
+      },
+    },
+  },
+  // GPT-6 Sol — Official pricing: ≤272k: $2/$10, fast 2x ($4/$20).
+  // Using standard ≤272k pricing as default.
+  'gpt-6-sol': {
+    ...buildRates(2.0, 10.0),
+    serviceTiers: {
+      fast: buildRates(4.0, 20.0),
+    },
+  },
+  // GPT-6 Luna — Official pricing: ≤272k: $0.10/$0.50, fast 2x ($0.20/$1.00).
+  // Using standard ≤272k pricing as default.
+  'gpt-6-luna': {
+    ...buildRates(0.1, 0.5),
+    serviceTiers: {
+      fast: buildRates(0.2, 1.0),
     },
   },
   // ---------------------------------------------------------------------------
@@ -977,7 +1030,7 @@ const NORMALIZED_PRICING_REGISTRY: Record<string, ModelPricing> = Object.entries
 }, {});
 
 const CODEX_PRICING_TUNING_REGEX =
-  /(?:-(?:minimal|low|medium|high|xhigh|max)(?:-fast)?|-fast(?:-(?:minimal|low|medium|high|xhigh|max))?|-fast)$/i;
+  /(?:-(?:none|minimal|low|medium|high|xhigh|max)(?:-fast)?|-fast(?:-(?:none|minimal|low|medium|high|xhigh|max))?|-fast)$/i;
 
 function isCodexTunableGptModel(modelName: string): boolean {
   return /^gpt-[56]/i.test(modelName) || /^codex/i.test(modelName);
@@ -1153,7 +1206,6 @@ function resolveBasePricing(model: string, options: PricingLookupOptions): Model
   // Fallback to unknown model pricing
   return UNKNOWN_MODEL_PRICING;
 }
-
 /**
  * Calculate cost in USD from token usage and model
  * @param usage - Token counts (input, output, cache creation, cache read)

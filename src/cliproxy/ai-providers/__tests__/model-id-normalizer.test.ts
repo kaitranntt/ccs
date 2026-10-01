@@ -173,6 +173,16 @@ describe('model-id-normalizer', () => {
         effort: 'max',
         serviceTier: 'fast',
       });
+      expect(parseCodexModelTuningAlias('gpt-6-sol-none')).toEqual({
+        baseModel: 'gpt-6-sol',
+        effort: 'none',
+        serviceTier: null,
+      });
+      expect(parseCodexModelTuningAlias('gpt-6-luna-none-fast')).toEqual({
+        baseModel: 'gpt-6-luna',
+        effort: 'none',
+        serviceTier: 'fast',
+      });
       expect(parseCodexModelTuningAlias('gpt-5.5[1m]')).toBeNull();
     });
   });

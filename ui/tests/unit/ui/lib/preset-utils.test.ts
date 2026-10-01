@@ -16,11 +16,12 @@ describe('claude preset utils', () => {
     vi.restoreAllMocks();
   });
 
-  it('keeps the claude catalog default on Sonnet 5 while exposing recent Claude models', () => {
+  it('keeps the claude catalog default on Sonnet 5.5 while exposing recent Claude models', () => {
     const claudeCatalog = MODEL_CATALOGS.claude;
     const ids = claudeCatalog.models.map((model) => model.id);
 
-    expect(claudeCatalog.defaultModel).toBe('claude-sonnet-5');
+    expect(claudeCatalog.defaultModel).toBe('claude-sonnet-5-5');
+    expect(ids).toContain('claude-sonnet-5-5');
     expect(ids).toContain('claude-sonnet-5');
     expect(ids).toContain('claude-fable-5-1');
     expect(ids).toContain('claude-fable-5');
@@ -54,15 +55,15 @@ describe('claude preset utils', () => {
 
     const result = await applyDefaultPreset('claude');
 
-    expect(result).toEqual({ success: true, presetName: 'Claude Sonnet 5' });
+    expect(result).toEqual({ success: true, presetName: 'Claude Sonnet 5.5' });
 
     const [, requestInit] = fetchMock.mock.calls[2] ?? [];
     const body = JSON.parse(String(requestInit?.body));
 
     expect(body.settings.env).toMatchObject({
-      ANTHROPIC_MODEL: 'claude-sonnet-5',
+      ANTHROPIC_MODEL: 'claude-sonnet-5-5',
       ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5-5',
-      ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5-5',
       ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5-20251001',
     });
   });
@@ -80,7 +81,7 @@ describe('claude preset utils', () => {
 
     const result = await applyDefaultPreset('claude', undefined, MODEL_CATALOGS.claude);
 
-    expect(result).toEqual({ success: true, presetName: 'Claude Sonnet 5' });
+    expect(result).toEqual({ success: true, presetName: 'Claude Sonnet 5.5' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/settings/auth/tokens/raw');
     expect(fetchMock).toHaveBeenNthCalledWith(

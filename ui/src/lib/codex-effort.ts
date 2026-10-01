@@ -1,7 +1,7 @@
-export type CodexEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+export type CodexEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export type CodexServiceTier = 'fast';
 
-const CODEX_TUNING_SUFFIX_TOKEN_REGEX = /-(minimal|low|medium|high|xhigh|max|fast)$/i;
+const CODEX_TUNING_SUFFIX_TOKEN_REGEX = /-(none|minimal|low|medium|high|xhigh|max|fast)$/i;
 export const CODEX_EFFORTS_IN_ORDER: readonly CodexEffort[] = [
   'minimal',
   'low',

@@ -26,7 +26,7 @@ const DENIED_ANTIGRAVITY_OPUS_45_REGEX =
 const DENIED_ANTIGRAVITY_SONNET_45_REGEX =
   /claude-sonnet-4(?:[.-])5(?:-thinking)?(?=(?:$|[^a-z0-9]))/gi;
 const CANONICAL_ANTIGRAVITY_OPUS_46_MODEL = 'claude-opus-4-6-thinking';
-const CODEX_TUNING_SUFFIX_TOKEN_REGEX = /-(minimal|low|medium|high|xhigh|max|fast)$/i;
+const CODEX_TUNING_SUFFIX_TOKEN_REGEX = /-(none|minimal|low|medium|high|xhigh|max|fast)$/i;
 const CODEX_LEGACY_MODEL_ALIASES: Readonly<Record<string, string>> = Object.freeze({
   'gpt-5-codex': 'gpt-5.4',
   'gpt-5-codex-mini': 'gpt-5.4-mini',
@@ -45,7 +45,14 @@ const IFLOW_LEGACY_MODEL_ALIASES: Readonly<Record<string, string>> = Object.free
   'minimax-m2.5': 'qwen3-coder-plus',
 });
 
-export type CodexModelTuningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+export type CodexModelTuningEffort =
+  | 'none'
+  | 'minimal'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'xhigh'
+  | 'max';
 export type CodexModelServiceTier = 'fast';
 
 export interface CodexModelTuningAlias {

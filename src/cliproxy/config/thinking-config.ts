@@ -16,11 +16,11 @@ import { getThinkingConfig } from '../../config/config-loader-facade';
 /** Model tier types for thinking budget defaults */
 export type ModelTier = 'opus' | 'sonnet' | 'haiku';
 
-const CODEX_EFFORT_REGEX = /^(minimal|low|medium|high|xhigh|max)$/i;
+const CODEX_EFFORT_REGEX = /^(none|minimal|low|medium|high|xhigh|max)$/i;
 const CODEX_FAST_TUNING_VALUE_REGEX =
-  /^(?:(minimal|low|medium|high|xhigh|max)-fast|fast-(minimal|low|medium|high|xhigh|max)|fast)$/i;
+  /^(?:(none|minimal|low|medium|high|xhigh|max)-fast|fast-(none|minimal|low|medium|high|xhigh|max)|fast)$/i;
 const CODEX_TUNING_SUFFIX_REGEX =
-  /(?:-(?:minimal|low|medium|high|xhigh|max)(?:-fast)?|-fast(?:-(?:minimal|low|medium|high|xhigh|max))?)$/i;
+  /(?:-(?:none|minimal|low|medium|high|xhigh|max)(?:-fast)?|-fast(?:-(?:none|minimal|low|medium|high|xhigh|max))?)$/i;
 
 /**
  * Normalize model ID for provider capability lookup.
@@ -34,7 +34,7 @@ function normalizeModelForThinkingLookup(model: string, provider: CLIProxyProvid
 
   // New codex suffix forms: gpt-5.4-low-fast, gpt-5.4-fast-high -> gpt-5.4
   const codexSuffixMatch = providerNormalized.match(
-    /^(.*?)(?:-(?:minimal|low|medium|high|xhigh|max)(?:-fast)?|-fast(?:-(?:minimal|low|medium|high|xhigh|max))?)$/i
+    /^(.*?)(?:-(?:none|minimal|low|medium|high|xhigh|max)(?:-fast)?|-fast(?:-(?:none|minimal|low|medium|high|xhigh|max))?)$/i
   );
   if (codexSuffixMatch?.[1]) {
     return codexSuffixMatch[1].trim();
@@ -42,7 +42,7 @@ function normalizeModelForThinkingLookup(model: string, provider: CLIProxyProvid
 
   // Legacy codex suffix form: gpt-5.3-codex(high) -> gpt-5.3-codex
   const codexLegacyMatch = providerNormalized.match(
-    /^(.*)\((minimal|low|medium|high|xhigh|max)\)$/i
+    /^(.*)\((none|minimal|low|medium|high|xhigh|max)\)$/i
   );
   if (codexLegacyMatch?.[1]) {
     return codexLegacyMatch[1].trim();

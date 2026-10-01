@@ -4,6 +4,7 @@ const {
   buildCodexModelEffortMap,
   getEffortForModel,
   injectReasoningEffortIntoBody,
+  normalizeCodexEffortForModel,
 } = require('../../../../dist/cliproxy/ai-providers/codex-reasoning-proxy');
 
 describe('Codex Reasoning Proxy', () => {
@@ -203,6 +204,30 @@ describe('Codex Reasoning Proxy', () => {
       // /api/provider/codex should match /api/provider/codex/v1
       const result = stripPathPrefix('/api/provider/codex/v1', '/api/provider/codex');
       assert.strictEqual(result, '/v1');
+    });
+  });
+  describe('normalizeCodexEffortForModel', () => {
+    it('clamps unsupported lower efforts up to low for gpt-6.1-sol', () => {
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6.1-sol', 'none'), 'low');
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6.1-sol', 'minimal'), 'low');
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6.1-sol', 'medium'), 'medium');
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6.1-sol', 'max'), 'max');
+    });
+
+    it('preserves none for gpt-6-sol and gpt-6-luna', () => {
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6-sol', 'none'), 'none');
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6-sol', 'max'), 'max');
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6-luna', 'none'), 'none');
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6-luna', 'max'), 'max');
+    });
+
+    it('clamps unsupported max effort down to xhigh for models capped at xhigh', () => {
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-5.4', 'max'), 'xhigh');
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-5.5', 'max'), 'xhigh');
+    });
+    it('preserves minimal effort for gpt-6-astra and existing GPT-5 models', () => {
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6-astra', 'minimal'), 'minimal');
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-5.5', 'minimal'), 'minimal');
     });
   });
 });

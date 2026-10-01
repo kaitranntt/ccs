@@ -229,6 +229,50 @@ describe('ToolSanitizationProxy Integration', () => {
         toolProxy.stop();
       }
     });
+    it('normalizes gpt-6.1-sol-none effort to low and gpt-6-sol-none to none in tool sanitization proxy', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      try {
+        await fetch(`http://127.0.0.1:${port}/api/provider/codex/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'gpt-6.1-sol-none' }),
+        });
+        expect((lastRequest!.body as Record<string, unknown>).model).toBe('gpt-6.1-sol');
+        expect(
+          ((lastRequest!.body as Record<string, unknown>).reasoning as Record<string, unknown>)
+            .effort
+        ).toBe('low');
+
+        await fetch(`http://127.0.0.1:${port}/api/provider/codex/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'gpt-6-sol-none' }),
+        });
+        expect((lastRequest!.body as Record<string, unknown>).model).toBe('gpt-6-sol');
+        expect(
+          ((lastRequest!.body as Record<string, unknown>).reasoning as Record<string, unknown>)
+            .effort
+        ).toBe('none');
+
+        await fetch(`http://127.0.0.1:${port}/api/provider/codex/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'gpt-6-luna-none-fast' }),
+        });
+        expect((lastRequest!.body as Record<string, unknown>).model).toBe('gpt-6-luna');
+        expect(
+          ((lastRequest!.body as Record<string, unknown>).reasoning as Record<string, unknown>)
+            .effort
+        ).toBe('none');
+        expect((lastRequest!.body as Record<string, unknown>).service_tier).toBe('priority');
+      } finally {
+        proxy.stop();
+      }
+    });
 
     it('normalizes dotted Claude thinking model IDs for root/composite routes', async () => {
       const proxy = new ToolSanitizationProxy({

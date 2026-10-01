@@ -304,8 +304,8 @@
     ]
   },
   "legacyShim": {
-    "totalMarkers": 469,
-    "filesAffected": 178,
+    "totalMarkers": 470,
+    "filesAffected": 179,
     "topFiles": [
       {
         "file": "src/auth/profile-detector.ts",
@@ -735,12 +735,12 @@
           "loc": 1510
         },
         {
-          "file": "src/cursor/cursor-executor.ts",
-          "loc": 1234
+          "file": "src/web-server/model-pricing.ts",
+          "loc": 1246
         },
         {
-          "file": "src/web-server/model-pricing.ts",
-          "loc": 1194
+          "file": "src/cursor/cursor-executor.ts",
+          "loc": 1234
         },
         {
           "file": "src/cliproxy/config/generator.ts",
@@ -760,11 +760,15 @@
         },
         {
           "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
-          "loc": 1020
+          "loc": 1022
         },
         {
           "file": "src/commands/cliproxy/variant-subcommand.ts",
           "loc": 1003
+        },
+        {
+          "file": "src/cliproxy/model-catalog.ts",
+          "loc": 984
         },
         {
           "file": "src/cliproxy/quota/quota-manager.ts",
@@ -777,10 +781,6 @@
         {
           "file": "src/glmt/glmt-proxy.ts",
           "loc": 939
-        },
-        {
-          "file": "src/cliproxy/model-catalog.ts",
-          "loc": 922
         }
       ]
     }

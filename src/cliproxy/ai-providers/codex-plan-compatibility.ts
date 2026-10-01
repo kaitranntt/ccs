@@ -11,18 +11,20 @@ export type CodexPlanType = CodexQuotaResult['planType'];
 const FREE_SAFE_DEFAULT_MODEL = 'gpt-5.4';
 const FREE_SAFE_FAST_MODEL = 'gpt-5.4-mini';
 const CODEX_TUNING_SUFFIX_REGEX =
-  /(?:-(?:minimal|low|medium|high|xhigh|max)(?:-fast)?|-fast(?:-(?:minimal|low|medium|high|xhigh|max))?)$/i;
-const CODEX_PAREN_SUFFIX_REGEX = /\((minimal|low|medium|high|xhigh|max)\)$/i;
+  /(?:-(?:none|minimal|low|medium|high|xhigh|max)(?:-fast)?|-fast(?:-(?:none|minimal|low|medium|high|xhigh|max))?)$/i;
+const CODEX_PAREN_SUFFIX_REGEX = /\((none|minimal|low|medium|high|xhigh|max)\)$/i;
 const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
 const KNOWN_CODEX_MODELS = new Set(
   (getProviderCatalog('codex')?.models ?? []).map((model) => model.id.toLowerCase())
 );
 
-const FREE_PLAN_FALLBACKS = new Map<string, string>([
-  ['gpt-5.5', FREE_SAFE_DEFAULT_MODEL],
-  ['gpt-5.3-codex', FREE_SAFE_DEFAULT_MODEL],
-  ['gpt-5.3-codex-spark', FREE_SAFE_FAST_MODEL],
-]);
+const FREE_PLAN_FALLBACKS: Record<string, string> = {
+  'gpt-6.1-sol': FREE_SAFE_DEFAULT_MODEL,
+  'gpt-6-sol': FREE_SAFE_DEFAULT_MODEL,
+  'gpt-5.5': FREE_SAFE_DEFAULT_MODEL,
+  'gpt-5.3-codex': FREE_SAFE_DEFAULT_MODEL,
+  'gpt-5.3-codex-spark': FREE_SAFE_FAST_MODEL,
+};
 
 export interface CodexRuntimeFallbackModelMap {
   defaultModel?: string;
@@ -68,7 +70,7 @@ export function getDefaultCodexModel(): string {
 }
 
 export function getFreePlanFallbackCodexModel(model: string): string | null {
-  return FREE_PLAN_FALLBACKS.get(normalizeCodexModelId(model)) ?? null;
+  return FREE_PLAN_FALLBACKS[normalizeCodexModelId(model)] ?? null;
 }
 
 export function parseCodexUnsupportedModelError(

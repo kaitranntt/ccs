@@ -23,6 +23,7 @@ import {
   stripCodexEffortSuffix,
 } from '../ai-providers/model-id-normalizer';
 import { getModelMaxLevel } from '../model-catalog';
+import { normalizeCodexEffortForModel } from '../ai-providers/codex-reasoning-proxy';
 
 import { createLogger } from '../../services/logging';
 import {
@@ -108,10 +109,11 @@ function applyCodexModelTuningAlias(body: Record<string, unknown>): Record<strin
   const tunedBody: Record<string, unknown> = { ...body, model: parsed.baseModel };
 
   if (parsed.effort) {
+    const normalizedEffort = normalizeCodexEffortForModel(parsed.baseModel, parsed.effort);
     const existingReasoning = isRecord(body.reasoning) ? body.reasoning : {};
     tunedBody.reasoning = {
       ...existingReasoning,
-      effort: parsed.effort,
+      effort: normalizedEffort,
     };
   }
 

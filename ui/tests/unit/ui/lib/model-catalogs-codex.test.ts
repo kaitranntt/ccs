@@ -5,6 +5,9 @@ describe('codex model catalog defaults', () => {
   it('mirrors the current Codex runtime catalog and free-safe defaults', () => {
     const codexCatalog = MODEL_CATALOGS.codex;
     const codex6Astra = codexCatalog.models.find((model) => model.id === 'gpt-6-astra');
+    const codex61Sol = codexCatalog.models.find((model) => model.id === 'gpt-6.1-sol');
+    const codex6Sol = codexCatalog.models.find((model) => model.id === 'gpt-6-sol');
+    const codex6Luna = codexCatalog.models.find((model) => model.id === 'gpt-6-luna');
     const codex56Sol = codexCatalog.models.find((model) => model.id === 'gpt-5.6-sol');
     const codex56Terra = codexCatalog.models.find((model) => model.id === 'gpt-5.6-terra');
     const codex56Luna = codexCatalog.models.find((model) => model.id === 'gpt-5.6-luna');
@@ -23,12 +26,41 @@ describe('codex model catalog defaults', () => {
     });
     expect(codex6Astra?.codexMaxEffort).toBe('max');
     expect(codex6Astra?.codexEfforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
+    expect(codex61Sol?.presetMapping).toEqual({
+      default: 'gpt-6.1-sol',
+      opus: 'gpt-6.1-sol',
+      sonnet: 'gpt-6.1-sol',
+      haiku: 'gpt-5.4-mini',
+    });
+    expect(codex61Sol?.codexMaxEffort).toBe('max');
+    expect(codex61Sol?.codexEfforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
+    expect(codex6Sol?.presetMapping).toEqual({
+      default: 'gpt-6-sol',
+      opus: 'gpt-6-sol',
+      sonnet: 'gpt-6-sol',
+      haiku: 'gpt-5.4-mini',
+    });
+    expect(codex6Sol?.codexMaxEffort).toBe('max');
+    expect(codex6Sol?.codexEfforts).toEqual(['none', 'low', 'medium', 'high', 'xhigh', 'max']);
+    expect(codex6Luna?.presetMapping).toEqual({
+      default: 'gpt-6-luna',
+      opus: 'gpt-6-luna',
+      sonnet: 'gpt-6-luna',
+      haiku: 'gpt-5.4-mini',
+    });
+    expect(codex6Luna?.codexMaxEffort).toBe('max');
+    expect(codex6Luna?.codexEfforts).toEqual(['none', 'low', 'medium', 'high', 'xhigh', 'max']);
     expect(codex56Sol?.codexMaxEffort).toBe('max');
     expect(codex56Sol?.codexEfforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
     expect(codex56Luna?.codexMaxEffort).toBe('max');
     expect(codex56Luna?.codexEfforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
-    for (const model of [codex6Astra, codex56Sol, codex56Terra, codex56Luna]) {
+    for (const model of [codex6Astra, codex6Luna, codex56Sol, codex56Terra, codex56Luna]) {
       expect(model?.tier).toBeUndefined();
+      expect(model?.codexServiceTiers).toEqual(['fast']);
+      expect(model?.presetMapping?.haiku).toBe('gpt-5.4-mini');
+    }
+    for (const model of [codex61Sol, codex6Sol]) {
+      expect(model?.tier).toBe('paid');
       expect(model?.codexServiceTiers).toEqual(['fast']);
       expect(model?.presetMapping?.haiku).toBe('gpt-5.4-mini');
     }

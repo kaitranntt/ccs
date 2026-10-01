@@ -220,5 +220,6 @@ export async function runCliproxyFlow(ctx: ProfileDispatchContext): Promise<void
     compositeTiers: profileInfo.compositeTiers,
     compositeDefaultTier: profileInfo.compositeDefaultTier,
     profileName: profileInfo.name,
+    browserLaunchOverride: ctx.claudeBrowserExposure?.override,
   });
 }
