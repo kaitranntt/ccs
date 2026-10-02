@@ -22,6 +22,7 @@ const slowTests = [
   'tests/integration/cursor-daemon-lifecycle.test.ts',
   'tests/integration/logging-request-context.test.ts',
   'tests/integration/proxy/daemon-lifecycle.test.ts',
+  'tests/integration/proxy/request-body-limit.test.ts',
   'tests/integration/web-server/codex-profiles-endpoint.test.ts',
   'tests/unit/commands/persist-command-handler.test.ts',
   'tests/unit/hooks/browser-mcp-advanced-interactions.test.ts',

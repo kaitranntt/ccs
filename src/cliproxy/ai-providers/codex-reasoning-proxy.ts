@@ -11,6 +11,12 @@ import {
   attachUpstreamResponseTimeout,
   writeForwardResponseHead,
 } from '../proxy/upstream-response-timeout';
+import { createLogger } from '../../services/logging';
+import {
+  readRequestBody,
+  RequestBodyTooLargeError,
+  respondRequestTooLarge,
+} from '../../utils/request-body';
 
 export type CodexReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export type CodexServiceTier = 'fast';
@@ -279,6 +285,7 @@ export class CodexReasoningProxy {
     Pick<CodexReasoningProxyConfig, 'modelMap' | 'stripPathPrefix'>;
   private readonly modelEffort: Map<string, CodexReasoningEffort>;
   private readonly sessionFallbackByModel = new Map<string, string>();
+  private readonly logger = createLogger('cliproxy:codex-reasoning-proxy');
   private readonly recent: Array<{
     at: string;
     model: string | null;
@@ -450,27 +457,6 @@ export class CodexReasoningProxy {
     this.port = null;
   }
 
-  private readBody(req: http.IncomingMessage): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      let total = 0;
-
-      req.on('data', (chunk: Buffer) => {
-        total += chunk.length;
-        if (total > maxSize) {
-          req.destroy(); // Signal client to stop sending
-          reject(new Error('Request body too large (max 10MB)'));
-          return;
-        }
-        chunks.push(chunk);
-      });
-
-      req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-      req.on('error', reject);
-    });
-  }
-
   private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const method = req.method || 'GET';
     let requestPath = req.url || '/';
@@ -523,7 +509,7 @@ export class CodexReasoningProxy {
         return;
       }
 
-      const rawBody = await this.readBody(req);
+      const rawBody = await readRequestBody(req);
       let parsed: unknown;
       try {
         parsed = rawBody.length ? JSON.parse(rawBody) : {};
@@ -585,7 +571,17 @@ export class CodexReasoningProxy {
         retryCount: 0,
       });
     } catch (error) {
+      if (error instanceof RequestBodyTooLargeError) {
+        respondRequestTooLarge(req, res, error, this.logger);
+        return;
+      }
       const err = error as Error;
+      this.logger.warn('codex-reasoning.proxy.request-error', `Error: ${err.message}`, {
+        error: err.message,
+        method,
+        path: requestPath,
+      });
+      if (res.writableEnded || res.destroyed || req.socket?.destroyed) return;
       if (!res.headersSent) {
         res.writeHead(502, { 'Content-Type': 'application/json' });
       }

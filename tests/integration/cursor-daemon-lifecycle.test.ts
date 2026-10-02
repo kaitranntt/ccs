@@ -6,16 +6,24 @@ import { isDaemonRunning, startDaemon, stopDaemon } from '../../src/cursor/curso
 import { saveCredentials } from '../../src/cursor/cursor-auth';
 
 let originalCcsHome: string | undefined;
+let originalMaxBody: string | undefined;
 let tempDir: string;
 
 beforeEach(() => {
   originalCcsHome = process.env.CCS_HOME;
+  originalMaxBody = process.env.CCS_PROXY_MAX_BODY_MB;
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-daemon-integration-'));
   process.env.CCS_HOME = tempDir;
 });
 
 afterEach(async () => {
   await stopDaemon();
+
+  if (originalMaxBody !== undefined) {
+    process.env.CCS_PROXY_MAX_BODY_MB = originalMaxBody;
+  } else {
+    delete process.env.CCS_PROXY_MAX_BODY_MB;
+  }
 
   if (originalCcsHome !== undefined) {
     process.env.CCS_HOME = originalCcsHome;
@@ -173,6 +181,8 @@ describe('cursor daemon lifecycle smoke', () => {
 
   it('validates invalid JSON, invalid message schema, and oversized body', async () => {
     const port = 10000 + Math.floor(Math.random() * 50000);
+    // The spawned daemon inherits this env; a 1 MB limit keeps the oversized case small.
+    process.env.CCS_PROXY_MAX_BODY_MB = '1';
     const result = await startDaemon({ port, ghost_mode: true });
     expect(result.success).toBe(true);
     const daemonToken = result.daemonToken as string;
@@ -225,11 +235,32 @@ describe('cursor daemon lifecycle smoke', () => {
         messages: [
           {
             role: 'user',
-            content: 'x'.repeat(10 * 1024 * 1024 + 1024),
+            content: 'x'.repeat(1024 * 1024 + 1024),
           },
         ],
       }),
     });
     expect(oversized.status).toBe(413);
+
+    const oversizedAnthropic = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        ...tokenHeader,
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4.5',
+        max_tokens: 256,
+        messages: [{ role: 'user', content: 'x'.repeat(1024 * 1024 + 1024) }],
+      }),
+    });
+    expect(oversizedAnthropic.status).toBe(413);
+    const oversizedAnthropicBody = (await oversizedAnthropic.json()) as {
+      type?: string;
+      error?: { type?: string; message?: string };
+    };
+    expect(oversizedAnthropicBody.type).toBe('error');
+    expect(oversizedAnthropicBody.error?.type).toBe('request_too_large');
   });
 });

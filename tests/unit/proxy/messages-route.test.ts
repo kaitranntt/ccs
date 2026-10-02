@@ -617,4 +617,45 @@ describe('handleProxyMessagesRequest', () => {
       expect.objectContaining({ role: 'system' })
     );
   });
+
+  it('answers an oversized body with an Anthropic 413 before contacting upstream', async () => {
+    const originalMaxBody = process.env.CCS_PROXY_MAX_BODY_MB;
+    process.env.CCS_PROXY_MAX_BODY_MB = '1';
+    let fetchCalled = false;
+    globalThis.fetch = (async () => {
+      fetchCalled = true;
+      throw new Error('upstream should not be called');
+    }) as typeof globalThis.fetch;
+
+    try {
+      const req = new FakeRequest({ 'x-api-key': 'local-token' });
+      const res = new FakeResponse();
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk: Buffer) => chunks.push(chunk));
+      const pending = handleProxyMessagesRequest(
+        req as never,
+        res as never,
+        buildProfile('hf'),
+        'local-token'
+      );
+      req.end(
+        JSON.stringify({
+          model: 'hf-default',
+          messages: [{ role: 'user', content: 'x'.repeat(1.5 * 1024 * 1024) }],
+        })
+      );
+      await pending;
+
+      expect(res.statusCode).toBe(413);
+      expect(fetchCalled).toBe(false);
+      expect(res.headers.has('connection')).toBe(false);
+      expect(JSON.parse(Buffer.concat(chunks).toString('utf8'))).toMatchObject({
+        type: 'error',
+        error: { type: 'request_too_large' },
+      });
+    } finally {
+      if (originalMaxBody === undefined) delete process.env.CCS_PROXY_MAX_BODY_MB;
+      else process.env.CCS_PROXY_MAX_BODY_MB = originalMaxBody;
+    }
+  });
 });

@@ -495,11 +495,11 @@
   },
   "maintainability": {
     "typedErrors": {
-      "totalThrows": 455,
-      "typedThrows": 89,
+      "totalThrows": 456,
+      "typedThrows": 90,
       "plainThrows": 306,
       "otherThrows": 60,
-      "adoptionRatio": 0.1956,
+      "adoptionRatio": 0.1974,
       "topSubdomainsByThrows": [
         {
           "subdomain": "web-server",
@@ -508,16 +508,16 @@
           "plain": 45
         },
         {
+          "subdomain": "proxy",
+          "count": 39,
+          "typed": 1,
+          "plain": 34
+        },
+        {
           "subdomain": "commands",
           "count": 38,
           "typed": 6,
           "plain": 30
-        },
-        {
-          "subdomain": "proxy",
-          "count": 38,
-          "typed": 0,
-          "plain": 34
         },
         {
           "subdomain": "codex-auth",
@@ -576,16 +576,15 @@
       "targetRatio": 0.4
     },
     "loggerCoverage": {
-      "filesWithCreateLogger": 65,
-      "totalSourceFiles": 765,
-      "coverageRatio": 0.085,
+      "filesWithCreateLogger": 68,
+      "totalSourceFiles": 766,
+      "coverageRatio": 0.0888,
       "subdomainsWithZeroCreateLogger": [
         "api",
         "bin",
         "channels",
         "cliproxy",
         "cliproxy/accounts",
-        "cliproxy/ai-providers",
         "cliproxy/binary",
         "cliproxy/config",
         "cliproxy/management",
@@ -609,8 +608,8 @@
         },
         {
           "subdomain": "utils",
-          "count": 90,
-          "withLogger": 1
+          "count": 91,
+          "withLogger": 2
         },
         {
           "subdomain": "management",
@@ -640,7 +639,7 @@
         {
           "subdomain": "cursor",
           "count": 24,
-          "withLogger": 2
+          "withLogger": 3
         },
         {
           "subdomain": "auth",
@@ -759,7 +758,7 @@
         },
         {
           "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
-          "loc": 1022
+          "loc": 1011
         },
         {
           "file": "src/commands/cliproxy/variant-subcommand.ts",
@@ -779,7 +778,7 @@
         },
         {
           "file": "src/glmt/glmt-proxy.ts",
-          "loc": 939
+          "loc": 925
         }
       ]
     }

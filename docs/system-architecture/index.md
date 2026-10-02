@@ -187,6 +187,13 @@ The host CLI uses loopback for locally managed CLIProxy traffic. Local auth
 files and the management API remain sensitive even when the transport never
 leaves the machine.
 
+Every local proxy that buffers request bodies shares one size limit:
+`CCS_PROXY_MAX_BODY_MB`, defaulting to the Anthropic Messages API limit of
+32 MB. An oversized body gets an HTTP 413 `request_too_large` and a warn log
+line, never a reset socket, which Claude Code would retry silently as
+`ECONNRESET`. Source of truth:
+[`request-body.ts`](../../src/utils/request-body.ts).
+
 ### Remote proxy
 
 A remote CLIProxy crosses a network and administrative boundary. TLS,
