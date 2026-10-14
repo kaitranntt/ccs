@@ -32,6 +32,8 @@ export interface RawUsageEntry {
   projectPath: string;
   version?: string;
   target?: string;
+  /** Shared by every transcript line of one API response; see getDedupeKey */
+  dedupeKey?: string;
 }
 
 /** Internal structure matching JSONL assistant entries */
@@ -42,7 +44,9 @@ interface JsonlAssistantEntry {
   version?: string;
   cwd?: string;
   target?: string;
+  requestId?: string;
   message: {
+    id?: string;
     model: string;
     usage: {
       input_tokens: number;
@@ -94,6 +98,51 @@ function isValidTimestamp(value: unknown): value is string {
   return typeof value === 'string' && Number.isFinite(Date.parse(value));
 }
 
+/**
+ * Claude Code writes one transcript line per content block, each repeating the
+ * response usage, and resumed sessions copy earlier lines into a new file.
+ * A request ID pins lines to one response. Without one, only message IDs that
+ * are unique per response (Anthropic `msg_`, OpenAI Responses `resp_`) are
+ * trusted, since some gateways reuse one placeholder ID for every response.
+ */
+function getDedupeKey(entry: JsonlAssistantEntry): string | undefined {
+  const messageId = entry.message.id;
+  if (typeof messageId !== 'string' || !messageId) return undefined;
+  if (typeof entry.requestId === 'string' && entry.requestId) {
+    return `${messageId}:${entry.requestId}`;
+  }
+  return /^(msg|resp)_/.test(messageId) ? messageId : undefined;
+}
+
+function totalTokens(entry: RawUsageEntry): number {
+  return entry.inputTokens + entry.outputTokens + entry.cacheCreationTokens + entry.cacheReadTokens;
+}
+
+/**
+ * Count each API response once. Keeps the line with the most tokens, since
+ * streaming proxies may only report final usage on the last content block.
+ */
+function dedupeResponses(entries: RawUsageEntry[]): RawUsageEntry[] {
+  const result: RawUsageEntry[] = [];
+  const indexByKey = new Map<string, number>();
+
+  for (const entry of entries) {
+    if (!entry.dedupeKey) {
+      result.push(entry);
+      continue;
+    }
+    const index = indexByKey.get(entry.dedupeKey);
+    if (index === undefined) {
+      indexByKey.set(entry.dedupeKey, result.length);
+      result.push(entry);
+    } else if (totalTokens(entry) > totalTokens(result[index])) {
+      result[index] = entry;
+    }
+  }
+
+  return result;
+}
+
 export function parseUsageEntry(line: string, projectPath: string): RawUsageEntry | null {
   // Strip UTF-8 BOM if present (can occur on first line of some files)
   const cleanLine = line.replace(/^\uFEFF/, '').trim();
@@ -133,6 +182,7 @@ export function parseUsageEntry(line: string, projectPath: string): RawUsageEntr
         typeof (entry as { target?: unknown }).target === 'string'
           ? ((entry as { target?: string }).target as string)
           : undefined,
+      dedupeKey: getDedupeKey(assistant),
     };
   } catch {
     // Malformed JSON - skip silently
@@ -271,16 +321,18 @@ export async function scanProjectsDirectory(options: ParserOptions = {}): Promis
     }
   }
 
+  const uniqueEntries = dedupeResponses(allEntries);
+
   // Filter by date if specified
   if (options.minDate) {
     const minTime = options.minDate.getTime();
-    return allEntries.filter((entry) => {
+    return uniqueEntries.filter((entry) => {
       const entryTime = Date.parse(entry.timestamp);
       return Number.isFinite(entryTime) && entryTime >= minTime;
     });
   }
 
-  return allEntries;
+  return uniqueEntries;
 }
 
 /**
