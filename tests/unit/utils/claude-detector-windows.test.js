@@ -13,8 +13,11 @@ describe('Windows Claude CLI Detection', () => {
   const originalEnv = { ...process.env };
 
   beforeEach(() => {
-    // Reset environment
+    // Reset environment. Drop any CCS_CLAUDE_PATH inherited from the shell: it is detection
+    // priority 1, so with existsSync mocked to true it would shadow the path under test.
+    // Tests that exercise it set their own value.
     process.env = { ...originalEnv };
+    delete process.env.CCS_CLAUDE_PATH;
   });
 
   afterEach(() => {
