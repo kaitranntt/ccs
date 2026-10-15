@@ -370,6 +370,16 @@ export function QuotaTooltipContent({ quota, resetTime }: QuotaTooltipContentPro
           weeklyResetTime={weeklyResetAt}
           fallbackResetTime={resetTime}
         />
+        {quota.stale && (
+          <p className="text-amber-700 dark:text-amber-300">
+            {t('quotaTooltip.staleAsOf', {
+              time: new Date(quota.lastUpdated).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+            })}
+          </p>
+        )}
       </div>
     );
   }

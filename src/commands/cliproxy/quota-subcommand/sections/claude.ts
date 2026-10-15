@@ -57,6 +57,11 @@ export function displayClaudeQuotaSection(
       minQuota === null ? info('') : minQuota > 50 ? ok('') : minQuota > 10 ? warn('') : fail('');
 
     console.log(`  ${statusIcon}${accountLabel}${defaultMark}`);
+    if (quota.stale) {
+      console.log(
+        `    ${dim(`Usage check rate-limited; showing data from ${new Date(quota.lastUpdated).toLocaleTimeString()}`)}`
+      );
+    }
 
     const resetParts: string[] = [];
     if (fiveHourWindow?.resetAt)

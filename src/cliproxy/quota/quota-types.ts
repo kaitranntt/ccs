@@ -174,6 +174,11 @@ export interface ClaudeQuotaResult extends QuotaErrorMetadata {
   accountId?: string;
   /** True if token is expired/invalid and re-auth is required */
   needsReauth?: boolean;
+  /**
+   * True when the live usage probe failed (e.g. HTTP 429) and this is the last
+   * successful result, served as-is. lastUpdated is when that data was fetched.
+   */
+  stale?: boolean;
 }
 
 /**

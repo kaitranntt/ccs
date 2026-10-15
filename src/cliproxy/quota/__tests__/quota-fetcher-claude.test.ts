@@ -4,7 +4,7 @@
  * Covers Claude quota parsing and auth/token edge cases.
  */
 
-import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, mock, setSystemTime } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -850,5 +850,165 @@ describe('Claude Quota Fetcher', () => {
       const result = await fetchClaudeQuota(accountId);
       expect(result.success).toBe(true);
     });
+  });
+});
+
+describe('fetchClaudeQuota shared probe state', () => {
+  const T0 = Date.parse('2026-03-01T00:00:00.000Z');
+  const accountId = 'claude-shared@example.com';
+
+  function usageResponse(fiveHourUtil: number, weeklyUtil: number): Response {
+    return new Response(
+      JSON.stringify({
+        five_hour: { utilization: fiveHourUtil, resets_at: '2026-03-01T03:00:00Z' },
+        seven_day: { utilization: weeklyUtil, resets_at: '2026-03-07T00:00:00Z' },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  function rateLimitedResponse(): Response {
+    return new Response(JSON.stringify({ message: 'Rate limited' }), {
+      status: 429,
+      headers: { 'Retry-After': '0', 'Content-Type': 'application/json' },
+    });
+  }
+
+  /** Queue of responses; each fetch call shifts one. */
+  function mockFetchSequence(responses: Array<() => Response>): { calls: () => number } {
+    let calls = 0;
+    global.fetch = mock(() => {
+      const next = responses[calls] ?? responses[responses.length - 1];
+      calls += 1;
+      return Promise.resolve(next());
+    }) as typeof fetch;
+    return { calls: () => calls };
+  }
+
+  beforeEach(() => {
+    setSystemTime(new Date(T0));
+    createClaudeAccount(accountId, {
+      access_token: 'shared-token',
+      expired: '2099-01-01T00:00:00.000Z',
+      type: 'claude',
+    });
+  });
+
+  afterEach(() => {
+    setSystemTime();
+  });
+
+  it('reuses a fresh result instead of probing again within the shared TTL', async () => {
+    const fetchMock = mockFetchSequence([() => usageResponse(40, 70)]);
+
+    const first = await fetchClaudeQuota(accountId);
+    setSystemTime(new Date(T0 + 30_000));
+    const second = await fetchClaudeQuota(accountId);
+
+    expect(fetchMock.calls()).toBe(1);
+    expect(second).toEqual(first);
+    expect(second.stale).toBeUndefined();
+  });
+
+  it('serves the last good numbers as stale when the probe is rate-limited', async () => {
+    const fetchMock = mockFetchSequence([() => usageResponse(40, 70), rateLimitedResponse]);
+
+    await fetchClaudeQuota(accountId);
+    setSystemTime(new Date(T0 + 5 * 60_000));
+    const result = await fetchClaudeQuota(accountId);
+
+    expect(fetchMock.calls()).toBe(2);
+    expect(result.success).toBe(true);
+    expect(result.stale).toBe(true);
+    expect(result.lastUpdated).toBe(T0);
+    expect(result.coreUsage?.fiveHour?.remainingPercent).toBe(60);
+    expect(result.coreUsage?.weekly?.remainingPercent).toBe(30);
+  });
+
+  it('skips the network during the 429 cooldown and backs off exponentially', async () => {
+    const fetchMock = mockFetchSequence([rateLimitedResponse]);
+
+    const first = await fetchClaudeQuota(accountId);
+    expect(first.success).toBe(false);
+    expect(first.errorDetail).toBe('retry-after:0');
+    expect(fetchMock.calls()).toBe(1);
+
+    // First cooldown is 2 minutes, even though Anthropic sent retry-after: 0.
+    setSystemTime(new Date(T0 + 90_000));
+    const during = await fetchClaudeQuota(accountId);
+    expect(fetchMock.calls()).toBe(1);
+    expect(during.success).toBe(false);
+    expect(during.errorCode).toBe('usage_probe_unavailable');
+    expect(during.errorDetail).toMatch(/^cooldown-until:/);
+
+    // After it expires, one probe; a second 429 doubles the cooldown to 4 minutes.
+    setSystemTime(new Date(T0 + 2 * 60_000 + 1));
+    await fetchClaudeQuota(accountId);
+    expect(fetchMock.calls()).toBe(2);
+
+    setSystemTime(new Date(T0 + 5 * 60_000));
+    await fetchClaudeQuota(accountId);
+    expect(fetchMock.calls()).toBe(2);
+
+    setSystemTime(new Date(T0 + 6 * 60_000 + 2));
+    await fetchClaudeQuota(accountId);
+    expect(fetchMock.calls()).toBe(3);
+  });
+
+  it('drops a stale window once its reset time has passed', async () => {
+    mockFetchSequence([() => usageResponse(40, 70), rateLimitedResponse]);
+
+    await fetchClaudeQuota(accountId);
+    // Past the 5h reset (03:00), before the weekly reset.
+    setSystemTime(new Date(T0 + 4 * 60 * 60_000));
+    const result = await fetchClaudeQuota(accountId);
+
+    expect(result.success).toBe(true);
+    expect(result.stale).toBe(true);
+    expect(result.coreUsage?.fiveHour).toBeNull();
+    expect(result.coreUsage?.weekly?.remainingPercent).toBe(30);
+    expect(result.windows.every((window) => window.rateLimitType !== 'five_hour')).toBe(true);
+  });
+
+  it('resets the backoff after a successful probe', async () => {
+    const fetchMock = mockFetchSequence([
+      rateLimitedResponse,
+      () => usageResponse(10, 20),
+      rateLimitedResponse,
+    ]);
+
+    await fetchClaudeQuota(accountId); // 429 -> 2 min cooldown
+    setSystemTime(new Date(T0 + 2 * 60_000 + 1));
+    const ok = await fetchClaudeQuota(accountId); // success
+    expect(ok.success).toBe(true);
+
+    setSystemTime(new Date(T0 + 4 * 60_000));
+    await fetchClaudeQuota(accountId); // 429 again -> back to a 2 min cooldown
+    expect(fetchMock.calls()).toBe(3);
+
+    setSystemTime(new Date(T0 + 6 * 60_000 + 1));
+    await fetchClaudeQuota(accountId);
+    expect(fetchMock.calls()).toBe(4);
+  });
+
+  it('coalesces concurrent calls in one process into one probe', async () => {
+    const fetchMock = mockFetchSequence([() => usageResponse(40, 70)]);
+
+    const [a, b] = await Promise.all([fetchClaudeQuota(accountId), fetchClaudeQuota(accountId)]);
+
+    expect(fetchMock.calls()).toBe(1);
+    expect(a).toEqual(b);
+  });
+
+  it('does not serve stale numbers for auth failures', async () => {
+    mockFetchSequence([() => usageResponse(40, 70), () => new Response('', { status: 401 })]);
+
+    await fetchClaudeQuota(accountId);
+    setSystemTime(new Date(T0 + 5 * 60_000));
+    const result = await fetchClaudeQuota(accountId);
+
+    expect(result.success).toBe(false);
+    expect(result.needsReauth).toBe(true);
+    expect(result.stale).toBeUndefined();
   });
 });

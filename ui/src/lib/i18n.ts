@@ -1728,6 +1728,7 @@ const resources = {
         resets: 'Resets {{time}}',
         fiveHourResets: '5h resets {{time}}',
         weeklyResets: 'Weekly resets {{time}}',
+        staleAsOf: 'Usage check rate-limited. Showing data from {{time}}.',
       },
       utils: {
         codeReview5h: 'Code review (5h)',
@@ -4523,6 +4524,7 @@ const resources = {
         resets: 'Reinicia {{time}}',
         fiveHourResets: 'Reinício de 5h {{time}}',
         weeklyResets: 'Reinício semanal {{time}}',
+        staleAsOf: 'Verificação de uso limitada. Mostrando dados de {{time}}.',
       },
       utils: {
         codeReview5h: 'Revisão de código (5h)',
@@ -7196,6 +7198,7 @@ const resources = {
         resets: '重置于 {{time}}',
         fiveHourResets: '5 小时重置于 {{time}}',
         weeklyResets: '每周重置于 {{time}}',
+        staleAsOf: '用量检查受限，显示 {{time}} 的数据。',
       },
       utils: {
         codeReview5h: '代码审查（5 小时）',
@@ -9914,6 +9917,7 @@ const resources = {
         resets: 'Reset lúc {{time}}',
         fiveHourResets: 'Reset 5h lúc {{time}}',
         weeklyResets: 'Reset hàng tuần lúc {{time}}',
+        staleAsOf: 'Kiểm tra mức dùng bị giới hạn. Đang hiển thị dữ liệu lúc {{time}}.',
       },
       utils: {
         codeReview5h: 'Đánh giá mã (5h)',
@@ -13280,6 +13284,7 @@ const resources = {
         resets: '{{time}} にリセット',
         fiveHourResets: '5時間リセット {{time}}',
         weeklyResets: '週間リセット {{time}}',
+        staleAsOf: '使用量チェックが制限中です。{{time}} 時点のデータを表示しています。',
       },
       utils: {
         codeReview5h: 'コードレビュー（5時間）',
@@ -15397,6 +15402,7 @@ const resources = {
         resets: '{{time}}에 재설정',
         fiveHourResets: '{{time}}에 5시간 재설정',
         weeklyResets: '{{time}}에 주간 재설정',
+        staleAsOf: '사용량 확인이 제한되었습니다. {{time}} 기준 데이터를 표시합니다.',
       },
       utils: {
         codeReview5h: '코드 리뷰 (5시간)',

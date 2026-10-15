@@ -830,6 +830,8 @@ export interface ClaudeQuotaResult {
   retryable?: boolean;
   /** True if result was served from cache */
   cached?: boolean;
+  /** True when the live usage probe failed and this is the last good result (as of lastUpdated) */
+  stale?: boolean;
 }
 
 /** Gemini CLI bucket (grouped by model series) */
