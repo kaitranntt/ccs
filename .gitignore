@@ -66,3 +66,6 @@ tests/mocks/fixtures/*.d.ts.map
 # Bar demo scaffolding (local dev only)
 _serve*.ts
 _serve*.log
+
+# Types Claude Code writes beside a mod it loads from a folder
+claude-mods/*/.claude-plugin/types/

@@ -14,6 +14,7 @@ import * as path from 'path';
 import { warn, info } from '../../utils/ui';
 import { CLIProxyProvider } from '../types';
 import { loadAccountsRegistry, pauseAccount, resumeAccount } from './registry';
+import { emitSessionNotice } from './session-notices';
 import { getCcsDir } from '../../config/config-loader-facade';
 
 const ISSUE_509_URL = 'https://github.com/kaitranntt/ccs/issues/509';
@@ -689,30 +690,21 @@ function truncate(str: string, maxLen: number): string {
 // --- Quota Exhaustion Handling ---
 
 /**
- * Write boxed quota warning to stderr (20% threshold).
- * Uses process.stderr.write() to work alongside inherited stdio.
+ * Raise the quota-low notice (warn threshold). Printed as a box on stderr, or,
+ * while a Claude Code session owns the terminal, routed through the session
+ * notices file and printed when the session ends (see session-notices.ts).
  * ASCII-only output (no emojis) per project constraints.
  */
 export function writeQuotaWarning(accountId: string, quotaPercent: number): void {
-  const masked = maskEmail(accountId);
-  const lines = [
-    `[!] Quota Low: ${masked} (${Math.round(quotaPercent)}% remaining)`,
-    `    Next session will use a different account if available`,
-  ];
-  const maxLen = Math.max(...lines.map((l) => l.length));
-  const border = '\u2550'.repeat(maxLen + 2);
-
-  process.stderr.write('\n');
-  process.stderr.write(`\u2554${border}\u2557\n`);
-  for (const line of lines) {
-    process.stderr.write(`\u2551 ${line.padEnd(maxLen)} \u2551\n`);
-  }
-  process.stderr.write(`\u255A${border}\u255D\n`);
-  process.stderr.write('\n');
+  emitSessionNotice({
+    level: 'warning',
+    title: `Quota Low: ${maskEmail(accountId)} (${Math.round(quotaPercent)}% remaining)`,
+    details: ['Next session will use a different account if available'],
+  });
 }
 
 /**
- * Write boxed quota exhaustion alert to stderr.
+ * Raise the quota-exhausted notice.
  * Called when quota falls below exhaustion_threshold — account will be cooled down.
  */
 function writeQuotaExhausted(
@@ -720,24 +712,16 @@ function writeQuotaExhausted(
   switchedTo: string | null,
   cooldownMinutes: number
 ): void {
-  const masked = maskEmail(accountId);
-  const lines = [`[X] Quota Exhausted: ${masked}`, `    Cooldown: ${cooldownMinutes} minutes`];
-  if (switchedTo) {
-    lines.push(`    Next session default: ${maskEmail(switchedTo)}`);
-  } else {
-    lines.push(`    No alternative accounts available`);
-  }
-
-  const maxLen = Math.max(...lines.map((l) => l.length));
-  const border = '\u2550'.repeat(maxLen + 2);
-
-  process.stderr.write('\n');
-  process.stderr.write(`\u2554${border}\u2557\n`);
-  for (const line of lines) {
-    process.stderr.write(`\u2551 ${line.padEnd(maxLen)} \u2551\n`);
-  }
-  process.stderr.write(`\u255A${border}\u255D\n`);
-  process.stderr.write('\n');
+  emitSessionNotice({
+    level: 'error',
+    title: `Quota Exhausted: ${maskEmail(accountId)}`,
+    details: [
+      `Cooldown: ${cooldownMinutes} minutes`,
+      switchedTo
+        ? `Next session default: ${maskEmail(switchedTo)}`
+        : 'No alternative accounts available',
+    ],
+  });
 }
 
 /**

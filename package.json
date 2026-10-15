@@ -42,6 +42,8 @@
     "scripts/",
     "config/",
     ".claude/",
+    "claude-mods/",
+    "!claude-mods/**/*.test.ts",
     "VERSION",
     "README.md",
     "LICENSE"

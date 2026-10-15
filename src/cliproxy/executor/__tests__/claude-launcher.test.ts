@@ -11,8 +11,11 @@
  */
 
 import { describe, expect, it, jest, beforeEach, afterEach, mock } from 'bun:test';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import type { ChildProcess } from 'child_process';
-import type { ExecutorConfig } from '../../types';
+import type { CLIProxyProvider, ExecutorConfig } from '../../types';
 
 // ── Spawn mock ────────────────────────────────────────────────────────────────
 
@@ -103,6 +106,12 @@ mock.module('../launch-settings', () => ({
 // ── Subject under test ────────────────────────────────────────────────────────
 
 import { launchClaude } from '../claude-launcher';
+import {
+  MIN_CLAUDE_MODS_VERSION,
+  SESSION_NOTICES_MOD,
+  getCachedClaudeCliVersion,
+} from '../claude-mods';
+import { SESSION_NOTICES_ENV, endSessionNotices } from '../../accounts/session-notices';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -123,7 +132,7 @@ function baseContext(overrides: object = {}) {
     env: { ANTHROPIC_BASE_URL: 'http://localhost:8317' } as NodeJS.ProcessEnv,
     cfg: makeCfg(),
     provider: 'gemini' as const,
-    compositeProviders: [] as string[],
+    compositeProviders: [] as CLIProxyProvider[],
     skipLocalAuth: true,
     sessionId: undefined,
     imageAnalysisMcpReady: false,
@@ -262,6 +271,50 @@ describe('launchClaude', () => {
       // spawn should be called with separate args array, not a shell cmd string
       const [, secondArg] = mockSpawn.mock.calls[0];
       expect(Array.isArray(secondArg)).toBe(true);
+    });
+  });
+
+  describe('ccs-notices mod on a TTY', () => {
+    const originalIsTTY = process.stderr.isTTY;
+    let tmpDir: string;
+    let originalCcsHome: string | undefined;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-launcher-mods-test-'));
+      originalCcsHome = process.env.CCS_HOME;
+      process.env.CCS_HOME = tmpDir;
+      Object.defineProperty(process.stderr, 'isTTY', { value: true, configurable: true });
+    });
+
+    afterEach(() => {
+      endSessionNotices();
+      Object.defineProperty(process.stderr, 'isTTY', {
+        value: originalIsTTY,
+        configurable: true,
+      });
+      if (originalCcsHome !== undefined) process.env.CCS_HOME = originalCcsHome;
+      else delete process.env.CCS_HOME;
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it('passes --plugin-dir for ccs-notices before --settings', async () => {
+      // A fake binary whose version is already cached, so no real `claude --version` runs.
+      const claudeCli = path.join(tmpDir, 'claude');
+      fs.writeFileSync(claudeCli, '#!/bin/sh\n');
+      getCachedClaudeCliVersion(claudeCli, () => MIN_CLAUDE_MODS_VERSION);
+
+      await launchClaude(baseContext({ claudeCli }));
+
+      const spawnArgs = mockSpawn.mock.calls[0][1] as string[];
+      const pluginDirIndex = spawnArgs.indexOf('--plugin-dir');
+      expect(pluginDirIndex).toBeGreaterThanOrEqual(0);
+      expect(pluginDirIndex).toBeLessThan(spawnArgs.indexOf('--settings'));
+      expect(spawnArgs[pluginDirIndex + 1]).toBe(
+        path.join(__dirname, '..', '..', '..', '..', 'claude-mods', SESSION_NOTICES_MOD)
+      );
+
+      const spawnOpts = mockSpawn.mock.calls[0][2] as { env: NodeJS.ProcessEnv };
+      expect(spawnOpts.env?.[SESSION_NOTICES_ENV]).toBeTruthy();
     });
   });
 });
