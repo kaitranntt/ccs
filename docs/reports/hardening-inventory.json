@@ -762,10 +762,6 @@
           "loc": 1042
         },
         {
-          "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
-          "loc": 1027
-        },
-        {
           "file": "src/commands/cliproxy/variant-subcommand.ts",
           "loc": 1003
         },
@@ -776,6 +772,10 @@
         {
           "file": "src/cliproxy/quota/quota-manager.ts",
           "loc": 954
+        },
+        {
+          "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
+          "loc": 948
         },
         {
           "file": "src/web-server/services/codex-dashboard-service.ts",

@@ -617,66 +617,29 @@ describe('ToolSanitizationProxy Integration', () => {
       }
     });
 
-    it('folds Codex system messages into the first user message before forwarding', async () => {
+    it('forwards Codex system prompt and system messages unchanged for CLIProxy to convert', async () => {
       const proxy = new ToolSanitizationProxy({
         upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
       });
       const port = await proxy.start();
+      const system = [{ type: 'text', text: 'Always be concise.' }];
+      const messages = [
+        { role: 'user', content: [{ type: 'text', text: 'hello' }] },
+        { role: 'system', content: '<total_tokens>1000 tokens left</total_tokens>' },
+        { role: 'assistant', content: 'Hi.' },
+        { role: 'user', content: 'next' },
+      ];
 
       try {
         await fetch(`http://127.0.0.1:${port}/api/provider/codex/v1/messages?beta=true`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'gpt-5.4',
-            system: [{ type: 'text', text: 'Always be concise.' }],
-            messages: [
-              { role: 'system', content: 'Use JSON.' },
-              { role: 'user', content: [{ type: 'text', text: 'hello' }] },
-            ],
-          }),
+          body: JSON.stringify({ model: 'gpt-5.4', system, messages }),
         });
 
         const sentBody = lastRequest!.body as Record<string, unknown>;
-        const sentMessages = sentBody.messages as Array<Record<string, unknown>>;
-
-        expect(sentBody.system).toBeUndefined();
-        expect(sentMessages).toHaveLength(1);
-        expect(sentMessages[0].role).toBe('user');
-        expect(sentMessages[0].content).toEqual([
-          { type: 'text', text: 'Always be concise.\n\nUse JSON.' },
-          { type: 'text', text: 'hello' },
-        ]);
-      } finally {
-        proxy.stop();
-      }
-    });
-
-    it('strips blank Codex system messages before forwarding', async () => {
-      const proxy = new ToolSanitizationProxy({
-        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
-      });
-      const port = await proxy.start();
-
-      try {
-        await fetch(`http://127.0.0.1:${port}/api/provider/codex/v1/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'gpt-5.4',
-            system: '   ',
-            messages: [
-              { role: 'system', content: [{ type: 'text', text: '  ' }] },
-              { role: 'user', content: 'hello' },
-            ],
-          }),
-        });
-
-        const sentBody = lastRequest!.body as Record<string, unknown>;
-        const sentMessages = sentBody.messages as Array<Record<string, unknown>>;
-
-        expect(sentBody.system).toBeUndefined();
-        expect(sentMessages).toEqual([{ role: 'user', content: 'hello' }]);
+        expect(sentBody.system).toEqual(system);
+        expect(sentBody.messages).toEqual(messages);
       } finally {
         proxy.stop();
       }
