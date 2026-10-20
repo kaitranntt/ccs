@@ -24,6 +24,7 @@ const slowTests = [
   'tests/integration/proxy/daemon-lifecycle.test.ts',
   'tests/integration/proxy/request-body-limit.test.ts',
   'tests/integration/web-server/codex-profiles-endpoint.test.ts',
+  'tests/unit/cliproxy/concurrent-state-locks.test.ts',
   'tests/unit/commands/persist-command-handler.test.ts',
   'tests/unit/hooks/browser-mcp-advanced-interactions.test.ts',
   'tests/unit/hooks/browser-mcp-downloads-and-files.test.ts',

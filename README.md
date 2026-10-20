@@ -240,4 +240,4 @@ ccs ollama "summarize these logs"
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=kaitranntt/ccs&type=Date&legend=top-left&sealed_token=ztbdUcU1tRfVPKPTvc-lMCRGPY6cLqpshj4rCGjkuQ41QKoJxwR_cNAbQ8itKG_JVP-kgju22G0vJpZiI3vcxfd10zaYUFq0_tyIVhlWzldVZYfCHa50qBwWzy4SenTIva_2pk49LYvDtaHNwNJxKt7wZ0Z5jhDQyxiDHc9BBsnCsjex8ub8Aea1BxU_)](https://star-history.com/#kaitranntt/ccs&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=kaitranntt/ccs&type=Date&legend=top-left)](https://star-history.com/#kaitranntt/ccs&Date)

@@ -1363,5 +1363,28 @@ describe('SharedManager', () => {
       expect(readMarketplaceLocation(instanceRegistryPath)).toBe(marketplacePath(instancePath));
       expect(fs.existsSync(path.join(instancePath, 'plugins', 'marketplaces'))).toBe(true);
     });
+
+    it('treats .last_inuse_sweep as instance-local and unlinks legacy symlinks (Issue #1756)', () => {
+      const globalPluginsDir = path.join(claudeDir(), 'plugins');
+      fs.mkdirSync(globalPluginsDir, { recursive: true });
+      fs.writeFileSync(path.join(globalPluginsDir, '.last_inuse_sweep'), '2026-10-20T00:00:00.000Z');
+
+      const instancePath = instanceDir('work');
+      const instancePluginsDir = path.join(instancePath, 'plugins');
+      fs.mkdirSync(instancePluginsDir, { recursive: true });
+
+      // Create a legacy symlink pointing to the global sweep file
+      fs.symlinkSync(
+        path.join(globalPluginsDir, '.last_inuse_sweep'),
+        path.join(instancePluginsDir, '.last_inuse_sweep'),
+        'file'
+      );
+
+      const manager = new SharedManager();
+      manager.linkSharedDirectories(instancePath);
+
+      // The legacy symlink must have been removed and not recreated
+      expect(fs.existsSync(path.join(instancePluginsDir, '.last_inuse_sweep'))).toBe(false);
+    });
   });
 });

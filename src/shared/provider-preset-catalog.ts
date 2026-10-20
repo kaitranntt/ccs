@@ -95,6 +95,7 @@ const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
     baseUrl: ORCAROUTER_BASE_URL,
     defaultProfileName: 'orcarouter',
     defaultModel: 'openai/gpt-5.5',
+    defaultTarget: 'claude',
     apiKeyPlaceholder: 'sk-orca-...',
     apiKeyHint: 'Get your API key at orcarouter.ai/console',
     category: 'recommended',

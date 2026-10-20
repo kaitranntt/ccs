@@ -315,7 +315,7 @@ function addAliasEntry(
   if (getDeniedModelIdReasonForProvider(normalized.name, 'agy')) return;
   if (getDeniedModelIdReasonForProvider(normalized.alias, 'agy')) return;
 
-  const key = normalized.alias;
+  const key = `${normalized.name}\0${normalized.alias}`;
   const existingIndex = indexByKey.get(key);
   if (existingIndex !== undefined) {
     if (normalized.fork) entries[existingIndex].fork = true;

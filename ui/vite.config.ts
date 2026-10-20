@@ -14,19 +14,20 @@ const TRUSTED_VITE_DEV_ORIGINS = new Set([
   'http://[::1]:5173',
 ]);
 
-function rewriteTrustedViteDevOrigin(proxyRequest: ClientRequest, request: IncomingMessage): void {
+function rewriteTrustedViteDevHeaders(proxyRequest: ClientRequest, request: IncomingMessage): void {
   const origin = request.headers.origin;
   if (origin && TRUSTED_VITE_DEV_ORIGINS.has(origin)) {
+    proxyRequest.setHeader('host', new URL(BACKEND_ORIGIN).host);
     proxyRequest.setHeader('origin', BACKEND_ORIGIN);
   }
 }
 
 const configureHttpProxy: NonNullable<ProxyOptions['configure']> = (proxy) => {
-  proxy.on('proxyReq', rewriteTrustedViteDevOrigin);
+  proxy.on('proxyReq', rewriteTrustedViteDevHeaders);
 };
 
 const configureWebSocketProxy: NonNullable<ProxyOptions['configure']> = (proxy) => {
-  proxy.on('proxyReqWs', rewriteTrustedViteDevOrigin);
+  proxy.on('proxyReqWs', rewriteTrustedViteDevHeaders);
 };
 
 // https://vite.dev/config/
@@ -90,13 +91,11 @@ export default defineConfig({
       // Preserve every other Origin so the backend can reject untrusted callers.
       '/api': {
         target: BACKEND_ORIGIN,
-        changeOrigin: true,
         configure: configureHttpProxy,
       },
       '/ws': {
         target: 'ws://localhost:3000',
         ws: true,
-        changeOrigin: true,
         configure: configureWebSocketProxy,
       },
     },
