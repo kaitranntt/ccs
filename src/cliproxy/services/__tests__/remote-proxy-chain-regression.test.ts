@@ -77,7 +77,7 @@ function close(server: http.Server | https.Server): Promise<void> {
 describe('remote proxy chain regression', () => {
   it('lets the local Codex reasoning proxy connect directly to self-signed HTTPS upstreams', async () => {
     let forwardedPath = '';
-    let forwardedReasoningEffort: unknown;
+    let forwardedModel: unknown;
     const upstream = https.createServer(
       { key: SELF_SIGNED_KEY, cert: SELF_SIGNED_CERT },
       (req, res) => {
@@ -86,7 +86,7 @@ describe('remote proxy chain regression', () => {
         req.on('data', (chunk: Buffer) => chunks.push(chunk));
         req.on('end', () => {
           const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-          forwardedReasoningEffort = parsed.reasoning?.effort;
+          forwardedModel = parsed.model;
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ content: [{ type: 'text', text: 'ok' }] }));
         });
@@ -114,7 +114,7 @@ describe('remote proxy chain regression', () => {
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ content: [{ type: 'text', text: 'ok' }] });
       expect(forwardedPath).toBe('/v1/messages');
-      expect(forwardedReasoningEffort).toBe('xhigh');
+      expect(forwardedModel).toBe('gpt-5.4(xhigh)');
     } finally {
       proxy.stop();
       await close(upstream);
@@ -123,7 +123,8 @@ describe('remote proxy chain regression', () => {
 
   it('routes Codex through tool sanitization to a self-signed remote HTTPS proxy', async () => {
     let forwardedPath = '';
-    let forwardedReasoningEffort: unknown;
+    let forwardedModel: unknown;
+    let forwardedTools: unknown;
     const upstream = https.createServer(
       { key: SELF_SIGNED_KEY, cert: SELF_SIGNED_CERT },
       (req, res) => {
@@ -132,7 +133,8 @@ describe('remote proxy chain regression', () => {
         req.on('data', (chunk: Buffer) => chunks.push(chunk));
         req.on('end', () => {
           const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-          forwardedReasoningEffort = parsed.reasoning?.effort;
+          forwardedModel = parsed.model;
+          forwardedTools = parsed.tools;
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ content: [{ type: 'text', text: 'ok' }] }));
         });
@@ -170,7 +172,9 @@ describe('remote proxy chain regression', () => {
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ content: [{ type: 'text', text: 'ok' }] });
       expect(forwardedPath).toBe('/v1/messages');
-      expect(forwardedReasoningEffort).toBe('xhigh');
+      expect(forwardedModel).toBe('gpt-5.4(xhigh)');
+      // The root-routed hop still recognizes the suffixed model as Codex.
+      expect(forwardedTools).toEqual([{ name: 'read', input_schema: {} }]);
     } finally {
       codexProxy?.stop();
       toolProxy.stop();

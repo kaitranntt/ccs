@@ -6,6 +6,7 @@ import {
   parseCodexUnsupportedModelError,
   resolveRuntimeCodexFallbackModel,
 } from './codex-plan-compatibility';
+import { parseCodexModelTuningAlias } from './model-id-normalizer';
 import { getModelMaxLevel, getModelThinkingSupport } from '../model-catalog';
 import {
   attachUpstreamResponseTimeout,
@@ -59,7 +60,6 @@ interface ForwardJsonContext {
 }
 
 const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
-const CODEX_TUNING_SUFFIX_TOKEN_REGEX = /-(none|minimal|low|medium|high|xhigh|max|fast)$/i;
 const CODEX_SERVICE_TIER_REQUEST_VALUE: Record<CodexServiceTier, CodexServiceTierRequestValue> = {
   fast: 'priority',
 };
@@ -74,37 +74,6 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function parseModelTuningSuffix(model: string): {
-  upstreamModel: string;
-  effort: CodexReasoningEffort | null;
-  serviceTier: CodexServiceTier | null;
-} | null {
-  const normalizedModel = stripExtendedContextSuffix(model);
-  let upstreamModel = normalizedModel;
-  let effort: CodexReasoningEffort | null = null;
-  let serviceTier: CodexServiceTier | null = null;
-
-  for (let consumed = 0; consumed < 2; consumed += 1) {
-    const match = upstreamModel.match(CODEX_TUNING_SUFFIX_TOKEN_REGEX);
-    if (!match?.[1]) break;
-
-    const token = match[1].toLowerCase();
-    if (token === 'fast') {
-      if (serviceTier) break;
-      serviceTier = 'fast';
-    } else {
-      if (effort) break;
-      effort = token as CodexReasoningEffort;
-    }
-
-    upstreamModel = upstreamModel.slice(0, -match[0].length).trim();
-  }
-
-  if (!effort && !serviceTier) return null;
-  if (!upstreamModel) return null;
-  return { upstreamModel, effort, serviceTier };
 }
 
 function isKnownCodexModelId(
@@ -249,16 +218,12 @@ export function injectCodexRequestTuningIntoBody(
 ): unknown {
   if (!isRecord(body)) return body;
 
-  // OpenAI Responses API knob: reasoning: { effort: "..." }
-  // Always override effort (user expectation).
-  const existingReasoning = isRecord(body.reasoning) ? body.reasoning : {};
   const tunedBody = { ...body };
 
-  if (tuning.effort) {
-    tunedBody.reasoning = {
-      ...existingReasoning,
-      effort: tuning.effort,
-    };
+  // CLIProxy reads effort from a `model(level)` suffix and gives it priority over the
+  // request body. Its Claude Messages translator ignores a top-level `reasoning` field.
+  if (tuning.effort && typeof body.model === 'string') {
+    tunedBody.model = `${body.model}(${tuning.effort})`;
   }
 
   if (tuning.serviceTier) {
@@ -373,12 +338,16 @@ export class CodexReasoningProxy {
     serviceTier: CodexServiceTier | null;
   } | null {
     if (!model) return null;
-    const parsed = parseModelTuningSuffix(model);
-    if (!parsed) return null;
-    if (!isKnownCodexModelId(parsed.upstreamModel, this.modelEffort)) {
+    const parsed = parseCodexModelTuningAlias(model);
+    if (!parsed?.baseModel) return null;
+    if (!isKnownCodexModelId(parsed.baseModel, this.modelEffort)) {
       return null;
     }
-    return parsed;
+    return {
+      upstreamModel: parsed.baseModel,
+      effort: parsed.effort,
+      serviceTier: parsed.serviceTier,
+    };
   }
 
   private log(message: string): void {
@@ -527,8 +496,7 @@ export class CodexReasoningProxy {
         : null;
 
       // Support "model aliases" like `gpt-5.4-high-fast` by translating to:
-      // - upstream model: `gpt-5.4`
-      // - reasoning.effort: `high`
+      // - model: `gpt-5.4(high)` (CLIProxy thinking suffix)
       // - service_tier: `priority` (Codex request value for fast mode)
       //
       // This allows tier/speed mapping without inventing upstream model IDs.
@@ -539,12 +507,13 @@ export class CodexReasoningProxy {
       const requestedEffort =
         suffixParsed?.effort ??
         getEffortForModel(normalizedRequestModel, this.modelEffort, this.config.defaultEffort);
+      // Unknown model IDs pass through unchanged: a suffix could break their routing.
       const effort =
-        !this.config.disableEffort && upstreamModel
+        !this.config.disableEffort &&
+        upstreamModel &&
+        isKnownCodexModelId(upstreamModel, this.modelEffort)
           ? normalizeCodexEffortForModel(upstreamModel, requestedEffort)
-          : !this.config.disableEffort
-            ? requestedEffort
-            : null;
+          : null;
       const serviceTier = suffixParsed?.serviceTier ?? null;
       const rewritten = this.buildForwardBody(parsed, upstreamModel, { effort, serviceTier });
 
