@@ -190,8 +190,8 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
 
     expect(response.statusCode).toBe(200);
     expect(capturedPath).toBe('/api/provider/codex/v1/messages');
-    expect(capturedBody?.model).toBe('gpt-5.3-codex');
-    expect((capturedBody?.reasoning as JsonRecord | undefined)?.effort).toBe('high');
+    expect(capturedBody?.model).toBe('gpt-5.3-codex(high)');
+    expect(capturedBody?.reasoning).toBeUndefined();
   });
 
   it('ends streaming responses when upstream stalls after headers', async () => {
@@ -318,11 +318,11 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
 
     expect(highFastResponse.statusCode).toBe(200);
     expect(fastHighResponse.statusCode).toBe(200);
-    expect(capturedBodies[0]?.model).toBe('gpt-5.4');
-    expect((capturedBodies[0]?.reasoning as JsonRecord | undefined)?.effort).toBe('high');
+    expect(capturedBodies[0]?.model).toBe('gpt-5.4(high)');
+    expect(capturedBodies[0]?.reasoning).toBeUndefined();
     expect(capturedBodies[0]?.service_tier).toBe('priority');
-    expect(capturedBodies[1]?.model).toBe('gpt-5.4');
-    expect((capturedBodies[1]?.reasoning as JsonRecord | undefined)?.effort).toBe('high');
+    expect(capturedBodies[1]?.model).toBe('gpt-5.4(high)');
+    expect(capturedBodies[1]?.reasoning).toBeUndefined();
     expect(capturedBodies[1]?.service_tier).toBe('priority');
   });
 
@@ -372,10 +372,10 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
 
     expect(minimalResponse.statusCode).toBe(200);
     expect(lowFastResponse.statusCode).toBe(200);
-    expect(capturedBodies[0]?.model).toBe('gpt-5.5');
-    expect((capturedBodies[0]?.reasoning as JsonRecord | undefined)?.effort).toBe('minimal');
-    expect(capturedBodies[1]?.model).toBe('gpt-5.5');
-    expect((capturedBodies[1]?.reasoning as JsonRecord | undefined)?.effort).toBe('low');
+    expect(capturedBodies[0]?.model).toBe('gpt-5.5(minimal)');
+    expect(capturedBodies[0]?.reasoning).toBeUndefined();
+    expect(capturedBodies[1]?.model).toBe('gpt-5.5(low)');
+    expect(capturedBodies[1]?.reasoning).toBeUndefined();
     expect(capturedBodies[1]?.service_tier).toBe('priority');
   });
 
@@ -550,9 +550,10 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
       });
       req.on('end', () => {
         const requestBody = rawBody ? (JSON.parse(rawBody) as JsonRecord) : {};
-        const reasoning = requestBody.reasoning as JsonRecord | undefined;
-        const model = String(requestBody.model ?? '');
-        const effort = typeof reasoning?.effort === 'string' ? reasoning.effort : undefined;
+        // CLIProxy thinking suffix: `model(effort)`
+        const [, model, effort] = String(requestBody.model ?? '').match(
+          /^(.*?)(?:\(([^()]*)\))?$/
+        ) as [string, string, string | undefined];
 
         capturedModels.push(model);
         capturedEfforts.push(effort);
@@ -677,8 +678,8 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
 
     expect(response.statusCode).toBe(200);
     expect(disableEffort).toBe(false);
-    expect(capturedBody?.model).toBe('gpt-5.3-codex');
-    expect((capturedBody?.reasoning as JsonRecord | undefined)?.effort).toBe('high');
+    expect(capturedBody?.model).toBe('gpt-5.3-codex(high)');
+    expect(capturedBody?.reasoning).toBeUndefined();
   });
 
   it('disables reasoning when CCS_THINKING=off is provided', async () => {
