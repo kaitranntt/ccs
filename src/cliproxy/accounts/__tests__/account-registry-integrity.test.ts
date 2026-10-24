@@ -379,6 +379,200 @@ describe('account registry integrity', () => {
     });
   });
 
+  it('splits a collapsed same-email Claude entry into one account per organization', async () => {
+    await withIsolatedHome(async (homeDir) => {
+      const cliproxyDir = path.join(homeDir, '.ccs', 'cliproxy');
+      const authDir = path.join(cliproxyDir, 'auth');
+      const registryPath = path.join(cliproxyDir, 'accounts.json');
+      fs.mkdirSync(authDir, { recursive: true });
+      for (const [tokenFile, email] of [
+        ['claude-1a2b3c4d-solo@example.com.json', 'solo@example.com'],
+        ['claude-a1b2c3d4-dev@example.com.json', 'dev@example.com'],
+        ['claude-f0e1d2c3-dev@example.com.json', 'dev@example.com'],
+      ]) {
+        fs.writeFileSync(
+          path.join(authDir, tokenFile),
+          JSON.stringify({ type: 'claude', email }),
+          'utf8'
+        );
+      }
+      // Registry written before Claude supported duplicate emails: both organizations
+      // collapsed onto one bare-email entry and the other token file was orphaned.
+      const soloAccount = {
+        email: 'solo@example.com',
+        nickname: 'solo',
+        tokenFile: 'claude-1a2b3c4d-solo@example.com.json',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        lastUsedAt: '2026-01-03T00:00:00.000Z',
+      };
+      const collapsedAccount = {
+        email: 'dev@example.com',
+        nickname: 'work',
+        tokenFile: 'claude-f0e1d2c3-dev@example.com.json',
+        createdAt: '2026-01-02T00:00:00.000Z',
+        lastUsedAt: '2026-01-02T00:00:00.000Z',
+      };
+      const collapsedRegistry = JSON.stringify({
+        version: 1,
+        providers: {
+          claude: {
+            default: 'dev@example.com',
+            accounts: {
+              'solo@example.com': soloAccount,
+              'dev@example.com': collapsedAccount,
+            },
+          },
+        },
+      });
+      fs.writeFileSync(registryPath, collapsedRegistry, 'utf8');
+
+      const { getProviderAccounts } = await loadAccountManager();
+      expect(
+        getProviderAccounts('claude')
+          .map((account) => [account.id, account.isDefault])
+          .sort()
+      ).toEqual([
+        ['dev@example.com#a1b2c3d4', false],
+        ['dev@example.com#f0e1d2c3', true],
+        ['solo@example.com', false],
+      ]);
+      expect(fs.readFileSync(registryPath, 'utf8')).toBe(collapsedRegistry);
+
+      const { discoverExistingAccounts, loadAccountsRegistry } = await loadRegistryModule();
+      discoverExistingAccounts();
+      const claudeAccounts = loadAccountsRegistry().providers.claude;
+
+      expect(claudeAccounts?.default).toBe('dev@example.com#f0e1d2c3');
+      expect(Object.keys(claudeAccounts?.accounts ?? {}).sort()).toEqual([
+        'dev@example.com#a1b2c3d4',
+        'dev@example.com#f0e1d2c3',
+        'solo@example.com',
+      ]);
+      expect(claudeAccounts?.accounts['solo@example.com']).toEqual(soloAccount);
+      expect(claudeAccounts?.accounts['dev@example.com#f0e1d2c3']).toEqual(collapsedAccount);
+      expect(claudeAccounts?.accounts['dev@example.com#a1b2c3d4']).toMatchObject({
+        email: 'dev@example.com',
+        nickname: 'dev-a1b2c3d4',
+        tokenFile: 'claude-a1b2c3d4-dev@example.com.json',
+      });
+
+      const migratedRegistry = fs.readFileSync(registryPath, 'utf8');
+      discoverExistingAccounts();
+      expect(fs.readFileSync(registryPath, 'utf8')).toBe(migratedRegistry);
+    });
+  });
+
+  it('keeps same-email Claude organization ids and entries while either one is paused', async () => {
+    await withIsolatedHome(async (homeDir) => {
+      const cliproxyDir = path.join(homeDir, '.ccs', 'cliproxy');
+      const authDir = path.join(cliproxyDir, 'auth');
+      const pausedDir = path.join(cliproxyDir, 'auth-paused');
+      const teamFile = 'claude-a1b2c3d4-dev@example.com.json';
+      const personalFile = 'claude-f0e1d2c3-dev@example.com.json';
+      fs.mkdirSync(authDir, { recursive: true });
+      for (const tokenFile of [teamFile, personalFile]) {
+        fs.writeFileSync(
+          path.join(authDir, tokenFile),
+          JSON.stringify({ type: 'claude', email: 'dev@example.com' }),
+          'utf8'
+        );
+      }
+
+      const { discoverExistingAccounts, loadAccountsRegistry, pauseAccount, resumeAccount } =
+        await loadRegistryModule();
+      const { getProviderAccounts } = await loadAccountManager();
+      const describeAccounts = () =>
+        getProviderAccounts('claude')
+          .map((account) => [account.id, account.tokenFile, account.nickname, !!account.paused])
+          .sort();
+      discoverExistingAccounts();
+
+      expect(pauseAccount('claude', 'dev@example.com#a1b2c3d4')).toBe(true);
+      discoverExistingAccounts();
+      expect(describeAccounts()).toEqual([
+        ['dev@example.com#a1b2c3d4', teamFile, 'dev-a1b2c3d4', true],
+        ['dev@example.com#f0e1d2c3', personalFile, 'dev-f0e1d2c3', false],
+      ]);
+
+      expect(pauseAccount('claude', 'dev@example.com#f0e1d2c3')).toBe(true);
+      expect(resumeAccount('claude', 'dev@example.com#a1b2c3d4')).toBe(true);
+      discoverExistingAccounts();
+
+      expect(describeAccounts()).toEqual([
+        ['dev@example.com#a1b2c3d4', teamFile, 'dev-a1b2c3d4', false],
+        ['dev@example.com#f0e1d2c3', personalFile, 'dev-f0e1d2c3', true],
+      ]);
+      expect(Object.keys(loadAccountsRegistry().providers.claude?.accounts ?? {}).sort()).toEqual([
+        'dev@example.com#a1b2c3d4',
+        'dev@example.com#f0e1d2c3',
+      ]);
+      expect(fs.readdirSync(pausedDir)).toEqual([personalFile]);
+    });
+  });
+
+  it('applies account mutations to hydrated Claude organization ids before discovery', async () => {
+    await withIsolatedHome(async (homeDir) => {
+      const cliproxyDir = path.join(homeDir, '.ccs', 'cliproxy');
+      const authDir = path.join(cliproxyDir, 'auth');
+      const registryPath = path.join(cliproxyDir, 'accounts.json');
+      fs.mkdirSync(authDir, { recursive: true });
+      for (const [tokenFile, email] of [
+        ['claude-a1b2c3d4-dev@example.com.json', 'dev@example.com'],
+        ['claude-f0e1d2c3-dev@example.com.json', 'dev@example.com'],
+        ['claude-1a2b3c4d-solo@example.com.json', 'solo@example.com'],
+      ]) {
+        fs.writeFileSync(
+          path.join(authDir, tokenFile),
+          JSON.stringify({ type: 'claude', email }),
+          'utf8'
+        );
+      }
+      const collapsedAccount = {
+        email: 'dev@example.com',
+        nickname: 'work',
+        tokenFile: 'claude-f0e1d2c3-dev@example.com.json',
+        createdAt: '2026-01-02T00:00:00.000Z',
+        lastUsedAt: '2026-01-02T00:00:00.000Z',
+      };
+      fs.writeFileSync(
+        registryPath,
+        JSON.stringify({
+          version: 1,
+          providers: {
+            claude: {
+              default: 'solo@example.com',
+              accounts: {
+                'solo@example.com': {
+                  email: 'solo@example.com',
+                  nickname: 'solo',
+                  tokenFile: 'claude-1a2b3c4d-solo@example.com.json',
+                  createdAt: '2026-01-01T00:00:00.000Z',
+                  lastUsedAt: '2026-01-01T00:00:00.000Z',
+                },
+                'dev@example.com': collapsedAccount,
+              },
+            },
+          },
+        }),
+        'utf8'
+      );
+
+      const { loadAccountsRegistry, renameAccount, setDefaultAccount } = await loadRegistryModule();
+      expect(setDefaultAccount('claude', 'dev@example.com#a1b2c3d4')).toBe(true);
+      expect(renameAccount('claude', 'dev@example.com#a1b2c3d4', 'team')).toBe(true);
+
+      const claudeAccounts = loadAccountsRegistry().providers.claude;
+      expect(claudeAccounts?.default).toBe('dev@example.com#a1b2c3d4');
+      expect(claudeAccounts?.accounts['solo@example.com']?.nickname).toBe('solo');
+      expect(claudeAccounts?.accounts['dev@example.com#f0e1d2c3']).toEqual(collapsedAccount);
+      expect(claudeAccounts?.accounts['dev@example.com#a1b2c3d4']).toMatchObject({
+        nickname: 'team',
+        tokenFile: 'claude-a1b2c3d4-dev@example.com.json',
+      });
+      expect(setDefaultAccount('claude', 'dev@example.com')).toBe(false);
+    });
+  });
+
   it('recovers to an empty registry when no token files are available', async () => {
     await withIsolatedHome(async (homeDir) => {
       const cliproxyDir = path.join(homeDir, '.ccs', 'cliproxy');

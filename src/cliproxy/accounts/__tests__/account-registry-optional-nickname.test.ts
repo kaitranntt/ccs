@@ -8,10 +8,10 @@ async function loadAccountManager() {
   return import(`../account-manager?optional-nickname=${Date.now()}`);
 }
 
-function writeTokenFile(homeDir: string, tokenFile: string): void {
+function writeTokenFile(homeDir: string, tokenFile: string, payload: object = {}): void {
   const authDir = path.join(homeDir, '.ccs', 'cliproxy', 'auth');
   fs.mkdirSync(authDir, { recursive: true });
-  fs.writeFileSync(path.join(authDir, tokenFile), '{}', 'utf8');
+  fs.writeFileSync(path.join(authDir, tokenFile), JSON.stringify(payload), 'utf8');
 }
 
 async function withIsolatedHome<T>(fn: (homeDir: string) => Promise<T> | T): Promise<T> {
@@ -153,5 +153,65 @@ describe('registerAccount optional nickname flow', () => {
     expect(result.ambiguousLookup).toBeNull();
     expect(result.teamLookup?.id).toBe('kaidu.kd@gmail.com#04a0f049-team');
     expect(result.freeLookup?.id).toBe('kaidu.kd@gmail.com#free');
+  });
+
+  it('keeps personal and team Claude organizations for one email as distinct accounts', async () => {
+    const result = await withIsolatedHome(async (homeDir) => {
+      const email = 'dev@example.com';
+      writeTokenFile(homeDir, 'claude-f0e1d2c3-dev@example.com.json', { type: 'claude', email });
+      writeTokenFile(homeDir, 'claude-a1b2c3d4-dev@example.com.json', { type: 'claude', email });
+      const { registerAccount, getProviderAccounts, findAccountByQuery } =
+        await loadAccountManager();
+      const personal = registerAccount('claude', 'claude-f0e1d2c3-dev@example.com.json', email);
+      const team = registerAccount('claude', 'claude-a1b2c3d4-dev@example.com.json', email);
+
+      return {
+        personal,
+        team,
+        accounts: getProviderAccounts('claude'),
+        ambiguousLookup: findAccountByQuery('claude', email),
+        personalLookup: findAccountByQuery('claude', 'dev@example.com#f0e1d2c3'),
+        teamLookup: findAccountByQuery('claude', 'dev-a1b2c3d4'),
+      };
+    });
+
+    expect(result.personal.id).toBe('dev@example.com');
+    expect(result.team.id).toBe('dev@example.com#a1b2c3d4');
+    expect(result.team.nickname).toBe('dev-a1b2c3d4');
+    expect(
+      result.accounts
+        .map((account) => [account.id, account.tokenFile, account.nickname, account.isDefault])
+        .sort()
+    ).toEqual([
+      ['dev@example.com#a1b2c3d4', 'claude-a1b2c3d4-dev@example.com.json', 'dev-a1b2c3d4', false],
+      ['dev@example.com#f0e1d2c3', 'claude-f0e1d2c3-dev@example.com.json', 'dev', true],
+    ]);
+    expect(result.ambiguousLookup).toBeNull();
+    expect(result.personalLookup?.tokenFile).toBe('claude-f0e1d2c3-dev@example.com.json');
+    expect(result.teamLookup?.tokenFile).toBe('claude-a1b2c3d4-dev@example.com.json');
+  });
+
+  it('keeps the bare email id and nickname for a single Claude organization', async () => {
+    const result = await withIsolatedHome(async (homeDir) => {
+      writeTokenFile(homeDir, 'claude-1a2b3c4d-solo@example.com.json', {
+        type: 'claude',
+        email: 'solo@example.com',
+      });
+      const { registerAccount, getProviderAccounts } = await loadAccountManager();
+      return {
+        registered: registerAccount(
+          'claude',
+          'claude-1a2b3c4d-solo@example.com.json',
+          'solo@example.com'
+        ),
+        accounts: getProviderAccounts('claude'),
+      };
+    });
+
+    expect(result.registered.id).toBe('solo@example.com');
+    expect(result.registered.nickname).toBe('solo');
+    expect(result.accounts.map((account) => [account.id, account.nickname])).toEqual([
+      ['solo@example.com', 'solo'],
+    ]);
   });
 });
