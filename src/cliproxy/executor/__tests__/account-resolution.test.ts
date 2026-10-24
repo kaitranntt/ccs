@@ -163,7 +163,7 @@ describe('resolveAccounts — --use switching', () => {
   });
 
   it('calls setDefaultAccount + touchAccount and logs success', async () => {
-    const setDefaultMock = jest.fn();
+    const setDefaultMock = jest.fn(() => true);
     const touchMock = jest.fn();
     mock.module('../../accounts/account-manager', () => ({
       getProviderAccounts: () => [],
@@ -200,6 +200,48 @@ describe('resolveAccounts — --use switching', () => {
     expect(touchMock).toHaveBeenCalledWith('gemini', 'acc1');
     const allOutput = logSpy.mock.calls.map((c) => c[0]).join('\n');
     expect(allOutput).toContain('Switched to account');
+  });
+
+  it('exits 1 without renaming when setDefaultAccount fails', async () => {
+    const touchMock = jest.fn();
+    const renameMock = jest.fn(() => true);
+    mock.module('../../accounts/account-manager', () => ({
+      getProviderAccounts: () => [],
+      findAccountByQuery: () => ({ id: 'acc2', email: 'user@example.com', nickname: 'work' }),
+      setDefaultAccount: () => false,
+      touchAccount: touchMock,
+      renameAccount: renameMock,
+      getDefaultAccount: () => ({ id: 'acc1', email: 'other@example.com' }),
+    }));
+    mock.module('../../accounts/email-account-identity', () => ({
+      formatAccountDisplayName: () => 'user@example.com',
+    }));
+    mock.module('../../config/config-generator', () => ({
+      getProviderConfig: () => ({ displayName: 'Gemini' }),
+    }));
+    mock.module('../../accounts/account-safety', () => ({
+      warnOAuthBanRisk: () => {},
+      warnCrossProviderDuplicates: () => false,
+      cleanupStaleAutoPauses: () => {},
+      enforceProviderIsolation: () => 0,
+      restoreAutoPausedAccounts: () => {},
+    }));
+
+    const { resolveAccounts } = await import('../account-resolution');
+    const result = await resolveAccounts({
+      provider: 'gemini',
+      showAccounts: false,
+      useAccount: 'work',
+      setNickname: 'renamed',
+      addAccount: false,
+    });
+
+    expect(result.earlyExit).toBe(true);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(touchMock).not.toHaveBeenCalled();
+    expect(renameMock).not.toHaveBeenCalled();
+    const allOutput = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(allOutput).not.toContain('Switched to account');
   });
 
   it('calls process.exit(1) when account not found', async () => {

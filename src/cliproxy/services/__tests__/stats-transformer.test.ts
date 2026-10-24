@@ -335,6 +335,47 @@ describe('buildCliproxyStatsFromUsageResponse', () => {
     });
   });
 
+  it('derives same-email Claude organization account ids from auth file metadata', () => {
+    const usage = createInternallyBucketedUsage([
+      createDetail({ auth_index: 'claude-team', source: 'dev@example.com' }),
+      createDetail({
+        auth_index: 'claude-personal',
+        source: 'dev@example.com',
+        timestamp: '2025-03-26T10:01:00.000Z',
+        failed: true,
+      }),
+    ]);
+    const authFiles: CliproxyManagementAuthFile[] = [
+      {
+        auth_index: 'claude-team',
+        provider: 'claude',
+        email: 'dev@example.com',
+        name: 'claude-a1b2c3d4-dev@example.com.json',
+      },
+      {
+        auth_index: 'claude-personal',
+        provider: 'claude',
+        email: 'dev@example.com',
+        name: 'claude-f0e1d2c3-dev@example.com.json',
+      },
+    ];
+
+    const stats = buildCliproxyStatsFromUsageResponse(usage, { authFiles });
+
+    expect(stats.accountStats['claude:dev@example.com#a1b2c3d4']).toMatchObject({
+      provider: 'claude',
+      source: 'dev@example.com#a1b2c3d4',
+      successCount: 1,
+      failureCount: 0,
+    });
+    expect(stats.accountStats['claude:dev@example.com#f0e1d2c3']).toMatchObject({
+      provider: 'claude',
+      source: 'dev@example.com#f0e1d2c3',
+      successCount: 0,
+      failureCount: 1,
+    });
+  });
+
   it('normalizes OAuth auth filenames before building account stats keys', () => {
     const usage: CliproxyUsageApiResponse = {
       usage: {
