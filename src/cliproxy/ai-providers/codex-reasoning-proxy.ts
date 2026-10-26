@@ -223,8 +223,10 @@ export function injectCodexRequestTuningIntoBody(
 
   // CLIProxy reads effort from a `model(level)` suffix and gives it priority over the
   // request body. Its Claude Messages translator ignores a top-level `reasoning` field.
+  // Strip any pre-existing parenthesized suffix to avoid generating `model(a)(b)`.
   if (tuning.effort && typeof body.model === 'string') {
-    tunedBody.model = `${body.model}(${tuning.effort})`;
+    const baseModel = body.model.replace(/\([^()]*\)$/, '').trim();
+    tunedBody.model = `${baseModel}(${tuning.effort})`;
   }
 
   if (tuning.serviceTier) {

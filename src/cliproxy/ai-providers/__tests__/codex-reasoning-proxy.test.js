@@ -64,6 +64,11 @@ describe('Codex Reasoning Proxy', () => {
       assert.deepStrictEqual(out, { model: 'm1(high)', reasoning: { summary: 'auto' } });
     });
 
+    it('strips existing parenthesized suffix to avoid double-suffixing', () => {
+      const out = injectReasoningEffortIntoBody({ model: 'gpt-5.4(low)' }, 'high');
+      assert.deepStrictEqual(out, { model: 'gpt-5.4(high)' });
+    });
+
     it('leaves non-object bodies unchanged', () => {
       assert.strictEqual(injectReasoningEffortIntoBody('x', 'medium'), 'x');
     });
