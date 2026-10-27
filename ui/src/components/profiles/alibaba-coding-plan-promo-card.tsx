@@ -1,6 +1,6 @@
 /**
- * Alibaba Coding Plan Promo Card
- * Permanent promotional card for Alibaba Coding Plan in providers sidebar.
+ * QwenCloud Coding Plan Promo Card
+ * Permanent promotional card for QwenCloud Coding Plan in providers sidebar.
  */
 
 import { Button } from '@/components/ui/button';

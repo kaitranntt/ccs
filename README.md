@@ -66,10 +66,10 @@ CCS gives you one stable command surface while letting you switch between:
   Copilot compatibility for existing setups
 - API and local-model profiles like GLM, Kimi, OpenRouter, Requesty,
   Atlas Cloud, Cheaper Inference, OrcaRouter, Runcrate, Ollama, llama.cpp,
-  Novita, Fireworks AI, and Alibaba Coding Plan
+  Novita, Fireworks AI, and QwenCloud Coding Plan
 
 Qwen Code account linking is not available in the bundled CLIProxy runtime yet;
-use an API-key Qwen profile such as Alibaba Coding Plan for Qwen models.
+use an API-key Qwen profile such as QwenCloud Coding Plan for Qwen models.
 
 The goal is simple: stop rewriting config files, stop breaking active sessions,
 and move between providers in seconds.

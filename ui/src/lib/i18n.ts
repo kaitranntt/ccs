@@ -38,7 +38,7 @@ const resources = {
         health: 'Health',
         logs: 'Logs',
         settings: 'Settings',
-        openrouterTooltip: 'Featured: OpenRouter + Alibaba Coding Plan + Ollama',
+        openrouterTooltip: 'Featured: OpenRouter + QwenCloud Coding Plan + Ollama',
       },
       home: {
         profiles: 'Profiles',
@@ -389,17 +389,17 @@ const resources = {
       },
       alibabaCodingPlanQuickStart: {
         recommended: 'Recommended',
-        title: 'Try Alibaba Coding Plan',
+        title: 'Try QwenCloud Coding Plan',
         description:
-          'Use Alibaba Cloud Coding Plan through an Anthropic-compatible endpoint for coding workloads.',
+          'Use QwenCloud Coding Plan through an Anthropic-compatible endpoint for coding workloads.',
         featureEndpoint: 'Anthropic-compatible endpoint',
         featureKeyFormat: 'Dedicated sk-sp API keys',
-        createAlibabaProfile: 'Create Alibaba Coding Plan Profile',
+        createAlibabaProfile: 'Create QwenCloud Coding Plan Profile',
         readGuideAt: 'Read setup guide at',
       },
       alibabaCodingPlanPromo: {
-        title: 'Alibaba Coding Plan',
-        subtitle: 'Model Studio Coding Plan via Anthropic endpoint',
+        title: 'QwenCloud Coding Plan',
+        subtitle: 'QwenCloud Coding Plan via Anthropic endpoint',
         add: 'Add',
       },
       credentialHealth: {
@@ -2785,7 +2785,7 @@ const resources = {
         health: 'Saúde',
         logs: 'Logs',
         settings: 'Configurações',
-        openrouterTooltip: 'Destaque: OpenRouter + Alibaba Coding Plan + Ollama',
+        openrouterTooltip: 'Destaque: OpenRouter + QwenCloud Coding Plan + Ollama',
       },
       home: {
         profiles: 'Perfis',
@@ -3144,17 +3144,17 @@ const resources = {
       },
       alibabaCodingPlanQuickStart: {
         recommended: 'Recomendado',
-        title: 'Experimente o Alibaba Coding Plan',
+        title: 'Experimente o QwenCloud Coding Plan',
         description:
-          'Use o Alibaba Cloud Coding Plan por meio de um endpoint compatível com Anthropic para cargas de trabalho de codificação.',
+          'Use o QwenCloud Coding Plan por meio de um endpoint compatível com Anthropic para cargas de trabalho de codificação.',
         featureEndpoint: 'Endpoint compatível com Anthropic',
         featureKeyFormat: 'Chaves de API sk-sp dedicadas',
-        createAlibabaProfile: 'Criar Perfil do Alibaba Coding Plan',
+        createAlibabaProfile: 'Criar Perfil do QwenCloud Coding Plan',
         readGuideAt: 'Leia o guia de configuração em',
       },
       alibabaCodingPlanPromo: {
-        title: 'Alibaba Coding Plan',
-        subtitle: 'Model Studio Coding Plan via endpoint Anthropic',
+        title: 'QwenCloud Coding Plan',
+        subtitle: 'QwenCloud Coding Plan via endpoint Anthropic',
         add: 'Adicionar',
       },
       credentialHealth: {
@@ -5599,7 +5599,7 @@ const resources = {
         health: '健康',
         logs: '日志',
         settings: '设置',
-        openrouterTooltip: '精选：OpenRouter + Alibaba Coding Plan + Ollama',
+        openrouterTooltip: '精选：OpenRouter + QwenCloud Coding Plan + Ollama',
       },
       home: {
         profiles: '配置',
@@ -5931,16 +5931,16 @@ const resources = {
       },
       alibabaCodingPlanQuickStart: {
         recommended: '推荐',
-        title: '试用阿里云 Coding Plan',
-        description: '通过 Anthropic 兼容端点接入阿里云 Model Studio Coding Plan。',
+        title: '试用 QwenCloud Coding Plan',
+        description: '通过 Anthropic 兼容端点接入 QwenCloud Coding Plan。',
         featureEndpoint: 'Anthropic 兼容端点',
         featureKeyFormat: '专用 sk-sp API Key',
-        createAlibabaProfile: '创建 Alibaba Coding Plan 配置',
+        createAlibabaProfile: '创建 QwenCloud Coding Plan 配置',
         readGuideAt: '查看配置文档：',
       },
       alibabaCodingPlanPromo: {
-        title: 'Alibaba Coding Plan',
-        subtitle: '通过 Anthropic 端点接入 Model Studio Coding Plan',
+        title: 'QwenCloud Coding Plan',
+        subtitle: '通过 Anthropic 端点接入 QwenCloud Coding Plan',
         add: '添加',
       },
       credentialHealth: {
@@ -8211,7 +8211,7 @@ const resources = {
         system: 'Hệ thống',
         health: 'Sức khỏe',
         settings: 'Cài đặt',
-        openrouterTooltip: 'Nổi bật: OpenRouter + Alibaba Coding Plan + Ollama',
+        openrouterTooltip: 'Nổi bật: OpenRouter + QwenCloud Coding Plan + Ollama',
         logs: 'Nhật ký',
       },
       home: {
@@ -8565,17 +8565,17 @@ const resources = {
       },
       alibabaCodingPlanQuickStart: {
         recommended: 'Đề xuất',
-        title: 'Dùng thử Alibaba Coding Plan',
+        title: 'Dùng thử QwenCloud Coding Plan',
         description:
-          'Sử dụng Alibaba Cloud Coding Plan qua endpoint tương thích Anthropic cho tác vụ lập trình.',
+          'Sử dụng QwenCloud Coding Plan qua endpoint tương thích Anthropic cho tác vụ lập trình.',
         featureEndpoint: 'Endpoint tương thích Anthropic',
         featureKeyFormat: 'Khóa API sk-sp chuyên dụng',
-        createAlibabaProfile: 'Tạo hồ sơ Alibaba Coding Plan',
+        createAlibabaProfile: 'Tạo hồ sơ QwenCloud Coding Plan',
         readGuideAt: 'Xem hướng dẫn tại',
       },
       alibabaCodingPlanPromo: {
-        title: 'Alibaba Coding Plan',
-        subtitle: 'Model Studio Coding Plan qua endpoint Anthropic',
+        title: 'QwenCloud Coding Plan',
+        subtitle: 'QwenCloud Coding Plan qua endpoint Anthropic',
         add: 'Thêm',
       },
       credentialHealth: {
@@ -10950,7 +10950,7 @@ const resources = {
         health: 'ヘルス',
         logs: 'ログ',
         settings: '設定',
-        openrouterTooltip: '注目: OpenRouter + Alibaba Coding Plan + Ollama',
+        openrouterTooltip: '注目: OpenRouter + QwenCloud Coding Plan + Ollama',
       },
       home: {
         profiles: 'プロファイル',
@@ -11303,17 +11303,17 @@ const resources = {
       },
       alibabaCodingPlanQuickStart: {
         recommended: '推奨',
-        title: 'Alibaba Coding Plan を試す',
+        title: 'QwenCloud Coding Plan を試す',
         description:
-          'コーディング用途向けに、Anthropic 互換エンドポイント経由で Alibaba Cloud Coding Plan を利用します。',
+          'コーディング用途向けに、Anthropic 互換エンドポイント経由で QwenCloud Coding Plan を利用します。',
         featureEndpoint: 'Anthropic 互換エンドポイント',
         featureKeyFormat: '専用の sk-sp API キー',
-        createAlibabaProfile: 'Alibaba Coding Plan プロファイルを作成',
+        createAlibabaProfile: 'QwenCloud Coding Plan プロファイルを作成',
         readGuideAt: 'セットアップガイド:',
       },
       alibabaCodingPlanPromo: {
-        title: 'Alibaba Coding Plan',
-        subtitle: 'Anthropic エンドポイント経由の Model Studio Coding Plan',
+        title: 'QwenCloud Coding Plan',
+        subtitle: 'Anthropic エンドポイント経由の QwenCloud Coding Plan',
         add: '追加',
       },
       credentialHealth: {
@@ -13712,7 +13712,7 @@ const resources = {
         health: '헬스',
         logs: '로그',
         settings: '설정',
-        openrouterTooltip: '추천: OpenRouter + Alibaba Coding Plan + Ollama',
+        openrouterTooltip: '추천: OpenRouter + QwenCloud Coding Plan + Ollama',
       },
       home: {
         profiles: '프로필',
@@ -14063,17 +14063,17 @@ const resources = {
       },
       alibabaCodingPlanQuickStart: {
         recommended: '추천',
-        title: 'Alibaba Coding Plan 사용해보기',
+        title: 'QwenCloud Coding Plan 사용해보기',
         description:
-          '코딩 워크로드에 Anthropic 호환 엔드포인트를 통해 Alibaba Cloud Coding Plan을 사용하십시오.',
+          '코딩 워크로드에 Anthropic 호환 엔드포인트를 통해 QwenCloud Coding Plan을 사용하십시오.',
         featureEndpoint: 'Anthropic 호환 엔드포인트',
         featureKeyFormat: '전용 sk-sp API 키',
-        createAlibabaProfile: 'Alibaba Coding Plan 프로필 생성',
+        createAlibabaProfile: 'QwenCloud Coding Plan 프로필 생성',
         readGuideAt: '설정 가이드 읽기:',
       },
       alibabaCodingPlanPromo: {
-        title: 'Alibaba Coding Plan',
-        subtitle: 'Anthropic 엔드포인트를 통한 Model Studio Coding Plan',
+        title: 'QwenCloud Coding Plan',
+        subtitle: 'Anthropic 엔드포인트를 통한 QwenCloud Coding Plan',
         add: '추가',
       },
       credentialHealth: {

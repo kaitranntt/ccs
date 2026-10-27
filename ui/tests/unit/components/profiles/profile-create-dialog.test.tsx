@@ -46,7 +46,7 @@ describe('ProfileCreateDialog', () => {
     expect(screen.getByText('Featured Providers')).toBeInTheDocument();
     expect(screen.getByText('More Presets')).toBeInTheDocument();
     expect(screen.getByText('Local runtimes')).toBeInTheDocument();
-    expect(screen.getByText('Alibaba Coding Plan')).toBeVisible();
+    expect(screen.getByText('QwenCloud Coding Plan')).toBeVisible();
     expect(screen.getByText('Hugging Face')).toBeVisible();
     expect(document.body.querySelectorAll('.overflow-x-auto')).toHaveLength(2);
 

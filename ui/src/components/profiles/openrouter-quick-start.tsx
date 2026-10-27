@@ -274,7 +274,7 @@ export function OpenRouterQuickStart({
                 <div className="rounded-lg bg-orange-500/10 p-2">
                   <img
                     src="/assets/providers/alibabacloud-color.svg"
-                    alt="Alibaba Coding Plan"
+                    alt="QwenCloud Coding Plan"
                     className="h-5 w-5"
                   />
                 </div>
@@ -296,12 +296,12 @@ export function OpenRouterQuickStart({
                 <>
                   {t('alibabaCodingPlanQuickStart.readGuideAt')}{' '}
                   <a
-                    href="https://www.alibabacloud.com/help/en/model-studio/coding-plan"
+                    href="https://docs.qwencloud.com"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-orange-700 hover:underline dark:text-orange-400"
                   >
-                    Alibaba Cloud Model Studio
+                    docs.qwencloud.com
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 </>
