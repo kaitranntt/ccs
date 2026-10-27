@@ -29,6 +29,7 @@ export const PROVIDER_PRESET_IDS = [
   'requesty',
   'atlascloud',
   'cheaperinference',
+  'runcrate',
 ] as const;
 
 export type ProviderPresetId = (typeof PROVIDER_PRESET_IDS)[number];
@@ -95,6 +96,7 @@ const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
     baseUrl: ORCAROUTER_BASE_URL,
     defaultProfileName: 'orcarouter',
     defaultModel: 'openai/gpt-5.5',
+    defaultTarget: 'claude',
     apiKeyPlaceholder: 'sk-orca-...',
     apiKeyHint: 'Get your API key at orcarouter.ai/console',
     category: 'recommended',
@@ -356,6 +358,20 @@ const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
     category: 'alternative',
     requiresApiKey: true,
     badge: 'OpenAI-compatible',
+  },
+  {
+    id: 'runcrate',
+    name: 'Runcrate',
+    description:
+      'Anthropic-compatible API for open models (DeepSeek, GLM, Qwen, gpt-oss) via api.runcrate.ai',
+    baseUrl: 'https://api.runcrate.ai',
+    defaultProfileName: 'runcrate',
+    defaultModel: 'deepseek-ai/DeepSeek-V4.1-Flash',
+    apiKeyPlaceholder: 'rc_live_...',
+    apiKeyHint: 'Create an API key at runcrate.ai/dashboard/api-keys',
+    category: 'alternative',
+    requiresApiKey: true,
+    badge: 'Anthropic-compatible',
   },
 ];
 

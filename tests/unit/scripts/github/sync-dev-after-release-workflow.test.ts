@@ -20,8 +20,7 @@ describe('sync dev after release workflow', () => {
     const syncSection = workflow.slice(workflow.indexOf('- name: Sync dev with main'));
 
     expect(workflow).toContain('name: Sync Dev After Main Release');
-    expect(workflow).toContain('runs-on: [self-hosted, linux, x64]');
-    expect(workflow).not.toContain('runs-on: ubuntu-latest');
+    expect(workflow).toContain('runs-on: ubuntu-latest');
     expect(checkoutSection).toContain('persist-credentials: false');
     expect(checkoutSection).not.toContain('token: ${{ secrets.PAT_TOKEN }}');
     expect(syncSection).toContain(

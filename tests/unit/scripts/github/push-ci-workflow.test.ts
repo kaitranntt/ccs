@@ -19,7 +19,7 @@ describe('push ci workflow', () => {
     expect(workflow).toContain('branches: [dev]');
     expect(workflow).toContain('group: push-ci-${{ github.ref }}');
     expect(workflow).toContain('cancel-in-progress: true');
-    expect(workflow).toContain('runs-on: [self-hosted, linux, x64]');
+    expect(workflow).toContain('runs-on: ubuntu-latest');
     expect(workflow).toContain("key: ${{ runner.os }}-bun-cache-v2-${{ hashFiles('bun.lock', 'ui/bun.lock') }}");
     expect(workflow).not.toContain('restore-keys:');
     expect(workflow).toContain("name: ${{ matrix.check.name }}");

@@ -19,7 +19,7 @@ describe('PR-Agent review lane migration', () => {
     const appTokenUsages = workflow.match(/uses: actions\/create-github-app-token@v1/g) ?? [];
 
     expect(workflow).toContain('name: AI Code Review');
-    expect(workflow).toContain('runs-on: [self-hosted, cliproxy]');
+    expect(workflow).toContain('runs-on: ubuntu-latest');
     expect(workflow).toContain('uses: qodo-ai/pr-agent');
     expect(appTokenUsages).toHaveLength(2);
     expect(workflow).toContain('OPENAI.API_BASE');

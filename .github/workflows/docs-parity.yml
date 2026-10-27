@@ -38,7 +38,7 @@ jobs:
     if: >-
       contains(fromJSON('["COLLABORATOR","MEMBER","OWNER"]'), github.event.pull_request.author_association)
       || github.event_name == 'push'
-    runs-on: [self-hosted, linux, x64, cliproxy]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4

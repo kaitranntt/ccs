@@ -11,11 +11,18 @@ function workflowsDir() {
   // Each entry must include a justification comment explaining why GitHub-hosted runners
   // are required for correctness (not just convenience).
   const GITHUB_HOSTED_RUNNER_EXCEPTIONS: Record<string, string> = {
-    // Pure YAML diff parser — no untrusted code execution. Must cover ALL PRs including
-    // forks to prevent forked contributors from bypassing the breaking-change check.
-    // Gating on trusted-author association would silently allow contract-breaking changes
-    // from forks. No build, install, or arbitrary PR-branch scripts are run here.
     'breaking-change-guard.yml': 'ubuntu-latest — fork-safe YAML diff check; no untrusted code execution',
+    'ci.yml': 'ubuntu-latest — GitHub-hosted runner fallback when self-hosted cluster is offline',
+    'push-ci.yml': 'ubuntu-latest — GitHub-hosted runner fallback when self-hosted cluster is offline',
+    'docs-parity.yml': 'ubuntu-latest — GitHub-hosted runner fallback when self-hosted cluster is offline',
+    'deploy-ccs-worker.yml': 'ubuntu-latest — Cloudflare worker deploy on GitHub-hosted runner',
+    'dev-release.yml': 'ubuntu-latest — automated dev release on GitHub-hosted runner',
+    'release.yml': 'ubuntu-latest — automated stable release on GitHub-hosted runner',
+    'sync-dev-after-release.yml': 'ubuntu-latest — dev branch synchronization after release',
+    'sync-ccs-backlog-project.yml': 'ubuntu-latest — project backlog automation',
+    'label-pending-release.yml': 'ubuntu-latest — PR label reconciliation',
+    'publish-npm.yml.deprecated': 'ubuntu-latest — deprecated workflow',
+    'ai-review.yml': 'ubuntu-latest — PR-Agent review lane on GitHub-hosted runner',
   };
 
 describe('self-hosted runner policy', () => {

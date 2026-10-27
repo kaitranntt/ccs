@@ -3,13 +3,14 @@
 set -Eeuo pipefail
 
 container_name="${CCS_CLIPROXY_CONTAINER:-ccs-cliproxy}"
-lock_file="${CCS_CLIPROXY_LOCK_FILE:-/run/lock/ccs-cliproxy-maintenance.lock}"
+lock_file="${CCS_CLIPROXY_LOCK_FILE:-/run/ccs-cliproxy/maintenance.lock}"
 log_file="${CCS_CLIPROXY_UPDATE_LOG:-/var/log/ccs-cliproxy-update.log}"
 
 log() {
   printf '[%s] %s\n' "$(date -Is)" "$*" | tee -a "$log_file"
 }
 
+mkdir -p -m 0700 "$(dirname "$lock_file")" 2>/dev/null || true
 exec 9>"$lock_file"
 if ! flock -n 9; then
   log 'Another CLIProxy maintenance operation is active; skipping update check'

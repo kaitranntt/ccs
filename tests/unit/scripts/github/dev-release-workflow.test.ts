@@ -24,8 +24,7 @@ describe('dev release workflow', () => {
 
     expect(workflow).toContain('name: Dev Release');
     expect(workflow).toContain('branches: [dev]');
-    expect(workflow.match(/runs-on: \[self-hosted, linux, x64\]/g)).toHaveLength(2);
-    expect(workflow).not.toContain('runs-on: ubuntu-latest');
+    expect(workflow.match(/runs-on: ubuntu-latest/g)).toHaveLength(2);
     expect(checkoutSection).toContain('persist-credentials: false');
     expect(checkoutSection).not.toContain('token: ${{ secrets.PAT_TOKEN }}');
     expect(checkoutSection).not.toContain('token: ${{ github.token }}');

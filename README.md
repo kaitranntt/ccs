@@ -65,8 +65,8 @@ CCS gives you one stable command surface while letting you switch between:
 - OAuth providers like Codex, xAI/Grok, Kiro, Claude, Kimi, and more, with legacy
   Copilot compatibility for existing setups
 - API and local-model profiles like GLM, Kimi, OpenRouter, Requesty,
-  Atlas Cloud, Cheaper Inference, OrcaRouter, Ollama, llama.cpp, Novita,
-  Fireworks AI, and Alibaba Coding Plan
+  Atlas Cloud, Cheaper Inference, OrcaRouter, Runcrate, Ollama, llama.cpp,
+  Novita, Fireworks AI, and Alibaba Coding Plan
 
 Qwen Code account linking is not available in the bundled CLIProxy runtime yet;
 use an API-key Qwen profile such as Alibaba Coding Plan for Qwen models.
@@ -230,7 +230,7 @@ ccs ollama "summarize these logs"
 - Daily local gate: `bun run format && bun run lint:fix && bun run validate` (`validate` is the fast path only)
 - Before review or merge confidence: `bun run validate:ci-parity`
 - Cross-runtime proxy transport: `bun run test:runtime-matrix` (Node 18/22/26 and Bun)
-- If PR checks stay queued for more than 10 minutes, assume the self-hosted runner is offline and notify a maintainer instead of retrying blindly
+- If PR checks stay queued for more than 10 minutes, verify GitHub Actions status instead of retrying blindly
 - Starter work:
   [good first issue](https://github.com/kaitranntt/ccs/labels/good%20first%20issue),
   [help wanted](https://github.com/kaitranntt/ccs/labels/help%20wanted)
@@ -240,4 +240,4 @@ ccs ollama "summarize these logs"
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=kaitranntt/ccs&type=Date&legend=top-left&sealed_token=ztbdUcU1tRfVPKPTvc-lMCRGPY6cLqpshj4rCGjkuQ41QKoJxwR_cNAbQ8itKG_JVP-kgju22G0vJpZiI3vcxfd10zaYUFq0_tyIVhlWzldVZYfCHa50qBwWzy4SenTIva_2pk49LYvDtaHNwNJxKt7wZ0Z5jhDQyxiDHc9BBsnCsjex8ub8Aea1BxU_)](https://star-history.com/#kaitranntt/ccs&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=kaitranntt/ccs&type=Date&legend=top-left)](https://star-history.com/#kaitranntt/ccs&Date)

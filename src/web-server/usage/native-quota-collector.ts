@@ -1685,11 +1685,7 @@ async function getNativeAccountRowsMultiProfile(
       continue;
     }
     tasks.push(
-      collectClaudeRowForProfile(
-        p,
-        deps,
-        force || claudeProfileStates.get(p)?.cachedRow?.quotaStatus === 'unsupported'
-      )
+      collectClaudeRowForProfile(p, deps, force)
         .then((r) => {
           if (!r) return null;
           const marked = markDefaultAndSyncCache(claudeProfileStates, p, r, isDefault);
@@ -1713,11 +1709,7 @@ async function getNativeAccountRowsMultiProfile(
       continue;
     }
     tasks.push(
-      collectCodexRowForProfile(
-        p,
-        deps,
-        force || codexProfileStates.get(p)?.cachedRow?.quotaStatus === 'unsupported'
-      )
+      collectCodexRowForProfile(p, deps, force)
         .then((r) => {
           if (!r) return null;
           const marked = markDefaultAndSyncCache(codexProfileStates, p, r, isDefault);

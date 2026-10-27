@@ -37,7 +37,7 @@ jobs:
   dispatch-review:
     name: Queue /review comment
     if: github.event_name == 'workflow_dispatch'
-    runs-on: [self-hosted, cliproxy]
+    runs-on: ubuntu-latest
     permissions:
       issues: write
 
@@ -91,7 +91,7 @@ jobs:
           )
         )
       )
-    runs-on: [self-hosted, cliproxy]
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       issues: write

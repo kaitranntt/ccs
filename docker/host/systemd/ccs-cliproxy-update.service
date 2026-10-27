@@ -5,5 +5,9 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
+User=root
+UMask=0077
+RuntimeDirectory=ccs-cliproxy
+RuntimeDirectoryMode=0700
 ExecStart=/opt/cliproxy/ccs-cliproxy-safe-update.sh
 TimeoutStartSec=10min

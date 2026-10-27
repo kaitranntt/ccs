@@ -24,8 +24,7 @@ describe('stable release workflow', () => {
 
     expect(workflow).toContain('name: Release');
     expect(workflow).toContain('branches: [main]');
-    expect(workflow).toContain('runs-on: [self-hosted, linux, x64]');
-    expect(workflow).not.toContain('runs-on: ubuntu-latest');
+    expect(workflow).toContain('runs-on: ubuntu-latest');
     expect(checkoutSection).toContain('persist-credentials: false');
     expect(checkoutSection).not.toContain('token: ${{ secrets.PAT_TOKEN }}');
     expect(releaseSection).toContain('echo "::add-mask::${auth_header}"');

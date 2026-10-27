@@ -7,7 +7,7 @@ on:
 jobs:
   sync-dev:
     if: ${{ !github.event.release.prerelease && github.event.release.target_commitish == 'main' && startsWith(github.event.release.tag_name, 'v') && !contains(github.event.release.tag_name, '-') }}
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
 
     permissions:
       contents: read
