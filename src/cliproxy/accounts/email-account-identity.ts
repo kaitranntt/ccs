@@ -1,6 +1,8 @@
 import type { CLIProxyProvider } from '../types';
 
-const DUPLICATE_EMAIL_ACCOUNT_PROVIDERS = new Set<string>(['codex']);
+// Claude: one login can authorize a personal or a team organization, and CLIProxyAPI
+// keeps each in its own claude-<org hash>-<email>.json file.
+const DUPLICATE_EMAIL_ACCOUNT_PROVIDERS = new Set<string>(['codex', 'claude']);
 const FREE_PLAN_PARTS = new Set(['free']);
 const PERSONAL_PLAN_PARTS = new Set(['plus', 'pro']);
 const BUSINESS_PLAN_PARTS = new Set(['team']);

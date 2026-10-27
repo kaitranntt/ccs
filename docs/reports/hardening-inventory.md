@@ -6,7 +6,7 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 
 | Metric | Value |
 |---|---:|
-| Sync fs occurrences (all) | 2574 |
+| Sync fs occurrences (all) | 2588 |
 | Sync fs files affected (all) | 271 |
 | Sync fs occurrences (runtime hotpaths) | 1209 |
 | Sync fs files affected (runtime hotpaths) | 159 |
@@ -59,7 +59,7 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 |---|---:|
 | typed-error adoption (typed/total throws) | 20.1% (92/458) |
 | typed-error adoption (P4 locked subdomains) | 93.3% (28/30), target 40% |
-| hotpath console.error/warn occurrences | 265 (591 total, 326 CLI-UX exempt) |
+| hotpath console.error/warn occurrences | 267 (593 total, 326 CLI-UX exempt) |
 | hotpath console.error/warn files | 82 |
 | files with createLogger | 68/769 |
 | subdomains with zero createLogger | 14 (api, bin, channels, cliproxy, cliproxy/accounts, cliproxy/binary, cliproxy/config, cliproxy/management, cliproxy/sync, cliproxy/types, config, dispatcher, shared, types) |
@@ -74,11 +74,11 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 | `src/utils/prompt.ts` | 11 |
 | `src/utils/websearch/profile-hook-injector.ts` | 10 |
 | `src/cliproxy/accounts/account-safety-cross-lane.ts` | 9 |
+| `src/cliproxy/executor/account-resolution.ts` | 9 |
 | `src/utils/hooks/image-analyzer-profile-hook-injector.ts` | 9 |
 | `src/utils/websearch/hook-installer.ts` | 8 |
 | `src/cliproxy/auth/token-manager.ts` | 7 |
 | `src/cliproxy/binary/downloader.ts` | 7 |
-| `src/cliproxy/executor/account-resolution.ts` | 7 |
 | `src/config/unified-config-loader.ts` | 7 |
 | `src/targets/claude-adapter.ts` | 7 |
 | `src/utils/shell-executor.ts` | 7 |
