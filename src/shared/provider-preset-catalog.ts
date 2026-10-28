@@ -30,6 +30,7 @@ export const PROVIDER_PRESET_IDS = [
   'atlascloud',
   'cheaperinference',
   'runcrate',
+  'obscurifyai',
 ] as const;
 
 export type ProviderPresetId = (typeof PROVIDER_PRESET_IDS)[number];
@@ -372,6 +373,19 @@ const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
     category: 'alternative',
     requiresApiKey: true,
     badge: 'Anthropic-compatible',
+  },
+  {
+    id: 'obscurifyai',
+    name: 'Obscurify.ai',
+    description: 'OpenAI-compatible API for 200+ models; prompts and responses are not stored',
+    baseUrl: 'https://obscurify.ai/v1',
+    defaultProfileName: 'obscurifyai',
+    defaultModel: 'deepseek/deepseek-v4-flash',
+    apiKeyPlaceholder: 'sk-obs1_...',
+    apiKeyHint: 'Get an API key at obscurify.ai/account (Show API Key)',
+    category: 'alternative',
+    requiresApiKey: true,
+    badge: 'OpenAI-compatible',
   },
 ];
 

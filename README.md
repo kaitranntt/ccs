@@ -65,8 +65,8 @@ CCS gives you one stable command surface while letting you switch between:
 - OAuth providers like Codex, xAI/Grok, Kiro, Claude, Kimi, and more, with legacy
   Copilot compatibility for existing setups
 - API and local-model profiles like GLM, Kimi, OpenRouter, Requesty,
-  Atlas Cloud, Cheaper Inference, OrcaRouter, Runcrate, Ollama, llama.cpp,
-  Novita, Fireworks AI, and Alibaba Coding Plan
+  Atlas Cloud, Cheaper Inference, OrcaRouter, Runcrate, Obscurify.ai, Ollama,
+  llama.cpp, Novita, Fireworks AI, and Alibaba Coding Plan
 
 Qwen Code account linking is not available in the bundled CLIProxy runtime yet;
 use an API-key Qwen profile such as Alibaba Coding Plan for Qwen models.
