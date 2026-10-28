@@ -12,6 +12,7 @@ import {
   resolveUpstreamTimeoutMs,
   writeForwardResponseHead,
 } from '../proxy/upstream-response-timeout';
+import { hasEncodedBody, setUpstreamAcceptEncoding } from '../proxy/content-encoding';
 import { createLogger } from '../../services/logging';
 import {
   readRequestBody,
@@ -356,7 +357,7 @@ export class CodexReasoningProxy {
     clientRes: http.ServerResponse,
     statusCode: number,
     headers: http.IncomingHttpHeaders,
-    responseBody: string
+    responseBody: string | Buffer
   ): void {
     writeForwardResponseHead(clientRes, statusCode, headers);
     clientRes.end(responseBody);
@@ -616,6 +617,7 @@ export class CodexReasoningProxy {
       if (hopByHop.has(lower)) continue;
       headers[key] = value;
     }
+    setUpstreamAcceptEncoding(headers);
 
     if (bodyString !== undefined) {
       headers['Content-Type'] = headers['Content-Type'] || 'application/json';
@@ -801,7 +803,21 @@ export class CodexReasoningProxy {
               return;
             }
             try {
-              const responseBody = Buffer.concat(chunks).toString('utf8');
+              const rawBody = Buffer.concat(chunks);
+              // A compressed error body can't be parsed for the model fallback;
+              // forward it byte-for-byte instead of corrupting it as text.
+              if (hasEncodedBody(upstreamRes.headers)) {
+                this.logger.warn(
+                  'codex-reasoning-proxy.encoded-passthrough',
+                  'Upstream compressed an error response despite Accept-Encoding: identity. Passing it through without model fallback.',
+                  { contentEncoding: upstreamRes.headers['content-encoding'], statusCode }
+                );
+                this.sendBufferedResponse(clientRes, statusCode, upstreamRes.headers, rawBody);
+                resolve(statusCode);
+                return;
+              }
+
+              const responseBody = rawBody.toString('utf8');
               const unsupportedError =
                 context.retryCount === 0
                   ? parseCodexUnsupportedModelError(statusCode, responseBody)

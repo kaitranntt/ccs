@@ -83,6 +83,9 @@ function createClientResStub() {
     end() {
       this.writableEnded = true;
     },
+    destroy() {
+      this.destroyed = true;
+    },
   };
 }
 
@@ -145,5 +148,20 @@ describe('attachUpstreamResponseTimeout', () => {
     expect(clientRes.body).toBe('');
     expect(upstreamRes.destroyedWith).toBeUndefined();
     expect(upstreamReq.destroyedWith).toBeUndefined();
+  });
+
+  it('resets a compressed response mid-body instead of appending a plain-text error', () => {
+    const upstreamRes = createUpstreamResStub();
+    upstreamRes.headers = { 'content-type': 'text/event-stream', 'content-encoding': 'zstd' };
+    const clientRes = createClientResStub();
+    clientRes.headersSent = true;
+    const { upstreamReq } = attach(upstreamRes, undefined, clientRes);
+
+    upstreamRes.fireTimeout();
+
+    expect(clientRes.body).toBe('');
+    expect(clientRes.destroyed).toBe(true);
+    expect(upstreamRes.destroyedWith?.message).toBe(UPSTREAM_RESPONSE_TIMEOUT_MESSAGE);
+    expect(upstreamReq.destroyedWith?.message).toBe(UPSTREAM_RESPONSE_TIMEOUT_MESSAGE);
   });
 });
