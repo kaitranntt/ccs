@@ -30,6 +30,7 @@ export const PROVIDER_PRESET_IDS = [
   'atlascloud',
   'cheaperinference',
   'runcrate',
+  'atmorouter',
 ] as const;
 
 export type ProviderPresetId = (typeof PROVIDER_PRESET_IDS)[number];
@@ -369,6 +370,20 @@ const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
     defaultModel: 'deepseek-ai/DeepSeek-V4.1-Flash',
     apiKeyPlaceholder: 'rc_live_...',
     apiKeyHint: 'Create an API key at runcrate.ai/dashboard/api-keys',
+    category: 'alternative',
+    requiresApiKey: true,
+    badge: 'Anthropic-compatible',
+  },
+  {
+    id: 'atmorouter',
+    name: 'AtmoRouter',
+    description:
+      'Anthropic-compatible gateway for Claude, GPT, Gemini, GLM, Kimi, Qwen and DeepSeek via atmorouter.dev',
+    baseUrl: 'https://atmorouter.dev',
+    defaultProfileName: 'atmorouter',
+    defaultModel: 'cc/claude-sonnet-4-6',
+    apiKeyPlaceholder: 'ar-...',
+    apiKeyHint: 'Create an API key at atmorouter.dev',
     category: 'alternative',
     requiresApiKey: true,
     badge: 'Anthropic-compatible',
