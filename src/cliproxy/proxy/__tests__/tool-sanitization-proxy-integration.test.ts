@@ -219,11 +219,8 @@ describe('ToolSanitizationProxy Integration', () => {
         expect(response.ok).toBe(true);
         expect(lastRequest).not.toBeNull();
         expect(lastRequest!.path).toBe('/api/provider/codex/v1/messages');
-        expect((lastRequest!.body as Record<string, unknown>).model).toBe('gpt-5.5');
-        expect(
-          ((lastRequest!.body as Record<string, unknown>).reasoning as Record<string, unknown>)
-            .effort
-        ).toBe('high');
+        expect((lastRequest!.body as Record<string, unknown>).model).toBe('gpt-5.5(high)');
+        expect((lastRequest!.body as Record<string, unknown>).reasoning).toBeUndefined();
       } finally {
         reasoningProxy.stop();
         toolProxy.stop();
@@ -241,33 +238,24 @@ describe('ToolSanitizationProxy Integration', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: 'gpt-6.1-sol-none' }),
         });
-        expect((lastRequest!.body as Record<string, unknown>).model).toBe('gpt-6.1-sol');
-        expect(
-          ((lastRequest!.body as Record<string, unknown>).reasoning as Record<string, unknown>)
-            .effort
-        ).toBe('low');
+        expect((lastRequest!.body as Record<string, unknown>).model).toBe('gpt-6.1-sol(low)');
+        expect((lastRequest!.body as Record<string, unknown>).reasoning).toBeUndefined();
 
         await fetch(`http://127.0.0.1:${port}/api/provider/codex/v1/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: 'gpt-6-sol-none' }),
         });
-        expect((lastRequest!.body as Record<string, unknown>).model).toBe('gpt-6-sol');
-        expect(
-          ((lastRequest!.body as Record<string, unknown>).reasoning as Record<string, unknown>)
-            .effort
-        ).toBe('none');
+        expect((lastRequest!.body as Record<string, unknown>).model).toBe('gpt-6-sol(none)');
+        expect((lastRequest!.body as Record<string, unknown>).reasoning).toBeUndefined();
 
         await fetch(`http://127.0.0.1:${port}/api/provider/codex/v1/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: 'gpt-6-luna-none-fast' }),
         });
-        expect((lastRequest!.body as Record<string, unknown>).model).toBe('gpt-6-luna');
-        expect(
-          ((lastRequest!.body as Record<string, unknown>).reasoning as Record<string, unknown>)
-            .effort
-        ).toBe('none');
+        expect((lastRequest!.body as Record<string, unknown>).model).toBe('gpt-6-luna(none)');
+        expect((lastRequest!.body as Record<string, unknown>).reasoning).toBeUndefined();
         expect((lastRequest!.body as Record<string, unknown>).service_tier).toBe('priority');
       } finally {
         proxy.stop();
@@ -608,9 +596,8 @@ describe('ToolSanitizationProxy Integration', () => {
         });
 
         const sentBody = lastRequest!.body as Record<string, unknown>;
-        expect(sentBody.model).toBe('gpt-5.5');
-        expect((sentBody.reasoning as Record<string, unknown>).summary).toBe('auto');
-        expect((sentBody.reasoning as Record<string, unknown>).effort).toBe('high');
+        expect(sentBody.model).toBe('gpt-5.5(high)');
+        expect(sentBody.reasoning).toEqual({ summary: 'auto' });
         expect(sentBody.service_tier).toBe('priority');
       } finally {
         proxy.stop();

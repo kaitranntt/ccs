@@ -23,7 +23,10 @@ import {
   stripCodexEffortSuffix,
 } from '../ai-providers/model-id-normalizer';
 import { getModelMaxLevel } from '../model-catalog';
-import { normalizeCodexEffortForModel } from '../ai-providers/codex-reasoning-proxy';
+import {
+  injectCodexRequestTuningIntoBody,
+  normalizeCodexEffortForModel,
+} from '../ai-providers/codex-reasoning-proxy';
 
 import { createLogger } from '../../services/logging';
 import {
@@ -73,8 +76,8 @@ const GEMINI_UNSUPPORTED_TOOL_FIELDS = new Set([
 ]);
 
 const CODEX_UNSUPPORTED_TOOL_FIELDS = new Set(['cache_control']);
-const CODEX_FAST_SERVICE_TIER = 'priority';
 const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
+const THINKING_SUFFIX_REGEX = /\([^()]*\)$/;
 const LEGACY_CODEX_MODEL_ID_REGEX = /^gpt-5(?:\.\d+)?-codex(?:-(?:mini|max))?$/i;
 
 function canonicalizeCodexModelId(model: string | undefined): string | null {
@@ -84,7 +87,8 @@ function canonicalizeCodexModelId(model: string | undefined): string | null {
   }
 
   const withoutExtendedContext = normalizedModel.replace(EXTENDED_CONTEXT_SUFFIX_REGEX, '').trim();
-  return stripCodexEffortSuffix(withoutExtendedContext);
+  const withoutThinkingSuffix = withoutExtendedContext.replace(THINKING_SUFFIX_REGEX, '').trim();
+  return stripCodexEffortSuffix(withoutThinkingSuffix);
 }
 
 function isKnownCodexModelId(model: string | undefined): boolean {
@@ -118,22 +122,13 @@ function applyCodexModelTuningAlias(body: Record<string, unknown>): Record<strin
     return body;
   }
 
-  const tunedBody: Record<string, unknown> = { ...body, model: parsed.baseModel };
-
-  if (parsed.effort) {
-    const normalizedEffort = normalizeCodexEffortForModel(parsed.baseModel, parsed.effort);
-    const existingReasoning = isRecord(body.reasoning) ? body.reasoning : {};
-    tunedBody.reasoning = {
-      ...existingReasoning,
-      effort: normalizedEffort,
-    };
-  }
-
-  if (parsed.serviceTier) {
-    tunedBody.service_tier = CODEX_FAST_SERVICE_TIER;
-  }
-
-  return tunedBody;
+  return injectCodexRequestTuningIntoBody(
+    { ...body, model: parsed.baseModel },
+    {
+      effort: parsed.effort ? normalizeCodexEffortForModel(parsed.baseModel, parsed.effort) : null,
+      serviceTier: parsed.serviceTier,
+    }
+  ) as Record<string, unknown>;
 }
 
 function getUnsupportedToolFields(

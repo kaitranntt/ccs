@@ -56,12 +56,17 @@ describe('Codex Reasoning Proxy', () => {
   });
 
   describe('injectReasoningEffortIntoBody', () => {
-    it('overrides reasoning.effort on object bodies', () => {
+    it('encodes effort as a CLIProxy model suffix and leaves reasoning untouched', () => {
       const out = injectReasoningEffortIntoBody(
-        { model: 'm1', reasoning: { effort: 'xhigh' } },
+        { model: 'm1', reasoning: { summary: 'auto' } },
         'high'
       );
-      assert.deepStrictEqual(out, { model: 'm1', reasoning: { effort: 'high' } });
+      assert.deepStrictEqual(out, { model: 'm1(high)', reasoning: { summary: 'auto' } });
+    });
+
+    it('strips existing parenthesized suffix to avoid double-suffixing', () => {
+      const out = injectReasoningEffortIntoBody({ model: 'gpt-5.4(low)' }, 'high');
+      assert.deepStrictEqual(out, { model: 'gpt-5.4(high)' });
     });
 
     it('leaves non-object bodies unchanged', () => {
@@ -77,24 +82,12 @@ describe('Codex Reasoning Proxy', () => {
   describe('model suffix aliasing', () => {
     it('lets callers use model-id suffixes without changing upstream model ids', () => {
       // We can't call the full proxy in unit tests, but we can validate the intent:
-      // - injected effort is based on the suffix
-      // - callers should set request.model to the base model upstream (proxy does this)
-      const out = injectReasoningEffortIntoBody(
-        { model: 'gpt-5.2-codex', reasoning: { effort: 'medium' } },
-        'xhigh'
-      );
-      assert.deepStrictEqual(out, {
-        model: 'gpt-5.2-codex',
-        reasoning: { effort: 'xhigh' },
-      });
-      const outMax = injectReasoningEffortIntoBody(
-        { model: 'gpt-6-astra', reasoning: { effort: 'low' } },
-        'max'
-      );
-      assert.deepStrictEqual(outMax, {
-        model: 'gpt-6-astra',
-        reasoning: { effort: 'max' },
-      });
+      // - callers set request.model to the base model (proxy does this)
+      // - injected effort becomes the CLIProxy thinking suffix on that base model
+      const out = injectReasoningEffortIntoBody({ model: 'gpt-5.2-codex' }, 'xhigh');
+      assert.deepStrictEqual(out, { model: 'gpt-5.2-codex(xhigh)' });
+      const outMax = injectReasoningEffortIntoBody({ model: 'gpt-6-astra' }, 'max');
+      assert.deepStrictEqual(outMax, { model: 'gpt-6-astra(max)' });
     });
   });
 

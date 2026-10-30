@@ -775,7 +775,7 @@
         },
         {
           "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
-          "loc": 948
+          "loc": 943
         },
         {
           "file": "src/web-server/services/codex-dashboard-service.ts",
