@@ -30,6 +30,7 @@ export const PROVIDER_PRESET_IDS = [
   'atlascloud',
   'cheaperinference',
   'runcrate',
+  'cloudgpu',
 ] as const;
 
 export type ProviderPresetId = (typeof PROVIDER_PRESET_IDS)[number];
@@ -374,6 +375,20 @@ const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
     category: 'alternative',
     requiresApiKey: true,
     badge: 'Anthropic-compatible',
+  },
+  {
+    id: 'cloudgpu',
+    name: 'CloudGPU',
+    description:
+      'OpenAI-compatible API for DeepSeek, Kimi, GLM and other models via cloudgpu.app/v1',
+    baseUrl: 'https://cloudgpu.app/v1',
+    defaultProfileName: 'cloudgpu',
+    defaultModel: 'deepseek-v4.1-flash',
+    apiKeyPlaceholder: 'sk-...',
+    apiKeyHint: 'Create an API key at cloudgpu.app/api/console',
+    category: 'alternative',
+    requiresApiKey: true,
+    badge: 'OpenAI-compatible',
   },
 ];
 
