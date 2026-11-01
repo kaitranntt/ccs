@@ -34,6 +34,17 @@ describe('run-test-bucket', () => {
     expect(slowSet.has('tests/integration/web-server/codex-profiles-endpoint.test.ts')).toBe(true);
   });
 
+  test('runs the default browser launch integration once in an isolated slow process', () => {
+    const file = 'tests/unit/targets/default-profile-browser-launch.test.ts';
+    expect(bucket.selectBucket('fast')).not.toContain(file);
+    const runs = bucket.getBunRuns('slow');
+    const matching = runs.filter((run) => run.selected.includes(file));
+    expect(matching).toHaveLength(1);
+    expect(matching[0].label).toBe(file);
+    expect(matching[0].selected).toEqual([file]);
+    expect(matching[0].bunArgs).toEqual(['test', '--max-concurrency=1', `./${file}`]);
+  });
+
   test('forces npm tests into the slow bucket', () => {
     expect(bucket.shouldForceSlow('tests/npm/cli.test.js')).toBe(true);
   });
