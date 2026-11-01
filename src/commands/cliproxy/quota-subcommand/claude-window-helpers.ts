@@ -7,7 +7,7 @@
  */
 
 import type { ClaudeQuotaResult } from '../../../cliproxy/quota/quota-types';
-import { pickMostRestrictiveClaudeWeeklyWindow } from '../../../cliproxy/quota/quota-fetcher-claude-normalizer';
+import { buildClaudeCoreUsageSummary } from '../../../cliproxy/quota/quota-fetcher-claude-normalizer';
 import type { ClaudeDisplayWindow } from './types';
 
 /** Human-readable label for a Claude window based on its rate-limit type. */
@@ -30,7 +30,7 @@ export function getClaudeWindowDisplayLabel(
     case 'overage':
       return 'Extra usage';
     default:
-      return window.label;
+      return window.label.replace(/[^\x20-\x7e]/g, '');
   }
 }
 
@@ -64,29 +64,15 @@ export function toClaudeCoreDisplayWindow(
 /**
  * Pick the two "core usage" windows (5h + weekly) for a Claude result.
  *
- * Prefers the explicit coreUsage metadata. Falls back to the 'five_hour'
- * window and the most restrictive weekly window when metadata is absent.
+ * Rebuilds account-wide slots from windows, ignoring old collapsed metadata.
  */
 export function getClaudeCoreUsageWindows(quota: ClaudeQuotaResult): {
   fiveHourWindow: ClaudeDisplayWindow | null;
   weeklyWindow: ClaudeDisplayWindow | null;
 } {
-  const coreUsage = quota.coreUsage;
-  const fiveHourFromCore = toClaudeCoreDisplayWindow(coreUsage?.fiveHour ?? null);
-  const weeklyFromCore = toClaudeCoreDisplayWindow(coreUsage?.weekly ?? null);
-  if (fiveHourFromCore || weeklyFromCore) {
-    return {
-      fiveHourWindow: fiveHourFromCore,
-      weeklyWindow: weeklyFromCore,
-    };
-  }
-
-  const fiveHourPolicy =
-    quota.windows.find((window) => window.rateLimitType === 'five_hour') ?? null;
-  const weeklyPolicy = pickMostRestrictiveClaudeWeeklyWindow(quota.windows);
-
+  const coreUsage = buildClaudeCoreUsageSummary(quota.windows);
   return {
-    fiveHourWindow: fiveHourPolicy ? toClaudeDisplayWindow(fiveHourPolicy) : null,
-    weeklyWindow: weeklyPolicy ? toClaudeDisplayWindow(weeklyPolicy) : null,
+    fiveHourWindow: toClaudeCoreDisplayWindow(coreUsage.fiveHour),
+    weeklyWindow: toClaudeCoreDisplayWindow(coreUsage.weekly),
   };
 }

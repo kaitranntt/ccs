@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { QuotaResult } from '../../../src/cliproxy/quota/quota-fetcher';
-import type {
-  ClaudeQuotaResult,
-  CodexQuotaResult,
-} from '../../../src/cliproxy/quota/quota-types';
+import type { ClaudeQuotaResult, CodexQuotaResult } from '../../../src/cliproxy/quota/quota-types';
 import {
   createBarPoolAccountQuotaFetcher,
   type BarPoolAccountQuotaFetcherDeps,
@@ -21,7 +18,26 @@ function agyResult(overrides: Partial<QuotaResult> = {}): QuotaResult {
 function claudeResult(overrides: Partial<ClaudeQuotaResult> = {}): ClaudeQuotaResult {
   return {
     success: true,
-    windows: [],
+    windows: [
+      {
+        rateLimitType: 'five_hour',
+        label: '5h usage limit',
+        status: 'allowed',
+        utilization: 0.28,
+        usedPercent: 28,
+        remainingPercent: 72,
+        resetAt: '2026-07-18T16:00:00.000Z',
+      },
+      {
+        rateLimitType: 'seven_day',
+        label: 'Weekly usage limit',
+        status: 'allowed_warning',
+        utilization: 0.55,
+        usedPercent: 55,
+        remainingPercent: 45,
+        resetAt: '2026-07-21T12:00:00.000Z',
+      },
+    ],
     coreUsage: {
       fiveHour: {
         rateLimitType: 'five_hour',

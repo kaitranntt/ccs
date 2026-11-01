@@ -31,7 +31,26 @@ function maxCreds(): ClaudeNativeCredentials {
 function successQuota(): ClaudeQuotaResult {
   return {
     success: true,
-    windows: [],
+    windows: [
+      {
+        rateLimitType: 'five_hour',
+        label: 'Session limit',
+        status: 'allowed',
+        utilization: 0.58,
+        usedPercent: 58,
+        remainingPercent: 42,
+        resetAt: '2026-06-09T20:00:00.000Z',
+      },
+      {
+        rateLimitType: 'seven_day',
+        label: 'Weekly limit',
+        status: 'allowed',
+        utilization: 0.3,
+        usedPercent: 30,
+        remainingPercent: 70,
+        resetAt: '2026-06-15T00:00:00.000Z',
+      },
+    ],
     coreUsage: {
       fiveHour: {
         rateLimitType: 'five_hour',
@@ -59,6 +78,7 @@ function maxQuotaWithSplits(): ClaudeQuotaResult {
   return {
     ...base,
     windows: [
+      ...base.windows,
       {
         rateLimitType: 'seven_day_opus',
         label: 'Opus weekly',
@@ -149,7 +169,7 @@ describe('Claude native row mapping', () => {
     expect(row?.needsReauth).toBe(false);
   });
 
-  it('emits quotaWindows with five_hour + seven_day from coreUsage (no opus/sonnet on non-Max)', async () => {
+  it('emits reported five_hour + seven_day windows without model splits', async () => {
     const clock = { now: 1_000_000 };
     const deps = makeDeps(async () => successQuota(), clock);
     const rows = await getNativeAccountRows(deps);
@@ -1844,6 +1864,9 @@ describe('multi-profile: quota reset invalidates cached rows', () => {
     const base = successQuota();
     return {
       ...base,
+      windows: base.windows.map((window) =>
+        window.rateLimitType === 'five_hour' ? { ...window, resetAt: resetIso } : window
+      ),
       coreUsage: {
         fiveHour: { ...base.coreUsage!.fiveHour!, resetAt: resetIso },
         weekly: base.coreUsage!.weekly,
@@ -1950,5 +1973,39 @@ describe('multi-profile: quota reset invalidates cached rows', () => {
     clock.now += 90_000;
     await getNativeAccountRows(deps);
     expect(deps.codexNetworkCount()).toBe(2);
+  });
+});
+
+describe('Claude native model-only quota', () => {
+  it('displays Fable while keeping general quota and reset unknown', async () => {
+    const { buildClaudeQuotaWindows, buildClaudeCoreUsageSummary } = await import(
+      '../../../src/cliproxy/quota/quota-fetcher-claude-normalizer'
+    );
+    const windows = buildClaudeQuotaWindows({
+      limits: [
+        {
+          kind: 'weekly_scoped',
+          percent: 100,
+          scope: { model: { display_name: 'Fable' } },
+          resets_at: '2026-11-01T00:00:00Z',
+        },
+      ],
+    });
+    const deps = makeDeps(
+      async () => ({
+        success: true,
+        windows,
+        coreUsage: buildClaudeCoreUsageSummary(windows),
+        lastUpdated: 1,
+      }),
+      { now: 1000000 }
+    );
+    const row = (await getNativeAccountRows(deps)).find((row) => row.provider === 'claude-code');
+    expect(row?.quota_percentage).toBeNull();
+    expect(row?.next_reset).toBeNull();
+    expect(row?.paused).toBe(false);
+    expect(row?.quotaWindows).toMatchObject([
+      { label: 'Fable · week', remainingPercent: 0, usedPercent: 100, windowMinutes: 10080 },
+    ]);
   });
 });

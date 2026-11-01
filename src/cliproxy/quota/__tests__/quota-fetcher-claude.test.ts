@@ -122,7 +122,7 @@ describe('Claude Quota Fetcher', () => {
       );
     });
 
-    it('clamps utilization ratio into 0..1', () => {
+    it('omits out-of-range utilization ratios', () => {
       const windows = buildClaudeQuotaWindows({
         restrictions: [
           {
@@ -138,11 +138,7 @@ describe('Claude Quota Fetcher', () => {
         ],
       });
 
-      expect(windows).toHaveLength(2);
-      expect(windows[0].utilization).toBe(1);
-      expect(windows[0].remainingPercent).toBe(0);
-      expect(windows[1].utilization).toBe(0);
-      expect(windows[1].remainingPercent).toBe(100);
+      expect(windows).toEqual([]);
     });
 
     it('parses direct single restriction payload shape', () => {
@@ -210,7 +206,7 @@ describe('Claude Quota Fetcher', () => {
   });
 
   describe('buildClaudeCoreUsageSummary', () => {
-    it('selects most restrictive weekly window', () => {
+    it('keeps general weekly separate from model weekly', () => {
       const summary = buildClaudeCoreUsageSummary([
         {
           rateLimitType: 'five_hour',
@@ -242,11 +238,11 @@ describe('Claude Quota Fetcher', () => {
       ]);
 
       expect(summary.fiveHour?.rateLimitType).toBe('five_hour');
-      expect(summary.weekly?.rateLimitType).toBe('seven_day_opus');
-      expect(summary.weekly?.remainingPercent).toBe(15);
+      expect(summary.weekly?.rateLimitType).toBe('seven_day');
+      expect(summary.weekly?.remainingPercent).toBe(55);
     });
 
-    it('considers oauth/cowork weekly windows in core summary', () => {
+    it('excludes unclassified oauth/cowork windows from core summary', () => {
       const summary = buildClaudeCoreUsageSummary([
         {
           rateLimitType: 'five_hour',
@@ -278,8 +274,7 @@ describe('Claude Quota Fetcher', () => {
       ]);
 
       expect(summary.fiveHour?.rateLimitType).toBe('five_hour');
-      expect(summary.weekly?.rateLimitType).toBe('seven_day_oauth_apps');
-      expect(summary.weekly?.remainingPercent).toBe(8);
+      expect(summary.weekly).toBeNull();
     });
 
     it('does not duplicate weekly window into fiveHour when only weekly exists', () => {
@@ -299,7 +294,7 @@ describe('Claude Quota Fetcher', () => {
       expect(summary.weekly?.rateLimitType).toBe('seven_day');
     });
 
-    it('uses earliest reset as tie-breaker for equal weekly remaining quota', () => {
+    it('never infers a general window from model reset order', () => {
       const summary = buildClaudeCoreUsageSummary([
         {
           rateLimitType: 'five_hour',
@@ -330,7 +325,7 @@ describe('Claude Quota Fetcher', () => {
         },
       ]);
 
-      expect(summary.weekly?.rateLimitType).toBe('seven_day_sonnet');
+      expect(summary.weekly).toBeNull();
     });
   });
 
@@ -1010,5 +1005,38 @@ describe('fetchClaudeQuota shared probe state', () => {
     expect(result.success).toBe(false);
     expect(result.needsReauth).toBe(true);
     expect(result.stale).toBeUndefined();
+  });
+});
+
+describe('Claude normalization migration cooldown', () => {
+  it('keeps an older cache cooldown active while discarding incompatible numbers', async () => {
+    const now = Date.now();
+    const accountId = 'migration@example.com';
+    createClaudeAccount(accountId, {
+      access_token: 'fixture-token',
+      expired: '2099-01-01T00:00:00Z',
+      type: 'claude',
+    });
+    const dir = path.join(tmpDir, '.ccs/cache/claude-quota');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, `${sanitizeEmail(accountId)}.json`),
+      JSON.stringify({
+        version: 1,
+        lastGood: { success: true, windows: [], lastUpdated: now },
+        consecutive429: 3,
+        cooldownUntil: now + 120000,
+      })
+    );
+    const fetchSpy = mock(() => {
+      throw new Error('cooldown must prevent a provider request');
+    });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    const result = await fetchClaudeQuota(accountId);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.errorCode).toBe('usage_probe_unavailable');
+    expect(result.httpStatus).toBe(429);
+    expect(result.windows).toEqual([]);
   });
 });

@@ -5,13 +5,13 @@ const TERMINAL_ESCAPE_SEQUENCE_REGEX =
 const TERMINAL_CONTROL_CHARS_REGEX = /[\u0000-\u001f\u007f-\u009f]/g;
 
 /**
- * Sanitize upstream Codex feature labels before storing or rendering them.
+ * Sanitize upstream quota labels before storing or rendering them.
  *
  * The quota API is not schema-validated at runtime, so additional-rate-limit
  * labels must be constrained to safe, printable strings before they reach the
  * terminal.
  */
-export function sanitizeCodexFeatureLabelOrNull(value: unknown): string | null {
+export function sanitizeQuotaLabelOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
 
   const sanitized = value
@@ -23,6 +23,8 @@ export function sanitizeCodexFeatureLabelOrNull(value: unknown): string | null {
 
   return sanitized.length > 0 ? sanitized : null;
 }
+
+export const sanitizeCodexFeatureLabelOrNull = sanitizeQuotaLabelOrNull;
 
 export function sanitizeCodexFeatureLabel(value: unknown): string {
   return sanitizeCodexFeatureLabelOrNull(value) ?? CODEX_FEATURE_LABEL_FALLBACK;

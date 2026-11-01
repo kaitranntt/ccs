@@ -104,6 +104,10 @@ export interface CodexQuotaResult extends QuotaErrorMetadata {
  * Claude policy limit window (5h/weekly/overage)
  */
 export interface ClaudeQuotaWindow {
+  /** Account-wide, model-specific, or unclassified limit. Optional for older clients. */
+  scope?: 'account' | 'model' | 'unknown';
+  cadence?: '5h' | 'weekly';
+  modelLabel?: string;
   /** Source identifier: five_hour, seven_day, seven_day_opus, seven_day_sonnet, overage, ... */
   rateLimitType: string;
   /** Human-friendly label for UI/CLI display */

@@ -37,7 +37,7 @@ function createClaudeQuota(): ClaudeQuotaResult {
         resetAt: '2026-05-01T01:00:00.000Z',
       },
       {
-        rateLimitType: 'seven_day_sonnet',
+        rateLimitType: 'seven_day',
         label: 'Weekly usage',
         status: 'allowed',
         utilization: NOISY_WEEKLY_USED_PERCENT / 100,
@@ -55,7 +55,7 @@ function createClaudeQuota(): ClaudeQuotaResult {
         status: 'allowed',
       },
       weekly: {
-        rateLimitType: 'seven_day_sonnet',
+        rateLimitType: 'seven_day',
         label: 'Weekly usage',
         remainingPercent: NOISY_WEEKLY_REMAINING_PERCENT,
         resetAt: '2026-05-07T01:00:00.000Z',

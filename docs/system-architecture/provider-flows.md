@@ -187,6 +187,8 @@ The stable pool contract is:
 7. Auto-resume only pauses created by CCS quota management; never override a
    user's manual pause.
 
+Claude account health and rotation use only known account-wide 5-hour and weekly windows. Model-specific limits remain independent display rows, and missing general limits remain unknown. See [Claude quota scope](../claude-scoped-quotas.md) for normalization and cache compatibility.
+
 Routing strategy remains an explicit user choice. CCS must not infer
 round-robin or fill-first from account count, plan tier, or quota state.
 

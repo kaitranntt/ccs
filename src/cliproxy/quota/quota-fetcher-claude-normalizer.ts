@@ -5,7 +5,7 @@
  */
 
 import type { ClaudeCoreUsageSummary, ClaudeQuotaWindow } from './quota-types';
-import { clampPercent } from '../../utils/percentage';
+import { sanitizeQuotaLabelOrNull } from './quota-label-sanitizer';
 
 // Distinguishes epoch milliseconds from seconds (1e12 ~= 2001-09-09T01:46:40Z).
 const EPOCH_MS_THRESHOLD = 1e12;
@@ -25,7 +25,7 @@ function asBoolean(value: unknown): boolean | undefined {
 
 function asNumber(value: unknown): number | null {
   if (typeof value === 'number' && isFinite(value)) return value;
-  if (typeof value === 'string') {
+  if (typeof value === 'string' && value.trim()) {
     const parsed = Number(value);
     return isFinite(parsed) ? parsed : null;
   }
@@ -85,82 +85,56 @@ function getClaudeWindowLabel(rateLimitType: string): string {
   }
 }
 
-function clampUnit(value: number): number {
-  return Math.max(0, Math.min(1, value));
-}
-
-/**
- * Unit of the `utilization` field in a Claude quota payload.
- *
- * Anthropic exposes utilization in two different units depending on the
- * payload form:
- *   - The `restrictions` payload (array or object map) returns a 0..1 ratio
- *     (e.g. 0.25 for 25% used).
- *   - The OAuth `oauth/usage` endpoint returns a percent value 0..100
- *     (e.g. 25 for 25% used; values like 1 for 1% used).
- *
- * The previous heuristic of "value <= 1 means ratio, otherwise percent"
- * silently misinterpreted boundary values like 1.0 (1% used) from the
- * OAuth payload as 100% used. Each call site now passes the unit it
- * knows it is parsing.
- */
+/** Units are dictated by the payload, never inferred from the value. */
 type UtilizationUnit = 'ratio' | 'percent';
 
-function normalizeUtilization(
-  raw: Record<string, unknown>,
-  unit: UtilizationUnit
-): {
-  utilization: number | null;
-  usedPercent: number;
-  remainingPercent: number;
-} {
-  const utilizationRaw = asNumber(raw['utilization']);
-  const usedPercentRaw = asNumber(raw['usedPercent'] ?? raw['used_percent']);
-  const remainingPercentRaw = asNumber(raw['remainingPercent'] ?? raw['remaining_percent']);
+function normalizeUtilization(raw: Record<string, unknown>, unit: UtilizationUnit) {
+  const utilization = asNumber(raw['utilization']);
+  const used = asNumber(raw['usedPercent'] ?? raw['used_percent'] ?? raw['used_percentage']);
+  const remaining = asNumber(raw['remainingPercent'] ?? raw['remaining_percent']);
+  const usedPercent =
+    utilization !== null
+      ? unit === 'ratio'
+        ? utilization * 100
+        : utilization
+      : (used ?? (remaining !== null ? 100 - remaining : null));
+  if (usedPercent === null || usedPercent < 0 || usedPercent > 100) return null;
+  return { utilization: usedPercent / 100, usedPercent, remainingPercent: 100 - usedPercent };
+}
 
-  if (utilizationRaw !== null) {
-    const usedPercent =
-      unit === 'ratio'
-        ? clampPercent(clampUnit(utilizationRaw) * 100)
-        : clampPercent(utilizationRaw);
-    return {
-      utilization: usedPercent / 100,
-      usedPercent,
-      remainingPercent: clampPercent(100 - usedPercent),
-    };
+/** Known legacy IDs are the only safe fallback for metadata-free cached windows. */
+export function getClaudeWindowMetadata(
+  window: Pick<ClaudeQuotaWindow, 'rateLimitType' | 'scope' | 'cadence' | 'modelLabel'>
+): Pick<ClaudeQuotaWindow, 'scope' | 'cadence' | 'modelLabel'> {
+  if (window.scope !== undefined)
+    return { scope: window.scope, cadence: window.cadence, modelLabel: window.modelLabel };
+  switch (window.rateLimitType) {
+    case 'five_hour':
+      return { scope: 'account', cadence: '5h' };
+    case 'seven_day':
+      return { scope: 'account', cadence: 'weekly' };
+    case 'seven_day_opus':
+      return { scope: 'model', cadence: 'weekly', modelLabel: 'Opus' };
+    case 'seven_day_sonnet':
+      return { scope: 'model', cadence: 'weekly', modelLabel: 'Sonnet' };
+    case 'fable_weekly':
+    case 'fable_seven_day':
+    case 'seven_day_fable':
+      return { scope: 'model', cadence: 'weekly', modelLabel: 'Fable' };
+    default:
+      return { scope: 'unknown' };
   }
+}
 
-  if (usedPercentRaw !== null) {
-    const usedPercent = clampPercent(usedPercentRaw);
-    return {
-      utilization: usedPercent / 100,
-      usedPercent,
-      remainingPercent: clampPercent(100 - usedPercent),
-    };
-  }
-
-  if (remainingPercentRaw !== null) {
-    const remainingPercent = clampPercent(remainingPercentRaw);
-    const usedPercent = clampPercent(100 - remainingPercent);
-    return {
-      utilization: usedPercent / 100,
-      usedPercent,
-      remainingPercent,
-    };
-  }
-
-  return {
-    utilization: null,
-    usedPercent: 0,
-    remainingPercent: 100,
-  };
+function normalizeModelLabel(label: string): string {
+  return label.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 function normalizeRateLimitType(value: unknown, fallbackKey?: string): string {
   const direct = asString(value);
   if (direct) return direct;
   if (fallbackKey) return fallbackKey;
-  return 'unknown';
+  return '';
 }
 
 function toObject(value: unknown): Record<string, unknown> | null {
@@ -177,7 +151,7 @@ function normalizeRestriction(
     raw['rateLimitType'] ?? raw['rate_limit_type'] ?? raw['claim'] ?? raw['claimAbbrev'],
     fallbackKey
   );
-  if (!rateLimitType || rateLimitType === 'unknown') return null;
+  if (!rateLimitType) return null;
 
   const status = asString(raw['status']) || 'unknown';
   const resetAt =
@@ -191,15 +165,18 @@ function normalizeRestriction(
         raw['overage_reset_at']
     ) || null;
 
-  const { utilization, usedPercent, remainingPercent } = normalizeUtilization(raw, unit);
+  const metrics = normalizeUtilization(raw, unit);
+  if (!metrics) return null;
+  const metadata = getClaudeWindowMetadata({ rateLimitType });
 
   return {
     rateLimitType,
-    label: getClaudeWindowLabel(rateLimitType),
+    label: metadata.modelLabel
+      ? metadata.modelLabel + ' weekly limit'
+      : getClaudeWindowLabel(rateLimitType),
+    ...metadata,
     status,
-    utilization,
-    usedPercent,
-    remainingPercent,
+    ...metrics,
     resetAt,
     surpassedThreshold: asBoolean(raw['surpassedThreshold'] ?? raw['surpassed_threshold']),
     severity: asString(raw['severity']) || undefined,
@@ -217,83 +194,77 @@ function normalizeRestriction(
  * Supports both policy-limits `restrictions` payloads and OAuth usage payloads
  * keyed by window name (`five_hour`, `seven_day`, `seven_day_sonnet`, ...).
  */
-function isClaudeOAuthUsageWindowCandidate(key: string, raw: Record<string, unknown>): boolean {
-  if (key === 'extra_usage') return false;
-  if (asNumber(raw['utilization']) === null) return false;
-
-  const resetAt = raw['resetsAt'] ?? raw['resets_at'] ?? raw['resetAt'] ?? raw['reset_at'] ?? null;
-  return resetAt !== null && resetAt !== undefined;
-}
-
 export function buildClaudeQuotaWindows(payload: Record<string, unknown>): ClaudeQuotaWindow[] {
-  const rawRestrictions = payload['restrictions'];
   const windows: ClaudeQuotaWindow[] = [];
-
-  if (Array.isArray(rawRestrictions)) {
-    for (const item of rawRestrictions) {
+  // Parse modern rows first so valid scoped entries win over legacy aliases.
+  if (Array.isArray(payload['limits'])) {
+    for (const item of payload['limits']) {
       const raw = toObject(item);
       if (!raw) continue;
-      // policy-limits restrictions[] returns utilization as a 0..1 ratio.
-      const window = normalizeRestriction(raw, undefined, 'ratio');
-      if (window) windows.push(window);
-    }
-  } else if (toObject(rawRestrictions)) {
-    for (const [key, value] of Object.entries(rawRestrictions as Record<string, unknown>)) {
-      const raw = toObject(value);
-      if (!raw) continue;
-      // policy-limits restrictions{} returns utilization as a 0..1 ratio.
-      const window = normalizeRestriction(raw, key, 'ratio');
-      if (window) windows.push(window);
-    }
-  } else if (toObject(payload)) {
-    for (const [key, value] of Object.entries(payload)) {
-      const raw = toObject(value);
-      if (!raw) continue;
-      if (!isClaudeOAuthUsageWindowCandidate(key, raw)) continue;
-      // OAuth /oauth/usage payloads return utilization as percent 0..100.
-      const window = normalizeRestriction(raw, key, 'percent');
-      if (window) windows.push(window);
-    }
-
-    // Some responses may contain a single restriction object directly,
-    // matching the policy-limits ratio shape.
-    if (windows.length === 0) {
-      const direct = normalizeRestriction(payload, undefined, 'ratio');
-      if (direct) windows.push(direct);
+      const model = toObject(toObject(raw['scope'])?.['model']);
+      const modelLabel = sanitizeQuotaLabelOrNull(model?.['display_name']);
+      const kind = asString(raw['kind']);
+      if (!kind) continue;
+      const percent = asNumber(raw['percent']);
+      if (percent === null) continue;
+      const window = normalizeRestriction({ ...raw, utilization: percent }, kind, 'percent');
+      if (!window) continue;
+      if (kind !== 'weekly_scoped' || !modelLabel) {
+        windows.push({ ...window, scope: 'unknown' });
+        continue;
+      }
+      windows.push({
+        ...window,
+        rateLimitType: 'weekly_scoped:' + normalizeModelLabel(modelLabel),
+        scope: 'model',
+        cadence: 'weekly',
+        modelLabel: modelLabel.replace(/\s+/g, ' '),
+        label: modelLabel.replace(/\s+/g, ' ') + ' weekly limit',
+      });
     }
   }
-
+  const restrictions = payload['restrictions'];
+  if (Array.isArray(restrictions)) {
+    for (const item of restrictions) {
+      const raw = toObject(item);
+      const window = raw ? normalizeRestriction(raw, undefined, 'ratio') : null;
+      if (window) windows.push(window);
+    }
+  } else if (toObject(restrictions)) {
+    for (const [key, value] of Object.entries(restrictions as Record<string, unknown>)) {
+      const raw = toObject(value);
+      const window = raw ? normalizeRestriction(raw, key, 'ratio') : null;
+      if (window) windows.push(window);
+    }
+  }
+  for (const [key, value] of Object.entries(payload)) {
+    if (key === 'extra_usage' || key === 'restrictions' || key === 'scope') continue;
+    const raw = toObject(value);
+    if (!raw) continue;
+    const window = normalizeRestriction(raw, key, 'percent');
+    if (window) windows.push(window);
+  }
+  if (windows.length === 0) {
+    const direct = normalizeRestriction(payload, undefined, 'ratio');
+    if (direct) windows.push(direct);
+  }
   const seen = new Set<string>();
-  const unique: ClaudeQuotaWindow[] = [];
-  for (const window of windows) {
-    const key = `${window.rateLimitType}:${window.resetAt ?? ''}:${window.status}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(window);
-  }
-
-  return unique.sort((a, b) => a.rateLimitType.localeCompare(b.rateLimitType));
-}
-
-function toEpochMs(iso: string | null): number | null {
-  if (!iso) return null;
-  const value = new Date(iso).getTime();
-  return isNaN(value) ? null : value;
-}
-
-function pickMostRestrictiveWeekly(windows: ClaudeQuotaWindow[]): ClaudeQuotaWindow | null {
-  if (windows.length === 0) return null;
-  return [...windows].sort((a, b) => {
-    if (a.remainingPercent !== b.remainingPercent) {
-      return a.remainingPercent - b.remainingPercent;
-    }
-    const aReset = toEpochMs(a.resetAt);
-    const bReset = toEpochMs(b.resetAt);
-    if (aReset === null && bReset === null) return 0;
-    if (aReset === null) return 1;
-    if (bReset === null) return -1;
-    return aReset - bReset;
-  })[0];
+  return windows
+    .filter((window) => {
+      const key = [
+        window.scope,
+        window.cadence,
+        window.modelLabel
+          ? normalizeModelLabel(window.modelLabel)
+          : window.scope === 'account'
+            ? ''
+            : window.rateLimitType,
+      ].join(':');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => a.rateLimitType.localeCompare(b.rateLimitType));
 }
 
 function mapCoreWindow(window: ClaudeQuotaWindow | null): ClaudeCoreUsageSummary['fiveHour'] {
@@ -307,66 +278,32 @@ function mapCoreWindow(window: ClaudeQuotaWindow | null): ClaudeCoreUsageSummary
   };
 }
 
-const WEEKLY_RATE_LIMIT_TYPES = new Set([
-  'seven_day',
-  'seven_day_opus',
-  'seven_day_sonnet',
-  'seven_day_oauth_apps',
-  'seven_day_cowork',
-]);
-
+/** Account-wide weekly quota only; model and unknown windows never bind account health. */
 export function isClaudeWeeklyRateLimitType(rateLimitType: string): boolean {
-  return WEEKLY_RATE_LIMIT_TYPES.has(rateLimitType);
+  return rateLimitType === 'seven_day';
 }
 
 export function pickMostRestrictiveClaudeWeeklyWindow(
   windows: ClaudeQuotaWindow[]
 ): ClaudeQuotaWindow | null {
-  const weeklyCandidates = windows.filter((window) =>
-    isClaudeWeeklyRateLimitType(window.rateLimitType)
+  return (
+    windows.find(
+      (window) =>
+        window.rateLimitType === 'seven_day' && getClaudeWindowMetadata(window).scope === 'account'
+    ) ?? null
   );
-  return pickMostRestrictiveWeekly(weeklyCandidates);
 }
 
-/**
- * Build explicit 5h + weekly usage summary from Claude policy windows.
- */
+/** Rebuild from actual windows, never trust a previously collapsed core summary. */
 export function buildClaudeCoreUsageSummary(windows: ClaudeQuotaWindow[]): ClaudeCoreUsageSummary {
-  if (!windows || windows.length === 0) {
-    return { fiveHour: null, weekly: null };
-  }
-
-  const fiveHourWindow = windows.find((window) => window.rateLimitType === 'five_hour') || null;
-  const weeklyWindow = pickMostRestrictiveClaudeWeeklyWindow(windows);
-
-  if (fiveHourWindow && weeklyWindow) {
-    return {
-      fiveHour: mapCoreWindow(fiveHourWindow),
-      weekly: mapCoreWindow(weeklyWindow),
-    };
-  }
-
-  // Fallback: infer shortest/longest reset windows from non-overage limits.
-  const nonOverage = windows.filter((window) => window.rateLimitType !== 'overage');
-  const withReset = nonOverage
-    .map((window) => ({
-      window,
-      resetMs: toEpochMs(window.resetAt),
-    }))
-    .filter((entry) => entry.resetMs !== null)
-    .sort((a, b) => (a.resetMs as number) - (b.resetMs as number));
-
-  const inferredWeekly =
-    weeklyWindow ||
-    [...withReset].reverse().find((entry) => entry.window !== fiveHourWindow)?.window ||
-    pickMostRestrictiveWeekly(nonOverage.filter((window) => window !== fiveHourWindow));
-  const inferredFiveHour =
-    fiveHourWindow ||
-    withReset.find((entry) => entry.window !== inferredWeekly)?.window ||
-    pickMostRestrictiveWeekly(nonOverage.filter((window) => window !== inferredWeekly));
-
   return {
-    fiveHour: mapCoreWindow(inferredFiveHour),
-    weekly: mapCoreWindow(inferredWeekly),
+    fiveHour: mapCoreWindow(
+      windows.find(
+        (window) =>
+          window.rateLimitType === 'five_hour' &&
+          getClaudeWindowMetadata(window).scope === 'account'
+      ) ?? null
+    ),
+    weekly: mapCoreWindow(pickMostRestrictiveClaudeWeeklyWindow(windows)),
   };
 }

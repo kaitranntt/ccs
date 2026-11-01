@@ -6,12 +6,12 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 
 | Metric | Value |
 |---|---:|
-| Sync fs occurrences (all) | 2574 |
-| Sync fs files affected (all) | 271 |
+| Sync fs occurrences (all) | 2581 |
+| Sync fs files affected (all) | 272 |
 | Sync fs occurrences (runtime hotpaths) | 1209 |
 | Sync fs files affected (runtime hotpaths) | 159 |
-| Legacy shim markers | 484 |
-| Legacy shim files affected | 181 |
+| Legacy shim markers | 488 |
+| Legacy shim files affected | 183 |
 
 ## Top Runtime Hotpath Sync fs Files
 
@@ -90,7 +90,7 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 
 | File | LOC |
 |---|---:|
-| `src/web-server/usage/native-quota-collector.ts` | 1750 |
+| `src/web-server/usage/native-quota-collector.ts` | 1718 |
 | `src/web-server/routes/cliproxy-auth-routes.ts` | 1531 |
 | `src/cliproxy/auth/oauth-handler.ts` | 1510 |
 | `src/cliproxy/config/generator.ts` | 1283 |
@@ -101,8 +101,8 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 | `src/web-server/routes/settings-routes.ts` | 1042 |
 | `src/commands/cliproxy/variant-subcommand.ts` | 1003 |
 | `src/cliproxy/model-catalog.ts` | 1001 |
-| `src/cliproxy/quota/quota-manager.ts` | 954 |
 | `src/cliproxy/proxy/tool-sanitization-proxy.ts` | 948 |
+| `src/cliproxy/quota/quota-manager.ts` | 946 |
 | `src/web-server/services/codex-dashboard-service.ts` | 940 |
 | `src/glmt/glmt-proxy.ts` | 925 |
 
