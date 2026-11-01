@@ -40,6 +40,34 @@ function createCodexQuotaResult(overrides: Partial<CodexQuotaResult> = {}): Code
 }
 
 describe('AccountSurfaceCard', () => {
+  it.each(['compact', 'detailed'] as const)(
+    'shows the nickname first in %s mode and masks both identity lines',
+    (mode) => {
+      const card = (privacyMode: boolean) => (
+        <AccountSurfaceCard
+          mode={mode}
+          provider="codex"
+          accountId="user@example.com#free"
+          email="user@example.com"
+          nickname="Personal"
+          privacyMode={privacyMode}
+          showQuota={false}
+        />
+      );
+      const { rerender, container } = render(card(false));
+      const nickname = screen.getByText('Personal');
+      const secondary = screen.getByText('user@example.com (Free)');
+      expect(
+        nickname.compareDocumentPosition(secondary) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      expect(nickname).toHaveAttribute('title', 'Personal');
+      rerender(card(true));
+      expect(screen.getByText('Personal')).toHaveClass('blur-[4px]');
+      expect(screen.getByText('user@example.com (Free)')).toHaveClass('blur-[4px]');
+      expect(container.querySelector('[title]')).toBeNull();
+    }
+  );
+
   it('prefers live quota entitlement tier over a stale account tier for Gemini badges', () => {
     render(
       <AccountSurfaceCard

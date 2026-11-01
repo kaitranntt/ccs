@@ -4,6 +4,7 @@ import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import type { UnifiedQuotaResult } from '@/hooks/use-cliproxy-stats';
 import {
   getAccountIdentityPresentation,
+  getAccountDisplayLabels,
   getCodexIdentityBadge,
   type CodexIdentityBadge,
 } from '@/lib/account-identity';
@@ -22,6 +23,7 @@ interface AccountSurfaceCardProps {
   provider: string;
   accountId: string;
   email?: string;
+  nickname?: string;
   displayEmail?: string;
   tokenFile?: string;
   tier?: AccountTier;
@@ -151,6 +153,7 @@ export function AccountSurfaceCard({
   provider,
   accountId,
   email,
+  nickname,
   displayEmail,
   tokenFile,
   tier,
@@ -171,7 +174,13 @@ export function AccountSurfaceCard({
 }: AccountSurfaceCardProps) {
   const { t } = useTranslation();
   const identity = getAccountIdentityPresentation(accountId, email, tokenFile);
-  const title = displayEmail || identity.email || accountId;
+  const { primary: title, secondary } = getAccountDisplayLabels(
+    accountId,
+    email,
+    tokenFile,
+    nickname,
+    displayEmail
+  );
   const sensitiveTitle = (value: string | null | undefined) =>
     privacyMode ? undefined : (value ?? undefined);
   const normalizedProvider = provider.toLowerCase();
@@ -345,6 +354,18 @@ export function AccountSurfaceCard({
               )}
             </div>
 
+            {secondary && (
+              <div
+                title={sensitiveTitle(secondary)}
+                className={cn(
+                  'mt-1 truncate text-muted-foreground',
+                  isCompact ? 'text-[9px]' : 'text-xs',
+                  privacyMode && PRIVACY_BLUR_CLASS
+                )}
+              >
+                {secondary}
+              </div>
+            )}
             {bodySlot && <div className="mt-1">{bodySlot}</div>}
           </div>
         </div>

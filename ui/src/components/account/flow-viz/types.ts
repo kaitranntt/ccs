@@ -15,6 +15,7 @@ export interface DragOffset {
 
 export interface AccountData {
   id: string;
+  nickname?: string;
   email: string;
   tokenFile?: string;
   provider: string;
@@ -50,6 +51,7 @@ export interface ConnectionEvent {
   id: string;
   timestamp: Date;
   accountEmail: string;
+  accountNickname?: string;
   status: 'success' | 'failed' | 'pending';
   latencyMs?: number;
 }

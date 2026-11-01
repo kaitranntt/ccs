@@ -135,6 +135,70 @@ describe('AccountCard grouped quota tooltip', () => {
     ] as ReturnType<typeof useAccountQuotas>);
   });
 
+  it('renders a single nickname and keeps quota and pause actions keyed by the original ID', async () => {
+    const onPauseToggle = vi.fn();
+    const account = {
+      ...groupedAccount,
+      id: 'user@example.com#free',
+      nickname: 'Personal',
+      variants: undefined,
+    };
+    render(
+      <AccountCard
+        account={account}
+        zone="left"
+        originalIndex={0}
+        isHovered={false}
+        isDragging={false}
+        offset={{ x: 0, y: 0 }}
+        showDetails={false}
+        privacyMode={false}
+        onMouseEnter={vi.fn()}
+        onMouseLeave={vi.fn()}
+        onPointerDown={vi.fn()}
+        onPointerMove={vi.fn()}
+        onPointerUp={vi.fn()}
+        onPauseToggle={onPauseToggle}
+      />
+    );
+    expect(screen.getByText('Personal')).toBeInTheDocument();
+    expect(screen.getByText('user@example.com (Free)')).toBeInTheDocument();
+    expect(mockedUseAccountQuota).toHaveBeenCalledWith('codex', account.id, true);
+    await userEvent.click(screen.getByRole('button'));
+    expect(onPauseToggle).toHaveBeenCalledWith([account.id], true);
+  });
+
+  it('renders each grouped nickname and masks the labels in privacy mode', () => {
+    const account = {
+      ...groupedAccount,
+      variants: groupedAccount.variants?.map((variant, index) => ({
+        ...variant,
+        nickname: index === 0 ? 'Work' : 'Personal',
+      })),
+    };
+    render(
+      <AccountCard
+        account={account}
+        zone="left"
+        originalIndex={0}
+        isHovered={false}
+        isDragging={false}
+        offset={{ x: 0, y: 0 }}
+        showDetails={false}
+        privacyMode
+        onMouseEnter={vi.fn()}
+        onMouseLeave={vi.fn()}
+        onPointerDown={vi.fn()}
+        onPointerMove={vi.fn()}
+        onPointerUp={vi.fn()}
+      />
+    );
+    for (const nickname of ['Work', 'Personal']) {
+      expect(screen.getByText(nickname).parentElement).toHaveClass('blur-[4px]');
+    }
+    expect(screen.getByText('user@example.com')).toHaveClass('blur-[4px]');
+  });
+
   it('keeps grouped Codex account labels distinct and shows quota tooltips for each variant', async () => {
     render(
       <AccountCard

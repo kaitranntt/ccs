@@ -257,10 +257,35 @@ export function getCodexIdentityBadge(
 export function formatAccountDisplayName(
   accountId: string,
   email?: string,
-  tokenFile?: string
+  tokenFile?: string,
+  nickname?: string
 ): string {
+  const { primary, secondary } = getAccountDisplayLabels(accountId, email, tokenFile, nickname);
+  if (secondary) return `${primary} (${secondary})`;
   const presentation = getAccountIdentityPresentation(accountId, email, tokenFile);
-  return presentation.inlineLabel
+  return presentation.inlineLabel ? `${presentation.email} (${presentation.inlineLabel})` : primary;
+}
+
+/** Presentation only: nicknames never replace the account ID used for actions. */
+export function getAccountDisplayLabels(
+  accountId: string,
+  email?: string,
+  tokenFile?: string,
+  nickname?: string,
+  displayEmail?: string
+): { primary: string; secondary?: string } {
+  const presentation = getAccountIdentityPresentation(accountId, email, tokenFile);
+  const identityLabel = presentation.inlineLabel
     ? `${presentation.email} (${presentation.inlineLabel})`
     : presentation.email;
+  const savedNickname = nickname?.trim();
+  return savedNickname
+    ? {
+        primary: savedNickname,
+        secondary:
+          !presentation.inlineLabel && presentation.email !== accountId
+            ? `${identityLabel} · ${accountId}`
+            : identityLabel,
+      }
+    : { primary: displayEmail || presentation.email || accountId };
 }

@@ -201,7 +201,7 @@ export function AccountItem({
         provider={account.provider}
         accountId={account.id}
         email={account.email}
-        displayEmail={account.email || account.id}
+        nickname={account.nickname}
         tokenFile={account.tokenFile}
         tier={account.tier}
         isDefault={account.isDefault}
