@@ -142,11 +142,27 @@ function toObject(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+/** Credit grants can expose utilization/reset fields without being time quotas. */
+function isMonetaryCreditBucket(raw: Record<string, unknown>): boolean {
+  return ['limit_dollars', 'used_dollars', 'remaining_dollars'].some((key) =>
+    Object.prototype.hasOwnProperty.call(raw, key)
+  );
+}
+
+function isUnscoped(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  const scope = toObject(value);
+  return (
+    scope !== null && Object.values(scope).every((entry) => entry === null || entry === undefined)
+  );
+}
+
 function normalizeRestriction(
   raw: Record<string, unknown>,
   fallbackKey: string | undefined,
   unit: UtilizationUnit
 ): ClaudeQuotaWindow | null {
+  if (isMonetaryCreditBucket(raw)) return null;
   const rateLimitType = normalizeRateLimitType(
     raw['rateLimitType'] ?? raw['rate_limit_type'] ?? raw['claim'] ?? raw['claimAbbrev'],
     fallbackKey
@@ -207,8 +223,22 @@ export function buildClaudeQuotaWindows(payload: Record<string, unknown>): Claud
       if (!kind) continue;
       const percent = asNumber(raw['percent']);
       if (percent === null) continue;
-      const window = normalizeRestriction({ ...raw, utilization: percent }, kind, 'percent');
+      const generalKind =
+        isUnscoped(raw['scope']) && kind === 'session'
+          ? 'five_hour'
+          : isUnscoped(raw['scope']) && kind === 'weekly_all'
+            ? 'seven_day'
+            : null;
+      const window = normalizeRestriction(
+        { ...raw, rateLimitType: generalKind ?? kind, utilization: percent },
+        undefined,
+        'percent'
+      );
       if (!window) continue;
+      if (generalKind) {
+        windows.push(window);
+        continue;
+      }
       if (kind !== 'weekly_scoped' || !modelLabel) {
         windows.push({ ...window, scope: 'unknown' });
         continue;

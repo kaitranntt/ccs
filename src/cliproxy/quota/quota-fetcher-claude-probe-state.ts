@@ -30,7 +30,7 @@ const CLAUDE_PROBE_RETRY_AFTER_MAX_MS = 60 * 60_000;
 export const CLAUDE_PROBE_STALE_MAX_AGE_MS = 6 * 60 * 60_000;
 
 const STATE_VERSION = 1;
-export const CLAUDE_QUOTA_NORMALIZATION_VERSION = 2;
+export const CLAUDE_QUOTA_NORMALIZATION_VERSION = 3;
 
 export interface ClaudeProbeState {
   version: number;

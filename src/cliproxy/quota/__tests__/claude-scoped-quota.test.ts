@@ -156,7 +156,7 @@ describe('Claude normalization cache migration', () => {
     else process.env.CCS_HOME = previous;
     fs.rmSync(home, { recursive: true, force: true });
   });
-  for (const normalizationVersion of [undefined, 1, 3]) {
+  for (const normalizationVersion of [undefined, 1, 2, 4]) {
     it(`discards lastGood version ${String(normalizationVersion)} without clearing cooldown`, () => {
       const dir = path.join(home, '.ccs/cache/claude-quota');
       fs.mkdirSync(dir, { recursive: true });
@@ -173,14 +173,14 @@ describe('Claude normalization cache migration', () => {
       const state = readClaudeProbeState('fixture');
       expect(state).toMatchObject({
         version: 1,
-        normalizationVersion: 2,
+        normalizationVersion: 3,
         lastGood: null,
         consecutive429: 4,
         cooldownUntil: now + 120000,
       });
       writeClaudeProbeState('fixture', { ...state, normalizationVersion: 1 });
       expect(JSON.parse(fs.readFileSync(path.join(dir, 'fixture.json'), 'utf8'))).toMatchObject({
-        normalizationVersion: 2,
+        normalizationVersion: 3,
         consecutive429: 4,
         cooldownUntil: now + 120000,
       });
