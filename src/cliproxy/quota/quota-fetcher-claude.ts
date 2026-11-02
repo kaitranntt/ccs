@@ -13,6 +13,7 @@ import type { ClaudeQuotaResult } from './quota-types';
 import {
   buildClaudeQuotaWindows,
   buildClaudeCoreUsageSummary,
+  buildClaudeGeneralWindowPresence,
 } from './quota-fetcher-claude-normalizer';
 import { createLogger } from '../../services/logging';
 import {
@@ -26,13 +27,47 @@ import {
 
 const logger = createLogger('cliproxy:quota:claude');
 
-export { buildClaudeQuotaWindows, buildClaudeCoreUsageSummary };
+export { buildClaudeQuotaWindows, buildClaudeCoreUsageSummary, buildClaudeGeneralWindowPresence };
 
 export const CLAUDE_OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';
 const CLAUDE_QUOTA_TIMEOUT_MS = 10000;
 const CLAUDE_QUOTA_MAX_ATTEMPTS = 2;
 const CLAUDE_OAUTH_BETA_HEADER = 'oauth-2025-04-20';
 const CLAUDE_QUOTA_ERROR_BODY_MAX_BYTES = 8192;
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    const error = new Error('Claude quota request cancelled');
+    error.name = 'AbortError';
+    throw error;
+  }
+}
+
+/** Bound caller waits even when a response-body implementation ignores fetch cancellation. */
+function waitWithAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener('abort', onAbort);
+      try {
+        throwIfAborted(signal);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      }
+    );
+    if (signal.aborted) onAbort();
+  });
+}
 
 interface ClaudeAuthData {
   accessToken: string;
@@ -240,25 +275,33 @@ function buildEmptyResult(
 async function runClaudeUsageFetch(
   accessToken: string,
   accountId: string,
-  verbose: boolean
+  verbose: boolean,
+  signal?: AbortSignal
 ): Promise<ClaudeQuotaResult> {
   let lastError = 'Unknown error';
 
   for (let attempt = 1; attempt <= CLAUDE_QUOTA_MAX_ATTEMPTS; attempt++) {
+    throwIfAborted(signal);
     const controller = new AbortController();
+    const onAbort = () => controller.abort();
+    signal?.addEventListener('abort', onAbort, { once: true });
     const timeoutId = setTimeout(() => controller.abort(), CLAUDE_QUOTA_TIMEOUT_MS);
 
     try {
-      const response = await fetch(CLAUDE_OAUTH_USAGE_URL, {
-        method: 'GET',
-        signal: controller.signal,
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          'anthropic-beta': CLAUDE_OAUTH_BETA_HEADER,
-        },
-      });
+      const response = await waitWithAbort(
+        fetch(CLAUDE_OAUTH_USAGE_URL, {
+          method: 'GET',
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'anthropic-beta': CLAUDE_OAUTH_BETA_HEADER,
+          },
+        }),
+        controller.signal
+      );
+      throwIfAborted(signal);
 
       if (verbose) {
         logger.info('quota.fetch.status', `Claude OAuth usage status: ${response.status}`, {
@@ -269,8 +312,11 @@ async function runClaudeUsageFetch(
       }
 
       if (response.status === 401) {
-        const errorMessage = await readResponseErrorMessage(response);
-        clearTimeout(timeoutId);
+        const errorMessage = await waitWithAbort(
+          readResponseErrorMessage(response),
+          controller.signal
+        );
+        throwIfAborted(signal);
         return buildEmptyResult(
           errorMessage || 'Authentication required for Claude OAuth usage',
           accountId,
@@ -279,19 +325,18 @@ async function runClaudeUsageFetch(
       }
 
       if (response.status === 404) {
-        clearTimeout(timeoutId);
         return buildEmptyResult('Claude OAuth usage endpoint not found', accountId);
       }
 
       if (response.status === 403) {
-        clearTimeout(timeoutId);
         return buildEmptyResult('Not authorized for Claude OAuth usage', accountId);
       }
 
       if (!response.ok) {
         lastError =
-          (await readResponseErrorMessage(response)) ||
+          (await waitWithAbort(readResponseErrorMessage(response), controller.signal)) ||
           `Claude OAuth usage API error: ${response.status}`;
+        throwIfAborted(signal);
         // Surface the upstream status + Retry-After so an outer caller (the
         // native collector's circuit-breaker) can honor backoff guidance.
         const retryAfter = response.headers.get('retry-after');
@@ -299,10 +344,8 @@ async function runClaudeUsageFetch(
         // honor Retry-After and bound total volume. Inner retry stays for
         // transient 5xx only.
         if (attempt < CLAUDE_QUOTA_MAX_ATTEMPTS && response.status >= 500) {
-          clearTimeout(timeoutId);
           continue;
         }
-        clearTimeout(timeoutId);
         if (response.status === 429) {
           return {
             ...buildEmptyResult('Claude usage status temporarily unavailable', accountId),
@@ -324,31 +367,33 @@ async function runClaudeUsageFetch(
 
       let payload: unknown;
       try {
-        payload = await response.json();
+        payload = await waitWithAbort(response.json(), controller.signal);
       } catch {
-        clearTimeout(timeoutId);
+        throwIfAborted(signal);
         return buildEmptyResult('Invalid Claude OAuth usage format', accountId);
       }
+      throwIfAborted(signal);
 
       if (!toObject(payload)) {
-        clearTimeout(timeoutId);
         return buildEmptyResult('Invalid Claude OAuth usage format', accountId);
       }
 
       const windows = buildClaudeQuotaWindows(payload as Record<string, unknown>);
       const coreUsage = buildClaudeCoreUsageSummary(windows);
-
-      clearTimeout(timeoutId);
+      const generalWindowPresence = buildClaudeGeneralWindowPresence(
+        payload as Record<string, unknown>
+      );
 
       return {
         success: true,
         windows,
         coreUsage,
+        generalWindowPresence,
         lastUpdated: Date.now(),
         accountId,
       };
     } catch (error) {
-      clearTimeout(timeoutId);
+      throwIfAborted(signal);
       lastError =
         error instanceof Error && error.name === 'AbortError'
           ? 'Claude OAuth usage request timeout'
@@ -372,9 +417,11 @@ async function runClaudeUsageFetch(
       }
 
       if (attempt >= CLAUDE_QUOTA_MAX_ATTEMPTS) {
-        clearTimeout(timeoutId);
         return { ...buildEmptyResult(lastError, accountId), retryable: true };
       }
+    } finally {
+      clearTimeout(timeoutId);
+      signal?.removeEventListener('abort', onAbort);
     }
   }
 
@@ -392,12 +439,14 @@ async function runClaudeUsageFetch(
 export async function fetchClaudeQuotaWithToken(
   accessToken: string,
   accountId = 'claude-code',
-  verbose = false
+  verbose = false,
+  signal?: AbortSignal
 ): Promise<ClaudeQuotaResult> {
+  throwIfAborted(signal);
   if (!accessToken || accessToken.trim().length === 0) {
     return buildEmptyResult('Missing native Claude access token', accountId, true);
   }
-  return runClaudeUsageFetch(accessToken.trim(), accountId, verbose);
+  return runClaudeUsageFetch(accessToken.trim(), accountId, verbose, signal);
 }
 
 /**
@@ -405,9 +454,12 @@ export async function fetchClaudeQuotaWithToken(
  */
 export async function fetchClaudeQuota(
   accountId: string,
-  verbose = false
+  verbose = false,
+  signal?: AbortSignal
 ): Promise<ClaudeQuotaResult> {
+  throwIfAborted(signal);
   const authData = await readClaudeAuthData(accountId);
+  throwIfAborted(signal);
   if (!authData) {
     return buildEmptyResult('Auth file not found for Claude account', accountId);
   }
@@ -421,21 +473,76 @@ export async function fetchClaudeQuota(
   }
 
   const pending = pendingClaudeFetches.get(accountId);
-  if (pending) return pending;
+  if (pending) return waitForSharedFetch(accountId, pending, signal);
 
-  const fetchPromise = fetchClaudeQuotaWithSharedState(
-    authData.accessToken,
-    accountId,
-    verbose
-  ).finally(() => {
-    pendingClaudeFetches.delete(accountId);
-  });
-  pendingClaudeFetches.set(accountId, fetchPromise);
-  return fetchPromise;
+  const controller = new AbortController();
+  const entry: PendingClaudeFetch = {
+    controller,
+    waiters: 0,
+    settled: false,
+    promise: fetchClaudeQuotaWithSharedState(
+      authData.accessToken,
+      accountId,
+      verbose,
+      controller.signal
+    ).finally(() => {
+      entry.settled = true;
+      if (pendingClaudeFetches.get(accountId) === entry) pendingClaudeFetches.delete(accountId);
+    }),
+  };
+  pendingClaudeFetches.set(accountId, entry);
+  return waitForSharedFetch(accountId, entry, signal);
 }
 
 /** In-process coalescing; the on-disk probe state coordinates across processes. */
-const pendingClaudeFetches = new Map<string, Promise<ClaudeQuotaResult>>();
+interface PendingClaudeFetch {
+  promise: Promise<ClaudeQuotaResult>;
+  controller: AbortController;
+  waiters: number;
+  settled: boolean;
+}
+const pendingClaudeFetches = new Map<string, PendingClaudeFetch>();
+
+/** Only the last departing caller may cancel a shared provider request. */
+function waitForSharedFetch(
+  accountId: string,
+  entry: PendingClaudeFetch,
+  signal?: AbortSignal
+): Promise<ClaudeQuotaResult> {
+  entry.waiters++;
+  return new Promise<ClaudeQuotaResult>((resolve, reject) => {
+    let done = false;
+    const release = () => {
+      if (done) return false;
+      done = true;
+      signal?.removeEventListener('abort', onAbort);
+      entry.waiters--;
+      if (!entry.settled && entry.waiters === 0) {
+        if (pendingClaudeFetches.get(accountId) === entry) pendingClaudeFetches.delete(accountId);
+        entry.controller.abort();
+      }
+      return true;
+    };
+    const onAbort = () => {
+      if (!release()) return;
+      try {
+        throwIfAborted(signal);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    entry.promise.then(
+      (value) => {
+        if (release()) resolve(value);
+      },
+      (error: unknown) => {
+        if (release()) reject(error);
+      }
+    );
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+  });
+}
 
 function buildCooldownHint(cooldownUntil: number): string {
   return `Inference may still be available. Anthropic rate-limited the usage check; CCS retries after ${new Date(cooldownUntil).toLocaleTimeString()}.`;
@@ -461,8 +568,10 @@ function buildCooldownResult(accountId: string, cooldownUntil: number): ClaudeQu
 async function fetchClaudeQuotaWithSharedState(
   accessToken: string,
   accountId: string,
-  verbose: boolean
+  verbose: boolean,
+  signal?: AbortSignal
 ): Promise<ClaudeQuotaResult> {
+  throwIfAborted(signal);
   const state = readClaudeProbeState(accountId);
   const now = Date.now();
 
@@ -475,7 +584,8 @@ async function fetchClaudeQuotaWithSharedState(
     return stale ?? buildCooldownResult(accountId, state.cooldownUntil);
   }
 
-  const result = await runClaudeUsageFetch(accessToken, accountId, verbose);
+  const result = await runClaudeUsageFetch(accessToken, accountId, verbose, signal);
+  throwIfAborted(signal);
 
   if (result.success) {
     writeClaudeProbeState(accountId, {

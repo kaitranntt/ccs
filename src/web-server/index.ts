@@ -23,6 +23,7 @@ import { startAutoSyncWatcher, stopAutoSyncWatcher } from '../cliproxy/sync';
 import { shutdownUsageAggregator } from './usage/aggregator';
 import { createLogger } from '../services/logging';
 import { DEFAULT_DASHBOARD_HOST, isLoopbackHost } from '../commands/config-dashboard-host';
+import { startClaudePoolPolicyController } from '../cliproxy/accounts/claude-pool-policy';
 
 export interface ServerOptions {
   port: number;
@@ -34,7 +35,7 @@ export interface ServerOptions {
 export interface ServerInstance {
   server: http.Server;
   wss: WebSocketServer;
-  cleanup: () => void;
+  cleanup: () => Promise<void>;
 }
 
 function getListenHost(options: ServerOptions): string {
@@ -169,12 +170,14 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
 
   // Start auto-sync watcher (if enabled in config)
   startAutoSyncWatcher();
+  const stopClaudePoolPolicy = startClaudePoolPolicyController();
 
   // Combined cleanup function
-  const cleanup = () => {
+  const cleanup = async () => {
     wsCleanup();
     stopAutoSyncWatcher().catch(() => {});
     shutdownUsageAggregator();
+    await stopClaudePoolPolicy();
   };
 
   // Start listening

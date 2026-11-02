@@ -160,6 +160,14 @@ export interface ClaudeCoreUsageSummary {
   weekly: ClaudeCoreUsageWindow | null;
 }
 
+/** Presence is independent of numeric quota windows retained in a stale response. */
+export type ClaudeGeneralWindowPresence = 'present' | 'absent' | 'unknown';
+
+export interface ClaudeGeneralWindowPresenceSummary {
+  fiveHour: ClaudeGeneralWindowPresence;
+  weekly: ClaudeGeneralWindowPresence;
+}
+
 /**
  * Claude quota fetch result
  */
@@ -170,6 +178,8 @@ export interface ClaudeQuotaResult extends QuotaErrorMetadata {
   windows: ClaudeQuotaWindow[];
   /** Explicit core usage windows (5h + weekly) */
   coreUsage?: ClaudeCoreUsageSummary;
+  /** General window presence confirmed from the original OAuth usage snapshot. */
+  generalWindowPresence?: ClaudeGeneralWindowPresenceSummary;
   /** Timestamp of fetch */
   lastUpdated: number;
   /** Error message if fetch failed */

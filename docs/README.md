@@ -30,6 +30,7 @@ option lists when a source link can remain accurate.
 | Current maintenance direction | [Project roadmap](./project-roadmap.md) |
 | Release mechanics | [Release process](./release-process.md) |
 | Claude quota scope and cache compatibility | [Scoped Claude quotas](./claude-scoped-quotas.md) |
+| Claude pool ordering, controller ownership and recovery | [Claude pool quota priority](./claude-pool-priority.md) |
 | Dashboard localization | [Dashboard i18n](./i18n-dashboard.md) |
 | Test layout and commands | [Test suite](../tests/README.md) |
 | Dashboard development | [UI guide](../ui/README.md) |

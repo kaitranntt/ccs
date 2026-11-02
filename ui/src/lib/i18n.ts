@@ -1934,7 +1934,7 @@ const resources = {
         poolRoutingOn: 'On',
         poolRoutingOff: 'Off',
         poolRoutingManaged:
-          'Pool routing is on: CCS manages strategy (fill-first), session affinity, and cooling for the whole proxy.',
+          'Pool routing is on: CCS manages account selection, session affinity, and cooling. Claude quota priority can apply its own account order.',
         poolRoutingOffHint:
           'Pool routing is off. Enable it from the CLI (ccs cliproxy pool --enable) for fill-first drain with cooldown.',
         poolRoutingApplyWarning:
@@ -1966,6 +1966,51 @@ const resources = {
         requestRetryLabel: 'Request retry count',
         maxRetryIntervalLabel: 'Max retry interval (seconds)',
         retryRangeError: 'Must be a whole number, 0 or greater.',
+      },
+      claudePoolPolicy: {
+        title: 'Claude quota priority',
+        shortOrder: '5h only → 5h + weekly → weekly only',
+        showDetails: 'Quota priority details',
+        hideDetails: 'Hide quota priority details',
+        accounts: 'Claude account quota groups',
+        modelLimitsIgnored: 'Fable and other model-specific limits do not affect this order.',
+        conversations:
+          'New conversations share the preferred available group evenly. If a higher-priority group becomes available, the next request moves there; responses already in progress continue.',
+        retention:
+          'If quota checks fail, the last confirmed group is kept for up to six hours. Unknown accounts remain a last resort.',
+        restore:
+          'Turning this off restores the previous account order. Setting a manual order turns automatic priority off.',
+        localOnly: 'Manage this policy on the server that owns the accounts.',
+        poolRequired: 'Enable pool routing before turning on Claude quota priority.',
+        controllerRequired: 'Waiting for a running CCS controller to apply account priorities.',
+        checked: 'Last update {{age}}',
+        confirmed: 'Confirmed {{age}}',
+        neverConfirmed: 'No confirmed general quota data',
+        accountNamesUnavailable: 'Saved account names could not be loaded.',
+        enabledToast: 'Claude quota priority applied',
+        disabledToast: 'Previous account order restored',
+        savedPending: 'Account order saved; check its application status.',
+        status: {
+          off: 'Off',
+          loading: 'Loading',
+          unavailable: 'Unavailable',
+          active: 'Applied',
+          pending: 'Pending',
+          degraded: 'Needs attention',
+        },
+        class: {
+          'five-hour-only': '5-hour quota only',
+          'five-hour-weekly': '5-hour and weekly quotas',
+          'weekly-only': 'Weekly quota only',
+          unknown: 'Unknown general quotas (last resort)',
+        },
+        accountState: {
+          applied: 'Applied',
+          pending: 'Pending',
+          drift: 'Order changed externally',
+          paused: 'Paused',
+          missing: 'Unavailable',
+        },
       },
       extendedContext: {
         extendedContext: 'Extended Context',
@@ -4730,7 +4775,7 @@ const resources = {
         poolRoutingOn: 'Ligado',
         poolRoutingOff: 'Desligado',
         poolRoutingManaged:
-          'O roteamento de pool está ligado: o CCS gerencia a estratégia (fill-first), a afinidade de sessão e o resfriamento para todo o proxy.',
+          'O roteamento de pool está ligado: o CCS gerencia a seleção de contas, a afinidade de sessão e o resfriamento. A prioridade de cotas do Claude pode aplicar sua própria ordem de contas.',
         poolRoutingOffHint:
           'O roteamento de pool está desligado. Ative-o pela CLI (ccs cliproxy pool --enable) para drenagem fill-first com resfriamento.',
         poolRoutingApplyWarning:
@@ -4762,6 +4807,52 @@ const resources = {
         requestRetryLabel: 'Tentativas da solicitação',
         maxRetryIntervalLabel: 'Intervalo máximo entre tentativas (segundos)',
         retryRangeError: 'Deve ser um número inteiro igual ou maior que 0.',
+      },
+      claudePoolPolicy: {
+        title: 'Prioridade de cotas do Claude',
+        shortOrder: 'Só 5h → 5h + semanal → só semanal',
+        showDetails: 'Detalhes da prioridade de cotas',
+        hideDetails: 'Ocultar detalhes da prioridade de cotas',
+        accounts: 'Grupos de cotas das contas Claude',
+        modelLimitsIgnored: 'Fable e outros limites por modelo não afetam esta ordem.',
+        conversations:
+          'Novas conversas são distribuídas igualmente no grupo disponível preferido. Se um grupo de maior prioridade ficar disponível, a próxima solicitação passará a usá-lo; respostas já em andamento continuarão.',
+        retention:
+          'Se as consultas de cotas falharem, o último grupo confirmado será mantido por até seis horas. Contas desconhecidas continuam como último recurso.',
+        restore:
+          'Ao desativar, a ordem anterior das contas será restaurada. Definir uma ordem manual desativa a prioridade automática.',
+        localOnly: 'Gerencie esta política no servidor que controla as contas.',
+        poolRequired: 'Ative o roteamento de pool antes de ativar a prioridade de cotas do Claude.',
+        controllerRequired:
+          'Aguardando um controlador CCS em execução para aplicar as prioridades das contas.',
+        checked: 'Última atualização {{age}}',
+        confirmed: 'Confirmado {{age}}',
+        neverConfirmed: 'Nenhum dado confirmado de cotas gerais',
+        accountNamesUnavailable: 'Não foi possível carregar os nomes salvos das contas.',
+        enabledToast: 'Prioridade de cotas do Claude aplicada',
+        disabledToast: 'Ordem anterior das contas restaurada',
+        savedPending: 'Ordem das contas salva; verifique o estado da aplicação.',
+        status: {
+          off: 'Desativada',
+          loading: 'Carregando',
+          unavailable: 'Indisponível',
+          active: 'Aplicada',
+          pending: 'Pendente',
+          degraded: 'Requer atenção',
+        },
+        class: {
+          'five-hour-only': 'Somente cota de 5 horas',
+          'five-hour-weekly': 'Cotas de 5 horas e semanal',
+          'weekly-only': 'Somente cota semanal',
+          unknown: 'Cotas gerais desconhecidas (último recurso)',
+        },
+        accountState: {
+          applied: 'Aplicada',
+          pending: 'Pendente',
+          drift: 'Ordem alterada externamente',
+          paused: 'Pausada',
+          missing: 'Indisponível',
+        },
       },
       extendedContext: {
         extendedContext: 'Contexto Estendido',
@@ -7395,7 +7486,7 @@ const resources = {
         poolRoutingOn: '开启',
         poolRoutingOff: '关闭',
         poolRoutingManaged:
-          '账号池路由已开启：CCS 为整个代理统一管理策略（优先填满）、会话粘性和冷却。',
+          '账号池路由已开启：CCS 管理账号选择、会话粘性和冷却。Claude 配额优先级可以应用独立的账号顺序。',
         poolRoutingOffHint:
           '账号池路由已关闭。可在命令行启用（ccs cliproxy pool --enable）以使用带冷却的优先填满。',
         poolRoutingApplyWarning:
@@ -7426,6 +7517,50 @@ const resources = {
         requestRetryLabel: '重试次数',
         maxRetryIntervalLabel: '最大重试间隔（秒）',
         retryRangeError: '必须是 0 或更大的整数。',
+      },
+      claudePoolPolicy: {
+        title: 'Claude 配额优先级',
+        shortOrder: '仅 5 小时 → 5 小时 + 每周 → 仅每周',
+        showDetails: '配额优先级详情',
+        hideDetails: '隐藏配额优先级详情',
+        accounts: 'Claude 账号配额分组',
+        modelLimitsIgnored: 'Fable 和其他模型专属限制不影响此顺序。',
+        conversations:
+          '新对话会均匀分配到可用的最高优先级分组。如果更高优先级的分组恢复可用，下一次请求会切换到该分组；正在进行的响应会继续完成。',
+        retention:
+          '如果配额查询失败，将保留上次确认的分组，最多六小时。配额未知的账号仍作为最后备用。',
+        restore: '关闭后会恢复之前的账号顺序。设置手动顺序会关闭自动优先级。',
+        localOnly: '请在管理这些账号的服务器上配置此策略。',
+        poolRequired: '请先开启账号池路由，再开启 Claude 配额优先级。',
+        controllerRequired: '正在等待运行中的 CCS 控制器应用账号优先级。',
+        checked: '上次更新：{{age}}',
+        confirmed: '确认于{{age}}',
+        neverConfirmed: '尚无已确认的通用配额数据',
+        accountNamesUnavailable: '无法加载已保存的账号名称。',
+        enabledToast: '已应用 Claude 配额优先级',
+        disabledToast: '已恢复之前的账号顺序',
+        savedPending: '已保存账号顺序，请检查应用状态。',
+        status: {
+          off: '已关闭',
+          loading: '加载中',
+          unavailable: '不可用',
+          active: '已应用',
+          pending: '待应用',
+          degraded: '需要处理',
+        },
+        class: {
+          'five-hour-only': '仅有 5 小时配额',
+          'five-hour-weekly': '同时有 5 小时和每周配额',
+          'weekly-only': '仅有每周配额',
+          unknown: '通用配额未知（最后备用）',
+        },
+        accountState: {
+          applied: '已应用',
+          pending: '待应用',
+          drift: '顺序被外部修改',
+          paused: '已暂停',
+          missing: '不可用',
+        },
       },
       extendedContext: {
         extendedContext: '扩展上下文',
@@ -10115,7 +10250,7 @@ const resources = {
         poolRoutingOn: 'Bật',
         poolRoutingOff: 'Tắt',
         poolRoutingManaged:
-          'Định tuyến nhóm đang bật: CCS quản lý chiến lược (fill-first), ghim phiên và làm nguội cho toàn bộ proxy.',
+          'Định tuyến nhóm đang bật: CCS quản lý việc chọn tài khoản, ghim phiên và làm nguội. Chính sách ưu tiên hạn mức Claude có thể áp dụng thứ tự tài khoản riêng.',
         poolRoutingOffHint:
           'Định tuyến nhóm đang tắt. Bật từ CLI (ccs cliproxy pool --enable) để dùng fill-first kèm làm nguội.',
         poolRoutingApplyWarning:
@@ -10147,6 +10282,52 @@ const resources = {
         requestRetryLabel: 'Số lần thử lại yêu cầu',
         maxRetryIntervalLabel: 'Khoảng chờ thử lại tối đa (giây)',
         retryRangeError: 'Phải là số nguyên từ 0 trở lên.',
+      },
+      claudePoolPolicy: {
+        title: 'Ưu tiên hạn mức Claude',
+        shortOrder: 'Chỉ 5 giờ → 5 giờ + tuần → chỉ tuần',
+        showDetails: 'Chi tiết ưu tiên hạn mức',
+        hideDetails: 'Ẩn chi tiết ưu tiên hạn mức',
+        accounts: 'Nhóm hạn mức tài khoản Claude',
+        modelLimitsIgnored:
+          'Fable và các giới hạn riêng theo mô hình không ảnh hưởng đến thứ tự này.',
+        conversations:
+          'Các cuộc hội thoại mới được chia đều trong nhóm khả dụng được ưu tiên. Nếu nhóm có ưu tiên cao hơn khả dụng trở lại, yêu cầu tiếp theo sẽ chuyển sang nhóm đó; các phản hồi đang chạy vẫn tiếp tục.',
+        retention:
+          'Nếu không kiểm tra được hạn mức, nhóm được xác nhận gần nhất sẽ được giữ tối đa sáu giờ. Tài khoản chưa rõ hạn mức vẫn là phương án cuối cùng.',
+        restore:
+          'Tắt tùy chọn này sẽ khôi phục thứ tự tài khoản trước đó. Đặt thứ tự thủ công sẽ tắt ưu tiên tự động.',
+        localOnly: 'Quản lý chính sách này trên máy chủ sở hữu các tài khoản.',
+        poolRequired: 'Bật định tuyến nhóm trước khi bật ưu tiên hạn mức Claude.',
+        controllerRequired: 'Đang chờ bộ điều khiển CCS hoạt động để áp dụng ưu tiên tài khoản.',
+        checked: 'Cập nhật gần nhất {{age}}',
+        confirmed: 'Đã xác nhận {{age}}',
+        neverConfirmed: 'Chưa có dữ liệu hạn mức chung được xác nhận',
+        accountNamesUnavailable: 'Không tải được tên tài khoản đã lưu.',
+        enabledToast: 'Đã áp dụng ưu tiên hạn mức Claude',
+        disabledToast: 'Đã khôi phục thứ tự tài khoản trước đó',
+        savedPending: 'Đã lưu thứ tự tài khoản; hãy kiểm tra trạng thái áp dụng.',
+        status: {
+          off: 'Tắt',
+          loading: 'Đang tải',
+          unavailable: 'Không khả dụng',
+          active: 'Đã áp dụng',
+          pending: 'Đang chờ',
+          degraded: 'Cần chú ý',
+        },
+        class: {
+          'five-hour-only': 'Chỉ có hạn mức 5 giờ',
+          'five-hour-weekly': 'Có hạn mức 5 giờ và hàng tuần',
+          'weekly-only': 'Chỉ có hạn mức hàng tuần',
+          unknown: 'Chưa rõ hạn mức chung (phương án cuối cùng)',
+        },
+        accountState: {
+          applied: 'Đã áp dụng',
+          pending: 'Đang chờ',
+          drift: 'Thứ tự đã bị thay đổi từ bên ngoài',
+          paused: 'Đã tạm dừng',
+          missing: 'Không khả dụng',
+        },
       },
       extendedContext: {
         extendedContext: 'Ngữ cảnh mở rộng',
@@ -13308,7 +13489,7 @@ const resources = {
         poolRoutingOn: 'オン',
         poolRoutingOff: 'オフ',
         poolRoutingManaged:
-          'プールルーティングが有効です。CCS がプロキシ全体の戦略（fill-first）、セッション固定、クールダウンを管理します。',
+          'プールルーティングが有効です。CCS がアカウント選択、セッション固定、クールダウンを管理します。Claude のクォータ優先設定では独自のアカウント順序を適用できます。',
         poolRoutingOffHint:
           'プールルーティングは無効です。CLI（ccs cliproxy pool --enable）で有効にすると、クールダウン付きの fill-first を利用できます。',
         poolRoutingApplyWarning:
@@ -13340,6 +13521,53 @@ const resources = {
         requestRetryLabel: 'リトライ回数',
         maxRetryIntervalLabel: '最大リトライ間隔（秒）',
         retryRangeError: '0 以上の整数を入力してください。',
+      },
+      claudePoolPolicy: {
+        title: 'Claude のクォータ優先順位',
+        shortOrder: '5 時間のみ → 5 時間 + 週間 → 週間のみ',
+        showDetails: 'クォータ優先順位の詳細',
+        hideDetails: 'クォータ優先順位の詳細を隠す',
+        accounts: 'Claude アカウントのクォータグループ',
+        modelLimitsIgnored: 'Fable などのモデル固有の制限は、この順序に影響しません。',
+        conversations:
+          '新しい会話は、利用可能な最優先グループ内で均等に振り分けられます。より優先度の高いグループが利用可能になると、次のリクエストから切り替わります。進行中の応答は継続します。',
+        retention:
+          'クォータの確認に失敗した場合、最後に確認できたグループを最大 6 時間維持します。クォータが不明なアカウントは最後の選択肢として使用します。',
+        restore:
+          '無効にすると、以前のアカウント順序に戻ります。手動の順序を設定すると、自動優先順位は無効になります。',
+        localOnly: 'アカウントを管理しているサーバーで、このポリシーを設定してください。',
+        poolRequired:
+          'Claude のクォータ優先順位を有効にする前に、プールルーティングを有効にしてください。',
+        controllerRequired:
+          '稼働中の CCS コントローラーがアカウントの優先順位を適用するのを待っています。',
+        checked: '最終更新：{{age}}',
+        confirmed: '確認日時：{{age}}',
+        neverConfirmed: '確認済みの全体クォータ情報はありません',
+        accountNamesUnavailable: '保存済みのアカウント名を読み込めませんでした。',
+        enabledToast: 'Claude のクォータ優先順位を適用しました',
+        disabledToast: '以前のアカウント順序に戻しました',
+        savedPending: 'アカウント順序を保存しました。適用状況を確認してください。',
+        status: {
+          off: '無効',
+          loading: '読み込み中',
+          unavailable: '利用不可',
+          active: '適用済み',
+          pending: '適用待ち',
+          degraded: '確認が必要',
+        },
+        class: {
+          'five-hour-only': '5 時間クォータのみ',
+          'five-hour-weekly': '5 時間と週間のクォータ',
+          'weekly-only': '週間クォータのみ',
+          unknown: '全体クォータが不明（最後の選択肢）',
+        },
+        accountState: {
+          applied: '適用済み',
+          pending: '適用待ち',
+          drift: '順序が外部で変更されました',
+          paused: '一時停止中',
+          missing: '利用不可',
+        },
       },
       settingsDialog: {
         editProfile: 'プロファイルを編集: {{name}}',
@@ -15608,7 +15836,7 @@ const resources = {
         poolRoutingOn: '켜짐',
         poolRoutingOff: '꺼짐',
         poolRoutingManaged:
-          '풀 라우팅이 켜져 있습니다. CCS가 프록시 전체의 전략(fill-first), 세션 어피니티, 쿨다운을 관리합니다.',
+          '풀 라우팅이 켜져 있습니다. CCS가 계정 선택, 세션 어피니티, 쿨다운을 관리합니다. Claude 할당량 우선순위는 별도의 계정 순서를 적용할 수 있습니다.',
         poolRoutingOffHint:
           '풀 라우팅이 꺼져 있습니다. CLI(ccs cliproxy pool --enable)에서 켜면 쿨다운이 있는 fill-first를 사용할 수 있습니다.',
         poolRoutingApplyWarning:
@@ -15640,6 +15868,52 @@ const resources = {
         requestRetryLabel: '재시도 횟수',
         maxRetryIntervalLabel: '최대 재시도 간격(초)',
         retryRangeError: '0 이상의 정수여야 합니다.',
+      },
+      claudePoolPolicy: {
+        title: 'Claude 할당량 우선순위',
+        shortOrder: '5시간만 → 5시간 + 주간 → 주간만',
+        showDetails: '할당량 우선순위 세부 정보',
+        hideDetails: '할당량 우선순위 세부 정보 숨기기',
+        accounts: 'Claude 계정 할당량 그룹',
+        modelLimitsIgnored: 'Fable 및 기타 모델별 제한은 이 순서에 영향을 주지 않습니다.',
+        conversations:
+          '새 대화는 사용 가능한 최우선 그룹 안에서 고르게 분배됩니다. 더 높은 우선순위 그룹을 사용할 수 있게 되면 다음 요청부터 해당 그룹으로 전환됩니다. 이미 진행 중인 응답은 계속됩니다.',
+        retention:
+          '할당량 확인에 실패하면 마지막으로 확인된 그룹을 최대 6시간 동안 유지합니다. 할당량을 알 수 없는 계정은 최후의 수단으로 사용됩니다.',
+        restore:
+          '이 설정을 끄면 이전 계정 순서가 복원됩니다. 수동 순서를 설정하면 자동 우선순위가 꺼집니다.',
+        localOnly: '계정을 관리하는 서버에서 이 정책을 설정하세요.',
+        poolRequired: 'Claude 할당량 우선순위를 켜기 전에 풀 라우팅을 켜세요.',
+        controllerRequired:
+          '실행 중인 CCS 컨트롤러가 계정 우선순위를 적용하기를 기다리고 있습니다.',
+        checked: '마지막 업데이트: {{age}}',
+        confirmed: '확인 시점: {{age}}',
+        neverConfirmed: '확인된 전체 할당량 데이터가 없습니다',
+        accountNamesUnavailable: '저장된 계정 이름을 불러올 수 없습니다.',
+        enabledToast: 'Claude 할당량 우선순위가 적용되었습니다',
+        disabledToast: '이전 계정 순서가 복원되었습니다',
+        savedPending: '계정 순서가 저장되었습니다. 적용 상태를 확인하세요.',
+        status: {
+          off: '꺼짐',
+          loading: '불러오는 중',
+          unavailable: '사용 불가',
+          active: '적용됨',
+          pending: '대기 중',
+          degraded: '확인 필요',
+        },
+        class: {
+          'five-hour-only': '5시간 할당량만',
+          'five-hour-weekly': '5시간 및 주간 할당량',
+          'weekly-only': '주간 할당량만',
+          unknown: '전체 할당량 알 수 없음 (최후의 수단)',
+        },
+        accountState: {
+          applied: '적용됨',
+          pending: '대기 중',
+          drift: '외부에서 순서가 변경됨',
+          paused: '일시 중지됨',
+          missing: '사용 불가',
+        },
       },
       extendedContext: {
         extendedContext: '확장 컨텍스트',

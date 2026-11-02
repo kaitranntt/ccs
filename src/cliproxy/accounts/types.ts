@@ -47,7 +47,7 @@ export interface AccountInfo {
  * - "tier": auto-derived from AccountTier (ultra > pro > free); unknown = last
  * - "file": stable file-system order (default, no priority writes)
  */
-export type DrainOrderMode = 'manual' | 'tier' | 'file';
+export type DrainOrderMode = 'manual' | 'tier' | 'file' | 'quota';
 
 /** Persisted drain order configuration for a provider */
 export interface DrainOrderConfig {
