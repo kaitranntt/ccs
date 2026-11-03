@@ -1,7 +1,7 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2574,
+    "totalOccurrences": 2588,
     "filesAffected": 271,
     "hotpathOccurrences": 1209,
     "hotpathFilesAffected": 159,
@@ -203,12 +203,13 @@
         "markers": []
       },
       {
-        "file": "src/cliproxy/accounts/__tests__/account-safety-quota-exhaustion.test.ts",
-        "count": 48,
+        "file": "src/cliproxy/accounts/__tests__/account-registry-integrity.test.ts",
+        "count": 57,
         "calls": [
           "existsSync",
           "mkdirSync",
           "mkdtempSync",
+          "readdirSync",
           "readFileSync",
           "rmSync",
           "writeFileSync"
@@ -216,13 +217,12 @@
         "markers": []
       },
       {
-        "file": "src/cliproxy/accounts/__tests__/account-registry-integrity.test.ts",
-        "count": 45,
+        "file": "src/cliproxy/accounts/__tests__/account-safety-quota-exhaustion.test.ts",
+        "count": 48,
         "calls": [
           "existsSync",
           "mkdirSync",
           "mkdtempSync",
-          "readdirSync",
           "readFileSync",
           "rmSync",
           "writeFileSync"
@@ -654,9 +654,9 @@
       ]
     },
     "hotpathConsoleErrors": {
-      "totalOccurrences": 591,
+      "totalOccurrences": 593,
       "exemptOccurrences": 326,
-      "hotpathOccurrences": 265,
+      "hotpathOccurrences": 267,
       "filesAffected": 82,
       "topFiles": [
         {
@@ -676,6 +676,10 @@
           "count": 9
         },
         {
+          "file": "src/cliproxy/executor/account-resolution.ts",
+          "count": 9
+        },
+        {
           "file": "src/utils/hooks/image-analyzer-profile-hook-injector.ts",
           "count": 9
         },
@@ -689,10 +693,6 @@
         },
         {
           "file": "src/cliproxy/binary/downloader.ts",
-          "count": 7
-        },
-        {
-          "file": "src/cliproxy/executor/account-resolution.ts",
           "count": 7
         },
         {
