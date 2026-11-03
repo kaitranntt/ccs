@@ -95,4 +95,49 @@ describe('useAuthMonitorData', () => {
     expect(result.current.totalFailure).toBe(2);
     expect(result.current.totalRequests).toBe(10);
   });
+
+  it('hydrates saved nicknames after auth refresh without changing IDs or grouping', () => {
+    useCliproxyStatusMock.mockReturnValue({ data: { running: false } });
+    const { result, rerender } = renderHook(() => useAuthMonitorData());
+    expect(result.current.accounts[0]?.nickname).toBeUndefined();
+    const account = authStatus[0].accounts[0];
+    useCliproxyAuthMock.mockReturnValue({
+      data: { authStatus: [{ ...authStatus[0], accounts: [{ ...account, nickname: 'Work' }] }] },
+      isLoading: false,
+      error: null,
+    });
+    rerender();
+    expect(result.current.accounts[0]).toMatchObject({
+      id: account.id,
+      nickname: 'Work',
+      tokenFile: account.tokenFile,
+    });
+    expect(result.current.providerStats[0]?.accounts[0]?.nickname).toBe('Work');
+
+    useCliproxyAuthMock.mockReturnValue({
+      data: {
+        authStatus: [
+          {
+            ...authStatus[0],
+            accounts: [
+              { ...account, id: 'codex@example.com#team', nickname: 'Work' },
+              { ...account, id: 'codex@example.com#free', nickname: 'Personal' },
+            ],
+          },
+        ],
+      },
+      isLoading: false,
+      error: null,
+    });
+    rerender();
+    expect(result.current.accounts).toHaveLength(1);
+    expect(result.current.accounts[0]?.variants?.map(({ nickname }) => nickname)).toEqual([
+      'Work',
+      'Personal',
+    ]);
+    expect(result.current.accounts[0]?.memberIds).toEqual([
+      'codex@example.com#team',
+      'codex@example.com#free',
+    ]);
+  });
 });

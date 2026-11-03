@@ -81,6 +81,7 @@ export function generateConnectionEvents(accounts: AccountData[]): ConnectionEve
           id: `${account.id}-${status}-${i}`,
           timestamp,
           accountEmail: account.email,
+          accountNickname: account.nickname,
           status,
           // Simulate realistic latency (success: 50-200ms, failed: 200-5000ms)
           latencyMs:

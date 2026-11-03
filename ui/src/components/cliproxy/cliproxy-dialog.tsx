@@ -245,7 +245,12 @@ export function CliproxyDialog({ open, onClose }: CliproxyDialogProps) {
                       <option key={acc.id} value={acc.id}>
                         {privacyMode
                           ? '••••••'
-                          : formatAccountDisplayName(acc.id, acc.email, acc.tokenFile)}
+                          : formatAccountDisplayName(
+                              acc.id,
+                              acc.email,
+                              acc.tokenFile,
+                              acc.nickname
+                            )}
                         {acc.isDefault ? ` ${t('cliproxyDialog.defaultSuffix')}` : ''}
                       </option>
                     ))}

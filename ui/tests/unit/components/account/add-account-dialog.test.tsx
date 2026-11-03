@@ -3,6 +3,7 @@ import i18n from '@/lib/i18n';
 import { AddAccountDialog } from '@/components/account/add-account-dialog';
 import { render, screen, userEvent, waitFor } from '@tests/setup/test-utils';
 import { toast } from 'sonner';
+import type { OAuthAccount } from '@/lib/api-client';
 
 const authMocks = vi.hoisted(() => ({
   startAuth: vi.fn(),
@@ -71,6 +72,7 @@ describe('AddAccountDialog power user mode', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en');
     vi.clearAllMocks();
+    vi.mocked(window.localStorage.getItem).mockReturnValue(null);
     fetchMock.mockReset();
     authFlowState.provider = null;
     authFlowState.isAuthenticating = false;
@@ -253,6 +255,64 @@ describe('AddAccountDialog power user mode', () => {
 
     expect(presetMocks.applyDefaultPreset).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('shows the saved nickname for reauthentication while sending the existing account ID and nickname', async () => {
+    const account: OAuthAccount = {
+      id: 'user@example.com#free',
+      email: 'user@example.com',
+      nickname: 'Personal',
+      provider: 'codex',
+      tokenFile: 'codex-user@example.com-free.json',
+      isDefault: true,
+      createdAt: '2026-01-01T00:00:00Z',
+    };
+    render(
+      <AddAccountDialog
+        open
+        onClose={vi.fn()}
+        provider="codex"
+        displayName="Codex"
+        account={account}
+      />
+    );
+    expect(screen.getAllByText('Personal')).toHaveLength(2);
+    expect(screen.getByText('user@example.com (Free)')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Reauthenticate' }));
+    expect(authMocks.startAuth).toHaveBeenCalledWith(
+      'codex',
+      expect.objectContaining({
+        accountId: account.id,
+        nickname: account.nickname,
+      })
+    );
+    expect(presetMocks.applyDefaultPreset).not.toHaveBeenCalled();
+  });
+
+  it('masks the nickname and secondary identity in the reauthentication dialog', () => {
+    vi.mocked(window.localStorage.getItem).mockImplementation((key) =>
+      key === 'ccs-privacy-mode' ? 'true' : null
+    );
+    const account: OAuthAccount = {
+      id: 'user@example.com#free',
+      email: 'user@example.com',
+      nickname: 'Personal',
+      provider: 'codex',
+      tokenFile: 'codex-user@example.com-free.json',
+      isDefault: true,
+      createdAt: '2026-01-01T00:00:00Z',
+    };
+    render(
+      <AddAccountDialog
+        open
+        onClose={vi.fn()}
+        provider="codex"
+        displayName="Codex"
+        account={account}
+      />
+    );
+    screen.getAllByText('Personal').forEach((label) => expect(label).toHaveClass('blur-[4px]'));
+    expect(screen.getByText('user@example.com (Free)')).toHaveClass('blur-[4px]');
   });
 
   it('applies the default preset when adding the first account', async () => {

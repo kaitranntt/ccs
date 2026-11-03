@@ -16,6 +16,49 @@ function makeAccount(overrides: Partial<OAuthAccount> & Pick<OAuthAccount, 'id' 
 }
 
 describe('buildAccountVisualGroups', () => {
+  it('preserves distinct saved nicknames and exact identities within a same-email group', () => {
+    const accounts = [
+      makeAccount({
+        id: 'user@example.com#team',
+        email: 'user@example.com',
+        nickname: 'Work',
+        tokenFile: 'codex-user@example.com-team.json',
+      }),
+      makeAccount({
+        id: 'user@example.com#free',
+        email: 'user@example.com',
+        nickname: 'Personal',
+        tokenFile: 'codex-user@example.com-free.json',
+      }),
+    ];
+    const snapshot = structuredClone(accounts);
+    const [group] = buildAccountVisualGroups(accounts);
+    expect(group?.nickname).toBeUndefined();
+    expect(
+      group?.variants?.map(({ id, nickname, tokenFile }) => ({ id, nickname, tokenFile }))
+    ).toEqual(accounts.map(({ id, nickname, tokenFile }) => ({ id, nickname, tokenFile })));
+    expect(group?.memberIds).toEqual(accounts.map(({ id }) => id));
+    expect(accounts).toEqual(snapshot);
+  });
+
+  it('carries a single saved nickname and uses only shared nicknames for grouped headings', () => {
+    const account = makeAccount({
+      id: 'user@example.com#free',
+      nickname: 'Personal',
+      tokenFile: 'codex-user@example.com-free.json',
+    });
+    expect(buildAccountVisualGroups([account])[0]?.nickname).toBe('Personal');
+    const sibling = {
+      ...account,
+      id: 'user@example.com#plus',
+      tokenFile: 'codex-user@example.com-plus.json',
+    };
+    expect(buildAccountVisualGroups([account, sibling])[0]?.nickname).toBe('Personal');
+    expect(
+      buildAccountVisualGroups([account, { ...sibling, nickname: undefined }])[0]?.nickname
+    ).toBeUndefined();
+  });
+
   it('preserves grouped codex variant identity details while ordering by audience', () => {
     const groups = buildAccountVisualGroups([
       makeAccount({
