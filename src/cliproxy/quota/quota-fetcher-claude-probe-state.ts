@@ -17,6 +17,7 @@ import * as path from 'node:path';
 import { getCcsDir } from '../../utils/config-manager';
 import { sanitizeEmail } from '../auth/auth-utils';
 import type { ClaudeQuotaResult } from './quota-types';
+import { buildClaudeCoreUsageSummary } from './quota-fetcher-claude-normalizer';
 
 /** Reuse another process's successful result for this long instead of probing. */
 export const CLAUDE_PROBE_SHARED_TTL_MS = 60_000;
@@ -29,9 +30,12 @@ const CLAUDE_PROBE_RETRY_AFTER_MAX_MS = 60 * 60_000;
 export const CLAUDE_PROBE_STALE_MAX_AGE_MS = 6 * 60 * 60_000;
 
 const STATE_VERSION = 1;
+export const CLAUDE_QUOTA_NORMALIZATION_VERSION = 3;
 
 export interface ClaudeProbeState {
   version: number;
+  /** Independent of the storage schema; old normalized numbers must not be reused. */
+  normalizationVersion?: number;
   /** Last successful usage result (success: true). */
   lastGood: ClaudeQuotaResult | null;
   /** Consecutive 429 responses since the last success. */
@@ -41,7 +45,13 @@ export interface ClaudeProbeState {
 }
 
 function emptyState(): ClaudeProbeState {
-  return { version: STATE_VERSION, lastGood: null, consecutive429: 0, cooldownUntil: 0 };
+  return {
+    version: STATE_VERSION,
+    normalizationVersion: CLAUDE_QUOTA_NORMALIZATION_VERSION,
+    lastGood: null,
+    consecutive429: 0,
+    cooldownUntil: 0,
+  };
 }
 
 function getStateFile(accountId: string): string {
@@ -55,11 +65,15 @@ export function readClaudeProbeState(accountId: string): ClaudeProbeState {
     const state = parsed as Partial<ClaudeProbeState>;
     if (state.version !== STATE_VERSION) return emptyState();
     const lastGood =
-      state.lastGood && state.lastGood.success === true && Array.isArray(state.lastGood.windows)
+      state.normalizationVersion === CLAUDE_QUOTA_NORMALIZATION_VERSION &&
+      state.lastGood &&
+      state.lastGood.success === true &&
+      Array.isArray(state.lastGood.windows)
         ? state.lastGood
         : null;
     return {
       version: STATE_VERSION,
+      normalizationVersion: CLAUDE_QUOTA_NORMALIZATION_VERSION,
       lastGood,
       consecutive429: Number.isFinite(state.consecutive429) ? Number(state.consecutive429) : 0,
       cooldownUntil: Number.isFinite(state.cooldownUntil) ? Number(state.cooldownUntil) : 0,
@@ -75,7 +89,11 @@ export function writeClaudeProbeState(accountId: string, state: ClaudeProbeState
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-    fs.writeFileSync(tmp, JSON.stringify(state), { mode: 0o600 });
+    fs.writeFileSync(
+      tmp,
+      JSON.stringify({ ...state, normalizationVersion: CLAUDE_QUOTA_NORMALIZATION_VERSION }),
+      { mode: 0o600 }
+    );
     fs.renameSync(tmp, file);
   } catch {
     // Best effort: losing the shared state only costs extra upstream calls.
@@ -126,15 +144,10 @@ export function buildStaleClaudeResult(
   if (now - lastGood.lastUpdated > CLAUDE_PROBE_STALE_MAX_AGE_MS) return null;
   const windows = lastGood.windows.filter((window) => !hasReset(window.resetAt, now));
   if (windows.length === 0) return null;
-  const fiveHour = lastGood.coreUsage?.fiveHour ?? null;
-  const weekly = lastGood.coreUsage?.weekly ?? null;
   return {
     ...lastGood,
     windows,
-    coreUsage: {
-      fiveHour: fiveHour && !hasReset(fiveHour.resetAt, now) ? fiveHour : null,
-      weekly: weekly && !hasReset(weekly.resetAt, now) ? weekly : null,
-    },
+    coreUsage: buildClaudeCoreUsageSummary(windows),
     stale: true,
   };
 }

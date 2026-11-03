@@ -1,3 +1,4 @@
+import { getClaudeAccountWindows } from './claude-quota';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type {
@@ -633,40 +634,17 @@ export function getCodexResetTime(windows: CodexQuotaWindow[]): string | null {
 export function getMinClaudePolicyQuota(quota: ClaudeQuotaResult): number | null {
   if (!quota.success) return null;
 
-  const coreWindows = [quota.coreUsage?.fiveHour, quota.coreUsage?.weekly].filter(
-    (window): window is NonNullable<typeof window> => !!window
-  );
-  if (coreWindows.length > 0) {
-    return Math.min(...coreWindows.map((window) => window.remainingPercent));
-  }
-
-  const usageWindows = quota.windows.filter((window) => window.rateLimitType !== 'overage');
-  if (usageWindows.length > 0) {
-    return Math.min(...usageWindows.map((window) => window.remainingPercent));
-  }
-
-  return null;
+  const windows = getClaudeAccountWindows(quota);
+  return windows.length ? Math.min(...windows.map((window) => window.remainingPercent)) : null;
 }
 
-/**
- * Get earliest reset time from Claude policy windows.
- */
+/** Get earliest reset time from account-wide Claude windows only. */
 export function getClaudePolicyResetTime(quota: ClaudeQuotaResult): string | null {
   if (!quota.success) return null;
-
-  const coreResets = [quota.coreUsage?.fiveHour?.resetAt, quota.coreUsage?.weekly?.resetAt].filter(
-    (value): value is string => !!value
-  );
-  if (coreResets.length > 0) {
-    return coreResets.sort()[0];
-  }
-
-  const resets = quota.windows
-    .filter((window) => window.rateLimitType !== 'overage')
+  const resets = getClaudeAccountWindows(quota)
     .map((window) => window.resetAt)
-    .filter((value): value is string => value !== null);
-  if (resets.length === 0) return null;
-  return resets.sort()[0];
+    .filter((value): value is string => !!value && Number.isFinite(Date.parse(value)));
+  return resets.sort((a, b) => Date.parse(a) - Date.parse(b))[0] ?? null;
 }
 
 /**

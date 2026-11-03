@@ -100,6 +100,33 @@ public enum BarQuotaGauge {
     }
   }
 
+  /// Account-level headroom is distinct from an individual model's window.
+  /// Claude's backend summary includes only general 5h/weekly limits and stays
+  /// nil when only model-specific or unknown windows are available.
+  public static func accountHeadroom(_ row: BarSummaryRow) -> Double? {
+    if row.provider == "claude-code" { return row.quotaPercentage }
+    return selectBindingWindow(row.quotaWindows ?? [])?.remainingPercent
+  }
+
+  /// Default profiles lead their provider carousel, followed by known account
+  /// headroom ascending. Unknown general capacity stays after known readings.
+  public static func orderedSubscriptions(_ rows: [BarSummaryRow]) -> [BarSummaryRow] {
+    rows.sorted { a, b in
+      if a.isDefault != b.isDefault { return a.isDefault }
+      switch (accountHeadroom(a), accountHeadroom(b)) {
+      case let (.some(x), .some(y)):
+        if x != y { return x < y }
+        return (a.displayName ?? a.provider) < (b.displayName ?? b.provider)
+      case (.some, .none):
+        return true
+      case (.none, .some):
+        return false
+      case (.none, .none):
+        return (a.displayName ?? a.provider) < (b.displayName ?? b.provider)
+      }
+    }
+  }
+
   /// Stable ordering for window keys when remaining% and length tie.
   private static func keyRank(_ key: String) -> Int {
     switch key {
@@ -224,16 +251,16 @@ public enum BarQuotaGauge {
     return "\(m)m"
   }
 
-  /// Header "most room" leader: among subscription rows that have a binding
-  /// window, the one whose BINDING window has the HIGHEST remaining%. Rows with
-  /// no binding window (error/reauth) are excluded. Tie-breaks alphabetically by
+  /// Header "most room" leader: the subscription with the highest known
+  /// account headroom. Claude model/unknown windows never supply that value.
+  /// Rows without known headroom are excluded. Tie-breaks alphabetically by
   /// display name (falling back to provider). Returns nil with fewer than two
   /// eligible subscriptions (the header is suppressed below that).
   public static func headroomLeader(_ rows: [BarSummaryRow]) -> (label: String, remainingPercent: Double)? {
     let eligible: [(label: String, remaining: Double)] = rows.compactMap { row in
-      guard let binding = selectBindingWindow(row.quotaWindows ?? []) else { return nil }
+      guard let remaining = accountHeadroom(row) else { return nil }
       let label = row.displayName ?? row.provider
-      return (label, binding.remainingPercent)
+      return (label, remaining)
     }
     guard eligible.count >= 2 else { return nil }
     let leader = eligible.max { a, b in

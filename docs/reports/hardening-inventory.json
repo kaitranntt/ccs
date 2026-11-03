@@ -1,8 +1,8 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2588,
-    "filesAffected": 271,
+    "totalOccurrences": 2595,
+    "filesAffected": 272,
     "hotpathOccurrences": 1209,
     "hotpathFilesAffected": 159,
     "topHotpathFiles": [
@@ -304,8 +304,8 @@
     ]
   },
   "legacyShim": {
-    "totalMarkers": 484,
-    "filesAffected": 181,
+    "totalMarkers": 489,
+    "filesAffected": 184,
     "topFiles": [
       {
         "file": "src/auth/profile-detector.ts",
@@ -727,7 +727,7 @@
       "topOver400": [
         {
           "file": "src/web-server/usage/native-quota-collector.ts",
-          "loc": 1750
+          "loc": 1718
         },
         {
           "file": "src/web-server/routes/cliproxy-auth-routes.ts",
@@ -775,7 +775,7 @@
         },
         {
           "file": "src/cliproxy/quota/quota-manager.ts",
-          "loc": 954
+          "loc": 946
         },
         {
           "file": "src/web-server/services/codex-dashboard-service.ts",

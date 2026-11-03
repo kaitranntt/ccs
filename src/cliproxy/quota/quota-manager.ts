@@ -14,7 +14,7 @@
 
 import { CLIProxyProvider } from '../types';
 import { QuotaResult, fetchAccountQuota } from './quota-fetcher';
-import { fetchClaudeQuota } from './quota-fetcher-claude';
+import { fetchClaudeQuota, buildClaudeCoreUsageSummary } from './quota-fetcher-claude';
 import { fetchCodexQuota } from './quota-fetcher-codex';
 import { fetchGeminiCliQuota } from './quota-fetcher-gemini-cli';
 import { fetchGhcpQuota } from './quota-fetcher-ghcp';
@@ -355,19 +355,11 @@ function calculateAgyQuotaPercent(quota: QuotaResult): number | null {
 function calculateClaudeQuotaPercent(quota: ClaudeQuotaResult): number | null {
   if (!quota.success) return null;
 
-  const coreWindows = [quota.coreUsage?.fiveHour, quota.coreUsage?.weekly].filter(
+  const core = buildClaudeCoreUsageSummary(quota.windows);
+  const windows = [core.fiveHour, core.weekly].filter(
     (window): window is NonNullable<typeof window> => !!window
   );
-  if (coreWindows.length > 0) {
-    return Math.min(...coreWindows.map((window) => window.remainingPercent));
-  }
-
-  const usageWindows = quota.windows.filter((window) => window.rateLimitType !== 'overage');
-  if (usageWindows.length > 0) {
-    return Math.min(...usageWindows.map((window) => window.remainingPercent));
-  }
-
-  return null;
+  return windows.length ? Math.min(...windows.map((window) => window.remainingPercent)) : null;
 }
 
 function calculateCodexQuotaPercent(quota: CodexQuotaResult): number | null {
