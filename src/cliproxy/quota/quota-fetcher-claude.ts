@@ -7,7 +7,7 @@
 import * as path from 'node:path';
 import * as fsp from 'node:fs/promises';
 import { getAuthDir } from '../config/config-generator';
-import { getPausedDir, getProviderAccounts } from '../accounts/account-manager';
+import { getAccount, getPausedDir, getProviderAccounts } from '../accounts/account-manager';
 import { sanitizeEmail, isTokenExpired } from '../auth/auth-utils';
 import type { ClaudeQuotaResult } from './quota-types';
 import {
@@ -158,6 +158,16 @@ async function readAuthCandidate(filePath: string): Promise<ClaudeAuthData | nul
 
 async function readClaudeAuthData(accountId: string): Promise<ClaudeAuthData | null> {
   const authDirs = [getAuthDir(), getPausedDir()];
+  const registryAccount = getAccount('claude', accountId);
+  if (registryAccount?.tokenFile) {
+    for (const authDir of authDirs) {
+      const authData = await readAuthCandidate(path.join(authDir, registryAccount.tokenFile));
+      if (authData) {
+        return authData;
+      }
+    }
+  }
+
   const sanitizedId = sanitizeEmail(accountId);
   const expectedFiles = [`claude-${sanitizedId}.json`, `anthropic-${sanitizedId}.json`];
 

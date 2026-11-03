@@ -747,8 +747,12 @@ describe('Claude Quota Fetcher', () => {
 
         expect(result.success).toBe(true);
         expect(attempt).toBe(2);
-        expect(globalThis.setTimeout).toHaveBeenCalledTimes(2);
-        expect(globalThis.clearTimeout).toHaveBeenCalledTimes(2);
+        // The registry token-file lookup holds a short file lock with its own timer, so
+        // count only the per-request abort timers (CLAUDE_QUOTA_TIMEOUT_MS).
+        const requestTimers = (globalThis.setTimeout as ReturnType<typeof mock>).mock.calls.filter(
+          ([, timeout]) => timeout === 10000
+        );
+        expect(requestTimers).toHaveLength(2);
         expect(activeTimers.size).toBe(0);
       } finally {
         globalThis.setTimeout = originalSetTimeout;
@@ -849,6 +853,69 @@ describe('Claude Quota Fetcher', () => {
 
       const result = await fetchClaudeQuota(accountId);
       expect(result.success).toBe(true);
+    });
+
+    it('uses each organization token file for same-email Claude accounts', async () => {
+      const authDir = path.join(tmpDir, '.ccs', 'cliproxy', 'auth');
+      fs.mkdirSync(authDir, { recursive: true });
+      for (const [orgHash, accessToken] of [
+        ['a1b2c3d4', 'team-token'],
+        ['f0e1d2c3', 'personal-token'],
+      ]) {
+        fs.writeFileSync(
+          path.join(authDir, `claude-${orgHash}-dev@example.com.json`),
+          JSON.stringify({
+            type: 'claude',
+            email: 'dev@example.com',
+            access_token: accessToken,
+            expired: '2099-01-01T00:00:00.000Z',
+          })
+        );
+      }
+
+      const usageByToken: Record<string, number> = { 'team-token': 10, 'personal-token': 70 };
+      global.fetch = mock((_url: string, options?: RequestInit) => {
+        const authorization = (options?.headers as Record<string, string>)['Authorization'];
+        const utilization = usageByToken[authorization.replace('Bearer ', '')];
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              five_hour: { utilization, resets_at: '2026-03-01T01:00:00Z' },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+        );
+      }) as typeof fetch;
+
+      const all = await fetchAllClaudeQuotas();
+      const remainingByAccount = Object.fromEntries(
+        all.map(({ account, quota }) => [account, quota.coreUsage?.fiveHour?.remainingPercent])
+      );
+
+      expect(remainingByAccount).toEqual({
+        'dev@example.com#a1b2c3d4': 90,
+        'dev@example.com#f0e1d2c3': 30,
+      });
+    });
+
+    it('does not guess a Claude auth file for an unknown organization variant', async () => {
+      createClaudeAccount('dev@example.com', {
+        type: 'claude',
+        email: 'dev@example.com',
+        access_token: 'other-org-token',
+        expired: '2099-01-01T00:00:00.000Z',
+      });
+
+      const fetchSpy = mock(() =>
+        Promise.resolve(new Response(JSON.stringify({}), { status: 200 }))
+      ) as typeof fetch;
+      global.fetch = fetchSpy;
+
+      const result = await fetchClaudeQuota('dev@example.com#a1b2c3d4');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Auth file not found for Claude account');
+      expect(fetchSpy).not.toHaveBeenCalled();
     });
   });
 });

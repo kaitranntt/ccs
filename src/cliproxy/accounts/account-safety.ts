@@ -487,7 +487,9 @@ export function pauseAccountForQuotaCooldown(
 ): boolean {
   const registryBefore = loadAccountsRegistry();
   const accountBefore = registryBefore.providers[provider]?.accounts[accountId];
-  if (!accountBefore || accountBefore.paused) {
+  // An id missing from accounts.json can still come from the hydrated view (for example a
+  // same-email variant id that discovery has not persisted yet); pauseAccount reconciles it.
+  if (accountBefore?.paused) {
     return false;
   }
 
