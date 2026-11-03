@@ -582,8 +582,8 @@
     },
     "loggerCoverage": {
       "filesWithCreateLogger": 68,
-      "totalSourceFiles": 778,
-      "coverageRatio": 0.0874,
+      "totalSourceFiles": 779,
+      "coverageRatio": 0.0873,
       "subdomainsWithZeroCreateLogger": [
         "api",
         "bin",
@@ -739,7 +739,7 @@
         },
         {
           "file": "src/cliproxy/config/generator.ts",
-          "loc": 1289
+          "loc": 1291
         },
         {
           "file": "src/web-server/model-pricing.ts",
