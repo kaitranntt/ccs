@@ -1,8 +1,7 @@
 /**
  * Shutdown Handler
  *
- * Handles SIGINT/SIGTERM signals to close server and exit immediately.
- * No graceful waiting - config dashboard doesn't need it.
+ * Handles SIGINT/SIGTERM and releases background-controller ownership before exit.
  */
 
 import { Server as HTTPServer } from 'http';
@@ -15,21 +14,29 @@ import { ok } from '../utils/ui';
 export function setupGracefulShutdown(
   server: HTTPServer,
   _wss: WebSocketServer,
-  cleanup?: () => void
+  cleanup?: () => void | Promise<void>
 ): void {
-  const shutdown = () => {
+  let shuttingDown = false;
+  const shutdown = async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     console.log('\n' + ok('Shutting down...'));
 
-    // Run cleanup (closes file watchers + WebSocket clients)
+    // Stop accepting requests before awaiting controller mutation/lease cleanup.
+    server.close();
+    server.closeAllConnections();
     if (cleanup) {
-      cleanup();
+      await cleanup();
     }
 
     // Close server and exit immediately
-    server.close();
     process.exit(0);
   };
 
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', () => {
+    void shutdown();
+  });
+  process.on('SIGTERM', () => {
+    void shutdown();
+  });
 }
