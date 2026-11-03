@@ -8,20 +8,45 @@ import {
 } from '../../../src/api/services/provider-presets';
 
 describe('provider-presets', () => {
-  it('resolves Alibaba Coding Plan preset id', () => {
+  it('resolves QwenCloud Coding Plan preset id and branding', () => {
     const preset = getPresetById('alibaba-coding-plan');
     expect(preset?.id).toBe('alibaba-coding-plan');
+    expect(preset?.name).toBe('QwenCloud Coding Plan');
+    expect(preset?.description).toBe('QwenCloud Coding Plan via Anthropic-compatible endpoint');
+    expect(preset?.apiKeyHint).toBe('Get your API key at https://home.qwencloud.com/api-keys');
+    expect(preset?.badge).toBe('QwenCloud');
     expect(preset?.baseUrl).toBe('https://coding-intl.dashscope.aliyuncs.com/apps/anthropic');
     expect(preset?.defaultProfileName).toBe('albb');
   });
 
-  it('resolves alibaba alias to Alibaba Coding Plan preset', () => {
+  it('resolves alibaba alias to QwenCloud Coding Plan preset', () => {
     const preset = getPresetById('alibaba');
     expect(preset?.id).toBe('alibaba-coding-plan');
   });
 
   it('treats alibaba alias as a valid preset id', () => {
     expect(isValidPresetId('alibaba')).toBe(true);
+  });
+
+  it('resolves qwencloud and qwen-cloud aliases to alibaba-coding-plan', () => {
+    expect(getPresetById('qwencloud')?.id).toBe('alibaba-coding-plan');
+    expect(getPresetById('qwen-cloud')?.id).toBe('alibaba-coding-plan');
+    expect(getPresetById('QWENCLOUD')?.id).toBe('alibaba-coding-plan');
+    expect(isValidPresetId('qwencloud')).toBe(true);
+    expect(isValidPresetId('qwen-cloud')).toBe(true);
+  });
+
+  it('rebrands qwen API preset hints to QwenCloud without changing the preset id', () => {
+    const preset = getPresetById('qwen');
+    expect(preset?.id).toBe('qwen');
+    expect(preset?.name).toBe('Qwen');
+    expect(preset?.description).toBe(
+      'QwenCloud - Qwen3 models (256K-1M context, thinking support)'
+    );
+    expect(preset?.apiKeyHint).toBe('Get your API key at https://home.qwencloud.com/api-keys');
+    expect(preset?.badge).toBe('QwenCloud');
+    expect(preset?.baseUrl).toBe('https://dashscope-intl.aliyuncs.com/apps/anthropic');
+    expect(preset?.defaultProfileName).toBe('qwen-api');
   });
 
   it('resolves canonical km preset id', () => {
