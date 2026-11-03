@@ -1,4 +1,5 @@
 import * as http from 'http';
+import { hasEncodedBody } from './content-encoding';
 
 export const UPSTREAM_RESPONSE_TIMEOUT_MESSAGE =
   'Upstream response timed out while streaming response body';
@@ -54,6 +55,12 @@ export function writeTimeoutResponse(
   const contentType = String(headers['content-type'] ?? '').toLowerCase();
 
   try {
+    if (clientRes.headersSent && hasEncodedBody(headers)) {
+      // A plain-text error appended to a compressed body would surface as a
+      // decompression error; reset the connection so the client sees the failure.
+      clientRes.destroy();
+      return;
+    }
     if (contentType.includes('text/event-stream')) {
       const payload = {
         type: 'error',

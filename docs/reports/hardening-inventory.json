@@ -582,8 +582,8 @@
     },
     "loggerCoverage": {
       "filesWithCreateLogger": 68,
-      "totalSourceFiles": 769,
-      "coverageRatio": 0.0884,
+      "totalSourceFiles": 770,
+      "coverageRatio": 0.0883,
       "subdomainsWithZeroCreateLogger": [
         "api",
         "bin",
@@ -770,12 +770,12 @@
           "loc": 1001
         },
         {
-          "file": "src/cliproxy/quota/quota-manager.ts",
-          "loc": 954
+          "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
+          "loc": 993
         },
         {
-          "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
-          "loc": 948
+          "file": "src/cliproxy/quota/quota-manager.ts",
+          "loc": 954
         },
         {
           "file": "src/web-server/services/codex-dashboard-service.ts",
