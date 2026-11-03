@@ -14,6 +14,21 @@ const businessAccount: OAuthAccount = {
 };
 
 describe('setup account identity privacy', () => {
+  it('masks a saved nickname and its secondary identity in the account selector', () => {
+    render(
+      <AccountStep
+        accounts={[{ ...businessAccount, nickname: 'Work' }]}
+        privacyMode
+        onSelect={vi.fn()}
+        onAddNew={vi.fn()}
+        onBack={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Work')).toHaveClass('blur-[4px]');
+    expect(screen.getByText('victim@example.com (Business · Workspace 04a0f049)')).toHaveClass(
+      'blur-[4px]'
+    );
+  });
   it('blurs account metadata badges in the account selection step', () => {
     render(
       <AccountStep

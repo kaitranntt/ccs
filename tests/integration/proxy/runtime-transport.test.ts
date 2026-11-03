@@ -60,6 +60,7 @@ describe('runtime-aware upstream transport', () => {
   const originalEnv = new Map<string, string | undefined>();
   let ccsHome = '';
   let corporateProxy: http.Server | undefined;
+  const fixtureSockets = new Set<import('node:net').Socket>();
   let corporateProxyHits = 0;
   let sawProxyAuthorization = false;
   let proxyServer: http.Server | undefined;
@@ -69,23 +70,36 @@ describe('runtime-aware upstream transport', () => {
       originalEnv.set(key, process.env[key]);
       delete process.env[key];
     }
+    originalEnv.set(
+      'CCS_OPENAI_PROXY_REQUEST_TIMEOUT_MS',
+      process.env.CCS_OPENAI_PROXY_REQUEST_TIMEOUT_MS
+    );
+    process.env.CCS_OPENAI_PROXY_REQUEST_TIMEOUT_MS = '500';
     originalEnv.set('CCS_HOME', process.env.CCS_HOME);
     ccsHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-runtime-transport-'));
     process.env.CCS_HOME = ccsHome;
     corporateProxy = undefined;
+    fixtureSockets.clear();
     proxyServer = undefined;
     corporateProxyHits = 0;
     sawProxyAuthorization = false;
   });
 
   afterEach(async () => {
+    // Release only sockets owned by these mock servers before awaiting shutdown.
+    for (const socket of fixtureSockets) socket.destroy();
     if (proxyServer) {
       await closeOpenAICompatProxyServer(proxyServer, 50);
     }
     if (corporateProxy) {
-      await new Promise<void>((resolve) => corporateProxy.close(() => resolve()));
+      const closed = new Promise<void>((resolve) => corporateProxy.close(() => resolve()));
+      await closed;
     }
-    for (const key of [...PROXY_ENV_KEYS, 'CCS_HOME'] as const) {
+    for (const key of [
+      ...PROXY_ENV_KEYS,
+      'CCS_HOME',
+      'CCS_OPENAI_PROXY_REQUEST_TIMEOUT_MS',
+    ] as const) {
       const value = originalEnv.get(key);
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
@@ -116,6 +130,10 @@ describe('runtime-aware upstream transport', () => {
       });
       res.end(upstreamPayload);
     });
+    corporateProxy.on('connection', (socket) => {
+      fixtureSockets.add(socket);
+      socket.once('close', () => fixtureSockets.delete(socket));
+    });
     const corporateProxyPort = await listen(corporateProxy);
     process.env.HTTP_PROXY = `http://sentinel-user:sentinel-password@127.0.0.1:${corporateProxyPort}`;
 
@@ -131,6 +149,10 @@ describe('runtime-aware upstream transport', () => {
       profile,
       port: 0,
       authToken: 'sentinel-local-token',
+    });
+    proxyServer.on('connection', (socket) => {
+      fixtureSockets.add(socket);
+      socket.once('close', () => fixtureSockets.delete(socket));
     });
     const proxyPort = await new Promise<number>((resolve, reject) => {
       proxyServer.once('error', reject);
@@ -152,7 +174,10 @@ describe('runtime-aware upstream transport', () => {
     process.env.NO_PROXY = 'upstream.invalid';
     const hitsBeforeBypass = corporateProxyHits;
     const bypassed = await requestMessages(proxyPort);
-    expect(bypassed.status).toBe(502);
+    // NO_PROXY must bypass the fake proxy even when the host's DNS failure is slow.
+    // Both DNS rejection and the bounded request timeout are upstream failures.
+    expect([502, 504]).toContain(bypassed.status);
+    expect(JSON.parse(bypassed.body).type).toBe('error');
     expect(corporateProxyHits).toBe(hitsBeforeBypass);
     expect(globalThis.fetch).toBe(originalFetch);
   });

@@ -7,7 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { getAccountIdentityPresentation, getCodexIdentityBadge } from '@/lib/account-identity';
+import {
+  getAccountDisplayLabels,
+  getAccountIdentityPresentation,
+  getCodexIdentityBadge,
+} from '@/lib/account-identity';
 import {
   Select,
   SelectContent,
@@ -59,6 +63,14 @@ export function VariantStep({
     selectedProvider === 'codex' && selectedAccountIdentity
       ? getCodexIdentityBadge(selectedAccountIdentity)
       : null;
+  const selectedAccountLabels = selectedAccount
+    ? getAccountDisplayLabels(
+        selectedAccount.id,
+        selectedAccount.email,
+        selectedAccount.tokenFile,
+        selectedAccount.nickname
+      )
+    : null;
 
   const handleModelSelect = (value: string) => {
     if (value === CUSTOM_MODEL_VALUE) {
@@ -79,9 +91,19 @@ export function VariantStep({
             <span>
               {t('setupVariant.using')}{' '}
               <span className={cn('break-all', privacyMode && PRIVACY_BLUR_CLASS)}>
-                {selectedAccountIdentity?.email}
+                {selectedAccountLabels?.primary}
               </span>
             </span>
+            {selectedAccountLabels?.secondary && (
+              <div
+                className={cn(
+                  'text-xs text-muted-foreground break-all',
+                  privacyMode && PRIVACY_BLUR_CLASS
+                )}
+              >
+                {selectedAccountLabels.secondary}
+              </div>
+            )}
             {(selectedAccountIdentity?.audienceLabel || selectedAccountIdentity?.detailLabel) && (
               <div className="flex items-center gap-1.5 flex-wrap">
                 {selectedCodexBadge?.label ? (

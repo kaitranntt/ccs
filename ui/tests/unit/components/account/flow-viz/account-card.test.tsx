@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, userEvent } from '@tests/setup/test-utils';
+import { render, screen, userEvent, within } from '@tests/setup/test-utils';
 import { AccountCard } from '@/components/account/flow-viz/account-card';
 import type { AccountData } from '@/components/account/flow-viz/types';
 import type { CodexQuotaResult } from '@/lib/api-client';
@@ -133,6 +133,186 @@ describe('AccountCard grouped quota tooltip', () => {
         isLoading: false,
       },
     ] as ReturnType<typeof useAccountQuotas>);
+  });
+
+  it('separates same-email Claude nicknames from hashes and controls while keeping exact quota and pause IDs', async () => {
+    const onPauseToggle = vi.fn();
+    const accounts: AccountData[] = [
+      {
+        id: 'shared@example.com#a1b2c3d4',
+        email: 'shared@example.com',
+        nickname: 'educup-primary',
+        provider: 'claude',
+        color: '#1e6091',
+        successCount: 2,
+        failureCount: 0,
+        isDefault: true,
+      },
+      {
+        id: 'shared@example.com#e5f6a7b8',
+        email: 'shared@example.com',
+        nickname: 'educup-dev',
+        provider: 'claude',
+        color: '#1e6091',
+        successCount: 1,
+        failureCount: 0,
+        paused: true,
+      },
+    ];
+    const cards = (privacyMode: boolean) => (
+      <>
+        {accounts.map((account, index) => (
+          <AccountCard
+            key={account.id}
+            account={account}
+            zone="left"
+            originalIndex={index}
+            isHovered={false}
+            isDragging={false}
+            offset={{ x: 0, y: 0 }}
+            showDetails={false}
+            privacyMode={privacyMode}
+            onMouseEnter={vi.fn()}
+            onMouseLeave={vi.fn()}
+            onPointerDown={vi.fn()}
+            onPointerMove={vi.fn()}
+            onPointerUp={vi.fn()}
+            onPauseToggle={onPauseToggle}
+          />
+        ))}
+      </>
+    );
+    const { container, rerender } = render(cards(false));
+
+    for (const account of accounts) {
+      const label = screen.getByText(account.nickname ?? '');
+      const card = label.closest('[data-account-index]');
+      if (!(card instanceof HTMLElement)) throw new Error('Expected a monitor account card');
+      const details = within(card).getByText(`shared@example.com (${account.id.split('#')[1]})`);
+      const pause = within(card).getByRole('button');
+      expect(card).toHaveClass('w-44');
+      expect(label).toHaveClass('whitespace-normal', 'wrap-anywhere');
+      expect(label).not.toHaveClass('truncate');
+      expect(label.parentElement?.parentElement).toContainElement(details);
+      expect(label.parentElement?.parentElement).not.toContainElement(pause);
+      expect(mockedUseAccountQuota).toHaveBeenCalledWith('claude', account.id, true);
+      await userEvent.click(pause);
+      expect(onPauseToggle).toHaveBeenLastCalledWith([account.id], !account.paused);
+    }
+
+    expect(onPauseToggle).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('Paused')).toBeInTheDocument();
+    rerender(cards(true));
+    for (const account of accounts) {
+      expect(screen.getByText(account.nickname ?? '')).toHaveClass('blur-[4px]');
+      expect(screen.getByText(`shared@example.com (${account.id.split('#')[1]})`)).toHaveClass(
+        'blur-[4px]'
+      );
+    }
+    expect(container.querySelector('[title]')).toBeNull();
+  });
+
+  it('retains long Claude nicknames as wrapping text rather than a truncated title', () => {
+    const nickname = 'educup-production-with-a-very-long-saved-nickname';
+    render(
+      <AccountCard
+        account={{
+          ...groupedAccount,
+          id: 'shared@example.com#a1b2c3d4',
+          email: 'shared@example.com',
+          nickname,
+          provider: 'claude',
+          variants: undefined,
+        }}
+        zone="left"
+        originalIndex={0}
+        isHovered={false}
+        isDragging={false}
+        offset={{ x: 0, y: 0 }}
+        showDetails={false}
+        privacyMode={false}
+        onMouseEnter={vi.fn()}
+        onMouseLeave={vi.fn()}
+        onPointerDown={vi.fn()}
+        onPointerMove={vi.fn()}
+        onPointerUp={vi.fn()}
+      />
+    );
+
+    // This asserts markup/classes only; browser verification owns the 176px layout.
+    const label = screen.getByText(nickname);
+    expect(label).toHaveClass('w-full', 'whitespace-normal', 'wrap-anywhere', 'leading-snug');
+    expect(label).not.toHaveClass('truncate');
+    expect(label.parentElement?.children).toHaveLength(1);
+    expect(label.parentElement).not.toContainElement(
+      screen.getByText('shared@example.com (a1b2c3d4)')
+    );
+  });
+
+  it('renders a single nickname and keeps quota and pause actions keyed by the original ID', async () => {
+    const onPauseToggle = vi.fn();
+    const account = {
+      ...groupedAccount,
+      id: 'user@example.com#free',
+      nickname: 'Personal',
+      variants: undefined,
+    };
+    render(
+      <AccountCard
+        account={account}
+        zone="left"
+        originalIndex={0}
+        isHovered={false}
+        isDragging={false}
+        offset={{ x: 0, y: 0 }}
+        showDetails={false}
+        privacyMode={false}
+        onMouseEnter={vi.fn()}
+        onMouseLeave={vi.fn()}
+        onPointerDown={vi.fn()}
+        onPointerMove={vi.fn()}
+        onPointerUp={vi.fn()}
+        onPauseToggle={onPauseToggle}
+      />
+    );
+    expect(screen.getByText('Personal')).toBeInTheDocument();
+    expect(screen.getByText('user@example.com (Free)')).toBeInTheDocument();
+    expect(mockedUseAccountQuota).toHaveBeenCalledWith('codex', account.id, true);
+    await userEvent.click(screen.getByRole('button'));
+    expect(onPauseToggle).toHaveBeenCalledWith([account.id], true);
+  });
+
+  it('renders each grouped nickname and masks the labels in privacy mode', () => {
+    const account = {
+      ...groupedAccount,
+      variants: groupedAccount.variants?.map((variant, index) => ({
+        ...variant,
+        nickname: index === 0 ? 'Work' : 'Personal',
+      })),
+    };
+    const { container } = render(
+      <AccountCard
+        account={account}
+        zone="left"
+        originalIndex={0}
+        isHovered={false}
+        isDragging={false}
+        offset={{ x: 0, y: 0 }}
+        showDetails={false}
+        privacyMode
+        onMouseEnter={vi.fn()}
+        onMouseLeave={vi.fn()}
+        onPointerDown={vi.fn()}
+        onPointerMove={vi.fn()}
+        onPointerUp={vi.fn()}
+      />
+    );
+    for (const nickname of ['Work', 'Personal']) {
+      expect(screen.getByText(nickname).parentElement).toHaveClass('blur-[4px]');
+    }
+    expect(screen.getByText('user@example.com')).toHaveClass('blur-[4px]');
+    expect(screen.getByText('Biz').parentElement).toHaveClass('blur-[4px]');
+    expect(container.querySelector('[title]')).toBeNull();
   });
 
   it('keeps grouped Codex account labels distinct and shows quota tooltips for each variant', async () => {

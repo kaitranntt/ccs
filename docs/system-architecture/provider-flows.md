@@ -130,10 +130,9 @@ Provider tokens live under the configured CLIProxy auth directory. Documentation
 and examples must use neutral account labels; raw email addresses, token
 filenames, access tokens, and refresh tokens are not architecture data.
 
-Some providers can produce more than one account with the same display email.
-CCS keeps runtime identity tied to the exact registered auth file rather than
-collapsing accounts by display text. The dashboard can show a safe variant
-label without exposing the internal identifier.
+Some providers can produce more than one account with the same display email. CCS keeps runtime identity tied to the exact registered auth file rather than collapsing accounts by display text. Dashboard account cards and selectors show the saved nickname first, falling back to email or account ID when it is absent or blank. Email and variant details remain secondary for disambiguation; privacy mode also masks nicknames and suppresses sensitive hover titles. Nicknames are presentation metadata and never replace action IDs, token filenames, or registry keys. Compact monitor cards give the nickname its own wrapping row; badges and controls remain separate so workspace hashes cannot displace the saved label.
+
+The dashboard's [visual grouping model](../../ui/src/lib/account-visual-groups.ts) retains each variant's nickname when Codex records share an email. A shared group nickname is used only when every member has the same nickname; otherwise the group keeps its email heading and the [flow card](../../ui/src/components/account/flow-viz/account-card.tsx) lists the individual nicknames with their underlying identities. Grouping and quota lookup behavior remain tied to the original account records.
 
 ## API-key profiles
 

@@ -119,7 +119,18 @@ export function ProviderCard({
                 title={
                   privacyMode
                     ? '••••••'
-                    : formatAccountDisplayName(acc.id, acc.email, acc.tokenFile)
+                    : acc.variants?.length
+                      ? acc.variants
+                          .map((variant) =>
+                            formatAccountDisplayName(
+                              variant.id,
+                              variant.email,
+                              variant.tokenFile,
+                              variant.nickname
+                            )
+                          )
+                          .join(' • ')
+                      : formatAccountDisplayName(acc.id, acc.email, acc.tokenFile, acc.nickname)
                 }
               />
               {isMissingProjectId && (

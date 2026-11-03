@@ -5,7 +5,11 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChevronRight, ArrowLeft, User, ExternalLink } from 'lucide-react';
-import { getAccountIdentityPresentation, getCodexIdentityBadge } from '@/lib/account-identity';
+import {
+  getAccountDisplayLabels,
+  getAccountIdentityPresentation,
+  getCodexIdentityBadge,
+} from '@/lib/account-identity';
 import { cn } from '@/lib/utils';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import type { AccountStepProps } from '../types';
@@ -30,6 +34,7 @@ export function AccountStep({
       <div className="grid gap-2 max-h-[320px] overflow-y-auto pr-1">
         {accounts.map((acc) => {
           const identity = getAccountIdentityPresentation(acc.id, acc.email, acc.tokenFile);
+          const labels = getAccountDisplayLabels(acc.id, acc.email, acc.tokenFile, acc.nickname);
           const codexBadge =
             acc.provider?.toLowerCase() === 'codex' ? getCodexIdentityBadge(identity) : null;
           return (
@@ -45,8 +50,18 @@ export function AccountStep({
                 </div>
                 <div className="space-y-1">
                   <div className={cn('font-medium', privacyMode && PRIVACY_BLUR_CLASS)}>
-                    {identity.email}
+                    {labels.primary}
                   </div>
+                  {labels.secondary && (
+                    <div
+                      className={cn(
+                        'text-xs text-muted-foreground break-all',
+                        privacyMode && PRIVACY_BLUR_CLASS
+                      )}
+                    >
+                      {labels.secondary}
+                    </div>
+                  )}
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {codexBadge?.label ? (
                       <Badge

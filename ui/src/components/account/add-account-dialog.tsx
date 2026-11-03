@@ -51,6 +51,9 @@ import {
 import type { KiroAuthMethod, KiroIDCFlow } from '@/lib/provider-config';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { usePrivacy, PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
+import { getAccountDisplayLabels } from '@/lib/account-identity';
+import { cn } from '@/lib/utils';
 
 interface AddAccountDialogProps {
   open: boolean;
@@ -131,7 +134,11 @@ export function AddAccountDialog({
   const gitlabPersonalAccessTokenTrimmed = gitlabPersonalAccessToken.trim();
   const errorMessage = localError || authFlow.error;
   const isReauth = Boolean(account);
-  const accountLabel = account?.email || account?.nickname || account?.id || displayName;
+  const { privacyMode } = usePrivacy();
+  const accountLabels = account
+    ? getAccountDisplayLabels(account.id, account.email, account.tokenFile, account.nickname)
+    : { primary: displayName };
+  const accountLabel = accountLabels.primary;
 
   const fetchPowerUserModeState = useCallback(async (): Promise<boolean> => {
     const response = await fetch('/api/settings/auth/antigravity-risk');
@@ -402,13 +409,19 @@ export function AddAccountDialog({
               : t('addAccountDialog.title', { displayName })}
           </DialogTitle>
           <DialogDescription>
-            {isReauth
-              ? `Refresh credentials for ${accountLabel}.`
-              : isKiro
-                ? t('addAccountDialog.descKiro')
-                : isDeviceCode
-                  ? t('addAccountDialog.descDeviceCode')
-                  : t('addAccountDialog.descOauth')}
+            {isReauth ? (
+              <>
+                Refresh credentials for{' '}
+                <span className={privacyMode ? PRIVACY_BLUR_CLASS : undefined}>{accountLabel}</span>
+                .
+              </>
+            ) : isKiro ? (
+              t('addAccountDialog.descKiro')
+            ) : isDeviceCode ? (
+              t('addAccountDialog.descDeviceCode')
+            ) : (
+              t('addAccountDialog.descOauth')
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -619,7 +632,16 @@ export function AddAccountDialog({
           {/* Nickname input - only show before auth starts */}
           {!showAuthUI && isReauth && (
             <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
-              <div className="font-medium">{accountLabel}</div>
+              <div className={cn('font-medium', privacyMode && PRIVACY_BLUR_CLASS)}>
+                {accountLabel}
+              </div>
+              {accountLabels.secondary && (
+                <div
+                  className={cn('text-xs text-muted-foreground', privacyMode && PRIVACY_BLUR_CLASS)}
+                >
+                  {accountLabels.secondary}
+                </div>
+              )}
               <div className="text-xs text-muted-foreground">
                 This sign-in updates the selected account instead of creating another account.
               </div>

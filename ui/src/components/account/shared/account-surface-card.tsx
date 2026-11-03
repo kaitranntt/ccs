@@ -1,9 +1,10 @@
-import type { ReactNode } from 'react';
+import { Children, cloneElement, isValidElement, type ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import type { UnifiedQuotaResult } from '@/hooks/use-cliproxy-stats';
 import {
   getAccountIdentityPresentation,
+  getAccountDisplayLabels,
   getCodexIdentityBadge,
   type CodexIdentityBadge,
 } from '@/lib/account-identity';
@@ -22,6 +23,7 @@ interface AccountSurfaceCardProps {
   provider: string;
   accountId: string;
   email?: string;
+  nickname?: string;
   displayEmail?: string;
   tokenFile?: string;
   tier?: AccountTier;
@@ -39,6 +41,24 @@ interface AccountSurfaceCardProps {
   footerSlot?: ReactNode;
   quotaInsetClassName?: string;
   className?: string;
+}
+
+// Grouped identity badges arrive through a slot; hide their hover titles as well as their labels.
+function maskCompactIdentityMetadata(content: ReactNode): ReactNode {
+  return Children.map(content, (child) => {
+    if (!isValidElement<{ title?: string; className?: string; children?: ReactNode }>(child)) {
+      return child;
+    }
+    return cloneElement(child, {
+      ...(child.props.title !== undefined && {
+        title: undefined,
+        className: cn(child.props.className, PRIVACY_BLUR_CLASS),
+      }),
+      ...(child.props.children !== undefined && {
+        children: maskCompactIdentityMetadata(child.props.children),
+      }),
+    });
+  });
 }
 
 function getAudienceBadgeClass(audience: AccountAudience) {
@@ -151,6 +171,7 @@ export function AccountSurfaceCard({
   provider,
   accountId,
   email,
+  nickname,
   displayEmail,
   tokenFile,
   tier,
@@ -171,7 +192,13 @@ export function AccountSurfaceCard({
 }: AccountSurfaceCardProps) {
   const { t } = useTranslation();
   const identity = getAccountIdentityPresentation(accountId, email, tokenFile);
-  const title = displayEmail || identity.email || accountId;
+  const { primary: title, secondary } = getAccountDisplayLabels(
+    accountId,
+    email,
+    tokenFile,
+    nickname,
+    displayEmail
+  );
   const sensitiveTitle = (value: string | null | undefined) =>
     privacyMode ? undefined : (value ?? undefined);
   const normalizedProvider = provider.toLowerCase();
@@ -226,18 +253,6 @@ export function AccountSurfaceCard({
               {getCompactAudienceBadgeLabel(identity.audience, t)}
             </span>
           )}
-      {normalizedProvider !== 'codex' && identity.compactDetailLabel && (
-        <span
-          title={sensitiveTitle(identity.detailLabel ?? identity.compactDetailLabel)}
-          className={cn(
-            'text-[8px] font-semibold px-1.5 py-0.5 rounded-md border shrink-0',
-            privacyMode && PRIVACY_BLUR_CLASS,
-            getCompactDetailBadgeClass(identity.audience)
-          )}
-        >
-          {identity.compactDetailLabel}
-        </span>
-      )}
       {paused && (
         <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-md shrink-0 bg-amber-500/15 text-amber-700 dark:bg-amber-500/25 dark:text-amber-300">
           {/* TODO i18n: missing key for compact "Paused" badge */}
@@ -246,11 +261,12 @@ export function AccountSurfaceCard({
       )}
     </>
   );
+  const compactBadges = compactMetaBadges ?? defaultCompactMetaBadges;
 
   return (
     <div className={cn('flex flex-col gap-2', className)}>
-      <div className="flex items-start justify-between gap-2">
-        <div className={cn('flex min-w-0 flex-1', isCompact ? 'gap-2' : 'gap-3')}>
+      <div className={cn('flex gap-2', isCompact ? 'flex-col' : 'items-start justify-between')}>
+        <div className={cn('flex min-w-0 flex-1', isCompact ? 'w-full gap-2' : 'gap-3')}>
           {beforeIdentity}
           {!isCompact && (
             <div className="relative shrink-0">
@@ -279,21 +295,18 @@ export function AccountSurfaceCard({
           )}
 
           <div className="min-w-0 flex-1">
-            <div
-              className={cn('flex items-center min-w-0', isCompact ? 'gap-1.5' : 'gap-2 flex-wrap')}
-            >
+            <div className={cn('min-w-0', !isCompact && 'flex items-center gap-2 flex-wrap')}>
               <span
                 title={sensitiveTitle(title)}
                 className={cn(
                   isCompact
-                    ? 'flex-1 min-w-0 text-xs font-semibold tracking-tight truncate leading-none'
+                    ? 'block w-full min-w-0 text-xs font-semibold tracking-tight whitespace-normal wrap-anywhere leading-snug'
                     : 'font-medium text-sm truncate',
                   privacyMode && PRIVACY_BLUR_CLASS
                 )}
               >
                 {title}
               </span>
-              {isCompact && (compactMetaBadges ?? defaultCompactMetaBadges)}
               {!isCompact && normalizedProvider === 'codex' && effectiveCodexBadge?.label && (
                 <Badge
                   variant="outline"
@@ -345,14 +358,45 @@ export function AccountSurfaceCard({
               )}
             </div>
 
+            {secondary && (
+              <div
+                title={sensitiveTitle(secondary)}
+                className={cn(
+                  'mt-1 text-muted-foreground',
+                  isCompact ? 'text-[9px] whitespace-normal wrap-anywhere' : 'text-xs truncate',
+                  privacyMode && PRIVACY_BLUR_CLASS
+                )}
+              >
+                {secondary}
+              </div>
+            )}
+            {isCompact &&
+              !secondary &&
+              normalizedProvider !== 'codex' &&
+              identity.compactDetailLabel && (
+                <div
+                  title={sensitiveTitle(identity.detailLabel ?? identity.compactDetailLabel)}
+                  className={cn(
+                    'mt-1 text-[9px] text-muted-foreground whitespace-normal wrap-anywhere',
+                    privacyMode && PRIVACY_BLUR_CLASS
+                  )}
+                >
+                  {identity.compactDetailLabel}
+                </div>
+              )}
             {bodySlot && <div className="mt-1">{bodySlot}</div>}
           </div>
         </div>
 
-        {headerEnd && (
-          <div className={cn('flex items-center shrink-0', isCompact ? 'gap-0.5' : 'gap-1')}>
-            {headerEnd}
+        {isCompact ? (
+          <div className="flex min-w-0 w-full items-start justify-between gap-2">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+              {privacyMode ? maskCompactIdentityMetadata(compactBadges) : compactBadges}
+            </div>
+            {headerEnd && <div className="flex shrink-0 items-center gap-0.5">{headerEnd}</div>}
           </div>
+        ) : (
+          headerEnd && <div className="flex items-center shrink-0 gap-1">{headerEnd}</div>
         )}
       </div>
 
