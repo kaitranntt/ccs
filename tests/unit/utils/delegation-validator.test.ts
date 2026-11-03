@@ -77,4 +77,52 @@ describe('DelegationValidator', () => {
     expect(result.valid).toBe(true);
     expect(result.apiKey).toBeUndefined();
   });
+
+  function writeKeylessProfile(name: string, baseUrl?: string): void {
+    const env: Record<string, string> = { ANTHROPIC_MODEL: 'claude-sonnet-4-6' };
+    if (baseUrl !== undefined) env.ANTHROPIC_BASE_URL = baseUrl;
+    fs.writeFileSync(path.join(ccsDir, `${name}.settings.json`), JSON.stringify({ env }));
+  }
+
+  it('accepts keyless profile without a custom base URL', () => {
+    writeKeylessProfile('no-base-url');
+    expect(DelegationValidator.validate('no-base-url').valid).toBe(true);
+
+    writeKeylessProfile('blank-base-url', '  ');
+    expect(DelegationValidator.validate('blank-base-url').valid).toBe(true);
+  });
+
+  it.each(['http://localhost:8790', 'http://[::1]:8790', 'http://127.0.0.2:8790/v1'])(
+    'accepts keyless profile with loopback base URL %s',
+    (baseUrl) => {
+      writeKeylessProfile('loopback', baseUrl);
+      expect(DelegationValidator.validate('loopback').valid).toBe(true);
+    }
+  );
+
+  it.each([
+    'https://api.z.ai/api/anthropic',
+    'http://192.168.1.10:8790',
+    'http://127.0.0.1.attacker.example',
+    'not a url',
+  ])('rejects keyless profile with non-loopback base URL %s', (baseUrl) => {
+    writeKeylessProfile('remote', baseUrl);
+    const result = DelegationValidator.validate('remote');
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('API key not configured');
+    expect(result.suggestion).toContain('claude.ai login');
+  });
+
+  it('accepts keyed profile with remote base URL', () => {
+    fs.writeFileSync(
+      path.join(ccsDir, 'glm.settings.json'),
+      JSON.stringify({
+        env: {
+          ANTHROPIC_BASE_URL: 'https://api.z.ai/api/anthropic',
+          ANTHROPIC_AUTH_TOKEN: 'sk-glm-test-key-12345',
+        },
+      })
+    );
+    expect(DelegationValidator.validate('glm').valid).toBe(true);
+  });
 });

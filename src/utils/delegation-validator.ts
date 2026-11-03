@@ -6,6 +6,25 @@ import { Settings } from '../types';
 import { ValidationResult } from '../types/utils';
 import { getCcsDir } from './config-manager';
 import { getProfileLookupCandidates } from './profile-compat';
+import { isLoopbackHost } from './proxy-env';
+
+/**
+ * Keyless profiles run on the instance's claude.ai login, and Claude Code sends
+ * that login to ANTHROPIC_BASE_URL. Only allow it when requests stay on this
+ * machine: no custom base URL, or a loopback one.
+ */
+function isKeylessBaseUrlSafe(baseUrl: string | undefined): boolean {
+  const trimmed = baseUrl?.trim();
+  if (!trimmed) {
+    return true;
+  }
+
+  try {
+    return isLoopbackHost(new URL(trimmed).hostname);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Extended validation result for delegation profiles
@@ -71,6 +90,20 @@ export class DelegationValidator {
     // Support both proxy mode (ANTHROPIC_AUTH_TOKEN) and native mode (ANTHROPIC_API_KEY).
     // Profiles without an API key use the instance's claude.ai subscription login.
     const apiKey = settings.env?.ANTHROPIC_AUTH_TOKEN || settings.env?.ANTHROPIC_API_KEY;
+    const baseUrl = settings.env?.ANTHROPIC_BASE_URL;
+
+    if (!apiKey && !isKeylessBaseUrlSafe(baseUrl)) {
+      return {
+        valid: false,
+        error: `API key not configured for ${profileName}`,
+        suggestion:
+          `Profiles without an API key use your claude.ai login, which would be sent to:\n` +
+          `  ${baseUrl}\n\n` +
+          `Edit: ${settingsPath}\n` +
+          `Either set env.ANTHROPIC_AUTH_TOKEN (proxy) or env.ANTHROPIC_API_KEY (direct),\n` +
+          `or point env.ANTHROPIC_BASE_URL at a local proxy (localhost / 127.0.0.1) or remove it.`,
+      };
+    }
 
     // Check for default placeholder values if an API key is present
     const defaultPlaceholders = [
