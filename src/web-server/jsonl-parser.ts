@@ -251,7 +251,10 @@ export async function parseProjectDirectory(projectDir: string): Promise<RawUsag
     for (const file of jsonlFiles) {
       const filePath = path.join(projectDir, file);
       const fileEntries = await parseJsonlFile(filePath, projectPath);
-      entries.push(...fileEntries);
+      // Append one at a time: spreading a large array as arguments throws a RangeError.
+      for (const entry of fileEntries) {
+        entries.push(entry);
+      }
     }
   } catch {
     // Directory access error - skip silently
@@ -317,7 +320,10 @@ export async function scanProjectsDirectory(options: ParserOptions = {}): Promis
     const batchResults = await Promise.all(batch.map((dir) => parseProjectDirectory(dir)));
 
     for (const entries of batchResults) {
-      allEntries.push(...entries);
+      // A single project can hold more entries than a spread call accepts as arguments.
+      for (const entry of entries) {
+        allEntries.push(entry);
+      }
     }
   }
 
