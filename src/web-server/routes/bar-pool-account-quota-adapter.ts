@@ -126,10 +126,7 @@ function normalizeResult(
 }
 
 function normalizeClaudeQuota(result: ClaudeQuotaResult): QuotaResult {
-  const coreUsage =
-    result.coreUsage?.fiveHour || result.coreUsage?.weekly
-      ? result.coreUsage
-      : buildClaudeCoreUsageSummary(result.windows);
+  const coreUsage = buildClaudeCoreUsageSummary(result.windows);
   const windows = [coreUsage?.fiveHour, coreUsage?.weekly].filter(isPresent).map((window) => ({
     name: window.rateLimitType,
     displayName: window.label,

@@ -47,8 +47,7 @@ export function displayClaudeQuotaSection(
       (window, index, arr): window is ClaudeDisplayWindow =>
         !!window && arr.indexOf(window) === index
     );
-    const statusWindows =
-      coreWindows.length > 0 ? coreWindows : quota.windows.map(toClaudeDisplayWindow);
+    const statusWindows = coreWindows;
     const minQuota =
       statusWindows.length > 0
         ? Math.min(...statusWindows.map((window) => window.remainingPercent))

@@ -326,28 +326,9 @@ struct BarMenuView: View {
     }
   }
 
-  /// Order subscription cards so the default/base account leads its provider
-  /// carousel (it is the account the user runs by default), then by tightest
-  /// binding window ascending (closest to empty next). Rows with no binding
-  /// window (error/reauth) sink to the bottom so actionable quota leads.
+  /// Preserve the default profile first, then compare known account headroom.
   private func orderedSubscriptions(_ subs: [BarSummaryRow]) -> [BarSummaryRow] {
-    subs.sorted { a, b in
-      // Default account first within its provider group.
-      if a.isDefault != b.isDefault { return a.isDefault }
-      let ra = BarQuotaGauge.selectBindingWindow(a.quotaWindows ?? [])?.remainingPercent
-      let rb = BarQuotaGauge.selectBindingWindow(b.quotaWindows ?? [])?.remainingPercent
-      switch (ra, rb) {
-      case let (.some(x), .some(y)):
-        if x != y { return x < y }
-        return (a.displayName ?? a.provider) < (b.displayName ?? b.provider)
-      case (.some, .none):
-        return true  // a has quota, b doesn't → a first
-      case (.none, .some):
-        return false
-      case (.none, .none):
-        return (a.displayName ?? a.provider) < (b.displayName ?? b.provider)
-      }
-    }
+    BarQuotaGauge.orderedSubscriptions(subs)
   }
 
   /// Swipeable profile pager: one full-width card visible at a time, an HStack of

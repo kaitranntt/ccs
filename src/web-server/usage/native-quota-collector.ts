@@ -36,6 +36,11 @@
  */
 
 import {
+  buildClaudeCoreUsageSummary,
+  getClaudeWindowMetadata,
+} from '../../cliproxy/quota/quota-fetcher-claude-normalizer';
+
+import {
   readClaudeCredentials,
   readClaudeCredentialsForConfigDir,
   getAccessToken,
@@ -239,32 +244,22 @@ function computeBackoffMs(attempt: number): number {
 }
 
 /**
- * Best-guess remaining percentage across the 5h + weekly core windows, mirroring
- * the CLIProxy quota-manager derivation: min of remaining across non-overage
- * windows, falling back to all windows if core summary is absent.
+ * Remaining percentage across account-wide 5h + weekly windows only.
  */
 function deriveClaudeQuotaPercentage(quota: ClaudeQuotaResult): number | null {
-  const coreWindows = [quota.coreUsage?.fiveHour, quota.coreUsage?.weekly].filter(
-    (w): w is NonNullable<typeof w> => !!w
-  );
-  if (coreWindows.length > 0) {
-    return Math.min(...coreWindows.map((w) => w.remainingPercent));
-  }
-  const usageWindows = quota.windows.filter((w) => w.rateLimitType !== 'overage');
-  if (usageWindows.length > 0) {
-    return Math.min(...usageWindows.map((w) => w.remainingPercent));
-  }
-  return null;
+  const core = buildClaudeCoreUsageSummary(quota.windows);
+  const windows = [core.fiveHour, core.weekly].filter((w): w is NonNullable<typeof w> => !!w);
+  return windows.length ? Math.min(...windows.map((w) => w.remainingPercent)) : null;
 }
 
-/** Soonest non-null reset ISO across the two core windows. */
+/** Soonest non-null account-wide reset. */
 function deriveClaudeNextReset(quota: ClaudeQuotaResult): string | null {
-  const resets = [quota.coreUsage?.fiveHour?.resetAt, quota.coreUsage?.weekly?.resetAt]
+  const core = buildClaudeCoreUsageSummary(quota.windows);
+  const resets = [core.fiveHour?.resetAt, core.weekly?.resetAt]
     .filter((r): r is string => typeof r === 'string')
-    .map((r) => ({ iso: r, ms: new Date(r).getTime() }))
-    .filter((r) => Number.isFinite(r.ms))
-    .sort((a, b) => a.ms - b.ms);
-  return resets.length > 0 ? resets[0].iso : null;
+    .filter((r) => Number.isFinite(Date.parse(r)))
+    .sort((a, b) => Date.parse(a) - Date.parse(b));
+  return resets[0] ?? null;
 }
 
 /** Window length in minutes by Claude rate-limit family. */
@@ -274,58 +269,31 @@ const SEVEN_DAY_MINUTES = 10080;
 /**
  * Build the per-window detail for a Claude subscription row.
  *
- * 5h + weekly come from coreUsage (the canonical core summary). Opus/Sonnet
- * weekly splits come from quota.windows[] and only exist on Max plans, so they
- * are omitted entirely when absent. Each window carries BOTH used and remaining
- * percent so the bar never re-derives them.
+ * Surface every reported window independently, including model-specific limits.
  */
 function buildClaudeQuotaWindows(quota: ClaudeQuotaResult): QuotaWindowDetail[] {
-  const windows: QuotaWindowDetail[] = [];
-
-  const fiveHour = quota.coreUsage?.fiveHour;
-  if (fiveHour) {
-    windows.push({
-      key: 'five_hour',
-      label: '5h',
-      usedPercent: 100 - fiveHour.remainingPercent,
-      remainingPercent: fiveHour.remainingPercent,
-      resetAt: fiveHour.resetAt,
-      windowMinutes: FIVE_HOUR_MINUTES,
-    });
-  }
-
-  const weekly = quota.coreUsage?.weekly;
-  if (weekly) {
-    windows.push({
-      key: 'seven_day',
-      label: 'week',
-      usedPercent: 100 - weekly.remainingPercent,
-      remainingPercent: weekly.remainingPercent,
-      resetAt: weekly.resetAt,
-      windowMinutes: SEVEN_DAY_MINUTES,
-    });
-  }
-
-  // Opus/Sonnet weekly splits are Max-only; surface them when the API carries
-  // them, otherwise omit so non-Max plans get exactly the two core windows.
-  const splitLabels: Record<string, string> = {
-    seven_day_opus: 'Opus · week',
-    seven_day_sonnet: 'Sonnet · week',
-  };
-  for (const w of quota.windows) {
-    const label = splitLabels[w.rateLimitType];
-    if (!label) continue;
-    windows.push({
-      key: w.rateLimitType,
-      label,
-      usedPercent: w.usedPercent,
-      remainingPercent: w.remainingPercent,
-      resetAt: w.resetAt,
-      windowMinutes: SEVEN_DAY_MINUTES,
-    });
-  }
-
-  return windows;
+  return quota.windows.map((window) => {
+    const metadata = getClaudeWindowMetadata(window);
+    return {
+      key: window.rateLimitType,
+      label:
+        metadata.scope === 'account'
+          ? metadata.cadence === '5h'
+            ? '5h'
+            : 'week'
+          : metadata.modelLabel
+            ? metadata.modelLabel + ' · week'
+            : window.label,
+      usedPercent: window.usedPercent,
+      remainingPercent: window.remainingPercent,
+      resetAt: window.resetAt,
+      windowMinutes: metadata.cadence
+        ? metadata.cadence === '5h'
+          ? FIVE_HOUR_MINUTES
+          : SEVEN_DAY_MINUTES
+        : null,
+    };
+  });
 }
 
 function buildClaudeRow(

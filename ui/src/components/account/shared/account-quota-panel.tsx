@@ -27,7 +27,7 @@ import { useTranslation } from 'react-i18next';
 type AccountSurfaceMode = 'compact' | 'detailed';
 
 interface QuotaRow {
-  id: 'five-hour' | 'weekly';
+  id: string;
   label: string;
   compactLabel: string;
   value: number;
@@ -135,35 +135,24 @@ export function AccountQuotaPanel({
         },
       ].filter((row): row is QuotaRow => row.value !== null)
     : isClaudeProvider && quota && isClaudeQuotaResult(quota)
-      ? [
-          {
-            id: 'five-hour',
-            label: t('quotaTooltip.fiveHourLimit'),
-            compactLabel: '5h',
-            value:
-              quota.coreUsage?.fiveHour?.remainingPercent ??
-              quota.windows.find((window) => window.rateLimitType === 'five_hour')
-                ?.remainingPercent ??
-              null,
-          },
-          {
-            id: 'weekly',
-            label: t('quotaTooltip.weeklyLimit'),
-            compactLabel: 'Week',
-            value:
-              quota.coreUsage?.weekly?.remainingPercent ??
-              quota.windows.find((window) =>
-                [
-                  'seven_day',
-                  'seven_day_opus',
-                  'seven_day_sonnet',
-                  'seven_day_oauth_apps',
-                  'seven_day_cowork',
-                ].includes(window.rateLimitType)
-              )?.remainingPercent ??
-              null,
-          },
-        ].filter((row): row is QuotaRow => row.value !== null)
+      ? quota.success
+        ? quota.windows.map((window) => ({
+            id: window.rateLimitType,
+            label:
+              window.rateLimitType === 'five_hour'
+                ? t('quotaTooltip.fiveHourLimit')
+                : window.rateLimitType === 'seven_day'
+                  ? t('quotaTooltip.weeklyLimit')
+                  : window.label,
+            compactLabel:
+              window.rateLimitType === 'five_hour'
+                ? '5h'
+                : window.rateLimitType === 'seven_day'
+                  ? 'Week'
+                  : (window.modelLabel ?? window.label),
+            value: window.remainingPercent,
+          }))
+        : []
       : [];
   const quotaRows = compactQuotaRows;
 
@@ -178,7 +167,7 @@ export function AccountQuotaPanel({
     );
   }
 
-  if (minQuotaValue !== null) {
+  if (minQuotaValue !== null || quotaRows.length > 0) {
     return (
       <div className={cn(mode === 'compact' ? 'px-0.5' : '', className)}>
         <TooltipProvider>
@@ -191,7 +180,7 @@ export function AccountQuotaPanel({
                       {quotaRows.map((row) => (
                         <div
                           key={row.id}
-                          className="grid grid-cols-[2rem_minmax(0,1fr)_2rem] items-center gap-x-1 text-[7px]"
+                          className="grid grid-cols-[minmax(2rem,auto)_minmax(0,1fr)_2rem] items-center gap-x-1 text-[7px]"
                         >
                           <span className="font-semibold uppercase leading-none text-muted-foreground/75">
                             {row.compactLabel}
@@ -222,9 +211,9 @@ export function AccountQuotaPanel({
                         <span
                           className={cn(
                             'text-[10px] font-mono font-bold',
-                            minQuotaValue > 50
+                            (minQuotaValue ?? 0) > 50
                               ? 'text-emerald-600 dark:text-emerald-400'
-                              : minQuotaValue > 20
+                              : (minQuotaValue ?? 0) > 20
                                 ? 'text-amber-500'
                                 : 'text-red-500'
                           )}
@@ -233,13 +222,13 @@ export function AccountQuotaPanel({
                         </span>
                       </div>
                       <Progress
-                        value={minQuotaValue}
+                        value={minQuotaValue ?? 0}
                         aria-label="Quota"
                         className="h-1"
                         indicatorClassName={
-                          minQuotaValue > 50
+                          (minQuotaValue ?? 0) > 50
                             ? 'bg-emerald-500'
-                            : minQuotaValue > 20
+                            : (minQuotaValue ?? 0) > 20
                               ? 'bg-amber-500'
                               : 'bg-red-500'
                         }
@@ -304,10 +293,10 @@ export function AccountQuotaPanel({
                   ) : (
                     <div className="flex items-center gap-2">
                       <Progress
-                        value={Math.max(0, Math.min(100, minQuotaValue))}
+                        value={Math.max(0, Math.min(100, minQuotaValue ?? 0))}
                         aria-label="Quota"
                         className="h-2 flex-1"
-                        indicatorClassName={getQuotaColor(minQuotaValue)}
+                        indicatorClassName={getQuotaColor(minQuotaValue ?? 0)}
                       />
                       <span className="text-xs font-medium w-10 text-right">{minQuotaLabel}%</span>
                     </div>

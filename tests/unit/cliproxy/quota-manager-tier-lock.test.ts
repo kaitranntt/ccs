@@ -452,4 +452,36 @@ describe('quota-manager findHealthyAccount — tier_lock', () => {
     expect(agyUnlocked).not.toBeNull();
     expect(agyUnlocked!.tier).toBe('pro');
   });
+  for (const general of [false, true]) {
+    it('does not pause or rotate on exhausted Fable; general present=' + general, async () => {
+      writeMinimalConfig(tempHome, null);
+      _mockAccounts = [PRO_ACCOUNT];
+      const manager = await import(
+        `../../../src/cliproxy/quota/quota-manager?fable-${Date.now()}-${Math.random()}`
+      );
+      const { buildClaudeQuotaWindows, buildClaudeCoreUsageSummary } = await import(
+        '../../../src/cliproxy/quota/quota-fetcher-claude-normalizer'
+      );
+      const windows = buildClaudeQuotaWindows({
+        ...(general ? { five_hour: { utilization: 20 } } : {}),
+        limits: [
+          { kind: 'weekly_scoped', percent: 100, scope: { model: { display_name: 'Fable' } } },
+        ],
+      });
+      manager.setCachedQuota('claude', PRO_ACCOUNT.id, {
+        success: true,
+        windows,
+        coreUsage: buildClaudeCoreUsageSummary(windows),
+        lastUpdated: Date.now(),
+      });
+      const result = await manager.preflightCheck('claude');
+      expect(result.proceed).toBe(true);
+      expect(result.accountId).toBe(PRO_ACCOUNT.id);
+      expect(result.switchedFrom).toBeUndefined();
+      const status = await manager.getQuotaStatus('claude');
+      expect(status.accounts[0].quota).toBe(general ? 80 : null);
+      expect(status.accounts[0].onCooldown).toBe(false);
+      expect(status.accounts[0].paused).toBe(false);
+    });
+  }
 });

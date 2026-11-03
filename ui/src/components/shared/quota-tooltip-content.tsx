@@ -1,3 +1,4 @@
+import { getClaudeAccountWindows } from '@/lib/claude-quota';
 /**
  * Shared Quota Tooltip Content Component
  * Displays provider-specific quota information in tooltips
@@ -308,48 +309,12 @@ export function QuotaTooltipContent({ quota, resetTime }: QuotaTooltipContentPro
 
   // Claude provider tooltip
   if (isClaudeQuotaResult(quota)) {
-    const coreWindows = [quota.coreUsage?.fiveHour, quota.coreUsage?.weekly]
-      .filter((window): window is NonNullable<typeof window> => !!window)
-      .map((window) => ({
-        rateLimitType: window.rateLimitType,
-        label: window.label,
-        remainingPercent: window.remainingPercent,
-        resetAt: window.resetAt,
-        status: window.status,
-      }));
-    const policyWindows = quota.windows.map((window) => ({
-      rateLimitType: window.rateLimitType,
-      label: window.label,
-      remainingPercent: window.remainingPercent,
-      resetAt: window.resetAt,
-      status: window.status,
-    }));
-    const orderedWindows = [...coreWindows, ...policyWindows].filter(
-      (window, index, arr) =>
-        arr.findIndex(
-          (candidate) =>
-            candidate.rateLimitType === window.rateLimitType &&
-            candidate.resetAt === window.resetAt &&
-            candidate.status === window.status
-        ) === index
-    );
-
+    const orderedWindows = quota.windows;
+    const accountWindows = getClaudeAccountWindows(quota);
     const fiveHourResetAt =
-      quota.coreUsage?.fiveHour?.resetAt ??
-      quota.windows.find((window) => window.rateLimitType === 'five_hour')?.resetAt ??
-      null;
+      accountWindows.find((window) => window.rateLimitType === 'five_hour')?.resetAt ?? null;
     const weeklyResetAt =
-      quota.coreUsage?.weekly?.resetAt ??
-      quota.windows.find((window) =>
-        [
-          'seven_day',
-          'seven_day_opus',
-          'seven_day_sonnet',
-          'seven_day_oauth_apps',
-          'seven_day_cowork',
-        ].includes(window.rateLimitType)
-      )?.resetAt ??
-      null;
+      accountWindows.find((window) => window.rateLimitType === 'seven_day')?.resetAt ?? null;
 
     return (
       <div className="text-xs space-y-1.5">

@@ -775,6 +775,10 @@ export interface CodexQuotaResult {
 
 /** Claude policy limit window */
 export interface ClaudeQuotaWindow {
+  /** Account-wide, model-specific, or unclassified limit. Optional for older clients. */
+  scope?: 'account' | 'model' | 'unknown';
+  cadence?: '5h' | 'weekly';
+  modelLabel?: string;
   /** Source identifier: five_hour, seven_day, seven_day_opus, seven_day_sonnet, overage, ... */
   rateLimitType: string;
   /** Human-friendly label for UI display */

@@ -1269,7 +1269,8 @@ do {
 do {
   func subRow(_ provider: String, _ name: String, remaining: Double) -> BarSummaryRow {
     BarSummaryRow(
-      accountId: provider, provider: provider, displayName: name, quotaStatus: "ok",
+      accountId: provider, provider: provider, displayName: name,
+      quotaPercentage: remaining, quotaStatus: "ok",
       quotaWindows: [
         QuotaWindowDetail(
           key: "five_hour", label: "5h", usedPercent: 100 - remaining,
@@ -1290,6 +1291,45 @@ do {
   check(single == nil, "headroom: <2 eligible subscriptions -> nil")
 
   check(BarQuotaGauge.headroomLeader([]) == nil, "headroom: empty -> nil")
+}
+
+// Model and unknown windows remain visible but never become Claude account headroom.
+do {
+  func window(_ key: String, remaining: Double) -> QuotaWindowDetail {
+    QuotaWindowDetail(key: key, label: key, usedPercent: 100 - remaining,
+      remainingPercent: remaining)
+  }
+  let healthy = BarSummaryRow(
+    accountId: "healthy", provider: "claude-code", displayName: "Healthy Claude",
+    quotaPercentage: 70, quotaWindows: [window("five_hour", remaining: 80),
+      window("seven_day", remaining: 70), window("weekly_scoped:fable", remaining: 0),
+      window("unknown_limit", remaining: 0)])
+  let modelOnly = BarSummaryRow(
+    accountId: "model-only", provider: "claude-code", displayName: "Model Only",
+    quotaPercentage: nil, quotaWindows: [window("weekly_scoped:fable", remaining: 90)])
+  let codex = BarSummaryRow(
+    accountId: "codex", provider: "codex", displayName: "Codex",
+    quotaPercentage: 95, quotaWindows: [window("five_hour", remaining: 40)])
+
+  check(BarQuotaGauge.accountHeadroom(healthy) == 70,
+    "headroom: exhausted Fable/unknown does not override healthy general Claude limits")
+  check(BarQuotaGauge.accountHeadroom(modelOnly) == nil,
+    "headroom: model-only Claude has unknown general capacity")
+  check(BarQuotaGauge.accountHeadroom(codex) == 40,
+    "headroom: other providers retain their binding-window behavior")
+  check(BarQuotaGauge.headroomLeader([healthy, codex])?.label == "Healthy Claude",
+    "headroom: Claude general capacity leads Codex despite exhausted Fable")
+  check(BarQuotaGauge.headroomLeader([modelOnly, codex]) == nil,
+    "headroom: model-only Claude is excluded from known-account comparisons")
+  check(BarQuotaGauge.orderedSubscriptions([modelOnly, healthy, codex]).map(\.accountId)
+    == ["codex", "healthy", "model-only"],
+    "ordering: compare general headroom, then place unknown capacity last")
+  let defaultRow = BarSummaryRow(
+    accountId: "default", provider: "claude-code", isDefault: true)
+  check(BarQuotaGauge.orderedSubscriptions([healthy, defaultRow]).first?.accountId == "default",
+    "ordering: default profile still leads with unknown capacity")
+  check(healthy.quotaWindows?.count == 4 && modelOnly.quotaWindows?.count == 1,
+    "headroom: per-window model and unknown display rows remain available")
 }
 
 // MARK: - Theme token model (BarPalette / BarAppearance / BarTheme)

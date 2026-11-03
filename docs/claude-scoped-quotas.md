@@ -1,0 +1,15 @@
+# Claude Quota Scope
+
+The [normalizer](../src/cliproxy/quota/quota-fetcher-claude-normalizer.ts) keeps each reported quota as a separate window. `windows[]`, numeric `usedPercent` and `remainingPercent`, and nullable `resetAt` remain compatible; optional `scope` (`account`, `model`, `unknown`), `cadence` (`5h`, `weekly`), and `modelLabel` describe the limit without changing its numeric contract.
+
+Only known `five_hour` and `seven_day` account windows populate `coreUsage`. Account health, minimum remaining quota, rotation, and automatic pause use these windows exclusively. A model-only response has unknown general remaining quota, including when the model is exhausted. It still renders its own rows in the CLI, dashboard, and native subscription bar details. There is no proactive model routing or model cooling configuration change.
+
+OAuth utilization and modern `limits[].percent` are percentages; policy `restrictions` utilization is a ratio. No value-based unit detection is used. Valid zero and 100 are retained; missing, nonfinite, blank, or out-of-range metrics are omitted. Missing or null reset metadata does not remove a valid metric. Unknown limit codes retain unknown scope and cannot become a general limit through reset ordering.
+
+Modern `limits[]` entries with unscoped `kind: session` and `kind: weekly_all` canonicalize to `five_hour` and `seven_day`. They deduplicate against traditional fields and take precedence when valid, including zero usage and null resets. Model/surface-scoped entries never become general account quotas. Objects with monetary credit fields (`limit_dollars`, `used_dollars`, `remaining_dollars`) are excluded from rate-limit windows, including provider codenames such as `iguana_necktie`; no credit value or promotional meaning is inferred.
+
+Modern `limits[]` entries with `kind: weekly_scoped` use `scope.model.display_name` as the model label. Windows deduplicate by scope, cadence, and the trimmed, whitespace-normalized, case-insensitive model name. A valid modern entry wins over legacy aliases, including `fable_weekly`, `fable_seven_day`, and `seven_day_fable`; invalid modern entries leave the legacy fallback available. Fable and Opus remain independent windows. Existing extra-usage handling is unchanged.
+
+The [shared probe cache](../src/cliproxy/quota/quota-fetcher-claude-probe-state.ts) retains storage `version: 1` and writes `normalizationVersion: 3`. Incompatible or missing normalization versions invalidate only `lastGood`, preserving `consecutive429` and `cooldownUntil`. A normalization upgrade never clears a rate-limit cooldown. Failed queries, successful responses without limits, and stale results retain their distinct states. Expired stale windows are removed and account core summaries are rebuilt from the surviving windows.
+
+Consumers of responses without scope metadata classify only known legacy IDs; they never trust an older model-collapsed `coreUsage`. Regression coverage is in the [scoped quota tests](../src/cliproxy/quota/__tests__/claude-scoped-quota.test.ts), the quota-manager tests, and the dashboard quota panel tests.
