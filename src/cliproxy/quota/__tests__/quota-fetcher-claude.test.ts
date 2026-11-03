@@ -12,9 +12,11 @@ import {
   buildClaudeQuotaWindows,
   buildClaudeCoreUsageSummary,
   fetchClaudeQuota,
+  fetchClaudeQuotaWithToken,
   fetchAllClaudeQuotas,
 } from '../quota-fetcher-claude';
 import { sanitizeEmail } from '../../auth/auth-utils';
+import { writeClaudeProbeState } from '../quota-fetcher-claude-probe-state';
 
 let tmpDir: string;
 let originalCcsHome: string | undefined;
@@ -970,6 +972,7 @@ describe('fetchClaudeQuota shared probe state', () => {
     expect(fetchMock.calls()).toBe(1);
     expect(second).toEqual(first);
     expect(second.stale).toBeUndefined();
+    expect(second.generalWindowPresence).toEqual({ fiveHour: 'present', weekly: 'present' });
   });
 
   it('serves the last good numbers as stale when the probe is rate-limited', async () => {
@@ -1030,6 +1033,8 @@ describe('fetchClaudeQuota shared probe state', () => {
     expect(result.coreUsage?.fiveHour).toBeNull();
     expect(result.coreUsage?.weekly?.remainingPercent).toBe(30);
     expect(result.windows.every((window) => window.rateLimitType !== 'five_hour')).toBe(true);
+    expect(result.generalWindowPresence).toEqual({ fiveHour: 'present', weekly: 'present' });
+    expect(result.lastUpdated).toBe(T0);
   });
 
   it('resets the backoff after a successful probe', async () => {
@@ -1072,6 +1077,208 @@ describe('fetchClaudeQuota shared probe state', () => {
     expect(result.success).toBe(false);
     expect(result.needsReauth).toBe(true);
     expect(result.stale).toBeUndefined();
+  });
+});
+
+describe('Claude quota caller cancellation', () => {
+  const accountId = 'cancel-fixture@example.com';
+  const usage = { five_hour: { utilization: 10 }, seven_day: { utilization: 20 } };
+
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((resolvePromise) => {
+      resolve = resolvePromise;
+    });
+    return { promise, resolve };
+  }
+
+  function seedProbe() {
+    writeClaudeProbeState(accountId, {
+      version: 1,
+      lastGood: {
+        success: true,
+        windows: buildClaudeQuotaWindows(usage),
+        generalWindowPresence: { fiveHour: 'present', weekly: 'present' },
+        lastUpdated: Date.now() - 120000,
+      },
+      consecutive429: 2,
+      cooldownUntil: Date.now() - 1,
+    });
+    const file = path.join(tmpDir, '.ccs/cache/claude-quota', `${sanitizeEmail(accountId)}.json`);
+    return { file, original: fs.readFileSync(file, 'utf8') };
+  }
+
+  function observeJoined(signal: AbortSignal) {
+    const joined = deferred<void>();
+    const addListener = signal.addEventListener.bind(signal);
+    signal.addEventListener = (type, listener, options) => {
+      addListener(type, listener, options);
+      if (type === 'abort') joined.resolve();
+    };
+    return joined.promise;
+  }
+
+  beforeEach(() => {
+    createClaudeAccount(accountId, {
+      access_token: 'cancel-synthetic-token',
+      expired: '2099-01-01T00:00:00Z',
+      type: 'claude',
+    });
+  });
+
+  it('rejects pre-aborted managed and native callers without fetching or mutating probe state', async () => {
+    const before = seedProbe();
+    const controller = new AbortController();
+    controller.abort();
+    const fetchSpy = mock(() => Promise.resolve(new Response(JSON.stringify(usage))));
+    global.fetch = fetchSpy as typeof fetch;
+    await expect(fetchClaudeQuota(accountId, false, controller.signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    await expect(
+      fetchClaudeQuotaWithToken(
+        'synthetic-native-token',
+        'native-fixture',
+        false,
+        controller.signal
+      )
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fs.readFileSync(before.file, 'utf8')).toBe(before.original);
+  });
+
+  it('cancels an in-flight provider fetch without retrying or changing lastGood/backoff', async () => {
+    const before = seedProbe();
+    const started = deferred<AbortSignal>();
+    const fetchSpy = mock((_input: unknown, init?: RequestInit) => {
+      const signal = init?.signal as AbortSignal;
+      started.resolve(signal);
+      return new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener(
+          'abort',
+          () => reject(new DOMException('fixture abort', 'AbortError')),
+          { once: true }
+        );
+      });
+    });
+    global.fetch = fetchSpy as typeof fetch;
+    const controller = new AbortController();
+    const result = fetchClaudeQuota(accountId, false, controller.signal);
+    const providerSignal = await started.promise;
+    controller.abort();
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    expect(providerSignal.aborted).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fs.readFileSync(before.file, 'utf8')).toBe(before.original);
+  });
+
+  it('cancels while a successful response body is pending without inventing a fresh result', async () => {
+    const before = seedProbe();
+    const bodyStarted = deferred<void>();
+    const body = deferred<unknown>();
+    let providerSignal: AbortSignal | undefined;
+    const fetchSpy = mock((_input: unknown, init?: RequestInit) => {
+      providerSignal = init?.signal as AbortSignal;
+      const response = new Response('', { status: 200 });
+      response.json = () => {
+        bodyStarted.resolve();
+        return body.promise;
+      };
+      return Promise.resolve(response);
+    });
+    global.fetch = fetchSpy as typeof fetch;
+    const controller = new AbortController();
+    const result = fetchClaudeQuota(accountId, false, controller.signal);
+    await bodyStarted.promise;
+    controller.abort();
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    body.resolve(usage);
+    expect(providerSignal?.aborted).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fs.readFileSync(before.file, 'utf8')).toBe(before.original);
+  });
+
+  for (const status of [429, 500]) {
+    it(`cancels while a ${status} error body is pending without writing cooldown or retrying`, async () => {
+      const before = seedProbe();
+      const bodyStarted = deferred<void>();
+      const fetchSpy = mock((_input: unknown, init?: RequestInit) => {
+        const signal = init?.signal as AbortSignal;
+        const stream = new ReadableStream<Uint8Array>({
+          start(bodyController) {
+            signal.addEventListener(
+              'abort',
+              () => bodyController.error(new DOMException('fixture abort', 'AbortError')),
+              { once: true }
+            );
+          },
+          pull() {
+            bodyStarted.resolve();
+          },
+        });
+        return Promise.resolve(new Response(stream, { status }));
+      });
+      global.fetch = fetchSpy as typeof fetch;
+      const controller = new AbortController();
+      const result = fetchClaudeQuota(accountId, false, controller.signal);
+      await bodyStarted.promise;
+      controller.abort();
+      await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(fs.readFileSync(before.file, 'utf8')).toBe(before.original);
+    });
+  }
+
+  it('does not cancel a shared request still needed by another caller', async () => {
+    const provider = deferred<Response>();
+    const started = deferred<AbortSignal>();
+    const fetchSpy = mock((_input: unknown, init?: RequestInit) => {
+      started.resolve(init?.signal as AbortSignal);
+      return provider.promise;
+    });
+    global.fetch = fetchSpy as typeof fetch;
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const first = fetchClaudeQuota(accountId, false, firstController.signal);
+    const providerSignal = await started.promise;
+    const joined = observeJoined(secondController.signal);
+    const second = fetchClaudeQuota(accountId, false, secondController.signal);
+    await joined;
+    firstController.abort();
+    await expect(first).rejects.toMatchObject({ name: 'AbortError' });
+    expect(providerSignal.aborted).toBe(false);
+    provider.resolve(new Response(JSON.stringify(usage)));
+    expect((await second).success).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(providerSignal.aborted).toBe(false);
+  });
+
+  it('cancels only after all shared callers leave and allows a subsequent fresh request', async () => {
+    const before = seedProbe();
+    const provider = deferred<Response>();
+    const started = deferred<AbortSignal>();
+    const fetchSpy = mock((_input: unknown, init?: RequestInit) => {
+      started.resolve(init?.signal as AbortSignal);
+      return provider.promise;
+    });
+    global.fetch = fetchSpy as typeof fetch;
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const first = fetchClaudeQuota(accountId, false, firstController.signal);
+    const providerSignal = await started.promise;
+    const joined = observeJoined(secondController.signal);
+    const second = fetchClaudeQuota(accountId, false, secondController.signal);
+    await joined;
+    firstController.abort();
+    await expect(first).rejects.toMatchObject({ name: 'AbortError' });
+    expect(providerSignal.aborted).toBe(false);
+    secondController.abort();
+    await expect(second).rejects.toMatchObject({ name: 'AbortError' });
+    expect(providerSignal.aborted).toBe(true);
+    expect(fs.readFileSync(before.file, 'utf8')).toBe(before.original);
+    global.fetch = mock(() => Promise.resolve(new Response(JSON.stringify(usage)))) as typeof fetch;
+    expect((await fetchClaudeQuota(accountId)).success).toBe(true);
+    provider.resolve(new Response(JSON.stringify(usage)));
   });
 });
 

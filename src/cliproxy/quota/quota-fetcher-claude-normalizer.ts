@@ -4,7 +4,11 @@
  * Parses Anthropic policy-limits or OAuth-usage payloads into normalized windows and core usage summary.
  */
 
-import type { ClaudeCoreUsageSummary, ClaudeQuotaWindow } from './quota-types';
+import type {
+  ClaudeCoreUsageSummary,
+  ClaudeGeneralWindowPresenceSummary,
+  ClaudeQuotaWindow,
+} from './quota-types';
 import { sanitizeQuotaLabelOrNull } from './quota-label-sanitizer';
 
 // Distinguishes epoch milliseconds from seconds (1e12 ~= 2001-09-09T01:46:40Z).
@@ -295,6 +299,118 @@ export function buildClaudeQuotaWindows(payload: Record<string, unknown>): Claud
       return true;
     })
     .sort((a, b) => a.rateLimitType.localeCompare(b.rateLimitType));
+}
+
+/**
+ * Preserve general-window presence before numeric normalization can omit invalid rows.
+ * Lists are complete snapshots only when their entry structure is valid. Legacy
+ * keyed OAuth snapshots must explicitly contain both general keys to prove a
+ * missing counterpart absent; a lone key may instead be a partial response.
+ */
+export function buildClaudeGeneralWindowPresence(
+  payload: Record<string, unknown>
+): ClaudeGeneralWindowPresenceSummary {
+  type GeneralKey = keyof ClaudeGeneralWindowPresenceSummary;
+  const observations = {
+    fiveHour: { present: false, invalid: false, absent: false },
+    weekly: { present: false, invalid: false, absent: false },
+  };
+  let complete = false;
+  const keyForType = (rateLimitType: string): GeneralKey | null =>
+    rateLimitType === 'five_hour' ? 'fiveHour' : rateLimitType === 'seven_day' ? 'weekly' : null;
+  const hasOwn = (key: string) => Object.prototype.hasOwnProperty.call(payload, key);
+
+  const observe = (
+    value: unknown,
+    fallbackKey: string | undefined,
+    unit: UtilizationUnit
+  ): boolean => {
+    const fallbackGeneralKey = fallbackKey ? keyForType(fallbackKey) : null;
+    if (value === null && fallbackGeneralKey) {
+      observations[fallbackGeneralKey].absent = true;
+      return true;
+    }
+    const raw = toObject(value);
+    if (!raw) {
+      if (fallbackGeneralKey) observations[fallbackGeneralKey].invalid = true;
+      return false;
+    }
+    const rateLimitType = normalizeRateLimitType(
+      raw['rateLimitType'] ?? raw['rate_limit_type'] ?? raw['claim'] ?? raw['claimAbbrev'],
+      fallbackKey
+    );
+    if (!rateLimitType) return false;
+    const key = keyForType(rateLimitType);
+    if (fallbackGeneralKey && fallbackGeneralKey !== key) {
+      observations[fallbackGeneralKey].invalid = true;
+    }
+    if (!key) return true;
+    // Legacy identifiers with additional constraints cannot prove a general quota.
+    const window = isUnscoped(raw['scope']) ? normalizeRestriction(raw, fallbackKey, unit) : null;
+    if (window) observations[key].present = true;
+    else observations[key].invalid = true;
+    return true;
+  };
+
+  const limits = payload['limits'];
+  if (Array.isArray(limits)) {
+    let validStructure = true;
+    for (const item of limits) {
+      const raw = toObject(item);
+      const kind = raw ? asString(raw['kind']) : null;
+      if (!raw || !kind) {
+        validStructure = false;
+        continue;
+      }
+      const key = kind === 'session' ? 'fiveHour' : kind === 'weekly_all' ? 'weekly' : null;
+      const scope = raw['scope'];
+      if (scope !== undefined && scope !== null && !toObject(scope)) {
+        validStructure = false;
+        if (key) observations[key].invalid = true;
+        continue;
+      }
+      if (!key || !isUnscoped(raw['scope'])) continue;
+      const percent = asNumber(raw['percent']);
+      const rateLimitType = key === 'fiveHour' ? 'five_hour' : 'seven_day';
+      if (percent === null) {
+        observations[key].invalid = true;
+        continue;
+      }
+      observe({ ...raw, rateLimitType, utilization: percent }, undefined, 'percent');
+    }
+    complete ||= validStructure;
+  }
+
+  const restrictions = payload['restrictions'];
+  if (Array.isArray(restrictions)) {
+    let validStructure = true;
+    for (const item of restrictions)
+      validStructure = observe(item, undefined, 'ratio') && validStructure;
+    complete ||= validStructure;
+  } else {
+    const restrictionMap = toObject(restrictions);
+    if (restrictionMap) {
+      let validStructure = true;
+      for (const [key, value] of Object.entries(restrictionMap)) {
+        validStructure = observe(value, key, 'ratio') && validStructure;
+      }
+      complete ||= validStructure;
+    }
+  }
+
+  for (const key of ['five_hour', 'seven_day']) {
+    if (hasOwn(key)) observe(payload[key], key, 'percent');
+  }
+  complete ||= hasOwn('five_hour') && hasOwn('seven_day');
+
+  const presence = (key: GeneralKey): ClaudeGeneralWindowPresenceSummary[GeneralKey] => {
+    const observation = observations[key];
+    if (observation.present) return 'present';
+    if (observation.invalid) return 'unknown';
+    if (observation.absent || complete) return 'absent';
+    return 'unknown';
+  };
+  return { fiveHour: presence('fiveHour'), weekly: presence('weekly') };
 }
 
 function mapCoreWindow(window: ClaudeQuotaWindow | null): ClaudeCoreUsageSummary['fiveHour'] {

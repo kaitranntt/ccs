@@ -20,6 +20,11 @@ import {
   buildManagementHeaders,
 } from '../proxy/proxy-target-resolver';
 import { loadDrainOrderConfig } from './registry';
+import {
+  claudePoolClassPriority,
+  effectiveClaudePoolClass,
+  readClaudePoolPolicyState,
+} from './claude-pool-policy-state';
 import type { AccountTier } from './types';
 import type { CLIProxyBackend, CLIProxyProvider } from '../types';
 import {
@@ -546,7 +551,7 @@ export function tieBreakKey(
 }
 
 /** How the effective drain order was derived. */
-export type EffectiveDrainOrderMode = 'manual' | 'tier' | 'file';
+export type EffectiveDrainOrderMode = 'manual' | 'tier' | 'file' | 'quota';
 
 /**
  * Effective drain order as the selector actually sees it: computed from the
@@ -615,6 +620,21 @@ export function resolveEffectiveDrainOrder(
   if (manualValidIds && manualValidIds.length > 0) {
     entries = computeManualDrainOrder(manualValidIds, activeAccounts);
     mode = 'manual';
+  } else if (drainCfg?.mode === 'quota' && provider === 'claude') {
+    const state = readClaudePoolPolicyState();
+    const now = Date.now();
+    entries = activeAccounts.map((account) => {
+      const entry = state?.entries[account.accountId];
+      return {
+        accountId: account.accountId,
+        tokenFile: account.tokenFile,
+        priority: entry ? claudePoolClassPriority(effectiveClaudePoolClass(entry, now)) : 1,
+        tier: account.tier,
+        tierDerived: false,
+        currentPriority: undefined,
+      };
+    });
+    mode = 'quota';
   } else if (drainCfg?.mode === 'tier') {
     entries = computeTierDrainOrder(activeAccounts);
     mode = 'tier';

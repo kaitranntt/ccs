@@ -14,6 +14,7 @@ import {
 import { CLIPROXY_DEFAULT_PORT } from '../cliproxy/config/port-manager';
 import { getCliproxyConfigPath } from '../cliproxy/config/path-resolver';
 import { registerSession, unregisterSession } from '../cliproxy/session-tracker';
+import { startClaudePoolPolicyController } from '../cliproxy/accounts/claude-pool-policy';
 import {
   getConfigYamlPath,
   loadOrCreateUnifiedConfig,
@@ -129,6 +130,7 @@ async function prepareIntegratedRuntime(): Promise<{ binaryPath: string; configP
 
 async function runCliproxy(): Promise<number> {
   const { binaryPath, configPath } = await prepareIntegratedRuntime();
+  const stopClaudePoolPolicy = startClaudePoolPolicyController();
   return new Promise<number>((resolve, reject) => {
     const child = spawn(binaryPath, ['--config', configPath], {
       stdio: 'inherit',
@@ -137,6 +139,22 @@ async function runCliproxy(): Promise<number> {
         WRITABLE_PATH: getCliproxyWritablePath(),
       },
     });
+    let shuttingDown = false;
+    const shutdown = (signal: NodeJS.Signals) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      void stopClaudePoolPolicy().finally(() => {
+        child.kill(signal);
+      });
+    };
+    const onSigterm = () => shutdown('SIGTERM');
+    const onSigint = () => shutdown('SIGINT');
+    const removeSignalHandlers = () => {
+      process.off('SIGTERM', onSigterm);
+      process.off('SIGINT', onSigint);
+    };
+    process.on('SIGTERM', onSigterm);
+    process.on('SIGINT', onSigint);
 
     // Register session lock so dashboard can detect the running proxy
     let sessionId: string | undefined;
@@ -152,12 +170,19 @@ async function runCliproxy(): Promise<number> {
       }
     });
 
-    child.on('error', reject);
+    child.on('error', (error) => {
+      removeSignalHandlers();
+      void stopClaudePoolPolicy().then(
+        () => reject(error),
+        () => reject(error)
+      );
+    });
     child.on('close', (code) => {
-      if (sessionId) {
-        unregisterSession(sessionId, CLIPROXY_DEFAULT_PORT);
-      }
-      resolve(code ?? 1);
+      removeSignalHandlers();
+      void stopClaudePoolPolicy().then(() => {
+        if (sessionId) unregisterSession(sessionId, CLIPROXY_DEFAULT_PORT);
+        resolve(shuttingDown ? 0 : (code ?? 1));
+      }, reject);
     });
   });
 }

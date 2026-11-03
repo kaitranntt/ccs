@@ -8,6 +8,7 @@ import type {
   CliproxySessionAffinityState,
 } from '@/lib/api-client';
 import { CliproxyRetryControl } from './cliproxy-retry-control';
+import { ClaudePoolPolicyControl } from './claude-pool-policy-control';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 
@@ -276,6 +277,7 @@ export function RoutingGuidanceCard({
           </div>
         ) : null}
 
+        <ClaudePoolPolicyControl compact poolEnabled={poolEnabled} manageable={poolManageable} />
         <CliproxyRetryControl />
       </div>
     );
@@ -434,6 +436,10 @@ export function RoutingGuidanceCard({
               {sessionAffinityState.message}
             </div>
           ) : null}
+        </div>
+
+        <div className="xl:col-span-2">
+          <ClaudePoolPolicyControl poolEnabled={poolEnabled} manageable={poolManageable} />
         </div>
 
         {error ? (

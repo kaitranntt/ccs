@@ -114,6 +114,8 @@ export function modeLabel(mode: PoolDrainOrderMode): string {
       return 'manual (--set)';
     case 'tier':
       return 'tier-derived (--by-tier)';
+    case 'quota':
+      return 'quota classes (--by-quota)';
     case 'file':
     default:
       return 'file order';
@@ -217,10 +219,20 @@ export async function renderProviderPoolSection(
   const retry = settings.poolEnabled
     ? `, max-retry ${settings.maxRetryCredentials ?? POOL_MAX_RETRY_CREDENTIALS}`
     : '';
-  console.log(`    Routing:  ${routingBadge} | ${settings.strategy} | ${affinity}${retry}`);
+  const quotaPolicy =
+    settings.poolEnabled && provider === 'claude' && pool.drainOrder.mode === 'quota';
+  const strategy = quotaPolicy ? 'round-robin within quota class' : settings.strategy;
+  console.log(`    Routing:  ${routingBadge} | ${strategy} | ${affinity}${retry}`);
+  if (quotaPolicy) {
+    console.log(
+      dim(
+        '    New conversations share the preferred available group; higher groups take precedence on the next request.'
+      )
+    );
+  }
 
   // Drain order line. Order is sorted by the on-disk priority the selector
-  // actually reads, so the first account here is the real "next" account.
+  // actually reads. In quota mode ties are a group, not an exact next pick.
   const orderMode = modeLabel(pool.drainOrder.mode);
   if (pool.drainOrder.order.length > 0) {
     console.log(`    Order:    ${dim(orderMode)} -> ${pool.drainOrder.order.join(' > ')}`);

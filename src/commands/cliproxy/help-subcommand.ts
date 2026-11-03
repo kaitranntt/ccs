@@ -86,6 +86,11 @@ export async function showHelp(): Promise<void> {
           'Set manual drain order (comma-separated account IDs)',
         ],
         ['accounts order <provider> --reset', 'Revert drain order to stable file order'],
+        [
+          'accounts order claude --by-quota',
+          'Prioritize Claude quota classes and balance new conversations',
+        ],
+        ['accounts order claude --no-quota', 'Restore the order before automatic quota mode'],
       ],
     ],
     [

@@ -49,7 +49,7 @@ export const POOL_TIER_AWARE_PROVIDERS = new Set<CLIProxyProvider>(['agy', 'gemi
 export type PoolAccountStateKind = 'available' | 'cooling' | 'paused';
 
 /** How the effective drain order was derived. */
-export type PoolDrainOrderMode = 'manual' | 'tier' | 'file';
+export type PoolDrainOrderMode = 'manual' | 'tier' | 'file' | 'quota';
 
 export interface PoolAccountState {
   accountId: string;

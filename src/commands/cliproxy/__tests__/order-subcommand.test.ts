@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:te
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { invalidateConfigCache as resetUnifiedConfigCache } from '../../../config/config-loader-facade';
 
 mock.module('../../../cliproxy/proxy/proxy-detector', () => ({
   detectRunningProxy: async () => ({ running: false, verified: false }),
@@ -96,6 +97,7 @@ describe('handleOrderSubcommand', () => {
     originalCcsHome = process.env.CCS_HOME;
     originalNoColor = process.env.NO_COLOR;
     process.env.CCS_HOME = tempHome;
+    resetUnifiedConfigCache();
     process.env.NO_COLOR = '1';
     process.exitCode = 0;
     lines = [];
@@ -105,6 +107,7 @@ describe('handleOrderSubcommand', () => {
   });
 
   afterEach(() => {
+    resetUnifiedConfigCache();
     logSpy.mockRestore();
     process.exitCode = 0;
     if (originalCcsHome !== undefined) {
@@ -170,6 +173,30 @@ describe('handleOrderSubcommand', () => {
   });
 
   describe('--reset clears residual priorities (proxy stopped -> direct write)', () => {
+    it('preserves quota policy ownership when a remote reset is refused', async () => {
+      writeAuthFile('claude-a.json', { email: 'a@x.com', priority: 4 });
+      const registry = await loadRegistry();
+      registry.registerAccount('claude', 'claude-a.json', 'a@x.com');
+      registry.saveDrainOrderConfig('claude', { mode: 'quota' });
+      const { mutateConfig, invalidateConfigCache } = await import(
+        '../../../config/config-loader-facade'
+      );
+      mutateConfig((config) => {
+        config.cliproxy_server = {
+          ...config.cliproxy_server!,
+          remote: { ...config.cliproxy_server!.remote, enabled: true, host: 'proxy.example.test' },
+        };
+      });
+      invalidateConfigCache();
+      await runOrderSubcommand(['claude', '--reset']);
+      expect(process.exitCode).toBe(1);
+      expect(registry.loadDrainOrderConfig('claude')?.mode).toBe('quota');
+      expect(readAuthFile('claude-a.json').priority).toBe(4);
+      expect(fs.existsSync(path.join(tempHome, '.ccs', 'cache', 'claude-pool-order.json'))).toBe(
+        false
+      );
+    });
+
     it('removes the priority field from auth files and reports per-file results', async () => {
       // Explicit below-minimum version to prove reset is ungated on old binaries.
       await configureBackend('original', '6.6.105');

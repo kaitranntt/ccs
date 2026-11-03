@@ -7,14 +7,11 @@ import * as path from 'path';
 import { getCliproxyDir, getAuthDir } from '../config/config-generator';
 import type { CLIProxyProvider } from '../types';
 import { AccountInfo } from './types';
+export { getAccountsRegistryPath } from './registry-config';
 
 /**
  * Get path to accounts registry file
  */
-export function getAccountsRegistryPath(): string {
-  return path.join(getCliproxyDir(), 'accounts.json');
-}
-
 export interface RecoverableTokenFile {
   tokenFile: string;
   filePath: string;
