@@ -1,8 +1,8 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2636,
-    "filesAffected": 278,
+    "totalOccurrences": 2641,
+    "filesAffected": 279,
     "hotpathOccurrences": 1222,
     "hotpathFilesAffected": 163,
     "topHotpathFiles": [
@@ -739,7 +739,7 @@
         },
         {
           "file": "src/cliproxy/config/generator.ts",
-          "loc": 1291
+          "loc": 1295
         },
         {
           "file": "src/web-server/model-pricing.ts",
