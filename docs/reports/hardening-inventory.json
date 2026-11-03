@@ -771,7 +771,7 @@
         },
         {
           "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
-          "loc": 993
+          "loc": 988
         },
         {
           "file": "src/cliproxy/quota/quota-manager.ts",
