@@ -30,6 +30,7 @@ import {
   parsePayloadSection,
   serializePayloadSection,
 } from './payload-rule-config';
+import { serializeFallbackChainSection } from './fallback-chain-serializer';
 
 /** Internal API key for CCS-managed requests */
 export const CCS_INTERNAL_API_KEY = 'ccs-internal-managed';
@@ -892,6 +893,7 @@ ${apiKeysYaml}
 auth-dir: "${authDirNormalized}"
 ${generateOAuthModelAliasSection(existingAliases, userRoutingConfig.oauth_model_alias)}
 ${payloadSection ? `${payloadSection}\n` : ''}
+${userRoutingConfig.fallback_chain ? `${serializeFallbackChainSection(userRoutingConfig.fallback_chain)}\n` : ''}
 `;
 
   return config;
@@ -1014,7 +1016,11 @@ const V8_REGENERATED_ROOTS = new Set([
 ]);
 
 /** Top-level keys the template emits only in some cases, so never carried over. */
-const CONDITIONALLY_GENERATED_KEYS = new Set(['max-retry-credentials', 'payload']);
+const CONDITIONALLY_GENERATED_KEYS = new Set([
+  'max-retry-credentials',
+  'payload',
+  'fallback-chain',
+]);
 
 interface TopLevelYamlSection {
   key: string;

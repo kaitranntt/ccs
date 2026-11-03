@@ -179,6 +179,22 @@ export interface CLIProxyPayloadConfig {
   [section: string]: unknown;
 }
 
+/** A candidate target within a fallback chain. */
+export interface CLIProxyFallbackCandidate {
+  provider: string;
+  model: string;
+}
+
+/** Configuration for an ordered cross-model fallback chain. */
+export interface CLIProxyFallbackChainEntry {
+  candidates: CLIProxyFallbackCandidate[];
+  sticky_primary?: boolean;
+  exhaustion_cooldown?: string;
+}
+
+/** Map of route model or alias to fallback chain configuration. */
+export type CLIProxyFallbackChainConfig = Record<string, CLIProxyFallbackChainEntry>;
+
 /** Lower bound (inclusive) accepted for CLIProxy retry config fields. */
 export const CLIPROXY_RETRY_MIN_VALUE = 0;
 
@@ -265,4 +281,6 @@ export interface CLIProxyConfig {
   oauth_model_alias?: CLIProxyOAuthModelAliasConfig;
   /** Scoped payload rules emitted into managed CLIProxy config. */
   payload?: CLIProxyPayloadConfig;
+  /** Ordered cross-model fallback chains on 402/429 exhaustion. */
+  fallback_chain?: CLIProxyFallbackChainConfig;
 }
