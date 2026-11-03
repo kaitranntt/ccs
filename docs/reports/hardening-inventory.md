@@ -101,7 +101,7 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 | `src/web-server/routes/settings-routes.ts` | 1042 |
 | `src/commands/cliproxy/variant-subcommand.ts` | 1003 |
 | `src/cliproxy/model-catalog.ts` | 1001 |
-| `src/cliproxy/proxy/tool-sanitization-proxy.ts` | 993 |
+| `src/cliproxy/proxy/tool-sanitization-proxy.ts` | 988 |
 | `src/cliproxy/quota/quota-manager.ts` | 954 |
 | `src/web-server/services/codex-dashboard-service.ts` | 940 |
 | `src/glmt/glmt-proxy.ts` | 925 |
