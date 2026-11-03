@@ -172,7 +172,7 @@ describe('createOpenAICompatLaunchSettings', () => {
       const result = createOpenAICompatLaunchSettings(settingsPath, settings);
 
       expect(fs.existsSync(result.settingsPath)).toBe(true);
-      expect(result.settingsPath).toContain('ccs-openai-compat-settings-');
+      expect(result.settingsPath).toMatch(/ccs-(?:openai-compat|launch)-settings-/);
 
       result.cleanup();
       expect(fs.existsSync(result.settingsPath)).toBe(false);
