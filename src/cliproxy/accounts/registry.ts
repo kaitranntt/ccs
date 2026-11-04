@@ -5,6 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { AuthError } from '../../errors/error-types';
 import { CLIProxyProvider } from '../types';
 import { PROVIDER_CAPABILITIES } from '../provider-capabilities';
 import { PROVIDER_TYPE_VALUES } from '../auth/auth-types';
@@ -534,7 +535,7 @@ export function registerAccount(
   nickname?: string,
   projectId?: string
 ): AccountInfo {
-  return mutateAccountsRegistry((registry) => {
+  const accountInfo = mutateAccountsRegistry((registry) => {
     syncRegistryWithTokenFiles(registry);
 
     if (!registry.providers[provider]) {
@@ -667,6 +668,14 @@ export function registerAccount(
       projectId: providerAccounts.accounts[accountId].projectId,
     };
   });
+  // Re-apply stored drain order priorities after registering or re-authenticating an account,
+  // but only if a drain order configuration is actively established for this provider.
+  // Idempotent: only writes when target priority differs from current on-disk priority.
+  if (loadDrainOrderConfig(provider)) {
+    void triggerReapplyManagedDrainOrders();
+  }
+
+  return accountInfo;
 }
 
 /**
@@ -780,7 +789,7 @@ export function renameAccount(
 ): boolean {
   const validationError = validateNickname(newNickname);
   if (validationError) {
-    throw new Error(validationError);
+    throw new AuthError(validationError);
   }
 
   return mutateAccountsRegistry((registry) => {
@@ -795,7 +804,7 @@ export function renameAccount(
       nickname: account.nickname,
     }));
     if (hasAccountNameConflict(existingAccounts, newNickname, accountId)) {
-      throw new Error(`Nickname "${newNickname}" is already used by another account`);
+      throw new AuthError(`Nickname "${newNickname}" is already used by another account`);
     }
 
     providerAccounts.accounts[accountId].nickname = newNickname;
@@ -843,14 +852,32 @@ export function setAccountTier(
  * 1. OAuth provider + profile ID from filename (e.g., github-ABC123)
  * 2. Fallback: provider + index (e.g., kiro-1, kiro-2)
  */
-export function discoverExistingAccounts(): void {
+export function discoverExistingAccounts(): Promise<unknown> {
   if (!fs.existsSync(getAuthDir())) {
-    return;
+    return Promise.resolve();
   }
   mutateAccountsRegistry((registry) => {
     syncRegistryWithTokenFiles(registry);
     populateRegistryFromTokenFiles(registry);
   });
+
+  // Re-apply stored drain order priorities after token discovery/sync.
+  // Idempotent: skips files whose priority already matches, preventing reload loops.
+  return triggerReapplyManagedDrainOrders();
+}
+
+/**
+ * Trigger re-application of stored drain orders in background / post-mutation.
+ * Idempotent and non-blocking: skips already-matching priorities, never crashes caller.
+ */
+export function triggerReapplyManagedDrainOrders(): Promise<unknown> {
+  try {
+    const { reapplyAllManagedDrainOrders } = require('./drain-order');
+    const registry = readAccountsRegistryFromDisk();
+    return reapplyAllManagedDrainOrders(registry);
+  } catch {
+    return Promise.resolve();
+  }
 }
 
 /**
