@@ -1,3 +1,95 @@
+## [8.11.0](https://github.com/kaitranntt/ccs/compare/v8.10.0...v8.11.0) (2026-11-04)
+
+### Features
+
+* add Cheaper Inference as an OpenAI-compatible provider ([305028b](https://github.com/kaitranntt/ccs/commit/305028bca9f4b2ee7e46713cb9ab46a0ffa2373d))
+* **api:** add Atlas Cloud provider preset ([8bdd4fa](https://github.com/kaitranntt/ccs/commit/8bdd4fa49a7151482eacce28d614234a371edc68))
+* **api:** add CloudGPU provider preset ([f5b2569](https://github.com/kaitranntt/ccs/commit/f5b2569dd50ad50c51959424daf696eb337be9d4))
+* **api:** add Obscurify.ai provider preset ([c0616b8](https://github.com/kaitranntt/ccs/commit/c0616b83c455d0741d536275af9b2d22a744768a))
+* **api:** add qwencloud aliases and QwenCloud Coding Plan labels ([4c5800e](https://github.com/kaitranntt/ccs/commit/4c5800e71ebc0c5e3f5215e812397bf314c8aea8))
+* **api:** add Runcrate provider preset ([44e75de](https://github.com/kaitranntt/ccs/commit/44e75debd95de297abff64f737b8fce6364058f2))
+* **cliproxy:** prioritize claude pool by general quota class ([64e72f9](https://github.com/kaitranntt/ccs/commit/64e72f9c93cc24f3a505e86d948eee0d72dfaadb))
+* **cliproxy:** reapply managed drain order automatically after registry sync ([c1a3fd7](https://github.com/kaitranntt/ccs/commit/c1a3fd7e81b48281510131fe1a6d996ccdd65d09))
+* **cliproxy:** support fallback_chain routing schema and v8 config generation ([0ad5457](https://github.com/kaitranntt/ccs/commit/0ad54571b466928b15eb90a3097cbc3ef0126cfb))
+* **models:** add Claude Haiku 5.5 to catalogs, preset mappings, and pricing ([d427e68](https://github.com/kaitranntt/ccs/commit/d427e68289240a3c47fc1373bc69cb8e7f093a17))
+* **models:** add Claude Opus 5.5 to catalogs, preset mappings, and pricing ([b369b2b](https://github.com/kaitranntt/ccs/commit/b369b2bd1e8aca55a92d343bdc705e0f562ce59b)), closes [#1740](https://github.com/kaitranntt/ccs/issues/1740)
+* **models:** add Claude Sonnet 5.5 to catalogs, preset mappings, and pricing ([f8a94d3](https://github.com/kaitranntt/ccs/commit/f8a94d3368e7b0d4508a6cee3bd91f82fd069d7a))
+* **models:** add GPT-6.1 Sol, GPT-6 Sol, and GPT-6 Luna to Codex catalogs and pricing ([a741ee8](https://github.com/kaitranntt/ccs/commit/a741ee8efe0f8ec7bc259bca48e5ab554c0b614e)), closes [#1741](https://github.com/kaitranntt/ccs/issues/1741) [#1742](https://github.com/kaitranntt/ccs/issues/1742)
+* **models:** update GPT-5.6 Luna specs to 272k context and max effort level ([54260c3](https://github.com/kaitranntt/ccs/commit/54260c3da6749f469166bea3dab9f4bd900b5814)), closes [#1742](https://github.com/kaitranntt/ccs/issues/1742)
+* **models:** update GPT-5.6 Sol specs to 272k context and max effort level ([25b794a](https://github.com/kaitranntt/ccs/commit/25b794afb45c31e4b65f6ca4a31cd0c719ca7d04)), closes [#1741](https://github.com/kaitranntt/ccs/issues/1741)
+
+### Bug Fixes
+
+* allow keyless settings delegation and isolate plugin sweep file (fixes [#1780](https://github.com/kaitranntt/ccs/issues/1780), [#1756](https://github.com/kaitranntt/ccs/issues/1756)) ([cb44365](https://github.com/kaitranntt/ccs/commit/cb44365ffd564424b384b05b997a3f19fa148d03))
+* **api:** point the Atlas Cloud key hint at the API keys page ([d9033e4](https://github.com/kaitranntt/ccs/commit/d9033e49a412e05b5aec20a1e5feddbf3b1db09c))
+* **bar:** compare claude accounts using general quota ([f685412](https://github.com/kaitranntt/ccs/commit/f685412c119e1f80eea9daa46a6be3d314748452))
+* **ci:** migrate Docker release and smoke test workflows to ubuntu-latest ([e33d087](https://github.com/kaitranntt/ccs/commit/e33d0871d6e733d164fddec4be59163049f9e761))
+* **ci:** migrate Linux workflows from self-hosted to GitHub-hosted ubuntu-latest ([ca013b5](https://github.com/kaitranntt/ccs/commit/ca013b52f5cd2d4c6d088855aac8f9b9ad6e77b6))
+* **cliproxy:** bind CLIProxy to 127.0.0.1 by default ([7ac704e](https://github.com/kaitranntt/ccs/commit/7ac704e755174ef80cd60c26156316f55a7dc03c))
+* **cliproxy:** canonicalize quota aliases and exclude credit grants ([28d58cc](https://github.com/kaitranntt/ccs/commit/28d58cce27e20884a8241eb1a698b77df4e855a4))
+* **cliproxy:** honor --browser/--no-browser on CLIProxy profiles ([44a88a3](https://github.com/kaitranntt/ccs/commit/44a88a3541b58fc680fddc1f4a95150b920a0925))
+* **cliproxy:** keep claude personal and team orgs with the same email as separate accounts ([73f2beb](https://github.com/kaitranntt/ccs/commit/73f2bebdbbf81810b32b8e8b2126f9f97c94e2b5))
+* **cliproxy:** keep CLIProxyAPI v8 config sections on regeneration ([8e82b29](https://github.com/kaitranntt/ccs/commit/8e82b295c52101ea098b16dac2d20adba565064c))
+* **cliproxy:** make the session proxies' upstream timeout configurable ([5fa1521](https://github.com/kaitranntt/ccs/commit/5fa152188cf087b99511456097062560ce152b60))
+* **cliproxy:** preserve account tier during registerAccount re-auth ([c637789](https://github.com/kaitranntt/ccs/commit/c637789f84e91bb49c015326db838042a6e9084b))
+* **cliproxy:** preserve optional scoped claude quotas ([434b680](https://github.com/kaitranntt/ccs/commit/434b680563fe898055492d9935791824018c6acd))
+* **cliproxy:** request identity encoding and pass compressed bodies through ([2f5de18](https://github.com/kaitranntt/ccs/commit/2f5de185f0302bc7ad81e1c0513a18ec738f9a5f))
+* **cliproxy:** send Codex reasoning effort as a CLIProxy model suffix ([97bf1ab](https://github.com/kaitranntt/ccs/commit/97bf1ab66a5ec2d3a05b78d0ce243eef989698a8))
+* **cliproxy:** show quota alerts in-app instead of drawing over Claude Code ([773a3ba](https://github.com/kaitranntt/ccs/commit/773a3bacdd4bd37b7f9fe99ddd14d381e17289f5))
+* **cliproxy:** skip Gemini schema sanitization for single-provider Claude profiles ([d08330b](https://github.com/kaitranntt/ccs/commit/d08330baab62a6363f056b8bb04a6469e683a555))
+* **cliproxy:** stop folding Codex system messages into the first user message ([0f70bb9](https://github.com/kaitranntt/ccs/commit/0f70bb925e0ff21fdf6c71ed0bd841e059d56bb6)), closes [#1778](https://github.com/kaitranntt/ccs/issues/1778)
+* **cliproxy:** strip transfer-encoding on buffered responses and isolate premature disconnect test ([d6b5799](https://github.com/kaitranntt/ccs/commit/d6b5799b93485935fe74a59c24d4790015a07c91))
+* **cliproxy:** wire automatic drain order reapply on re-auth and discovery with proxy guards ([b32ac65](https://github.com/kaitranntt/ccs/commit/b32ac6568fa5fbccfcd9632eb97422e9c00e6ed7))
+* **codex:** add max to codex effort ladder and correct astra specs ([355f65a](https://github.com/kaitranntt/ccs/commit/355f65a768e1ad510ec51e850c2e31fe4890c48e))
+* **codex:** strip pre-existing parenthesized thinking suffix before appending effort ([72785db](https://github.com/kaitranntt/ccs/commit/72785db498c968a68f3ce6400f1073e536df2ecf))
+* **cursor:** validate port before probing daemon health and guard isDaemonRunning ([57c544f](https://github.com/kaitranntt/ccs/commit/57c544f363bf8bc0336c54b051bbbb05ac5756fd)), closes [#1747](https://github.com/kaitranntt/ccs/issues/1747)
+* **delegation:** only allow keyless profiles with a local base URL ([132fb49](https://github.com/kaitranntt/ccs/commit/132fb49406cea8c8415b79c07b196b495dd84a3f)), closes [#1780](https://github.com/kaitranntt/ccs/issues/1780) [#1781](https://github.com/kaitranntt/ccs/issues/1781)
+* **fleet:** snapshot durable settings for background fleet daemon respawns ([6387cd7](https://github.com/kaitranntt/ccs/commit/6387cd7dd578ab430af786b5f5ef8a5a481a052c)), closes [#1734](https://github.com/kaitranntt/ccs/issues/1734)
+* **plugins:** harden directory-source marketplace precedence and narrowing ([820c412](https://github.com/kaitranntt/ccs/commit/820c41294f9d56f77dc98bf1f99bea00e2ac0f7a))
+* **plugins:** preserve directory-source marketplaces during registry normalization ([8433c3b](https://github.com/kaitranntt/ccs/commit/8433c3b6a7052fe41e245c86aa5ed94efb997376)), closes [#1737](https://github.com/kaitranntt/ccs/issues/1737)
+* **proxy:** answer oversized request bodies with 413 instead of resetting the socket ([832b6f4](https://github.com/kaitranntt/ccs/commit/832b6f4a2efef209b7c81916bad9305d8178c736))
+* **quota:** keep Claude usage visible when the usage probe is rate-limited ([55e3f43](https://github.com/kaitranntt/ccs/commit/55e3f4380edd7a7febb1bfb1a439eaf414e17856))
+* **security:** resolve findings identified in Codex Security Cloud ([0a530cc](https://github.com/kaitranntt/ccs/commit/0a530cc6e7eaa16ff9ffe67748ae0acdf719557d))
+* **shared-manager:** keep correct instance symlinks when relinking ([b30cead](https://github.com/kaitranntt/ccs/commit/b30cead56cf064cc536d3da3e56be0c7b20525df))
+* **test:** properly restore process.env.CCS_DEBUG and isolate websearch test env ([af7117b](https://github.com/kaitranntt/ccs/commit/af7117bbbc790f6fb0ec96dccd4e0ccdb71c7d5c)), closes [#1749](https://github.com/kaitranntt/ccs/issues/1749)
+* **ui:** disambiguate claude-opus-5 in model selector test ([dcd7dc7](https://github.com/kaitranntt/ccs/commit/dcd7dc74e4b5ec5d1b9424ae6a599899ed0a9edf))
+* **ui:** keep monitor nicknames readable in compact cards ([cdb341a](https://github.com/kaitranntt/ccs/commit/cdb341a482919656419d32532553df53c4be5d11))
+* **ui:** keep the claude provider model-neutral on first account add ([d1f58ae](https://github.com/kaitranntt/ccs/commit/d1f58ae5a1c3ff696062aaa317a6a205213969a6))
+* **ui:** parse provider and endpoint from direct CLIProxy error logs ([58c50c8](https://github.com/kaitranntt/ccs/commit/58c50c840e991ef71cb634f634d0039ccdf9905e))
+* **ui:** show saved account nicknames ([491346a](https://github.com/kaitranntt/ccs/commit/491346a2e0d2f6af43e6173df0c515e33257ccdf))
+* **ui:** stop account add from resetting provider settings ([f9a5990](https://github.com/kaitranntt/ccs/commit/f9a599095b196ba39400eb6d7eb3d87cc8329146))
+* **usage:** append scanned entries without spreading large arrays ([717ab10](https://github.com/kaitranntt/ccs/commit/717ab103c7f78709915e55b58b3331d7d54526c3))
+* **usage:** attribute populated snapshots and guard legacy migration ([cf32edf](https://github.com/kaitranntt/ccs/commit/cf32edf86b0cdd4bb969680dd2eb4e849ddf1016))
+* **usage:** count each Claude transcript response once ([102c389](https://github.com/kaitranntt/ccs/commit/102c389574a8f5af391c110c3a61225ddf67e6a2))
+* **usage:** preserve hashed client-key attribution in history ([8743f48](https://github.com/kaitranntt/ccs/commit/8743f48c8b47215a67cba7a695d11f572879e9d1))
+* **usage:** read a shared transcript store once across instances ([99c675c](https://github.com/kaitranntt/ccs/commit/99c675cdf72e5c382b8615446dc3dcaf9a707a28))
+* **usage:** stop counting cached tokens as input for Codex and CLIProxy sources ([c7274d4](https://github.com/kaitranntt/ccs/commit/c7274d430b7c17e5fec93dc7d583b6405d817d1b))
+
+### Documentation
+
+* **cliproxy:** list 429 among the statuses request-retry retries ([d2c9f91](https://github.com/kaitranntt/ccs/commit/d2c9f916a4bf1a8da92380821d45a20e85fd810f))
+* document API Route custom Claude Code profiles ([ba41b0b](https://github.com/kaitranntt/ccs/commit/ba41b0bf8506ed2e274f664ce32de9d2f90202ce))
+* **readme:** add Requesty to the API profile list ([ccd7a85](https://github.com/kaitranntt/ccs/commit/ccd7a850e91e7b0b7a29826afc4155d62485d2ec))
+* **reports:** refresh hardening-inventory metrics ([48a30bf](https://github.com/kaitranntt/ccs/commit/48a30bfeabbd9018646517653704b9749ca0234f))
+
+### Styles
+
+* format plugin-metadata-normalizer and update hardening inventory ([0b32cac](https://github.com/kaitranntt/ccs/commit/0b32cacbb95d7a95169e0b05c5e2bb676af102e2))
+
+### Code Refactoring
+
+* **cliproxy:** unify openai-compat (strip) and cliproxy (overlay) launch-settings helpers ([5343518](https://github.com/kaitranntt/ccs/commit/53435181310287dde448d69782e6f79ca30326be))
+
+### Tests
+
+* bound transport fixtures and await child exits ([01ea9a3](https://github.com/kaitranntt/ccs/commit/01ea9a3e18f3daf304a7b58648b90e44d97a3e81))
+* bound transport fixtures and await child exits ([50900da](https://github.com/kaitranntt/ccs/commit/50900da7a7981adc8b4577fbde194a58c3fe3a53))
+* **browser:** bind the fake DevTools servers to 127.0.0.1 ([86c38cd](https://github.com/kaitranntt/ccs/commit/86c38cdc6fd2e5c26ed7cf3c4d0db53a3c37a02b))
+* isolate claude detection tests from an inherited CCS_CLAUDE_PATH ([281a4b4](https://github.com/kaitranntt/ccs/commit/281a4b4edce8fc0060bbd5333b48ca48b5034901))
+* isolate default browser launch integration coverage ([6712d87](https://github.com/kaitranntt/ccs/commit/6712d877d57d5019f684dd4a5469097aad9c929f))
+* isolate default browser launch integration coverage ([917609b](https://github.com/kaitranntt/ccs/commit/917609bc5b241f7f7ca04e22852c22967ccf1ec1))
+* verify directory source under claudeDir/plugins remains byte-for-byte unrewritten ([6f3f318](https://github.com/kaitranntt/ccs/commit/6f3f3181bf5cb3600a47596659d77ff1cbf1ddff))
+
 ## [8.10.0](https://github.com/kaitranntt/ccs/compare/v8.9.0...v8.10.0) (2026-09-11)
 
 ### Features
