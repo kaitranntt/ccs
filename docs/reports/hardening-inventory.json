@@ -1,7 +1,7 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2664,
+    "totalOccurrences": 2667,
     "filesAffected": 282,
     "hotpathOccurrences": 1220,
     "hotpathFilesAffected": 163,
@@ -501,10 +501,10 @@
   "maintainability": {
     "typedErrors": {
       "totalThrows": 484,
-      "typedThrows": 118,
-      "plainThrows": 306,
+      "typedThrows": 120,
+      "plainThrows": 304,
       "otherThrows": 60,
-      "adoptionRatio": 0.2438,
+      "adoptionRatio": 0.2479,
       "topSubdomainsByThrows": [
         {
           "subdomain": "web-server",
@@ -515,8 +515,8 @@
         {
           "subdomain": "cliproxy/accounts",
           "count": 39,
-          "typed": 26,
-          "plain": 13
+          "typed": 28,
+          "plain": 11
         },
         {
           "subdomain": "proxy",
@@ -782,8 +782,8 @@
           "loc": 940
         },
         {
-          "file": "src/glmt/glmt-proxy.ts",
-          "loc": 925
+          "file": "src/cliproxy/accounts/registry.ts",
+          "loc": 926
         }
       ]
     }
