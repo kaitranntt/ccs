@@ -6,8 +6,8 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 
 | Metric | Value |
 |---|---:|
-| Sync fs occurrences (all) | 2656 |
-| Sync fs files affected (all) | 281 |
+| Sync fs occurrences (all) | 2667 |
+| Sync fs files affected (all) | 282 |
 | Sync fs occurrences (runtime hotpaths) | 1220 |
 | Sync fs files affected (runtime hotpaths) | 163 |
 | Legacy shim markers | 494 |
@@ -57,7 +57,7 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 
 | Metric | Value |
 |---|---:|
-| typed-error adoption (typed/total throws) | 24.4% (118/484) |
+| typed-error adoption (typed/total throws) | 24.8% (120/484) |
 | typed-error adoption (P4 locked subdomains) | 93.3% (28/30), target 40% |
 | hotpath console.error/warn occurrences | 267 (593 total, 326 CLI-UX exempt) |
 | hotpath console.error/warn files | 82 |
@@ -104,5 +104,5 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 | `src/cliproxy/proxy/tool-sanitization-proxy.ts` | 988 |
 | `src/cliproxy/quota/quota-manager.ts` | 946 |
 | `src/web-server/services/codex-dashboard-service.ts` | 940 |
-| `src/glmt/glmt-proxy.ts` | 925 |
+| `src/cliproxy/accounts/registry.ts` | 926 |
 

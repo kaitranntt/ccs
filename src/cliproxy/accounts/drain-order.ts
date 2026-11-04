@@ -793,11 +793,35 @@ export async function reapplyAllManagedDrainOrders(
   registry: {
     providers: Record<
       string,
-      { accounts: Record<string, { tokenFile: string; paused?: boolean }> }
+      { accounts: Record<string, { tokenFile: string; paused?: boolean; tier?: AccountTier }> }
     >;
   },
-  proxyRunning = false
+  proxyRunning?: boolean
 ): Promise<Record<string, ApplyDrainOrderResult>> {
+  let isProxyRunning = proxyRunning;
+  if (isProxyRunning === undefined) {
+    try {
+      const target = getProxyTarget();
+      // Remote targets: remote drain order writing is out of scope (v1). Refuse direct writes.
+      if (target.isRemote) {
+        return {};
+      }
+
+      const { resolveLifecyclePort } = require('../config/port-manager');
+      const { detectRunningProxy } = require('../proxy/proxy-detector');
+      const status = await detectRunningProxy(resolveLifecyclePort());
+
+      // Ambiguous state: process alive but not verified responding to HTTP.
+      // Refuse rather than risk a direct write being clobbered by MarkResult persist.
+      if (status.running && !status.verified) {
+        return {};
+      }
+
+      isProxyRunning = status.running && status.verified;
+    } catch {
+      isProxyRunning = false;
+    }
+  }
   const results: Record<string, ApplyDrainOrderResult> = {};
 
   for (const [providerName, providerAccounts] of Object.entries(registry.providers)) {
@@ -807,13 +831,21 @@ export async function reapplyAllManagedDrainOrders(
 
     for (const [accountId, meta] of Object.entries(providerAccounts.accounts)) {
       if (!meta.paused && meta.tokenFile) {
-        activeAccounts.push({ accountId, tokenFile: meta.tokenFile });
+        activeAccounts.push({
+          accountId,
+          tokenFile: meta.tokenFile,
+          tier: meta.tier,
+        });
       }
     }
 
     if (activeAccounts.length === 0) continue;
 
-    const res = await reapplyDrainOrderForProvider(provider, activeAccounts, proxyRunning);
+    const res = await reapplyDrainOrderForProvider(
+      provider,
+      activeAccounts,
+      isProxyRunning ?? false
+    );
     if (res) {
       results[providerName] = res;
     }
