@@ -750,3 +750,74 @@ export async function fetchProxyAuthCooldowns(): Promise<ProxyAuthCooldown[]> {
     clearTimeout(timeoutId);
   }
 }
+/**
+ * Re-apply the stored drain order for a provider if configured.
+ *
+ * Idempotent: uses applyDrainOrder which reads the on-disk priority first
+ * and skips any write when priority matches target, preventing reload/watcher loops.
+ *
+ * @param provider The CLIProxy provider
+ * @param activeAccounts Active accounts for the provider
+ * @param proxyRunning Whether the proxy is currently running
+ * @returns Result summary or undefined if no stored order configured
+ */
+export async function reapplyDrainOrderForProvider(
+  provider: CLIProxyProvider,
+  activeAccounts: DrainOrderInput[],
+  proxyRunning: boolean
+): Promise<ApplyDrainOrderResult | undefined> {
+  const drainCfg = loadDrainOrderConfig(provider);
+  if (!drainCfg) {
+    return undefined;
+  }
+
+  const effective = resolveEffectiveDrainOrder(provider, activeAccounts);
+  if (effective.mode === 'file' || effective.entries.length === 0) {
+    return undefined;
+  }
+
+  return applyDrainOrder(effective.entries, proxyRunning);
+}
+/**
+ * Re-apply stored drain orders across all configured providers.
+ *
+ * Idempotent: applies each provider's effective drain order only when the
+ * on-disk file priority differs from the target priority. If all priorities
+ * match, zero writes occur and no reload loops are triggered.
+ *
+ * @param registry The current accounts registry
+ * @param proxyRunning Whether the proxy is currently running (defaults to false)
+ * @returns Map of provider to apply result
+ */
+export async function reapplyAllManagedDrainOrders(
+  registry: {
+    providers: Record<
+      string,
+      { accounts: Record<string, { tokenFile: string; paused?: boolean }> }
+    >;
+  },
+  proxyRunning = false
+): Promise<Record<string, ApplyDrainOrderResult>> {
+  const results: Record<string, ApplyDrainOrderResult> = {};
+
+  for (const [providerName, providerAccounts] of Object.entries(registry.providers)) {
+    if (!providerAccounts) continue;
+    const provider = providerName as CLIProxyProvider;
+    const activeAccounts: DrainOrderInput[] = [];
+
+    for (const [accountId, meta] of Object.entries(providerAccounts.accounts)) {
+      if (!meta.paused && meta.tokenFile) {
+        activeAccounts.push({ accountId, tokenFile: meta.tokenFile });
+      }
+    }
+
+    if (activeAccounts.length === 0) continue;
+
+    const res = await reapplyDrainOrderForProvider(provider, activeAccounts, proxyRunning);
+    if (res) {
+      results[providerName] = res;
+    }
+  }
+
+  return results;
+}
