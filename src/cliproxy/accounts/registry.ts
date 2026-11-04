@@ -535,7 +535,7 @@ export function registerAccount(
   nickname?: string,
   projectId?: string
 ): AccountInfo {
-  const accountInfo = mutateAccountsRegistry((registry) => {
+  const accountInfo = mutateAccountsRegistry<AccountInfo>((registry) => {
     syncRegistryWithTokenFiles(registry);
 
     if (!registry.providers[provider]) {
@@ -644,6 +644,7 @@ export function registerAccount(
       tokenFile,
       createdAt: existingAccount?.createdAt || new Date().toISOString(),
       lastUsedAt: new Date().toISOString(),
+      tier: existingAccount?.tier,
     };
 
     if (provider === 'agy' && projectId) {
@@ -666,15 +667,15 @@ export function registerAccount(
       createdAt: providerAccounts.accounts[accountId].createdAt,
       lastUsedAt: providerAccounts.accounts[accountId].lastUsedAt,
       projectId: providerAccounts.accounts[accountId].projectId,
+      tier: providerAccounts.accounts[accountId].tier,
     };
   });
   // Re-apply stored drain order priorities after registering or re-authenticating an account,
   // but only if a drain order configuration is actively established for this provider.
   // Idempotent: only writes when target priority differs from current on-disk priority.
   if (loadDrainOrderConfig(provider)) {
-    void triggerReapplyManagedDrainOrders();
+    accountInfo.scheduledDrainOrderPromise = triggerReapplyManagedDrainOrders();
   }
-
   return accountInfo;
 }
 

@@ -39,6 +39,8 @@ export interface AccountInfo {
   tier?: AccountTier;
   /** GCP Project ID (Antigravity only) - read-only, fetched from auth token */
   projectId?: string;
+  /** Internal promise for scheduled drain order re-apply (present when drain order is active) */
+  scheduledDrainOrderPromise?: Promise<unknown>;
 }
 
 /**

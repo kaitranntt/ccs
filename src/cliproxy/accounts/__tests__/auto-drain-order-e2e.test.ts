@@ -9,7 +9,6 @@ import {
   discoverExistingAccounts,
   registerAccount,
   setAccountTier,
-  triggerReapplyManagedDrainOrders,
 } from '../registry';
 import { readAuthFilePriority } from '../drain-order';
 import { runWithScopedCcsHome } from '../../../utils/config-manager';
@@ -93,41 +92,49 @@ describe('End-to-end automatic drain order re-apply after discovery/sync and re-
     }
   });
 
-  it('automatically restores priorities after registerAccount completes re-auth for a pooled account', async () => {
-    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-auto-drain-reauth-'));
+  it('preserves existingAccount.tier and restores tier priorities after registerAccount completes re-auth alone', async () => {
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-auto-drain-tier-reauth-'));
     try {
       await runWithScopedCcsHome(tempHome, async () => {
         const authDir = path.join(tempHome, '.ccs', 'cliproxy', 'auth');
         fs.mkdirSync(authDir, { recursive: true, mode: 0o700 });
 
-        writeAuthFile(authDir, 'antigravity-1.json', {
-          email: 'user1@x.com',
+        writeAuthFile(authDir, 'antigravity-pro.json', { email: 'pro@x.com', type: 'antigravity' });
+        writeAuthFile(authDir, 'antigravity-free.json', {
+          email: 'free@x.com',
           type: 'antigravity',
-          priority: 100,
-        });
-        writeAuthFile(authDir, 'antigravity-2.json', {
-          email: 'user2@x.com',
-          type: 'antigravity',
-          priority: 50,
         });
 
         await discoverExistingAccounts();
+        setAccountTier('agy', 'pro@x.com', 'pro');
+        setAccountTier('agy', 'free@x.com', 'free');
 
-        // Stored manual drain order: user1 first, then user2
-        saveDrainOrderConfig('agy', { mode: 'manual', orderedIds: ['user1@x.com', 'user2@x.com'] });
+        // Configure tier drain order
+        saveDrainOrderConfig('agy', { mode: 'tier' });
+        await discoverExistingAccounts();
 
-        // Simulate re-auth of user2: auth file refreshed without priority
-        writeAuthFile(authDir, 'antigravity-2.json', { email: 'user2@x.com', type: 'antigravity' });
-        expect(readAuthFilePriority('antigravity-2.json')).toBeUndefined();
+        expect(readAuthFilePriority('antigravity-pro.json')).toBeGreaterThan(
+          readAuthFilePriority('antigravity-free.json')!
+        );
 
-        // Calling registerAccount (the actual token-manager/auth-handler completion path)
-        registerAccount('agy', 'antigravity-2.json', 'user2@x.com');
-        await triggerReapplyManagedDrainOrders();
+        // Simulate re-auth of the pro account: file overwritten without priority
+        writeAuthFile(authDir, 'antigravity-pro.json', { email: 'pro@x.com', type: 'antigravity' });
+        expect(readAuthFilePriority('antigravity-pro.json')).toBeUndefined();
 
-        // Priority must be restored to user2's file automatically
-        expect(readAuthFilePriority('antigravity-2.json')).toBeDefined();
-        expect(readAuthFilePriority('antigravity-1.json')).toBeGreaterThan(
-          readAuthFilePriority('antigravity-2.json')!
+        // registerAccount is invoked during re-auth (e.g. by token-manager / auth-handler)
+        const account = registerAccount('agy', 'antigravity-pro.json', 'pro@x.com');
+        expect(account.tier).toBe('pro');
+
+        // Await the actual scheduled operation returned on the registered account object
+        const scheduledOperation = account.scheduledDrainOrderPromise;
+        expect(scheduledOperation).toBeDefined();
+        await scheduledOperation;
+
+        // Priority must be restored matching the pro tier without dropping to unknown/zero
+        const restoredProPriority = readAuthFilePriority('antigravity-pro.json');
+        expect(restoredProPriority).toBeDefined();
+        expect(restoredProPriority!).toBeGreaterThan(
+          readAuthFilePriority('antigravity-free.json')!
         );
       });
     } finally {
