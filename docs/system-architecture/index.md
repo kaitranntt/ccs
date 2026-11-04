@@ -141,6 +141,21 @@ Target-owned writers follow their own boundary. For example, the Droid adapter
 manages CCS custom-model entries in `~/.factory/settings.json`, not arbitrary
 user settings.
 
+### Account user-config ownership
+
+Claude owns each persistent account instance's `.claude.json`, credentials, and
+session history. CCS MCP synchronization updates only `mcpServers`, preserving
+unrelated fields and instance overrides except for CCS-managed servers. Existing
+malformed or unreadable documents are left untouched rather than reset.
+
+CCS holds its per-file `.ccs-lock` protocol across read, merge, and atomic
+same-directory replacement. Failed staging or rename never falls back to
+truncating the live document. This ensures complete-document visibility for
+CCS publications, not fsync-backed crash durability or conflict-free updates
+from uncoordinated writers. Native Claude uses its own lock protocol; its
+in-place fallback writes remain outside this guarantee. Account launches do
+not copy credentials or change config directories to work around that boundary.
+
 ## Local server and dashboard
 
 The Express server exposes APIs used by the React dashboard for supported

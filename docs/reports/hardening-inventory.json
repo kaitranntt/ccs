@@ -1,10 +1,10 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2652,
-    "filesAffected": 280,
-    "hotpathOccurrences": 1220,
-    "hotpathFilesAffected": 163,
+    "totalOccurrences": 2655,
+    "filesAffected": 281,
+    "hotpathOccurrences": 1223,
+    "hotpathFilesAffected": 164,
     "topHotpathFiles": [
       {
         "file": "src/utils/browser/mcp-installer.ts",
@@ -500,11 +500,11 @@
   },
   "maintainability": {
     "typedErrors": {
-      "totalThrows": 484,
+      "totalThrows": 485,
       "typedThrows": 118,
       "plainThrows": 306,
-      "otherThrows": 60,
-      "adoptionRatio": 0.2438,
+      "otherThrows": 61,
+      "adoptionRatio": 0.2433,
       "topSubdomainsByThrows": [
         {
           "subdomain": "web-server",
@@ -581,9 +581,9 @@
       "targetRatio": 0.4
     },
     "loggerCoverage": {
-      "filesWithCreateLogger": 68,
-      "totalSourceFiles": 780,
-      "coverageRatio": 0.0872,
+      "filesWithCreateLogger": 69,
+      "totalSourceFiles": 781,
+      "coverageRatio": 0.0883,
       "subdomainsWithZeroCreateLogger": [
         "api",
         "bin",
@@ -613,7 +613,7 @@
         },
         {
           "subdomain": "utils",
-          "count": 92,
+          "count": 93,
           "withLogger": 2
         },
         {
@@ -722,7 +722,7 @@
       ]
     },
     "largeFiles": {
-      "countOver400": 96,
+      "countOver400": 97,
       "countOver600": 44,
       "topOver400": [
         {
