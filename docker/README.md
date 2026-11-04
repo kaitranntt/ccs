@@ -109,6 +109,8 @@ escalates from supervised-process restart to container restart and finally Compo
 
 The integrated Docker stack publishes the dashboard and CLIProxy ports on `127.0.0.1` by default. This keeps the services reachable from the Docker host and SSH tunnels without exposing them on every host interface.
 
+Inside the container, CLIProxy listens on all interfaces (the images set `CCS_CLIPROXY_HOST=0.0.0.0`) so the published port can reach it; the host-side exposure is still controlled by `CCS_DOCKER_BIND_HOST`. Outside Docker, CCS writes `host: "127.0.0.1"` into the CLIProxy config, and keeps a `host` you set yourself.
+
 For remote hosts, prefer an SSH tunnel:
 
 ```bash

@@ -24,6 +24,11 @@ import { GlmtTransformer } from './glmt-transformer';
 import { SSEParser } from './sse-parser';
 import { DeltaAccumulator } from './delta-accumulator';
 import { createLogger } from '../services/logging';
+import {
+  readRequestBody,
+  RequestBodyTooLargeError,
+  respondRequestTooLarge,
+} from '../utils/request-body';
 
 const logger = createLogger('glmt:proxy');
 
@@ -201,7 +206,7 @@ export class GlmtProxy {
       }
 
       // Read request body
-      const body = await this.readBody(req);
+      const body = await readRequestBody(req);
       this.log(`Request body size: ${body.length} bytes`);
 
       // Parse JSON with error handling
@@ -251,6 +256,10 @@ export class GlmtProxy {
         await this.handleBufferedRequest(req, res, anthropicRequest, startTime);
       }
     } catch (error) {
+      if (error instanceof RequestBodyTooLargeError) {
+        respondRequestTooLarge(req, res, error, logger);
+        return;
+      }
       const err = error as Error;
       logger.error('glmt.proxy.request_error', 'GLMT proxy request error', {
         err: { name: err.name, message: err.message },
@@ -370,29 +379,6 @@ export class GlmtProxy {
       thinkingConfig,
       startTime
     );
-  }
-
-  /**
-   * Read request body
-   */
-  private readBody(req: http.IncomingMessage): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      const maxSize = 10 * 1024 * 1024; // 10MB limit
-      let totalSize = 0;
-
-      req.on('data', (chunk: Buffer) => {
-        totalSize += chunk.length;
-        if (totalSize > maxSize) {
-          reject(new Error('Request body too large (max 10MB)'));
-          return;
-        }
-        chunks.push(chunk);
-      });
-
-      req.on('end', () => resolve(Buffer.concat(chunks).toString()));
-      req.on('error', reject);
-    });
   }
 
   /**

@@ -9,11 +9,18 @@ import { randomUUID } from 'crypto';
 import { Readable } from 'stream';
 import { CursorExecutor } from './cursor-executor';
 import {
+  createLogger,
   REQUEST_ID_HEADER,
   REQUEST_ID_PATTERN,
   runWithRequestId,
   withRequestContext,
 } from '../services/logging';
+import { readJsonBody } from '../proxy/server/http-helpers';
+import {
+  logRequestTooLarge,
+  REQUEST_TOO_LARGE_ERROR_TYPE,
+  RequestBodyTooLargeError,
+} from '../utils/request-body';
 import {
   createAnthropicErrorResponse,
   createAnthropicProxyResponse,
@@ -23,6 +30,8 @@ import { checkAuthStatus } from './cursor-auth';
 import { getModelsForDaemon, resolveCursorRequestModel } from './cursor-models';
 import type { CursorTool } from './cursor-protobuf-schema';
 import { ValidationError } from '../errors/error-types';
+
+const logger = createLogger('cursor:daemon-entry');
 
 interface DaemonRuntimeOptions {
   port: number;
@@ -61,8 +70,6 @@ interface OpenAIChatRequest {
   messages?: OpenAIMessage[];
 }
 
-const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10MB
-
 function getAnthropicRequestToken(headers: http.IncomingHttpHeaders): string {
   const xApiKey = headers['x-api-key'];
   if (typeof xApiKey === 'string' && xApiKey.trim().length > 0) {
@@ -83,54 +90,6 @@ function getAnthropicRequestToken(headers: http.IncomingHttpHeaders): string {
 function writeJson(res: http.ServerResponse, statusCode: number, payload: unknown): void {
   res.writeHead(statusCode, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(payload));
-}
-
-function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    let total = 0;
-    let settled = false;
-
-    const resolveOnce = (payload: unknown) => {
-      if (settled) return;
-      settled = true;
-      resolve(payload);
-    };
-
-    const rejectOnce = (error: Error) => {
-      if (settled) return;
-      settled = true;
-      reject(error);
-    };
-
-    req.on('data', (chunk: Buffer) => {
-      total += chunk.length;
-      if (total > MAX_BODY_SIZE) {
-        // Stop processing body, but avoid force-closing socket so caller can return 413 cleanly.
-        req.pause();
-        rejectOnce(new Error('Request body too large (max 10MB)'));
-        return;
-      }
-      chunks.push(chunk);
-    });
-
-    req.on('end', () => {
-      const raw = Buffer.concat(chunks).toString('utf8').trim();
-      if (!raw) {
-        resolveOnce({});
-        return;
-      }
-      try {
-        resolveOnce(JSON.parse(raw));
-      } catch {
-        rejectOnce(new Error('Invalid JSON in request body'));
-      }
-    });
-
-    req.on('error', (error) => {
-      rejectOnce(error instanceof Error ? error : new Error(String(error)));
-    });
-  });
 }
 
 function headerMatchesToken(header: string | string[] | undefined, expectedToken: string): boolean {
@@ -466,11 +425,19 @@ export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Ser
         await pipeWebResponseToNode(outgoingResponse, res);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        const isPayloadTooLarge = message.includes('Request body too large');
+        const isPayloadTooLarge = error instanceof RequestBodyTooLargeError;
         const status = isPayloadTooLarge ? 413 : 400;
+        if (isPayloadTooLarge) {
+          logRequestTooLarge(logger, req, error);
+          if (!error.drained) res.setHeader('Connection', 'close');
+        }
         if (isAnthropicRoute) {
           await pipeWebResponseToNode(
-            createAnthropicErrorResponse(status, 'invalid_request_error', message),
+            createAnthropicErrorResponse(
+              status,
+              isPayloadTooLarge ? REQUEST_TOO_LARGE_ERROR_TYPE : 'invalid_request_error',
+              message
+            ),
             res
           );
         } else {

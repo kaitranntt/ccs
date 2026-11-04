@@ -152,7 +152,13 @@ export async function resolveAccounts(
       process.exit(1);
       return { earlyExit: true };
     }
-    setDefaultAccount(provider, account.id);
+    if (!setDefaultAccount(provider, account.id)) {
+      // Stop here: a following --nickname would otherwise rename the previous default.
+      console.error(fail(`Failed to switch to account: ${formatAccountDisplayName(account)}`));
+      console.error(`    Run "ccs ${provider} --accounts" to review the registered accounts`);
+      process.exit(1);
+      return { earlyExit: true };
+    }
     touchAccount(provider, account.id);
     const switchedLabel = account.nickname
       ? `${account.nickname} (${formatAccountDisplayName(account)})`

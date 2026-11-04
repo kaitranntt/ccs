@@ -115,6 +115,10 @@ export async function buildProxyChain(context: ProxyChainContext): Promise<Proxy
         verbose,
         warnOnSanitize: true,
         allowSelfSigned: useRemoteProxy ? (proxyConfig.allowSelfSigned ?? false) : false,
+        // Single-provider Claude reaches Anthropic, which accepts full JSON Schema.
+        // Composite tiers may route to Gemini; CLIProxy also cleans schemas itself
+        // when a Claude-format request lands on a Gemini/Antigravity backend.
+        sanitizeSchemas: !(provider === 'claude' && !cfg.isComposite),
       });
       toolSanitizationPort = await toolSanitizationProxy.start();
       log(`Tool sanitization proxy active on port ${toolSanitizationPort}`);

@@ -1367,7 +1367,11 @@ describe('CursorExecutor', () => {
         expect(hasWarning).toBe(true);
       } finally {
         console.error = originalError;
-        process.env.CCS_DEBUG = originalDebug;
+        if (originalDebug === undefined) {
+          delete process.env.CCS_DEBUG;
+        } else {
+          process.env.CCS_DEBUG = originalDebug;
+        }
       }
     });
   });

@@ -80,12 +80,22 @@ export function ConnectionTimeline({ events, privacyMode }: ConnectionTimelinePr
                           privacyMode && PRIVACY_BLUR_CLASS
                         )}
                       >
-                        {cleanEmail(event.accountEmail)}
+                        {event.accountNickname?.trim() || cleanEmail(event.accountEmail)}
                       </span>
                       <span className="text-[9px] text-muted-foreground font-mono flex-shrink-0">
                         {formatTimelineTime(event.timestamp)}
                       </span>
                     </div>
+                    {event.accountNickname?.trim() && (
+                      <div
+                        className={cn(
+                          'text-[9px] text-muted-foreground truncate',
+                          privacyMode && PRIVACY_BLUR_CLASS
+                        )}
+                      >
+                        {event.accountEmail}
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 mt-0.5">
                       <span
                         className="text-[9px] font-medium uppercase"

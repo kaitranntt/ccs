@@ -310,9 +310,16 @@ describe('execClaudeWithCLIProxy browser flag validation', () => {
       throw new Error('Test server did not bind to a TCP port');
     }
 
-    const exitSpy = jest
-      .spyOn(process, 'exit')
-      .mockImplementation((() => undefined as never) as typeof process.exit);
+    let observeExit: (code: Parameters<typeof process.exit>[0]) => void = () => {};
+    const exited = new Promise<Parameters<typeof process.exit>[0]>((resolve) => {
+      observeExit = resolve;
+    });
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation(((
+      code: Parameters<typeof process.exit>[0]
+    ) => {
+      observeExit(code);
+      return undefined as never;
+    }) as typeof process.exit);
     const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -338,6 +345,8 @@ describe('execClaudeWithCLIProxy browser flag validation', () => {
 
       expect(await waitForFile(markerPath)).toBe(true);
       expect(requestCount).toBeGreaterThan(0);
+      // The marker is written before the child emits its exit event.
+      await expect(exited).resolves.toBe(0);
       expect(exitSpy).toHaveBeenCalledWith(0);
     } finally {
       exitSpy.mockRestore();

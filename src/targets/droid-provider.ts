@@ -94,6 +94,7 @@ export function inferDroidProviderFromBaseUrl(
 
   if (
     host.includes('openrouter.ai') ||
+    host.includes('orcarouter.ai') ||
     host.includes('api.groq.com') ||
     host.includes('api.deepinfra.com') ||
     host.includes('api.fireworks.ai') ||
@@ -122,21 +123,23 @@ export function inferDroidProviderFromModel(
   const normalized = model.trim().toLowerCase();
   if (!normalized) return null;
 
-  if (normalized.startsWith('claude-')) {
+  const stripped = normalized.startsWith('openai/') ? normalized.slice(7) : normalized;
+
+  if (stripped.startsWith('claude-')) {
     return 'anthropic';
   }
   if (
-    normalized.startsWith('gpt-') ||
-    normalized.startsWith('o1') ||
-    normalized.startsWith('o3') ||
-    normalized.startsWith('o4')
+    stripped.startsWith('gpt-') ||
+    stripped.startsWith('o1') ||
+    stripped.startsWith('o3') ||
+    stripped.startsWith('o4')
   ) {
     return 'openai';
   }
   if (
-    normalized.startsWith('qwen') ||
-    normalized.startsWith('deepseek') ||
-    normalized.startsWith('kimi')
+    stripped.startsWith('qwen') ||
+    stripped.startsWith('deepseek') ||
+    stripped.startsWith('kimi')
   ) {
     return 'generic-chat-completion-api';
   }

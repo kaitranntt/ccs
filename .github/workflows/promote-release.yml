@@ -32,7 +32,7 @@ on:
 jobs:
   promote:
     name: Promote ${{ inputs.tag }} Docker mutable tags
-    runs-on: [self-hosted, linux, x64, cliproxy]
+    runs-on: ubuntu-latest
 
     permissions:
       contents: read   # to verify the release

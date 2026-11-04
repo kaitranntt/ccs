@@ -69,14 +69,14 @@ function writeCodexRollout(
             cached_input_tokens: 20,
             output_tokens: 5,
             reasoning_output_tokens: 2,
-            total_tokens: 127,
+            total_tokens: 105,
           },
           last_token_usage: {
             input_tokens: 100,
             cached_input_tokens: 20,
             output_tokens: 5,
             reasoning_output_tokens: 2,
-            total_tokens: 127,
+            total_tokens: 105,
           },
           model_context_window: 200000,
         },
@@ -93,14 +93,14 @@ function writeCodexRollout(
             cached_input_tokens: 20,
             output_tokens: 5,
             reasoning_output_tokens: 2,
-            total_tokens: 127,
+            total_tokens: 105,
           },
           last_token_usage: {
             input_tokens: 100,
             cached_input_tokens: 20,
             output_tokens: 5,
             reasoning_output_tokens: 2,
-            total_tokens: 127,
+            total_tokens: 105,
           },
           model_context_window: 200000,
         },
@@ -117,14 +117,14 @@ function writeCodexRollout(
             cached_input_tokens: 30,
             output_tokens: 10,
             reasoning_output_tokens: 3,
-            total_tokens: 193,
+            total_tokens: 160,
           },
           last_token_usage: {
             input_tokens: 50,
             cached_input_tokens: 10,
             output_tokens: 5,
             reasoning_output_tokens: 1,
-            total_tokens: 66,
+            total_tokens: 55,
           },
           model_context_window: 200000,
         },
@@ -151,14 +151,14 @@ function appendCodexTokenCount(rolloutPath: string): void {
             cached_input_tokens: 40,
             output_tokens: 20,
             reasoning_output_tokens: 5,
-            total_tokens: 265,
+            total_tokens: 220,
           },
           last_token_usage: {
             input_tokens: 50,
             cached_input_tokens: 10,
             output_tokens: 10,
             reasoning_output_tokens: 2,
-            total_tokens: 72,
+            total_tokens: 60,
           },
           model_context_window: 200000,
         },
@@ -202,14 +202,14 @@ describe('codex native usage collector', () => {
       model: 'gpt-5',
       version: '0.126.0',
       target: 'codex',
-      inputTokens: 100,
+      inputTokens: 80,
       cacheReadTokens: 20,
-      outputTokens: 7,
+      outputTokens: 5,
     });
     expect(entries[1]).toMatchObject({
-      inputTokens: 50,
+      inputTokens: 40,
       cacheReadTokens: 10,
-      outputTokens: 6,
+      outputTokens: 5,
     });
   });
 
@@ -291,9 +291,9 @@ describe('codex native usage collector', () => {
     expect(firstEntries).toHaveLength(2);
     expect(secondEntries).toHaveLength(3);
     expect(secondEntries[2]).toMatchObject({
-      inputTokens: 50,
+      inputTokens: 40,
       cacheReadTokens: 10,
-      outputTokens: 12,
+      outputTokens: 10,
     });
   });
 

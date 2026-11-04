@@ -180,7 +180,11 @@ function buildMarketplaceRegistryContent(sourcePaths: string[], targetConfigDir:
           continue;
         }
 
-        merged[name] = normalizePluginMetadataValue(value, targetConfigDir).normalized;
+        if (isDirectorySourceMarketplace(value)) {
+          merged[name] = value;
+        } else {
+          merged[name] = normalizePluginMetadataValue(value, targetConfigDir).normalized;
+        }
       }
     } catch (err) {
       console.log(
@@ -196,16 +200,30 @@ function buildMarketplaceRegistryContent(sourcePaths: string[], targetConfigDir:
   // excluded: they lack required schema fields that Claude Code enforces.
   for (const name of Object.keys(merged)) {
     const entry = merged[name];
-    if (!(name in discoveredEntries)) {
+    if (!isMarketplaceRegistryEntry(entry)) {
       delete merged[name];
-    } else if (isMarketplaceRegistryEntry(entry)) {
+      continue;
+    }
+    // Directory-source marketplace takes precedence over discovered clone dirs.
+    // A directory-source marketplace lives at its source path and has no clone
+    // under plugins/marketplaces/. Even if an empty directory exists under
+    // plugins/marketplaces/<name>, preserve the original entry and installLocation.
+    if (isDirectorySourceMarketplace(entry)) {
+      if (fs.existsSync(entry.source.path)) {
+        continue;
+      }
+      // Prune stale directory source; never resurrect as a clone
+      delete merged[name];
+      continue;
+    }
+    if (name in discoveredEntries) {
       merged[name] = {
         ...entry,
         installLocation: discoveredEntries[name].installLocation,
       };
-    } else {
-      delete merged[name];
+      continue;
     }
+    delete merged[name];
   }
 
   return JSON.stringify(merged, null, 2);
@@ -250,6 +268,25 @@ function isMarketplaceRegistryEntry(value: unknown): value is Record<string, unk
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isDirectorySourceMarketplace(
+  entry: unknown
+): entry is { source: { source: 'directory'; path: string } } {
+  if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+    return false;
+  }
+  if (!('source' in entry)) {
+    return false;
+  }
+  const source = entry.source;
+  if (typeof source !== 'object' || source === null || Array.isArray(source)) {
+    return false;
+  }
+  if (!('source' in source) || !('path' in source)) {
+    return false;
+  }
+  return source.source === 'directory' && typeof source.path === 'string' && source.path.length > 0;
+}
+
 /**
  * Write a plugin metadata file, creating parent dirs first and skipping
  * when the content is unchanged.
@@ -285,10 +322,6 @@ export function reconcileLocalMarketplaceRegistry(
   }
 
   const discoveredEntries = discoverMarketplaceEntries(configDir);
-  if (Object.keys(discoveredEntries).length === 0) {
-    removeExistingPath(registryPath, 'file');
-    return;
-  }
 
   let parsed: Record<string, unknown> = {};
   try {
@@ -299,27 +332,48 @@ export function reconcileLocalMarketplaceRegistry(
   } catch {
     parsed = {};
   }
+  // Preserve directory-source entries whose path still exists on disk (precedence over discovered)
+  const directoryEntries: Record<string, Record<string, unknown>> = {};
+  for (const [name, entry] of Object.entries(parsed)) {
+    if (
+      isMarketplaceRegistryEntry(entry) &&
+      isDirectorySourceMarketplace(entry) &&
+      fs.existsSync(entry.source.path)
+    ) {
+      directoryEntries[name] = entry;
+    }
+  }
 
-  const reconciled = Object.fromEntries(
-    Object.entries(discoveredEntries).map(([name, value]) => {
-      const existing = parsed[name];
-      if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
-        return [
-          name,
-          {
-            ...(normalizePluginMetadataValue(existing, configDir).normalized as Record<
-              string,
-              unknown
-            >),
-            installLocation: value.installLocation,
-          },
-        ];
-      }
+  if (Object.keys(discoveredEntries).length === 0 && Object.keys(directoryEntries).length === 0) {
+    removeExistingPath(registryPath, 'file');
+    return;
+  }
 
-      return [name, value];
-    })
-  );
+  const reconciled: Record<string, unknown> = {
+    ...directoryEntries,
+  };
 
+  for (const [name, value] of Object.entries(discoveredEntries)) {
+    if (name in directoryEntries) {
+      continue;
+    }
+    const existing = parsed[name];
+    if (isDirectorySourceMarketplace(existing)) {
+      // Stale directory source must not be resurrected as a clone
+      continue;
+    }
+    if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
+      reconciled[name] = {
+        ...(normalizePluginMetadataValue(existing, configDir).normalized as Record<
+          string,
+          unknown
+        >),
+        installLocation: value.installLocation,
+      };
+    } else {
+      reconciled[name] = value;
+    }
+  }
   writePluginMetadataFile(
     registryPath,
     JSON.stringify(reconciled, null, 2),

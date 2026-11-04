@@ -108,6 +108,8 @@ function runHookWithMockedFetch(mode: 'success' | 'empty' | 'non-result' | 'fail
       }),
       env: {
         ...process.env,
+        CCS_DEBUG: '',
+        CCS_WEBSEARCH_TRACE: '',
         CCS_PROFILE_TYPE: NEUTRAL_PROFILE_TYPE,
         CCS_WEBSEARCH_ENABLED: '1',
         CCS_WEBSEARCH_SKIP: '0',

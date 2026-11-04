@@ -5,6 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { AuthError } from '../../errors/error-types';
 import { CLIProxyProvider } from '../types';
 import { PROVIDER_CAPABILITIES } from '../provider-capabilities';
 import { PROVIDER_TYPE_VALUES } from '../auth/auth-types';
@@ -207,8 +208,16 @@ function populateRegistryFromTokenFiles(
   registry: AccountsRegistry,
   options: { includePaused?: boolean } = {}
 ): RegistryPopulationIssue[] {
-  const { tokens, issues } = readRecoverableTokenFiles(options);
-  const duplicateEmailCounts = buildDuplicateEmailCounts(tokens);
+  // Count same-email token files in auth/ and auth-paused/ so an account keeps its
+  // email#variant id while a sibling with the same email is paused. Counting only
+  // active files would rename the sibling to the bare email, and a later resume
+  // could then reuse that id and overwrite the paused account's entry.
+  const { tokens: allTokens, issues: allIssues } = readRecoverableTokenFiles({
+    includePaused: true,
+  });
+  const duplicateEmailCounts = buildDuplicateEmailCounts(allTokens);
+  const tokens = options.includePaused ? allTokens : allTokens.filter((token) => !token.paused);
+  const issues = options.includePaused ? allIssues : allIssues.filter((issue) => !issue.paused);
 
   for (const token of tokens) {
     const providerAccounts = ensureProviderRegistry(registry, token.provider);
@@ -488,6 +497,26 @@ export function hydrateRegistryFromTokenFiles(registry: AccountsRegistry): boole
 }
 
 /**
+ * Return the provider accounts that contain accountId, reconciling the locked registry
+ * with token files first when accountId is missing. Read paths show a hydrated view, so
+ * an id the user selected (for example a migrated email#variant id) may not be in
+ * accounts.json until discovery persists it.
+ */
+function findProviderAccountsForMutation(
+  registry: AccountsRegistry,
+  provider: CLIProxyProvider,
+  accountId: string
+): NonNullable<AccountsRegistry['providers'][CLIProxyProvider]> | undefined {
+  if (!registry.providers[provider]?.accounts[accountId]) {
+    syncRegistryWithTokenFiles(registry);
+    populateRegistryFromTokenFiles(registry);
+  }
+
+  const providerAccounts = registry.providers[provider];
+  return providerAccounts?.accounts[accountId] ? providerAccounts : undefined;
+}
+
+/**
  * Register a new account
  * Called after successful OAuth to record the account
  *
@@ -506,7 +535,7 @@ export function registerAccount(
   nickname?: string,
   projectId?: string
 ): AccountInfo {
-  return mutateAccountsRegistry((registry) => {
+  const accountInfo = mutateAccountsRegistry<AccountInfo>((registry) => {
     syncRegistryWithTokenFiles(registry);
 
     if (!registry.providers[provider]) {
@@ -615,6 +644,7 @@ export function registerAccount(
       tokenFile,
       createdAt: existingAccount?.createdAt || new Date().toISOString(),
       lastUsedAt: new Date().toISOString(),
+      tier: existingAccount?.tier,
     };
 
     if (provider === 'agy' && projectId) {
@@ -637,8 +667,16 @@ export function registerAccount(
       createdAt: providerAccounts.accounts[accountId].createdAt,
       lastUsedAt: providerAccounts.accounts[accountId].lastUsedAt,
       projectId: providerAccounts.accounts[accountId].projectId,
+      tier: providerAccounts.accounts[accountId].tier,
     };
   });
+  // Re-apply stored drain order priorities after registering or re-authenticating an account,
+  // but only if a drain order configuration is actively established for this provider.
+  // Idempotent: only writes when target priority differs from current on-disk priority.
+  if (loadDrainOrderConfig(provider)) {
+    accountInfo.scheduledDrainOrderPromise = triggerReapplyManagedDrainOrders();
+  }
+  return accountInfo;
 }
 
 /**
@@ -646,9 +684,9 @@ export function registerAccount(
  */
 export function setDefaultAccount(provider: CLIProxyProvider, accountId: string): boolean {
   return mutateAccountsRegistry((registry) => {
-    const providerAccounts = registry.providers[provider];
+    const providerAccounts = findProviderAccountsForMutation(registry, provider, accountId);
 
-    if (!providerAccounts || !providerAccounts.accounts[accountId]) {
+    if (!providerAccounts) {
       return false;
     }
 
@@ -663,9 +701,9 @@ export function setDefaultAccount(provider: CLIProxyProvider, accountId: string)
  */
 export function pauseAccount(provider: CLIProxyProvider, accountId: string): boolean {
   return mutateAccountsRegistry((registry) => {
-    const providerAccounts = registry.providers[provider];
+    const providerAccounts = findProviderAccountsForMutation(registry, provider, accountId);
 
-    if (!providerAccounts?.accounts[accountId]) {
+    if (!providerAccounts) {
       return false;
     }
 
@@ -694,9 +732,9 @@ export function pauseAccount(provider: CLIProxyProvider, accountId: string): boo
  */
 export function resumeAccount(provider: CLIProxyProvider, accountId: string): boolean {
   return mutateAccountsRegistry((registry) => {
-    const providerAccounts = registry.providers[provider];
+    const providerAccounts = findProviderAccountsForMutation(registry, provider, accountId);
 
-    if (!providerAccounts?.accounts[accountId]) {
+    if (!providerAccounts) {
       return false;
     }
 
@@ -720,9 +758,9 @@ export function resumeAccount(provider: CLIProxyProvider, accountId: string): bo
  */
 export function removeAccount(provider: CLIProxyProvider, accountId: string): boolean {
   return mutateAccountsRegistry((registry) => {
-    const providerAccounts = registry.providers[provider];
+    const providerAccounts = findProviderAccountsForMutation(registry, provider, accountId);
 
-    if (!providerAccounts || !providerAccounts.accounts[accountId]) {
+    if (!providerAccounts) {
       return false;
     }
 
@@ -752,13 +790,13 @@ export function renameAccount(
 ): boolean {
   const validationError = validateNickname(newNickname);
   if (validationError) {
-    throw new Error(validationError);
+    throw new AuthError(validationError);
   }
 
   return mutateAccountsRegistry((registry) => {
-    const providerAccounts = registry.providers[provider];
+    const providerAccounts = findProviderAccountsForMutation(registry, provider, accountId);
 
-    if (!providerAccounts?.accounts[accountId]) {
+    if (!providerAccounts) {
       return false;
     }
 
@@ -767,7 +805,7 @@ export function renameAccount(
       nickname: account.nickname,
     }));
     if (hasAccountNameConflict(existingAccounts, newNickname, accountId)) {
-      throw new Error(`Nickname "${newNickname}" is already used by another account`);
+      throw new AuthError(`Nickname "${newNickname}" is already used by another account`);
     }
 
     providerAccounts.accounts[accountId].nickname = newNickname;
@@ -780,8 +818,8 @@ export function renameAccount(
  */
 export function touchAccount(provider: CLIProxyProvider, accountId: string): void {
   mutateAccountsRegistry((registry) => {
-    const providerAccounts = registry.providers[provider];
-    if (providerAccounts?.accounts[accountId]) {
+    const providerAccounts = findProviderAccountsForMutation(registry, provider, accountId);
+    if (providerAccounts) {
       providerAccounts.accounts[accountId].lastUsedAt = new Date().toISOString();
     }
   });
@@ -796,9 +834,9 @@ export function setAccountTier(
   tier: 'free' | 'pro' | 'ultra' | 'unknown'
 ): boolean {
   return mutateAccountsRegistry((registry) => {
-    const providerAccounts = registry.providers[provider];
+    const providerAccounts = findProviderAccountsForMutation(registry, provider, accountId);
 
-    if (!providerAccounts?.accounts[accountId]) {
+    if (!providerAccounts) {
       return false;
     }
 
@@ -815,14 +853,32 @@ export function setAccountTier(
  * 1. OAuth provider + profile ID from filename (e.g., github-ABC123)
  * 2. Fallback: provider + index (e.g., kiro-1, kiro-2)
  */
-export function discoverExistingAccounts(): void {
+export function discoverExistingAccounts(): Promise<unknown> {
   if (!fs.existsSync(getAuthDir())) {
-    return;
+    return Promise.resolve();
   }
   mutateAccountsRegistry((registry) => {
     syncRegistryWithTokenFiles(registry);
     populateRegistryFromTokenFiles(registry);
   });
+
+  // Re-apply stored drain order priorities after token discovery/sync.
+  // Idempotent: skips files whose priority already matches, preventing reload loops.
+  return triggerReapplyManagedDrainOrders();
+}
+
+/**
+ * Trigger re-application of stored drain orders in background / post-mutation.
+ * Idempotent and non-blocking: skips already-matching priorities, never crashes caller.
+ */
+export function triggerReapplyManagedDrainOrders(): Promise<unknown> {
+  try {
+    const { reapplyAllManagedDrainOrders } = require('./drain-order');
+    const registry = readAccountsRegistryFromDisk();
+    return reapplyAllManagedDrainOrders(registry);
+  } catch {
+    return Promise.resolve();
+  }
 }
 
 /**

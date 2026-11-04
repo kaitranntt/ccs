@@ -14,6 +14,7 @@ import {
   readCliproxyRetryState,
 } from '../../cliproxy/routing/retry-settings';
 import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
+import { getClaudePoolPolicyController } from '../../cliproxy/accounts/claude-pool-policy';
 
 const router = Router();
 
@@ -26,6 +27,22 @@ router.use((req: Request, res: Response, next) => {
     )
   ) {
     next();
+  }
+});
+
+router.get('/routing/claude-quota', (_req: Request, res: Response): void => {
+  res.json(getClaudePoolPolicyController().getStatus());
+});
+
+router.put('/routing/claude-quota', async (req: Request, res: Response): Promise<void> => {
+  if (typeof req.body?.enabled !== 'boolean') {
+    res.status(400).json({ error: 'Use enabled=true|false for Claude quota ordering.' });
+    return;
+  }
+  try {
+    res.json(await getClaudePoolPolicyController().setEnabled(req.body.enabled));
+  } catch (error) {
+    res.status(409).json({ error: (error as Error).message });
   }
 });
 

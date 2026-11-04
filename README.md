@@ -64,11 +64,12 @@ CCS gives you one stable command surface while letting you switch between:
 - multiple Claude subscriptions and isolated account contexts
 - OAuth providers like Codex, xAI/Grok, Kiro, Claude, Kimi, and more, with legacy
   Copilot compatibility for existing setups
-- API and local-model profiles like GLM, Kimi, OpenRouter, OrcaRouter, Ollama,
-  llama.cpp, Novita, Fireworks AI, and Alibaba Coding Plan
+- API and local-model profiles like GLM, Kimi, OpenRouter, Requesty,
+  Atlas Cloud, Cheaper Inference, OrcaRouter, Runcrate, Obscurify.ai,
+  CloudGPU, Ollama, llama.cpp, Novita, Fireworks AI, and QwenCloud Coding Plan
 
 Qwen Code account linking is not available in the bundled CLIProxy runtime yet;
-use an API-key Qwen profile such as Alibaba Coding Plan for Qwen models.
+use an API-key Qwen profile such as QwenCloud Coding Plan for Qwen models.
 
 The goal is simple: stop rewriting config files, stop breaking active sessions,
 and move between providers in seconds.
@@ -96,6 +97,17 @@ model routing through `proxy.routing`, and explicit activation helpers such as
 
 Guide:
 [OpenAI-Compatible Provider Routing](https://docs.ccs.kaitran.ca/features/proxy/openai-compatible-providers).
+
+### API Route custom profile
+
+[API Route](https://www.api-route.com/docs/quickstart) serves an Anthropic-compatible Messages endpoint. Create a custom Claude Code profile and enter your API Route key when prompted:
+
+```bash
+ccs api create api-route --base-url https://global.api-route.com --model claude-haiku-4-5 --target claude
+ccs api-route
+```
+
+Use the host without `/v1`, since Claude Code appends `/v1/messages`. Replace the example model with a Claude model ID available to your key; authenticated `GET https://global.api-route.com/v1/models` lists the IDs. API Route is a paid hosted service: see [API keys](https://www.api-route.com/api-keys) and [pricing](https://www.api-route.com/pricing). Profile settings use the existing [CCS configuration workflow](https://docs.ccs.kaitran.ca/getting-started/configuration).
 
 ### Related Project: claude-code-router
 
@@ -218,7 +230,7 @@ ccs ollama "summarize these logs"
 - Daily local gate: `bun run format && bun run lint:fix && bun run validate` (`validate` is the fast path only)
 - Before review or merge confidence: `bun run validate:ci-parity`
 - Cross-runtime proxy transport: `bun run test:runtime-matrix` (Node 18/22/26 and Bun)
-- If PR checks stay queued for more than 10 minutes, assume the self-hosted runner is offline and notify a maintainer instead of retrying blindly
+- If PR checks stay queued for more than 10 minutes, verify GitHub Actions status instead of retrying blindly
 - Starter work:
   [good first issue](https://github.com/kaitranntt/ccs/labels/good%20first%20issue),
   [help wanted](https://github.com/kaitranntt/ccs/labels/help%20wanted)
@@ -228,4 +240,4 @@ ccs ollama "summarize these logs"
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=kaitranntt/ccs&type=Date&legend=top-left&sealed_token=ztbdUcU1tRfVPKPTvc-lMCRGPY6cLqpshj4rCGjkuQ41QKoJxwR_cNAbQ8itKG_JVP-kgju22G0vJpZiI3vcxfd10zaYUFq0_tyIVhlWzldVZYfCHa50qBwWzy4SenTIva_2pk49LYvDtaHNwNJxKt7wZ0Z5jhDQyxiDHc9BBsnCsjex8ub8Aea1BxU_)](https://star-history.com/#kaitranntt/ccs&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=kaitranntt/ccs&type=Date&legend=top-left)](https://star-history.com/#kaitranntt/ccs&Date)

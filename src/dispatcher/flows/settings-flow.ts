@@ -384,7 +384,6 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
       ),
     };
     delete proxyEnv.ANTHROPIC_API_KEY;
-    const launchSettings = createOpenAICompatLaunchSettings(expandedSettingsPath, settings);
 
     // Claude subcommands reject `--settings` (it flips `agents` to list mode).
     // Routing env vars still flow via proxyEnv. Issue #1218.
@@ -392,6 +391,11 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
     const subcommandArgs = isSubcommand
       ? stripClaudeSubcommandSessionArgs(browserArgs)
       : browserArgs;
+
+    const launchSettings = isSubcommand
+      ? { settingsPath: expandedSettingsPath, cleanup: () => {} }
+      : createOpenAICompatLaunchSettings(expandedSettingsPath, settings, { durable: true });
+
     const launchArgs = isSubcommand
       ? appendThirdPartyWebSearchToolArgs(subcommandArgs, webSearchLaunch.enabled)
       : [

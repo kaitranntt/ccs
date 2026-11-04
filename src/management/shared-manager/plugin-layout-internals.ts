@@ -121,6 +121,15 @@ export function linkInstancePlugins(
   const linkItems = getSharedPluginLinkItems(roots.sharedDir);
   assertInstanceIdentity?.();
 
+  // Remove any legacy symlinks for instance-local metadata files (e.g. .last_inuse_sweep)
+  for (const metadataName of INSTANCE_LOCAL_PLUGIN_METADATA_FILES) {
+    const localEntryPath = path.join(linkPath, metadataName);
+    const localStats = getLstatSync(localEntryPath);
+    if (localStats?.isSymbolicLink()) {
+      runGuardedInstanceMutation(assertInstanceIdentity, () => fs.unlinkSync(localEntryPath));
+    }
+  }
+
   for (const item of linkItems) {
     const targetEntryPath = path.join(targetPath, item.name);
     const linkEntryPath = path.join(linkPath, item.name);

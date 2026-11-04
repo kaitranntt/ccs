@@ -11,8 +11,8 @@ describe('buildUiCatalog codex tuning metadata merge', () => {
     });
 
     const model = merged?.models.find((entry) => entry.id === 'gpt-5.6-sol');
-    expect(model?.codexMaxEffort).toBe('xhigh');
-    expect(model?.codexEfforts).toEqual(['low', 'medium', 'high', 'xhigh']);
+    expect(model?.codexMaxEffort).toBe('max');
+    expect(model?.codexEfforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
     expect(model?.codexServiceTiers).toEqual(['fast']);
   });
 

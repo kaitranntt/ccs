@@ -8,6 +8,7 @@ import type {
   CLIProxyPayloadConfig,
 } from '../../config/schemas/cliproxy';
 import type { CliproxyRoutingStrategy } from './provider-types';
+import type { BrowserLaunchOverride } from '../../utils/browser/browser-policy';
 
 /** CLIProxy config.yaml structure (minimal) */
 export interface CLIProxyConfig {
@@ -79,6 +80,8 @@ export interface ExecutorConfig {
   profileName?: string;
   claudeConfigDir?: string;
   browserRuntimeEnv?: Record<string, string>;
+  /** `--browser` / `--no-browser`, already stripped from args by the dispatcher */
+  browserLaunchOverride?: BrowserLaunchOverride;
 }
 
 /** Resolved proxy configuration after merging CLI > ENV > config.yaml > defaults */

@@ -83,10 +83,11 @@ describe('FlexibleModelSelector', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /select model/i }));
 
-    expect(screen.getByRole('option', { name: /claude-sonnet-5/i })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /claude-opus-5/i })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /claude-opus-4-8/i })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /claude-sonnet-4-6/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^claude-sonnet-5$/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^claude-opus-5-5$/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^claude-opus-5$/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^claude-opus-4-8$/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^claude-sonnet-4-6$/i })).toBeInTheDocument();
   });
 
   it('surfaces Claude Sonnet 5 in the GitHub Copilot CLIProxy picker', async () => {
@@ -193,9 +194,21 @@ describe('FlexibleModelSelector', () => {
     expect(screen.getByText('gpt-5.3-codex-xhigh')).toBeInTheDocument();
     expect(screen.getByText('gpt-5.4-high-fast')).toBeInTheDocument();
     expect(screen.getByText('gpt-5.6-sol-low')).toBeInTheDocument();
+    expect(screen.getByText('gpt-5.6-sol-max')).toBeInTheDocument();
+    expect(screen.getByText('gpt-5.6-sol-max-fast')).toBeInTheDocument();
     expect(screen.getByText('gpt-5.6-terra-xhigh')).toBeInTheDocument();
     expect(screen.getByText('gpt-5.6-luna-fast')).toBeInTheDocument();
+    expect(screen.getByText('gpt-5.6-luna-max')).toBeInTheDocument();
+    expect(screen.getByText('gpt-5.6-luna-max-fast')).toBeInTheDocument();
     expect(screen.queryByText('gpt-5.6-sol-minimal')).not.toBeInTheDocument();
+    for (const suffix of ['', '-low', '-medium', '-high', '-xhigh', '-max']) {
+      expect(screen.getByText(`gpt-6-astra${suffix}`)).toBeInTheDocument();
+      expect(screen.getByText(`gpt-6-astra${suffix}-fast`)).toBeInTheDocument();
+    }
+    for (const effort of ['minimal', 'ultra']) {
+      expect(screen.queryByText(`gpt-6-astra-${effort}`)).not.toBeInTheDocument();
+      expect(screen.queryByText(`gpt-6-astra-${effort}-fast`)).not.toBeInTheDocument();
+    }
 
     await userEvent.click(screen.getByText('gpt-5.3-codex-high'));
     expect(onChange).toHaveBeenCalledWith('gpt-5.3-codex-high');

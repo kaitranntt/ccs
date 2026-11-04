@@ -47,8 +47,7 @@ export function displayClaudeQuotaSection(
       (window, index, arr): window is ClaudeDisplayWindow =>
         !!window && arr.indexOf(window) === index
     );
-    const statusWindows =
-      coreWindows.length > 0 ? coreWindows : quota.windows.map(toClaudeDisplayWindow);
+    const statusWindows = coreWindows;
     const minQuota =
       statusWindows.length > 0
         ? Math.min(...statusWindows.map((window) => window.remainingPercent))
@@ -57,6 +56,11 @@ export function displayClaudeQuotaSection(
       minQuota === null ? info('') : minQuota > 50 ? ok('') : minQuota > 10 ? warn('') : fail('');
 
     console.log(`  ${statusIcon}${accountLabel}${defaultMark}`);
+    if (quota.stale) {
+      console.log(
+        `    ${dim(`Usage check rate-limited; showing data from ${new Date(quota.lastUpdated).toLocaleTimeString()}`)}`
+      );
+    }
 
     const resetParts: string[] = [];
     if (fiveHourWindow?.resetAt)

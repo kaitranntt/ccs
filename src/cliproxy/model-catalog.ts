@@ -33,7 +33,7 @@ export interface ThinkingSupport {
   /** Valid level names (for levels type) */
   levels?: string[];
   /** Maximum reasoning effort level (caps effort at this level for levels type) */
-  maxLevel?: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  maxLevel?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   /** Whether zero/disabled thinking is allowed */
   zeroAllowed?: boolean;
   /** Whether dynamic/auto thinking is allowed */
@@ -195,14 +195,70 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
     defaultModel: 'gpt-5.4',
     models: [
       {
+        id: 'gpt-6-astra',
+        name: 'GPT-6 Astra',
+        description: 'Most capable model for complex, demanding work.',
+        contextWindow: 272000,
+        thinking: {
+          type: 'levels',
+          levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          maxLevel: 'max',
+          dynamicAllowed: false,
+        },
+        codexServiceTiers: ['fast'],
+      },
+      {
+        id: 'gpt-6.1-sol',
+        name: 'GPT-6.1 Sol',
+        tier: 'pro',
+        description: 'Latest frontier agentic coding model (1.05M context, 128K output).',
+        contextWindow: 1050000,
+        thinking: {
+          type: 'levels',
+          levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          maxLevel: 'max',
+          dynamicAllowed: false,
+        },
+        codexServiceTiers: ['fast'],
+      },
+      {
+        id: 'gpt-6-sol',
+        name: 'GPT-6 Sol',
+        tier: 'pro',
+        description: 'Frontier agentic coding model (1.05M context, 128K output).',
+        contextWindow: 1050000,
+        thinking: {
+          type: 'levels',
+          levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+          maxLevel: 'max',
+          zeroAllowed: true,
+          dynamicAllowed: false,
+        },
+        codexServiceTiers: ['fast'],
+      },
+      {
+        id: 'gpt-6-luna',
+        name: 'GPT-6 Luna',
+        description: 'Fast and affordable lightweight agentic reasoning model (1.05M context).',
+        contextWindow: 1050000,
+        thinking: {
+          type: 'levels',
+          levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+          maxLevel: 'max',
+          zeroAllowed: true,
+          dynamicAllowed: false,
+        },
+        codexServiceTiers: ['fast'],
+      },
+      {
         id: 'gpt-5.6-sol',
         name: 'GPT-5.6 Sol',
         description: 'Latest frontier agentic coding model.',
-        contextWindow: 372000,
+        contextWindow: 272000,
         thinking: {
           type: 'levels',
-          levels: ['low', 'medium', 'high', 'xhigh'],
-          maxLevel: 'xhigh',
+          levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          maxLevel: 'max',
           dynamicAllowed: false,
         },
         codexServiceTiers: ['fast'],
@@ -224,11 +280,11 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
         id: 'gpt-5.6-luna',
         name: 'GPT-5.6 Luna',
         description: 'Fast and affordable agentic coding model.',
-        contextWindow: 372000,
+        contextWindow: 272000,
         thinking: {
           type: 'levels',
-          levels: ['low', 'medium', 'high', 'xhigh'],
-          maxLevel: 'xhigh',
+          levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          maxLevel: 'max',
           dynamicAllowed: false,
         },
         codexServiceTiers: ['fast'],
@@ -514,12 +570,29 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
   claude: {
     provider: 'claude',
     displayName: 'Claude (Anthropic)',
-    defaultModel: 'claude-sonnet-5',
+    defaultModel: 'claude-sonnet-5-5',
     models: [
+      {
+        id: 'claude-sonnet-5-5',
+        name: 'Claude Sonnet 5.5',
+        description: 'Latest Sonnet model (1M context, 128K output)',
+        contextWindow: 1000000,
+        nativeImageInput: true,
+        // Adaptive thinking; Anthropic rejects `thinking.type: "disabled"` and manual
+        // budget_tokens with 400 (its off switch is `between_tools`, which CCS does not
+        // emit), so zero is not allowed. Effort levels are recalibrated from Sonnet 5.
+        thinking: {
+          type: 'levels',
+          levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          maxLevel: 'max',
+          dynamicAllowed: true,
+        },
+        extendedContext: true,
+      },
       {
         id: 'claude-sonnet-5',
         name: 'Claude Sonnet 5',
-        description: 'Latest Sonnet model',
+        description: 'Previous Sonnet model',
         contextWindow: 1000000,
         nativeImageInput: true,
         // Sonnet 5 uses adaptive thinking; manual budget_tokens is rejected with 400.
@@ -556,6 +629,22 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
         nativeImageInput: true,
         // New tier above Opus. Same adaptive-thinking surface as Opus 4.8:
         // Anthropic accepts only effort levels; manual budget_tokens is rejected with 400.
+        thinking: {
+          type: 'levels',
+          levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          maxLevel: 'max',
+          dynamicAllowed: true,
+        },
+        extendedContext: true,
+      },
+      {
+        id: 'claude-opus-5-5',
+        name: 'Claude Opus 5.5',
+        description: 'Most capable model for long-running agentic coding and knowledge work',
+        contextWindow: 1000000,
+        nativeImageInput: true,
+        // Thinking is always on: Anthropic rejects `thinking.type: "disabled"` and
+        // manual budget_tokens with 400. Default effort is `medium`, not `high`.
         thinking: {
           type: 'levels',
           levels: ['low', 'medium', 'high', 'xhigh', 'max'],
@@ -691,9 +780,26 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
         extendedContext: true,
       },
       {
+        id: 'claude-haiku-5-5',
+        name: 'Claude Haiku 5.5',
+        description: 'Fast and efficient (1M context, 128K output)',
+        contextWindow: 1000000,
+        nativeImageInput: true,
+        // Adaptive thinking is on by default (default effort `medium`); Anthropic
+        // rejects manual budget_tokens with 400 and accepts `thinking.type: "disabled"`
+        // only at effort `high` or below, so zero is not allowed.
+        thinking: {
+          type: 'levels',
+          levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          maxLevel: 'max',
+          dynamicAllowed: true,
+        },
+        extendedContext: true,
+      },
+      {
         id: 'claude-haiku-4-5-20251001',
         name: 'Claude Haiku 4.5',
-        description: 'Fast and efficient',
+        description: 'Previous Haiku model',
         contextWindow: 200000,
         nativeImageInput: true,
         thinking: { type: 'none' },
@@ -751,7 +857,7 @@ export function findModel(provider: CLIProxyProvider, modelId: string): ModelEnt
   if (provider === 'codex') {
     for (const candidate of [...lookupCandidates]) {
       const tuningMatch = candidate.match(
-        /^(.*?)(?:-(?:minimal|low|medium|high|xhigh)(?:-fast)?|-fast(?:-(?:minimal|low|medium|high|xhigh))?)$/i
+        /^(.*?)(?:-(?:none|minimal|low|medium|high|xhigh|max)(?:-fast)?|-fast(?:-(?:none|minimal|low|medium|high|xhigh|max))?)$/i
       );
       if (tuningMatch?.[1]) {
         lookupCandidates.add(tuningMatch[1].trim());

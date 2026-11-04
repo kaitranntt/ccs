@@ -149,10 +149,16 @@ function formatModelOption(model: ModelEntry): string {
   return `${model.name}${tierBadge}`;
 }
 
-const CODEX_EFFORTS_IN_ORDER = ['minimal', 'low', 'medium', 'high', 'xhigh'] as const;
+const CODEX_EFFORTS_IN_ORDER = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 type CodexSelectableEffort = (typeof CODEX_EFFORTS_IN_ORDER)[number];
 
 function getCodexSelectableEfforts(model: ModelEntry): CodexSelectableEffort[] {
+  const thinkingLevels = model.thinking?.levels;
+  if (thinkingLevels && thinkingLevels.length > 0) {
+    return thinkingLevels.filter((lvl): lvl is CodexSelectableEffort =>
+      (CODEX_EFFORTS_IN_ORDER as readonly string[]).includes(lvl)
+    );
+  }
   const maxLevel = model.thinking?.maxLevel;
   const maxIndex = CODEX_EFFORTS_IN_ORDER.findIndex((effort) => effort === maxLevel);
   if (maxIndex < 0) return [];

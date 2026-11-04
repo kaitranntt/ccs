@@ -61,6 +61,10 @@ export async function showHelp(): Promise<void> {
           'Show quota status + pool context (drain order, per-account available/cooling/paused)',
         ],
         ['quota --provider <name>', `Filter by provider (${QUOTA_PROVIDER_HELP_TEXT})`],
+        [
+          'quota --provider claude',
+          'Show available account/model limits; only account limits drive rotation',
+        ],
         ['routing', 'Show current routing strategy and manual guidance'],
         ['routing explain', 'Explain strategy vs session-affinity and how sessions are recognized'],
         ['routing set <mode>', 'Explicitly set round-robin or fill-first'],
@@ -82,6 +86,11 @@ export async function showHelp(): Promise<void> {
           'Set manual drain order (comma-separated account IDs)',
         ],
         ['accounts order <provider> --reset', 'Revert drain order to stable file order'],
+        [
+          'accounts order claude --by-quota',
+          'Prioritize Claude quota classes and balance new conversations',
+        ],
+        ['accounts order claude --no-quota', 'Restore the order before automatic quota mode'],
       ],
     ],
     [

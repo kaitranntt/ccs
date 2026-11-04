@@ -27,7 +27,7 @@ describe('pr ci workflow', () => {
     expect(workflow).toContain('group: ci-${{ github.ref }}');
     expect(workflow).toContain('cancel-in-progress: true');
     expect(workflow).toContain('fail-fast: false');
-    expect(workflow).toContain('runs-on: [self-hosted, linux, x64]');
+    expect(workflow).toContain('runs-on: ubuntu-latest');
     expect(workflow).toContain("cmd: 'bun run typecheck'");
     expect(workflow).toContain("cmd: 'bun run lint'");
     expect(workflow).toContain("cmd: 'bun run format:check'");

@@ -188,7 +188,44 @@ describe('Model Catalog', () => {
     });
     it('has correct default model', () => {
       const { MODEL_CATALOG } = modelCatalog;
-      assert.strictEqual(MODEL_CATALOG.claude.defaultModel, 'claude-sonnet-5');
+      assert.strictEqual(MODEL_CATALOG.claude.defaultModel, 'claude-sonnet-5-5');
+    });
+
+    it('includes Claude Sonnet 5.5 with adaptive levels, 1M context, and no zero budget', () => {
+      const { MODEL_CATALOG } = modelCatalog;
+      const sonnet55 = MODEL_CATALOG.claude.models.find((m) => m.id === 'claude-sonnet-5-5');
+      assert(sonnet55, 'Should include Claude Sonnet 5.5');
+      assert.strictEqual(sonnet55.name, 'Claude Sonnet 5.5');
+      assert.strictEqual(sonnet55.contextWindow, 1000000);
+      assert.strictEqual(sonnet55.thinking.type, 'levels');
+      assert.deepStrictEqual(sonnet55.thinking.levels, ['low', 'medium', 'high', 'xhigh', 'max']);
+      assert.strictEqual(sonnet55.thinking.maxLevel, 'max');
+      assert.strictEqual(sonnet55.thinking.dynamicAllowed, true);
+      // `thinking.type: "disabled"` returns 400 on Sonnet 5.5.
+      assert.strictEqual(sonnet55.thinking.zeroAllowed, undefined);
+      assert.strictEqual(sonnet55.nativeImageInput, true);
+      assert.strictEqual(sonnet55.extendedContext, true);
+    });
+
+    it('includes Claude Haiku 5.5 with adaptive levels, 1M context, and no zero budget', () => {
+      const { MODEL_CATALOG } = modelCatalog;
+      const haiku55 = MODEL_CATALOG.claude.models.find((m) => m.id === 'claude-haiku-5-5');
+      assert(haiku55, 'Should include Claude Haiku 5.5');
+      assert.strictEqual(haiku55.name, 'Claude Haiku 5.5');
+      assert.strictEqual(haiku55.contextWindow, 1000000);
+      assert.strictEqual(haiku55.thinking.type, 'levels');
+      assert.deepStrictEqual(haiku55.thinking.levels, ['low', 'medium', 'high', 'xhigh', 'max']);
+      assert.strictEqual(haiku55.thinking.maxLevel, 'max');
+      assert.strictEqual(haiku55.thinking.dynamicAllowed, true);
+      // `thinking.type: "disabled"` returns 400 on Haiku 5.5 at effort xhigh/max.
+      assert.strictEqual(haiku55.thinking.zeroAllowed, undefined);
+      assert.strictEqual(haiku55.nativeImageInput, true);
+      assert.strictEqual(haiku55.extendedContext, true);
+
+      // Haiku 4.5 keeps its 200K window and no thinking control.
+      const haiku45 = MODEL_CATALOG.claude.models.find((m) => m.id === 'claude-haiku-4-5-20251001');
+      assert.strictEqual(haiku45.contextWindow, 200000);
+      assert.strictEqual(haiku45.thinking.type, 'none');
     });
 
     it('includes Claude Sonnet 5 with adaptive levels and extended context', () => {
@@ -264,6 +301,20 @@ describe('Model Catalog', () => {
       assert.strictEqual(opus5.nativeImageInput, true);
       assert.strictEqual(opus5.extendedContext, true);
     });
+    it('includes Claude Opus 5.5 with adaptive levels and 1M context', () => {
+      const { MODEL_CATALOG } = modelCatalog;
+      const opus55 = MODEL_CATALOG.claude.models.find((m) => m.id === 'claude-opus-5-5');
+      assert(opus55, 'Should include Claude Opus 5.5');
+      assert.strictEqual(opus55.name, 'Claude Opus 5.5');
+      assert.strictEqual(opus55.contextWindow, 1000000);
+      assert.strictEqual(opus55.thinking.type, 'levels');
+      assert.deepStrictEqual(opus55.thinking.levels, ['low', 'medium', 'high', 'xhigh', 'max']);
+      assert.strictEqual(opus55.thinking.maxLevel, 'max');
+      assert.strictEqual(opus55.thinking.dynamicAllowed, true);
+      assert.strictEqual(opus55.thinking.zeroAllowed, undefined);
+      assert.strictEqual(opus55.nativeImageInput, true);
+      assert.strictEqual(opus55.extendedContext, true);
+    });
 
     it('retains previous 4.5 snapshot models for explicit selection', () => {
       const { MODEL_CATALOG } = modelCatalog;
@@ -310,6 +361,81 @@ describe('Model Catalog', () => {
   });
 
   describe('Codex models', () => {
+    it('includes Astra with supported CCS efforts, fast mode, and its context window', () => {
+      const astra = modelCatalog.MODEL_CATALOG.codex.models.find((m) => m.id === 'gpt-6-astra');
+      assert(astra, 'Should include GPT-6 Astra');
+      assert.strictEqual(astra.contextWindow, 272000);
+      assert.deepStrictEqual(astra.thinking, {
+        type: 'levels',
+        levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+        maxLevel: 'max',
+        dynamicAllowed: false,
+      });
+      assert.deepStrictEqual(astra.codexServiceTiers, ['fast']);
+    });
+    it('includes GPT-6.1 Sol with 1.05M context, max effort level, and fast mode', () => {
+      const sol61 = modelCatalog.MODEL_CATALOG.codex.models.find((m) => m.id === 'gpt-6.1-sol');
+      assert(sol61, 'Should include GPT-6.1 Sol');
+      assert.strictEqual(sol61.contextWindow, 1050000);
+      assert.deepStrictEqual(sol61.thinking, {
+        type: 'levels',
+        levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+        maxLevel: 'max',
+        dynamicAllowed: false,
+      });
+      assert.deepStrictEqual(sol61.codexServiceTiers, ['fast']);
+    });
+    it('includes GPT-6 Sol with 1.05M context, none effort, max effort level, and fast mode', () => {
+      const sol6 = modelCatalog.MODEL_CATALOG.codex.models.find((m) => m.id === 'gpt-6-sol');
+      assert(sol6, 'Should include GPT-6 Sol');
+      assert.strictEqual(sol6.contextWindow, 1050000);
+      assert.deepStrictEqual(sol6.thinking, {
+        type: 'levels',
+        levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+        maxLevel: 'max',
+        zeroAllowed: true,
+        dynamicAllowed: false,
+      });
+      assert.deepStrictEqual(sol6.codexServiceTiers, ['fast']);
+    });
+    it('includes GPT-6 Luna with 1.05M context, none effort, max effort level, and fast mode', () => {
+      const luna6 = modelCatalog.MODEL_CATALOG.codex.models.find((m) => m.id === 'gpt-6-luna');
+      assert(luna6, 'Should include GPT-6 Luna');
+      assert.strictEqual(luna6.contextWindow, 1050000);
+      assert.deepStrictEqual(luna6.thinking, {
+        type: 'levels',
+        levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+        maxLevel: 'max',
+        zeroAllowed: true,
+        dynamicAllowed: false,
+      });
+      assert.deepStrictEqual(luna6.codexServiceTiers, ['fast']);
+    });
+    it('includes Sol with 272k context, max effort level, and fast mode', () => {
+      const sol = modelCatalog.MODEL_CATALOG.codex.models.find((m) => m.id === 'gpt-5.6-sol');
+      assert(sol, 'Should include GPT-5.6 Sol');
+      assert.strictEqual(sol.contextWindow, 272000);
+      assert.deepStrictEqual(sol.thinking, {
+        type: 'levels',
+        levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+        maxLevel: 'max',
+        dynamicAllowed: false,
+      });
+      assert.deepStrictEqual(sol.codexServiceTiers, ['fast']);
+    });
+    it('includes Luna with 272k context, max effort level, and fast mode', () => {
+      const luna = modelCatalog.MODEL_CATALOG.codex.models.find((m) => m.id === 'gpt-5.6-luna');
+      assert(luna, 'Should include GPT-5.6 Luna');
+      assert.strictEqual(luna.contextWindow, 272000);
+      assert.deepStrictEqual(luna.thinking, {
+        type: 'levels',
+        levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+        maxLevel: 'max',
+        dynamicAllowed: false,
+      });
+      assert.deepStrictEqual(luna.codexServiceTiers, ['fast']);
+    });
+
     it('has correct default model', () => {
       const { MODEL_CATALOG } = modelCatalog;
       assert.strictEqual(MODEL_CATALOG.codex.defaultModel, 'gpt-5.4');
@@ -319,6 +445,10 @@ describe('Model Catalog', () => {
       const { MODEL_CATALOG } = modelCatalog;
       const ids = MODEL_CATALOG.codex.models.map((m) => m.id);
       assert.deepStrictEqual(ids, [
+        'gpt-6-astra',
+        'gpt-6.1-sol',
+        'gpt-6-sol',
+        'gpt-6-luna',
         'gpt-5.6-sol',
         'gpt-5.6-terra',
         'gpt-5.6-luna',

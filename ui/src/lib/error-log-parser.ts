@@ -67,7 +67,11 @@ export function parseFilename(name: string): ParsedFilename {
   // Extract endpoint: after provider, before timestamp
   // Format: error-api-provider-{provider}-{endpoint}-{timestamp}-{id}.log
   // Example: error-api-provider-agy-v1-messages-2025-12-29T105823-a12b73f8.log
-  const endpointMatch = name.match(/error-api-provider-[^-]+-(.+?)-\d{4}-\d{2}-\d{2}T/);
+  // Direct routes carry no provider: error-{endpoint}-{timestamp}-{id}.log
+  // Example: error-v1-messages-2026-10-06T151606-681f3f2b.log
+  const endpointMatch =
+    name.match(/error-api-provider-[^-]+-(.+?)-\d{4}-\d{2}-\d{2}T/) ??
+    name.match(/^error-(.+?)-\d{4}-\d{2}-\d{2}T/);
   if (endpointMatch) {
     result.endpoint = endpointMatch[1].replace(/-/g, '/');
   }
@@ -113,6 +117,7 @@ export function parseErrorLog(content: string): ParsedErrorLog {
   const sections = content.split(/^===\s*(.+?)\s*===$/m);
 
   let currentSection = '';
+  let attemptProvider = '';
   for (let i = 0; i < sections.length; i++) {
     const part = sections[i].trim();
 
@@ -124,6 +129,10 @@ export function parseErrorLog(content: string): ParsedErrorLog {
       continue;
     } else if (part === 'REQUEST BODY') {
       currentSection = 'request_body';
+      continue;
+    } else if (/^API REQUEST \d+$/.test(part)) {
+      // Per-attempt upstream request; only its Auth line is used
+      currentSection = 'api_request';
       continue;
     } else if (part === 'API RESPONSE') {
       // Skip API RESPONSE section - we parse the actual RESPONSE section instead
@@ -145,6 +154,12 @@ export function parseErrorLog(content: string): ParsedErrorLog {
       case 'request_body':
         result.requestBody = part;
         break;
+      case 'api_request': {
+        // "Auth: provider=claude, auth_id=..." — the last attempt wins
+        const authProvider = part.match(/^Auth:\s*provider=([^,\s]+)/m);
+        if (authProvider) attemptProvider = authProvider[1];
+        break;
+      }
       case 'response':
         parseResponse(part, result);
         break;
@@ -153,6 +168,7 @@ export function parseErrorLog(content: string): ParsedErrorLog {
 
   // Compute derived fields
   computeDerivedFields(result);
+  if (!result.provider) result.provider = attemptProvider;
 
   return result;
 }
@@ -246,7 +262,10 @@ function computeDerivedFields(result: ParsedErrorLog): void {
 
   // Extract endpoint from URL: /api/provider/{provider}/{version}/{endpoint}
   // e.g., /api/provider/agy/v1/messages?beta=true → v1/messages
-  const endpointMatch = result.url.match(/\/api\/provider\/[^/]+\/(.+?)(?:\?|$)/);
+  // Direct routes (no provider segment): /v1/messages?beta=true → v1/messages
+  const endpointMatch =
+    result.url.match(/\/api\/provider\/[^/]+\/(.+?)(?:\?|$)/) ??
+    result.url.match(/^\/(.+?)(?:\?|$)/);
   if (endpointMatch) {
     result.endpoint = endpointMatch[1];
   }

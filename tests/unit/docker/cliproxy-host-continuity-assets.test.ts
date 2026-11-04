@@ -23,8 +23,8 @@ describe('CLIProxy Docker host continuity assets', () => {
   });
 
   it('serializes updates and reconciliation with the same lock', () => {
-    expect(updateScript).toContain('/run/lock/ccs-cliproxy-maintenance.lock');
-    expect(reconcileScript).toContain('/run/lock/ccs-cliproxy-maintenance.lock');
+    expect(updateScript).toContain('/run/ccs-cliproxy/maintenance.lock');
+    expect(reconcileScript).toContain('/run/ccs-cliproxy/maintenance.lock');
     expect(updateScript).toContain('flock -n 9');
     expect(reconcileScript).toContain('flock -n 9');
   });

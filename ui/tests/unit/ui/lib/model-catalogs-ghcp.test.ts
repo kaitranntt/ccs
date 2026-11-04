@@ -12,7 +12,7 @@ describe('GitHub Copilot model catalog defaults', () => {
     expect(sonnet5?.extendedContext).toBe(true);
     expect(sonnet5?.presetMapping).toEqual({
       default: 'claude-sonnet-5',
-      opus: 'claude-opus-4.8',
+      opus: 'claude-opus-5.5',
       sonnet: 'claude-sonnet-5',
       haiku: 'claude-haiku-4.5',
     });
@@ -24,6 +24,7 @@ describe('GitHub Copilot model catalog defaults', () => {
     expect(ids).toEqual(
       expect.arrayContaining([
         'claude-sonnet-5',
+        'claude-opus-5.5',
         'claude-opus-4.8',
         'claude-opus-4.8-fast-mode',
         'claude-fable-5',

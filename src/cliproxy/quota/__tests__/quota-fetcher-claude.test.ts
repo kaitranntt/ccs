@@ -4,7 +4,7 @@
  * Covers Claude quota parsing and auth/token edge cases.
  */
 
-import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, mock, setSystemTime } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -12,9 +12,11 @@ import {
   buildClaudeQuotaWindows,
   buildClaudeCoreUsageSummary,
   fetchClaudeQuota,
+  fetchClaudeQuotaWithToken,
   fetchAllClaudeQuotas,
 } from '../quota-fetcher-claude';
 import { sanitizeEmail } from '../../auth/auth-utils';
+import { writeClaudeProbeState } from '../quota-fetcher-claude-probe-state';
 
 let tmpDir: string;
 let originalCcsHome: string | undefined;
@@ -122,7 +124,7 @@ describe('Claude Quota Fetcher', () => {
       );
     });
 
-    it('clamps utilization ratio into 0..1', () => {
+    it('omits out-of-range utilization ratios', () => {
       const windows = buildClaudeQuotaWindows({
         restrictions: [
           {
@@ -138,11 +140,7 @@ describe('Claude Quota Fetcher', () => {
         ],
       });
 
-      expect(windows).toHaveLength(2);
-      expect(windows[0].utilization).toBe(1);
-      expect(windows[0].remainingPercent).toBe(0);
-      expect(windows[1].utilization).toBe(0);
-      expect(windows[1].remainingPercent).toBe(100);
+      expect(windows).toEqual([]);
     });
 
     it('parses direct single restriction payload shape', () => {
@@ -210,7 +208,7 @@ describe('Claude Quota Fetcher', () => {
   });
 
   describe('buildClaudeCoreUsageSummary', () => {
-    it('selects most restrictive weekly window', () => {
+    it('keeps general weekly separate from model weekly', () => {
       const summary = buildClaudeCoreUsageSummary([
         {
           rateLimitType: 'five_hour',
@@ -242,11 +240,11 @@ describe('Claude Quota Fetcher', () => {
       ]);
 
       expect(summary.fiveHour?.rateLimitType).toBe('five_hour');
-      expect(summary.weekly?.rateLimitType).toBe('seven_day_opus');
-      expect(summary.weekly?.remainingPercent).toBe(15);
+      expect(summary.weekly?.rateLimitType).toBe('seven_day');
+      expect(summary.weekly?.remainingPercent).toBe(55);
     });
 
-    it('considers oauth/cowork weekly windows in core summary', () => {
+    it('excludes unclassified oauth/cowork windows from core summary', () => {
       const summary = buildClaudeCoreUsageSummary([
         {
           rateLimitType: 'five_hour',
@@ -278,8 +276,7 @@ describe('Claude Quota Fetcher', () => {
       ]);
 
       expect(summary.fiveHour?.rateLimitType).toBe('five_hour');
-      expect(summary.weekly?.rateLimitType).toBe('seven_day_oauth_apps');
-      expect(summary.weekly?.remainingPercent).toBe(8);
+      expect(summary.weekly).toBeNull();
     });
 
     it('does not duplicate weekly window into fiveHour when only weekly exists', () => {
@@ -299,7 +296,7 @@ describe('Claude Quota Fetcher', () => {
       expect(summary.weekly?.rateLimitType).toBe('seven_day');
     });
 
-    it('uses earliest reset as tie-breaker for equal weekly remaining quota', () => {
+    it('never infers a general window from model reset order', () => {
       const summary = buildClaudeCoreUsageSummary([
         {
           rateLimitType: 'five_hour',
@@ -330,7 +327,7 @@ describe('Claude Quota Fetcher', () => {
         },
       ]);
 
-      expect(summary.weekly?.rateLimitType).toBe('seven_day_sonnet');
+      expect(summary.weekly).toBeNull();
     });
   });
 
@@ -747,8 +744,12 @@ describe('Claude Quota Fetcher', () => {
 
         expect(result.success).toBe(true);
         expect(attempt).toBe(2);
-        expect(globalThis.setTimeout).toHaveBeenCalledTimes(2);
-        expect(globalThis.clearTimeout).toHaveBeenCalledTimes(2);
+        // The registry token-file lookup holds a short file lock with its own timer, so
+        // count only the per-request abort timers (CLAUDE_QUOTA_TIMEOUT_MS).
+        const requestTimers = (globalThis.setTimeout as ReturnType<typeof mock>).mock.calls.filter(
+          ([, timeout]) => timeout === 10000
+        );
+        expect(requestTimers).toHaveLength(2);
         expect(activeTimers.size).toBe(0);
       } finally {
         globalThis.setTimeout = originalSetTimeout;
@@ -850,5 +851,466 @@ describe('Claude Quota Fetcher', () => {
       const result = await fetchClaudeQuota(accountId);
       expect(result.success).toBe(true);
     });
+
+    it('uses each organization token file for same-email Claude accounts', async () => {
+      const authDir = path.join(tmpDir, '.ccs', 'cliproxy', 'auth');
+      fs.mkdirSync(authDir, { recursive: true });
+      for (const [orgHash, accessToken] of [
+        ['a1b2c3d4', 'team-token'],
+        ['f0e1d2c3', 'personal-token'],
+      ]) {
+        fs.writeFileSync(
+          path.join(authDir, `claude-${orgHash}-dev@example.com.json`),
+          JSON.stringify({
+            type: 'claude',
+            email: 'dev@example.com',
+            access_token: accessToken,
+            expired: '2099-01-01T00:00:00.000Z',
+          })
+        );
+      }
+
+      const usageByToken: Record<string, number> = { 'team-token': 10, 'personal-token': 70 };
+      global.fetch = mock((_url: string, options?: RequestInit) => {
+        const authorization = (options?.headers as Record<string, string>)['Authorization'];
+        const utilization = usageByToken[authorization.replace('Bearer ', '')];
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              five_hour: { utilization, resets_at: '2026-03-01T01:00:00Z' },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+        );
+      }) as typeof fetch;
+
+      const all = await fetchAllClaudeQuotas();
+      const remainingByAccount = Object.fromEntries(
+        all.map(({ account, quota }) => [account, quota.coreUsage?.fiveHour?.remainingPercent])
+      );
+
+      expect(remainingByAccount).toEqual({
+        'dev@example.com#a1b2c3d4': 90,
+        'dev@example.com#f0e1d2c3': 30,
+      });
+    });
+
+    it('does not guess a Claude auth file for an unknown organization variant', async () => {
+      createClaudeAccount('dev@example.com', {
+        type: 'claude',
+        email: 'dev@example.com',
+        access_token: 'other-org-token',
+        expired: '2099-01-01T00:00:00.000Z',
+      });
+
+      const fetchSpy = mock(() =>
+        Promise.resolve(new Response(JSON.stringify({}), { status: 200 }))
+      ) as typeof fetch;
+      global.fetch = fetchSpy;
+
+      const result = await fetchClaudeQuota('dev@example.com#a1b2c3d4');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Auth file not found for Claude account');
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('fetchClaudeQuota shared probe state', () => {
+  const T0 = Date.parse('2026-03-01T00:00:00.000Z');
+  const accountId = 'claude-shared@example.com';
+
+  function usageResponse(fiveHourUtil: number, weeklyUtil: number): Response {
+    return new Response(
+      JSON.stringify({
+        five_hour: { utilization: fiveHourUtil, resets_at: '2026-03-01T03:00:00Z' },
+        seven_day: { utilization: weeklyUtil, resets_at: '2026-03-07T00:00:00Z' },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  function rateLimitedResponse(): Response {
+    return new Response(JSON.stringify({ message: 'Rate limited' }), {
+      status: 429,
+      headers: { 'Retry-After': '0', 'Content-Type': 'application/json' },
+    });
+  }
+
+  /** Queue of responses; each fetch call shifts one. */
+  function mockFetchSequence(responses: Array<() => Response>): { calls: () => number } {
+    let calls = 0;
+    global.fetch = mock(() => {
+      const next = responses[calls] ?? responses[responses.length - 1];
+      calls += 1;
+      return Promise.resolve(next());
+    }) as typeof fetch;
+    return { calls: () => calls };
+  }
+
+  beforeEach(() => {
+    setSystemTime(new Date(T0));
+    createClaudeAccount(accountId, {
+      access_token: 'shared-token',
+      expired: '2099-01-01T00:00:00.000Z',
+      type: 'claude',
+    });
+  });
+
+  afterEach(() => {
+    setSystemTime();
+  });
+
+  it('reuses a fresh result instead of probing again within the shared TTL', async () => {
+    const fetchMock = mockFetchSequence([() => usageResponse(40, 70)]);
+
+    const first = await fetchClaudeQuota(accountId);
+    setSystemTime(new Date(T0 + 30_000));
+    const second = await fetchClaudeQuota(accountId);
+
+    expect(fetchMock.calls()).toBe(1);
+    expect(second).toEqual(first);
+    expect(second.stale).toBeUndefined();
+    expect(second.generalWindowPresence).toEqual({ fiveHour: 'present', weekly: 'present' });
+  });
+
+  it('serves the last good numbers as stale when the probe is rate-limited', async () => {
+    const fetchMock = mockFetchSequence([() => usageResponse(40, 70), rateLimitedResponse]);
+
+    await fetchClaudeQuota(accountId);
+    setSystemTime(new Date(T0 + 5 * 60_000));
+    const result = await fetchClaudeQuota(accountId);
+
+    expect(fetchMock.calls()).toBe(2);
+    expect(result.success).toBe(true);
+    expect(result.stale).toBe(true);
+    expect(result.lastUpdated).toBe(T0);
+    expect(result.coreUsage?.fiveHour?.remainingPercent).toBe(60);
+    expect(result.coreUsage?.weekly?.remainingPercent).toBe(30);
+  });
+
+  it('skips the network during the 429 cooldown and backs off exponentially', async () => {
+    const fetchMock = mockFetchSequence([rateLimitedResponse]);
+
+    const first = await fetchClaudeQuota(accountId);
+    expect(first.success).toBe(false);
+    expect(first.errorDetail).toBe('retry-after:0');
+    expect(fetchMock.calls()).toBe(1);
+
+    // First cooldown is 2 minutes, even though Anthropic sent retry-after: 0.
+    setSystemTime(new Date(T0 + 90_000));
+    const during = await fetchClaudeQuota(accountId);
+    expect(fetchMock.calls()).toBe(1);
+    expect(during.success).toBe(false);
+    expect(during.errorCode).toBe('usage_probe_unavailable');
+    expect(during.errorDetail).toMatch(/^cooldown-until:/);
+
+    // After it expires, one probe; a second 429 doubles the cooldown to 4 minutes.
+    setSystemTime(new Date(T0 + 2 * 60_000 + 1));
+    await fetchClaudeQuota(accountId);
+    expect(fetchMock.calls()).toBe(2);
+
+    setSystemTime(new Date(T0 + 5 * 60_000));
+    await fetchClaudeQuota(accountId);
+    expect(fetchMock.calls()).toBe(2);
+
+    setSystemTime(new Date(T0 + 6 * 60_000 + 2));
+    await fetchClaudeQuota(accountId);
+    expect(fetchMock.calls()).toBe(3);
+  });
+
+  it('drops a stale window once its reset time has passed', async () => {
+    mockFetchSequence([() => usageResponse(40, 70), rateLimitedResponse]);
+
+    await fetchClaudeQuota(accountId);
+    // Past the 5h reset (03:00), before the weekly reset.
+    setSystemTime(new Date(T0 + 4 * 60 * 60_000));
+    const result = await fetchClaudeQuota(accountId);
+
+    expect(result.success).toBe(true);
+    expect(result.stale).toBe(true);
+    expect(result.coreUsage?.fiveHour).toBeNull();
+    expect(result.coreUsage?.weekly?.remainingPercent).toBe(30);
+    expect(result.windows.every((window) => window.rateLimitType !== 'five_hour')).toBe(true);
+    expect(result.generalWindowPresence).toEqual({ fiveHour: 'present', weekly: 'present' });
+    expect(result.lastUpdated).toBe(T0);
+  });
+
+  it('resets the backoff after a successful probe', async () => {
+    const fetchMock = mockFetchSequence([
+      rateLimitedResponse,
+      () => usageResponse(10, 20),
+      rateLimitedResponse,
+    ]);
+
+    await fetchClaudeQuota(accountId); // 429 -> 2 min cooldown
+    setSystemTime(new Date(T0 + 2 * 60_000 + 1));
+    const ok = await fetchClaudeQuota(accountId); // success
+    expect(ok.success).toBe(true);
+
+    setSystemTime(new Date(T0 + 4 * 60_000));
+    await fetchClaudeQuota(accountId); // 429 again -> back to a 2 min cooldown
+    expect(fetchMock.calls()).toBe(3);
+
+    setSystemTime(new Date(T0 + 6 * 60_000 + 1));
+    await fetchClaudeQuota(accountId);
+    expect(fetchMock.calls()).toBe(4);
+  });
+
+  it('coalesces concurrent calls in one process into one probe', async () => {
+    const fetchMock = mockFetchSequence([() => usageResponse(40, 70)]);
+
+    const [a, b] = await Promise.all([fetchClaudeQuota(accountId), fetchClaudeQuota(accountId)]);
+
+    expect(fetchMock.calls()).toBe(1);
+    expect(a).toEqual(b);
+  });
+
+  it('does not serve stale numbers for auth failures', async () => {
+    mockFetchSequence([() => usageResponse(40, 70), () => new Response('', { status: 401 })]);
+
+    await fetchClaudeQuota(accountId);
+    setSystemTime(new Date(T0 + 5 * 60_000));
+    const result = await fetchClaudeQuota(accountId);
+
+    expect(result.success).toBe(false);
+    expect(result.needsReauth).toBe(true);
+    expect(result.stale).toBeUndefined();
+  });
+});
+
+describe('Claude quota caller cancellation', () => {
+  const accountId = 'cancel-fixture@example.com';
+  const usage = { five_hour: { utilization: 10 }, seven_day: { utilization: 20 } };
+
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((resolvePromise) => {
+      resolve = resolvePromise;
+    });
+    return { promise, resolve };
+  }
+
+  function seedProbe() {
+    writeClaudeProbeState(accountId, {
+      version: 1,
+      lastGood: {
+        success: true,
+        windows: buildClaudeQuotaWindows(usage),
+        generalWindowPresence: { fiveHour: 'present', weekly: 'present' },
+        lastUpdated: Date.now() - 120000,
+      },
+      consecutive429: 2,
+      cooldownUntil: Date.now() - 1,
+    });
+    const file = path.join(tmpDir, '.ccs/cache/claude-quota', `${sanitizeEmail(accountId)}.json`);
+    return { file, original: fs.readFileSync(file, 'utf8') };
+  }
+
+  function observeJoined(signal: AbortSignal) {
+    const joined = deferred<void>();
+    const addListener = signal.addEventListener.bind(signal);
+    signal.addEventListener = (type, listener, options) => {
+      addListener(type, listener, options);
+      if (type === 'abort') joined.resolve();
+    };
+    return joined.promise;
+  }
+
+  beforeEach(() => {
+    createClaudeAccount(accountId, {
+      access_token: 'cancel-synthetic-token',
+      expired: '2099-01-01T00:00:00Z',
+      type: 'claude',
+    });
+  });
+
+  it('rejects pre-aborted managed and native callers without fetching or mutating probe state', async () => {
+    const before = seedProbe();
+    const controller = new AbortController();
+    controller.abort();
+    const fetchSpy = mock(() => Promise.resolve(new Response(JSON.stringify(usage))));
+    global.fetch = fetchSpy as typeof fetch;
+    await expect(fetchClaudeQuota(accountId, false, controller.signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    await expect(
+      fetchClaudeQuotaWithToken(
+        'synthetic-native-token',
+        'native-fixture',
+        false,
+        controller.signal
+      )
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fs.readFileSync(before.file, 'utf8')).toBe(before.original);
+  });
+
+  it('cancels an in-flight provider fetch without retrying or changing lastGood/backoff', async () => {
+    const before = seedProbe();
+    const started = deferred<AbortSignal>();
+    const fetchSpy = mock((_input: unknown, init?: RequestInit) => {
+      const signal = init?.signal as AbortSignal;
+      started.resolve(signal);
+      return new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener(
+          'abort',
+          () => reject(new DOMException('fixture abort', 'AbortError')),
+          { once: true }
+        );
+      });
+    });
+    global.fetch = fetchSpy as typeof fetch;
+    const controller = new AbortController();
+    const result = fetchClaudeQuota(accountId, false, controller.signal);
+    const providerSignal = await started.promise;
+    controller.abort();
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    expect(providerSignal.aborted).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fs.readFileSync(before.file, 'utf8')).toBe(before.original);
+  });
+
+  it('cancels while a successful response body is pending without inventing a fresh result', async () => {
+    const before = seedProbe();
+    const bodyStarted = deferred<void>();
+    const body = deferred<unknown>();
+    let providerSignal: AbortSignal | undefined;
+    const fetchSpy = mock((_input: unknown, init?: RequestInit) => {
+      providerSignal = init?.signal as AbortSignal;
+      const response = new Response('', { status: 200 });
+      response.json = () => {
+        bodyStarted.resolve();
+        return body.promise;
+      };
+      return Promise.resolve(response);
+    });
+    global.fetch = fetchSpy as typeof fetch;
+    const controller = new AbortController();
+    const result = fetchClaudeQuota(accountId, false, controller.signal);
+    await bodyStarted.promise;
+    controller.abort();
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    body.resolve(usage);
+    expect(providerSignal?.aborted).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fs.readFileSync(before.file, 'utf8')).toBe(before.original);
+  });
+
+  for (const status of [429, 500]) {
+    it(`cancels while a ${status} error body is pending without writing cooldown or retrying`, async () => {
+      const before = seedProbe();
+      const bodyStarted = deferred<void>();
+      const fetchSpy = mock((_input: unknown, init?: RequestInit) => {
+        const signal = init?.signal as AbortSignal;
+        const stream = new ReadableStream<Uint8Array>({
+          start(bodyController) {
+            signal.addEventListener(
+              'abort',
+              () => bodyController.error(new DOMException('fixture abort', 'AbortError')),
+              { once: true }
+            );
+          },
+          pull() {
+            bodyStarted.resolve();
+          },
+        });
+        return Promise.resolve(new Response(stream, { status }));
+      });
+      global.fetch = fetchSpy as typeof fetch;
+      const controller = new AbortController();
+      const result = fetchClaudeQuota(accountId, false, controller.signal);
+      await bodyStarted.promise;
+      controller.abort();
+      await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(fs.readFileSync(before.file, 'utf8')).toBe(before.original);
+    });
+  }
+
+  it('does not cancel a shared request still needed by another caller', async () => {
+    const provider = deferred<Response>();
+    const started = deferred<AbortSignal>();
+    const fetchSpy = mock((_input: unknown, init?: RequestInit) => {
+      started.resolve(init?.signal as AbortSignal);
+      return provider.promise;
+    });
+    global.fetch = fetchSpy as typeof fetch;
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const first = fetchClaudeQuota(accountId, false, firstController.signal);
+    const providerSignal = await started.promise;
+    const joined = observeJoined(secondController.signal);
+    const second = fetchClaudeQuota(accountId, false, secondController.signal);
+    await joined;
+    firstController.abort();
+    await expect(first).rejects.toMatchObject({ name: 'AbortError' });
+    expect(providerSignal.aborted).toBe(false);
+    provider.resolve(new Response(JSON.stringify(usage)));
+    expect((await second).success).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(providerSignal.aborted).toBe(false);
+  });
+
+  it('cancels only after all shared callers leave and allows a subsequent fresh request', async () => {
+    const before = seedProbe();
+    const provider = deferred<Response>();
+    const started = deferred<AbortSignal>();
+    const fetchSpy = mock((_input: unknown, init?: RequestInit) => {
+      started.resolve(init?.signal as AbortSignal);
+      return provider.promise;
+    });
+    global.fetch = fetchSpy as typeof fetch;
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const first = fetchClaudeQuota(accountId, false, firstController.signal);
+    const providerSignal = await started.promise;
+    const joined = observeJoined(secondController.signal);
+    const second = fetchClaudeQuota(accountId, false, secondController.signal);
+    await joined;
+    firstController.abort();
+    await expect(first).rejects.toMatchObject({ name: 'AbortError' });
+    expect(providerSignal.aborted).toBe(false);
+    secondController.abort();
+    await expect(second).rejects.toMatchObject({ name: 'AbortError' });
+    expect(providerSignal.aborted).toBe(true);
+    expect(fs.readFileSync(before.file, 'utf8')).toBe(before.original);
+    global.fetch = mock(() => Promise.resolve(new Response(JSON.stringify(usage)))) as typeof fetch;
+    expect((await fetchClaudeQuota(accountId)).success).toBe(true);
+    provider.resolve(new Response(JSON.stringify(usage)));
+  });
+});
+
+describe('Claude normalization migration cooldown', () => {
+  it('keeps an older cache cooldown active while discarding incompatible numbers', async () => {
+    const now = Date.now();
+    const accountId = 'migration@example.com';
+    createClaudeAccount(accountId, {
+      access_token: 'fixture-token',
+      expired: '2099-01-01T00:00:00Z',
+      type: 'claude',
+    });
+    const dir = path.join(tmpDir, '.ccs/cache/claude-quota');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, `${sanitizeEmail(accountId)}.json`),
+      JSON.stringify({
+        version: 1,
+        lastGood: { success: true, windows: [], lastUpdated: now },
+        consecutive429: 3,
+        cooldownUntil: now + 120000,
+      })
+    );
+    const fetchSpy = mock(() => {
+      throw new Error('cooldown must prevent a provider request');
+    });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    const result = await fetchClaudeQuota(accountId);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.errorCode).toBe('usage_probe_unavailable');
+    expect(result.httpStatus).toBe(429);
+    expect(result.windows).toEqual([]);
   });
 });

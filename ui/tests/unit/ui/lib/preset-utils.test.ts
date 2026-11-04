@@ -16,33 +16,46 @@ describe('claude preset utils', () => {
     vi.restoreAllMocks();
   });
 
-  it('keeps the claude catalog default on Sonnet 5 while exposing recent Claude models', () => {
+  it('keeps the claude catalog default on Sonnet 5.5 while exposing recent Claude models', () => {
     const claudeCatalog = MODEL_CATALOGS.claude;
     const ids = claudeCatalog.models.map((model) => model.id);
 
-    expect(claudeCatalog.defaultModel).toBe('claude-sonnet-5');
+    expect(claudeCatalog.defaultModel).toBe('claude-sonnet-5-5');
+    expect(ids).toContain('claude-sonnet-5-5');
     expect(ids).toContain('claude-sonnet-5');
     expect(ids).toContain('claude-fable-5-1');
     expect(ids).toContain('claude-fable-5');
+    expect(ids).toContain('claude-opus-5-5');
     expect(ids).toContain('claude-opus-5');
     expect(ids).toContain('claude-opus-4-8');
     expect(ids).toContain('claude-opus-4-7');
     expect(ids).toContain('claude-sonnet-4-6');
+    expect(ids).toContain('claude-haiku-5-5');
+    expect(ids).toContain('claude-haiku-4-5-20251001');
   });
 
-  it('applies the default claude preset from the catalog default model mapping', async () => {
+  const codexCatalog = {
+    provider: 'codex',
+    displayName: 'Codex',
+    defaultModel: 'gpt-test',
+    models: [
+      {
+        id: 'gpt-test',
+        name: 'GPT Test',
+        presetMapping: {
+          default: 'gpt-test',
+          opus: 'gpt-test-max',
+          sonnet: 'gpt-test',
+          haiku: 'gpt-test-mini',
+        },
+      },
+    ],
+  };
+
+  it('applies the default preset from the catalog default model mapping', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          catalogs: {
-            claude: MODEL_CATALOGS.claude,
-          },
-          source: 'live',
-          cache: { synced: true, age: '0m ago' },
-        }),
-      })
+      .mockResolvedValueOnce({ ok: false, status: 404 })
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ apiKey: { value: 'managed-key' } }),
@@ -51,24 +64,38 @@ describe('claude preset utils', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await applyDefaultPreset('claude');
+    const result = await applyDefaultPreset('codex', undefined, codexCatalog);
 
-    expect(result).toEqual({ success: true, presetName: 'Claude Sonnet 5' });
+    expect(result).toEqual({ success: true, presetName: 'GPT Test' });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/settings/codex');
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/settings/auth/tokens/raw');
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/settings/codex',
+      expect.objectContaining({ method: 'PUT' })
+    );
 
     const [, requestInit] = fetchMock.mock.calls[2] ?? [];
     const body = JSON.parse(String(requestInit?.body));
 
     expect(body.settings.env).toMatchObject({
-      ANTHROPIC_MODEL: 'claude-sonnet-5',
-      ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-8',
-      ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5',
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5-20251001',
+      ANTHROPIC_AUTH_TOKEN: 'managed-key',
+      ANTHROPIC_MODEL: 'gpt-test',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'gpt-test-max',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-test',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gpt-test-mini',
     });
   });
 
-  it('skips catalog fetch when the caller already has the provider catalog cached', async () => {
+  it('fetches the catalog when the caller has none cached', async () => {
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce({ ok: false, status: 404 })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ catalogs: { codex: codexCatalog } }),
+      })
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ apiKey: { value: 'managed-key' } }),
@@ -77,18 +104,49 @@ describe('claude preset utils', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
+    const result = await applyDefaultPreset('codex');
+
+    expect(result.success).toBe(true);
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/cliproxy/catalog');
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      '/api/settings/codex',
+      expect.objectContaining({ method: 'PUT' })
+    );
+  });
+
+  it('never pins models for the model-neutral claude provider', async () => {
+    const fetchMock = vi.fn();
+
+    vi.stubGlobal('fetch', fetchMock);
+
     const result = await applyDefaultPreset('claude', undefined, MODEL_CATALOGS.claude);
 
-    expect(result).toEqual({ success: true, presetName: 'Claude Sonnet 5' });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/settings/auth/tokens/raw');
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      '/api/settings/claude',
-      expect.objectContaining({
-        method: 'PUT',
-      })
-    );
+    expect(result).toEqual({ success: true, skipped: true });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('leaves existing provider settings untouched', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: true, status: 200 });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await applyDefaultPreset('codex', undefined, codexCatalog);
+
+    expect(result).toEqual({ success: true, skipped: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith('/api/settings/codex');
+  });
+
+  it('does not write when it cannot tell whether provider settings exist', async () => {
+    const fetchMock = vi.fn().mockRejectedValueOnce(new Error('network down'));
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await applyDefaultPreset('codex', undefined, codexCatalog);
+
+    expect(result).toEqual({ success: false });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('builds UI catalogs from upstream provider models without requiring static dropdown edits', () => {
@@ -143,6 +201,7 @@ describe('claude preset utils', () => {
   it('uses the selected visible model for quick setup fallback mappings', async () => {
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce({ ok: false, status: 404 })
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ apiKey: { value: 'managed-key' } }),
@@ -160,7 +219,7 @@ describe('claude preset utils', () => {
 
     expect(result).toEqual({ success: true, presetName: 'Gemini Live Only' });
 
-    const [, requestInit] = fetchMock.mock.calls[1] ?? [];
+    const [, requestInit] = fetchMock.mock.calls[2] ?? [];
     const body = JSON.parse(String(requestInit?.body));
 
     expect(body.settings.env).toMatchObject({

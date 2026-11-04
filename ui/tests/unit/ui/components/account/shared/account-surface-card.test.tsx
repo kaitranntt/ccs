@@ -1,5 +1,5 @@
-import { render, screen } from '@tests/setup/test-utils';
-import { describe, expect, it } from 'vitest';
+import { render, screen, userEvent } from '@tests/setup/test-utils';
+import { describe, expect, it, vi } from 'vitest';
 import { AccountSurfaceCard } from '@/components/account/shared/account-surface-card';
 import type { CodexQuotaResult, GeminiCliQuotaResult } from '@/lib/api-client';
 
@@ -40,6 +40,121 @@ function createCodexQuotaResult(overrides: Partial<CodexQuotaResult> = {}): Code
 }
 
 describe('AccountSurfaceCard', () => {
+  it.each(['educup-primary', 'educup-dev', 'educup-production-with-a-very-long-saved-nickname'])(
+    'gives the compact nickname %s its own wrapping row above identity details and actions',
+    async (nickname) => {
+      const accountId = 'shared@example.com#a1b2c3d4';
+      const onReauth = vi.fn();
+      render(
+        <AccountSurfaceCard
+          mode="compact"
+          provider="claude"
+          accountId={accountId}
+          email="shared@example.com"
+          nickname={nickname}
+          paused
+          headerEnd={<button onClick={() => onReauth(accountId)}>Reauthenticate</button>}
+        />
+      );
+
+      const label = screen.getByText(nickname);
+      const details = screen.getByText('shared@example.com (a1b2c3d4)');
+      const action = screen.getByRole('button', { name: 'Reauthenticate' });
+      const identityColumn = label.parentElement?.parentElement;
+      // JSDOM verifies the wrapping contract and separation, not pixel layout at 176px.
+      expect(label).toHaveClass('w-full', 'whitespace-normal', 'wrap-anywhere', 'leading-snug');
+      expect(label).not.toHaveClass('truncate');
+      expect(label.parentElement?.children).toHaveLength(1);
+      expect(identityColumn).toContainElement(details);
+      expect(identityColumn).not.toContainElement(action);
+      expect(identityColumn).not.toContainElement(screen.getByText('Paused'));
+      expect(details).toHaveAttribute('title', 'shared@example.com (a1b2c3d4)');
+      expect(details).toHaveClass('wrap-anywhere');
+      expect(screen.queryByText('a1b2c3d4', { exact: true })).not.toBeInTheDocument();
+
+      await userEvent.click(action);
+      expect(onReauth).toHaveBeenCalledExactlyOnceWith(accountId);
+    }
+  );
+
+  it('keeps workspace disambiguation in a secondary line when no nickname is saved', () => {
+    render(
+      <AccountSurfaceCard
+        mode="compact"
+        provider="claude"
+        accountId="shared@example.com#a1b2c3d4-team"
+        email="shared@example.com"
+      />
+    );
+
+    const email = screen.getByText('shared@example.com');
+    const workspace = screen.getByText('a1b2c3d4');
+    const audience = screen.getByText('Biz');
+    expect(email.parentElement).not.toContainElement(workspace);
+    expect(email.parentElement?.parentElement).toContainElement(workspace);
+    expect(email.parentElement?.parentElement).not.toContainElement(audience);
+    expect(workspace).toHaveClass('text-muted-foreground', 'wrap-anywhere');
+    expect(workspace).toHaveAttribute('title', 'Workspace a1b2c3d4');
+  });
+
+  it.each(['compact', 'detailed'] as const)(
+    'masks saved Claude nicknames, email and hash details without sensitive hover titles in %s mode',
+    (mode) => {
+      const { container } = render(
+        <AccountSurfaceCard
+          mode={mode}
+          provider="claude"
+          accountId="shared@example.com#a1b2c3d4-team"
+          email="shared@example.com"
+          nickname="educup-primary"
+          privacyMode
+          isDefault
+          paused
+        />
+      );
+
+      expect(screen.getByText('educup-primary')).toHaveClass('blur-[4px]');
+      expect(screen.getByText('shared@example.com (Business · Workspace a1b2c3d4)')).toHaveClass(
+        'blur-[4px]'
+      );
+      expect(screen.getByText(mode === 'compact' ? 'Biz' : 'Business')).toHaveClass('blur-[4px]');
+      expect(screen.getByText('Paused')).toBeInTheDocument();
+      if (mode === 'detailed') {
+        expect(screen.getByText('Workspace a1b2c3d4')).toHaveClass('blur-[4px]');
+        expect(screen.getByText('Default')).toBeInTheDocument();
+      }
+      expect(container.querySelector('[title]')).toBeNull();
+    }
+  );
+
+  it.each(['compact', 'detailed'] as const)(
+    'shows the nickname first in %s mode and masks both identity lines',
+    (mode) => {
+      const card = (privacyMode: boolean) => (
+        <AccountSurfaceCard
+          mode={mode}
+          provider="codex"
+          accountId="user@example.com#free"
+          email="user@example.com"
+          nickname="Personal"
+          privacyMode={privacyMode}
+          showQuota={false}
+        />
+      );
+      const { rerender, container } = render(card(false));
+      const nickname = screen.getByText('Personal');
+      const secondary = screen.getByText('user@example.com (Free)');
+      expect(
+        nickname.compareDocumentPosition(secondary) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      expect(nickname).toHaveAttribute('title', 'Personal');
+      rerender(card(true));
+      expect(screen.getByText('Personal')).toHaveClass('blur-[4px]');
+      expect(screen.getByText('user@example.com (Free)')).toHaveClass('blur-[4px]');
+      expect(container.querySelector('[title]')).toBeNull();
+    }
+  );
+
   it('prefers live quota entitlement tier over a stale account tier for Gemini badges', () => {
     render(
       <AccountSurfaceCard

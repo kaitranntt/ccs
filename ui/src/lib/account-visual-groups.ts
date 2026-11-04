@@ -5,6 +5,7 @@ import type { CliproxyStats } from '@/hooks/use-cliproxy-stats';
 
 export interface AccountVisualVariant {
   id: string;
+  nickname?: string;
   email: string;
   tokenFile: string;
   isDefault: boolean;
@@ -22,6 +23,7 @@ export interface AccountVisualVariant {
 
 export interface AccountVisualGroup {
   id: string;
+  nickname?: string;
   email: string;
   tokenFile: string;
   provider: OAuthAccount['provider'];
@@ -59,6 +61,7 @@ function buildAccountVariant(
 
   return {
     id: account.id,
+    nickname: account.nickname,
     email: identity.email || account.email || account.id,
     tokenFile: account.tokenFile,
     isDefault: account.isDefault,
@@ -116,6 +119,7 @@ export function buildAccountVisualGroups(
 
       return {
         id: variant.id,
+        nickname: variant.nickname,
         email: variant.email,
         tokenFile: variant.tokenFile,
         provider: original?.provider ?? 'codex',
@@ -135,6 +139,12 @@ export function buildAccountVisualGroups(
 
     return {
       id: bucketKey,
+      // Only a shared nickname can describe the whole group; retain individual names on variants.
+      nickname: orderedVariants.every(
+        (variant) => variant.nickname?.trim() === orderedVariants[0]?.nickname?.trim()
+      )
+        ? orderedVariants[0]?.nickname
+        : undefined,
       email: canonicalEmail,
       tokenFile: orderedVariants[0]?.tokenFile ?? '',
       provider: originalProvider,

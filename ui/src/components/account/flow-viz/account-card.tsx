@@ -3,10 +3,15 @@
  */
 
 import { AccountSurfaceCard } from '@/components/account/shared/account-surface-card';
+import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import { QuotaTooltipContent } from '@/components/shared/quota-tooltip-content';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { getCodexIdentityBadge, type CodexIdentityBadge } from '@/lib/account-identity';
+import {
+  getAccountDisplayLabels,
+  getCodexIdentityBadge,
+  type CodexIdentityBadge,
+} from '@/lib/account-identity';
 import {
   cn,
   formatQuotaPercent,
@@ -485,6 +490,7 @@ export function AccountCard({
         provider={account.provider}
         accountId={account.id}
         email={account.email}
+        nickname={account.nickname}
         displayEmail={cleanEmail(account.email)}
         tokenFile={account.tokenFile}
         tier={account.tier}
@@ -497,6 +503,31 @@ export function AccountCard({
         runtimeLastUsed={account.lastUsedAt}
         headerEnd={headerEnd}
         compactMetaBadges={compactMetaBadges}
+        bodySlot={
+          hasGroupedVariants && account.variants?.some((variant) => variant.nickname?.trim()) ? (
+            <div className="space-y-1">
+              {account.variants.map((variant) => {
+                const labels = getAccountDisplayLabels(
+                  variant.id,
+                  variant.email,
+                  variant.tokenFile,
+                  variant.nickname
+                );
+                return (
+                  <div
+                    key={variant.id}
+                    className={cn('text-[9px] min-w-0', privacyMode && PRIVACY_BLUR_CLASS)}
+                  >
+                    <div className="font-semibold truncate">{labels.primary}</div>
+                    {labels.secondary && (
+                      <div className="text-muted-foreground truncate">{labels.secondary}</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : undefined
+        }
         footerSlot={
           <>
             <AccountCardStats

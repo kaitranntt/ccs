@@ -1,7 +1,7 @@
-export type CodexEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+export type CodexEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export type CodexServiceTier = 'fast';
 
-const CODEX_TUNING_SUFFIX_TOKEN_REGEX = /-(minimal|low|medium|high|xhigh|fast)$/i;
+const CODEX_TUNING_SUFFIX_TOKEN_REGEX = /-(none|minimal|low|medium|high|xhigh|max|fast)$/i;
 export const CODEX_EFFORTS_IN_ORDER: readonly CodexEffort[] = [
   'minimal',
   'low',
@@ -124,7 +124,7 @@ export function getCodexEffortDisplay(
 ): { label: string; explicit: boolean } | null {
   if (!modelId) return null;
   const effort = parseCodexEffort(modelId);
-  if (effort) {
+  if (effort !== undefined) {
     return {
       label: effortLabels?.pinned(effort) ?? `Pinned ${effort}`,
       explicit: true,

@@ -1,7 +1,26 @@
 import * as http from 'http';
+import { hasEncodedBody } from './content-encoding';
 
 export const UPSTREAM_RESPONSE_TIMEOUT_MESSAGE =
   'Upstream response timed out while streaming response body';
+
+/** Default wait on a CLIProxy upstream request (headers, socket idle, body idle). */
+export const DEFAULT_UPSTREAM_TIMEOUT_MS = 120_000;
+export const UPSTREAM_TIMEOUT_ENV = 'CCS_CLIPROXY_UPSTREAM_TIMEOUT_MS';
+
+/**
+ * Upstream timeout for the CLIProxy session proxies, overridable with
+ * CCS_CLIPROXY_UPSTREAM_TIMEOUT_MS (positive integer milliseconds). The default
+ * can cut off a valid slow first byte, e.g. while CLIProxy retries credentials
+ * or a long prompt is queued, well before Claude Code's own 600 s client timeout.
+ * Invalid values fall back to the default.
+ */
+export function resolveUpstreamTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env[UPSTREAM_TIMEOUT_ENV]?.trim();
+  if (!raw || !/^\d+$/.test(raw)) return DEFAULT_UPSTREAM_TIMEOUT_MS;
+  const parsed = Number(raw);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : DEFAULT_UPSTREAM_TIMEOUT_MS;
+}
 
 export function buildTimeoutSafeResponseHeaders(
   headers: http.IncomingHttpHeaders
@@ -36,6 +55,12 @@ export function writeTimeoutResponse(
   const contentType = String(headers['content-type'] ?? '').toLowerCase();
 
   try {
+    if (clientRes.headersSent && hasEncodedBody(headers)) {
+      // A plain-text error appended to a compressed body would surface as a
+      // decompression error; reset the connection so the client sees the failure.
+      clientRes.destroy();
+      return;
+    }
     if (contentType.includes('text/event-stream')) {
       const payload = {
         type: 'error',

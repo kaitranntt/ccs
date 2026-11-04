@@ -370,3 +370,47 @@ describe('cliproxy quota remaining percent labels and ASCII compliance', () => {
     }
   });
 });
+
+describe('Claude scoped quota display', () => {
+  it('shows exhausted Fable without reporting general account exhaustion', () => {
+    const output: string[] = [];
+    const log = spyOn(console, 'log').mockImplementation((...args) =>
+      output.push(args.map(String).join(' '))
+    );
+    try {
+      displayClaudeQuotaSection([
+        {
+          account: 'fixture@example.com',
+          quota: {
+            success: true,
+            windows: [
+              {
+                rateLimitType: 'weekly_scoped:fable',
+                scope: 'model',
+                cadence: 'weekly',
+                modelLabel: 'Fable',
+                label: 'Fable weekly limit',
+                status: 'unknown',
+                utilization: 1,
+                usedPercent: 100,
+                remainingPercent: 0,
+                resetAt: null,
+              },
+            ],
+            coreUsage: { fiveHour: null, weekly: null },
+            lastUpdated: 1,
+          },
+        },
+      ]);
+    } finally {
+      log.mockRestore();
+    }
+    const text = output.join('\n');
+    expect(text).toContain('[i] fixture@example.com');
+    expect(text).toContain('Fable weekly limit');
+    expect(text).toContain('0% remaining');
+    expect(text).not.toContain('[X]');
+    expect(text).not.toContain('Weekly usage limit');
+    expect(text).not.toContain('Reset schedule:');
+  });
+});

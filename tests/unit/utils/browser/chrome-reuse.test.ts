@@ -35,6 +35,7 @@ describe('chrome reuse resolver', () => {
 
   async function startDevToolsServer(versionPayload: Record<string, unknown>) {
     const server = Bun.serve({
+      hostname: '127.0.0.1',
       port: 0,
       fetch(request: Request) {
         if (new URL(request.url).pathname === '/json/version') {
@@ -49,6 +50,7 @@ describe('chrome reuse resolver', () => {
 
   async function startFailingDevToolsServer(status: number, body = 'error') {
     const server = Bun.serve({
+      hostname: '127.0.0.1',
       port: 0,
       fetch(request: Request) {
         if (new URL(request.url).pathname === '/json/version') {
@@ -63,6 +65,7 @@ describe('chrome reuse resolver', () => {
 
   async function startMalformedJsonDevToolsServer() {
     const server = Bun.serve({
+      hostname: '127.0.0.1',
       port: 0,
       fetch(request: Request) {
         if (new URL(request.url).pathname === '/json/version') {
@@ -80,6 +83,7 @@ describe('chrome reuse resolver', () => {
 
   function reserveClosedPort(): number {
     const server = Bun.serve({
+      hostname: '127.0.0.1',
       port: 0,
       fetch() {
         return new Response('ok');
@@ -238,7 +242,7 @@ describe('chrome reuse resolver', () => {
   it('throws a clear error when DevToolsActivePort metadata is missing', async () => {
     const profileDir = createTempDir('ccs-chrome-missing-metadata-');
 
-    expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
+    await expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
       `Chrome reuse metadata not found: ${path.join(profileDir, 'DevToolsActivePort')}`
     );
   });
@@ -247,7 +251,7 @@ describe('chrome reuse resolver', () => {
     const profileDir = createTempDir('ccs-chrome-invalid-metadata-');
     writeDevToolsActivePort(profileDir, 'not-a-port\n/devtools/browser/target');
 
-    expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
+    await expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
       `Chrome reuse metadata is invalid: ${path.join(profileDir, 'DevToolsActivePort')}`
     );
   });
@@ -257,7 +261,7 @@ describe('chrome reuse resolver', () => {
     const port = reserveClosedPort();
     writeDevToolsActivePort(profileDir, `${port}\n/devtools/browser/stale`);
 
-    expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
+    await expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
       `Chrome DevTools endpoint is unreachable: http://127.0.0.1:${port}`
     );
   });
@@ -267,7 +271,7 @@ describe('chrome reuse resolver', () => {
     const server = await startDevToolsServer({ Browser: 'Chrome/136.0.0.0' });
     writeDevToolsActivePort(profileDir, `${server.port}\n/devtools/browser/no-ws`);
 
-    expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
+    await expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
       `Chrome DevTools endpoint did not provide a websocket target: http://127.0.0.1:${server.port}/json/version`
     );
   });
@@ -277,7 +281,7 @@ describe('chrome reuse resolver', () => {
     const server = await startFailingDevToolsServer(500);
     writeDevToolsActivePort(profileDir, `${server.port}\n/devtools/browser/bad-status`);
 
-    expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
+    await expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
       `Chrome DevTools endpoint is unreachable: http://127.0.0.1:${server.port}`
     );
   });
@@ -287,7 +291,7 @@ describe('chrome reuse resolver', () => {
     const server = await startMalformedJsonDevToolsServer();
     writeDevToolsActivePort(profileDir, `${server.port}\n/devtools/browser/bad-json`);
 
-    expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
+    await expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
       `Chrome DevTools endpoint is unreachable: http://127.0.0.1:${server.port}`
     );
   });
@@ -325,7 +329,7 @@ describe('chrome reuse resolver', () => {
       'missing-profile'
     );
 
-    expect(resolveBrowserRuntimeEnv({ profileDir: missingProfileDir })).rejects.toThrow(
+    await expect(resolveBrowserRuntimeEnv({ profileDir: missingProfileDir })).rejects.toThrow(
       `Chrome profile directory is invalid: ${missingProfileDir}`
     );
   });

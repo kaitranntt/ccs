@@ -23,12 +23,23 @@ import {
   stripCodexEffortSuffix,
 } from '../ai-providers/model-id-normalizer';
 import { getModelMaxLevel } from '../model-catalog';
+import {
+  injectCodexRequestTuningIntoBody,
+  normalizeCodexEffortForModel,
+} from '../ai-providers/codex-reasoning-proxy';
 
 import { createLogger } from '../../services/logging';
 import {
+  readRequestBody,
+  RequestBodyTooLargeError,
+  respondRequestTooLarge,
+} from '../../utils/request-body';
+import {
   attachUpstreamResponseTimeout,
+  resolveUpstreamTimeoutMs,
   writeForwardResponseHead,
 } from './upstream-response-timeout';
+import { hasEncodedBody, setUpstreamAcceptEncoding } from './content-encoding';
 
 export interface ToolSanitizationProxyConfig {
   /** Upstream CLIProxy URL */
@@ -41,6 +52,12 @@ export interface ToolSanitizationProxyConfig {
   timeoutMs?: number;
   /** Skip TLS certificate validation for self-signed remote HTTPS proxies */
   allowSelfSigned?: boolean;
+  /**
+   * Reduce tool input_schema to Gemini's supported subset (default true).
+   * Disable when every request reaches Anthropic, which accepts full JSON Schema:
+   * stripping there drops real constraints (const, allOf, exclusiveMinimum, ...).
+   */
+  sanitizeSchemas?: boolean;
 }
 
 /**
@@ -60,8 +77,8 @@ const GEMINI_UNSUPPORTED_TOOL_FIELDS = new Set([
 ]);
 
 const CODEX_UNSUPPORTED_TOOL_FIELDS = new Set(['cache_control']);
-const CODEX_FAST_SERVICE_TIER = 'priority';
 const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
+const THINKING_SUFFIX_REGEX = /\([^()]*\)$/;
 const LEGACY_CODEX_MODEL_ID_REGEX = /^gpt-5(?:\.\d+)?-codex(?:-(?:mini|max))?$/i;
 
 function canonicalizeCodexModelId(model: string | undefined): string | null {
@@ -71,7 +88,8 @@ function canonicalizeCodexModelId(model: string | undefined): string | null {
   }
 
   const withoutExtendedContext = normalizedModel.replace(EXTENDED_CONTEXT_SUFFIX_REGEX, '').trim();
-  return stripCodexEffortSuffix(withoutExtendedContext);
+  const withoutThinkingSuffix = withoutExtendedContext.replace(THINKING_SUFFIX_REGEX, '').trim();
+  return stripCodexEffortSuffix(withoutThinkingSuffix);
 }
 
 function isKnownCodexModelId(model: string | undefined): boolean {
@@ -105,99 +123,13 @@ function applyCodexModelTuningAlias(body: Record<string, unknown>): Record<strin
     return body;
   }
 
-  const tunedBody: Record<string, unknown> = { ...body, model: parsed.baseModel };
-
-  if (parsed.effort) {
-    const existingReasoning = isRecord(body.reasoning) ? body.reasoning : {};
-    tunedBody.reasoning = {
-      ...existingReasoning,
-      effort: parsed.effort,
-    };
-  }
-
-  if (parsed.serviceTier) {
-    tunedBody.service_tier = CODEX_FAST_SERVICE_TIER;
-  }
-
-  return tunedBody;
-}
-
-function extractSystemText(content: unknown): string {
-  if (typeof content === 'string') {
-    return content;
-  }
-
-  if (!Array.isArray(content)) {
-    return '';
-  }
-
-  return content
-    .filter((block): block is { type: unknown; text?: unknown } => isRecord(block))
-    .filter((block) => block.type === 'text' && typeof block.text === 'string')
-    .map((block) => block.text as string)
-    .join('\n\n');
-}
-
-function prependSystemTextToContent(content: unknown, systemText: string): unknown {
-  if (Array.isArray(content)) {
-    return [{ type: 'text', text: systemText }, ...content];
-  }
-  if (typeof content === 'string') {
-    return `${systemText}\n\n${content}`;
-  }
-  return systemText;
-}
-
-function foldCodexSystemMessages(body: Record<string, unknown>): Record<string, unknown> {
-  const systemTexts: string[] = [];
-  let removedSystem = false;
-  const nextBody = { ...body };
-
-  if (body.system !== undefined) {
-    removedSystem = true;
-    delete nextBody.system;
-    const systemText = extractSystemText(body.system).trim();
-    if (systemText) {
-      systemTexts.push(systemText);
+  return injectCodexRequestTuningIntoBody(
+    { ...body, model: parsed.baseModel },
+    {
+      effort: parsed.effort ? normalizeCodexEffortForModel(parsed.baseModel, parsed.effort) : null,
+      serviceTier: parsed.serviceTier,
     }
-  }
-
-  const rawMessages = Array.isArray(body.messages) ? body.messages : [];
-  const messages = rawMessages.filter((message) => {
-    if (!isRecord(message) || message.role !== 'system') {
-      return true;
-    }
-    removedSystem = true;
-    const systemText = extractSystemText(message.content).trim();
-    if (systemText) {
-      systemTexts.push(systemText);
-    }
-    return false;
-  });
-
-  if (!removedSystem) {
-    return body;
-  }
-
-  if (systemTexts.length > 0) {
-    const systemPrefix = systemTexts.join('\n\n');
-    const firstUserIndex = messages.findIndex(
-      (message) => isRecord(message) && message.role === 'user'
-    );
-
-    if (firstUserIndex >= 0 && isRecord(messages[firstUserIndex])) {
-      const firstUserMessage = messages[firstUserIndex];
-      messages[firstUserIndex] = {
-        ...firstUserMessage,
-        content: prependSystemTextToContent(firstUserMessage.content, systemPrefix),
-      };
-    } else {
-      messages.unshift({ role: 'user', content: systemPrefix });
-    }
-  }
-
-  nextBody.messages = messages;
-  return nextBody;
+  ) as Record<string, unknown>;
 }
 
 function getUnsupportedToolFields(
@@ -276,8 +208,9 @@ export class ToolSanitizationProxy {
       upstreamBaseUrl: config.upstreamBaseUrl,
       verbose: config.verbose ?? false,
       warnOnSanitize: config.warnOnSanitize ?? true,
-      timeoutMs: config.timeoutMs ?? 120000,
+      timeoutMs: config.timeoutMs ?? resolveUpstreamTimeoutMs(),
       allowSelfSigned: config.allowSelfSigned ?? false,
+      sanitizeSchemas: config.sanitizeSchemas ?? true,
     };
   }
 
@@ -324,27 +257,6 @@ export class ToolSanitizationProxy {
     return this.port;
   }
 
-  private readBody(req: http.IncomingMessage): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      let total = 0;
-
-      req.on('data', (chunk: Buffer) => {
-        total += chunk.length;
-        if (total > maxSize) {
-          req.destroy();
-          reject(new Error('Request body too large (max 10MB)'));
-          return;
-        }
-        chunks.push(chunk);
-      });
-
-      req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-      req.on('error', reject);
-    });
-  }
-
   private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const method = req.method || 'GET';
     const requestPath = req.url || '/';
@@ -370,7 +282,7 @@ export class ToolSanitizationProxy {
         return;
       }
 
-      const rawBody = await this.readBody(req);
+      const rawBody = await readRequestBody(req);
       let parsed: unknown;
       try {
         parsed = rawBody.length ? JSON.parse(rawBody) : {};
@@ -411,16 +323,19 @@ export class ToolSanitizationProxy {
       }
 
       if (isRecord(modifiedBody) && isCodexRequest(providerFromPath, modifiedBody.model)) {
-        const tunedBody = applyCodexModelTuningAlias(modifiedBody);
-        modifiedBody = foldCodexSystemMessages(tunedBody);
+        modifiedBody = applyCodexModelTuningAlias(modifiedBody);
       }
 
       // Sanitize tools if present
       if (isRecord(modifiedBody) && Array.isArray(modifiedBody.tools)) {
         // Step 1: Sanitize input_schema properties (remove non-standard JSON Schema properties)
-        const schemaResult = sanitizeToolSchemas(
-          modifiedBody.tools as Array<{ name: string; input_schema?: Record<string, unknown> }>
-        );
+        const requestTools = modifiedBody.tools as Array<{
+          name: string;
+          input_schema?: Record<string, unknown>;
+        }>;
+        const schemaResult = this.config.sanitizeSchemas
+          ? sanitizeToolSchemas(requestTools)
+          : { tools: requestTools, totalRemoved: 0, removedByTool: [] };
 
         if (schemaResult.totalRemoved > 0) {
           for (const entry of schemaResult.removedByTool) {
@@ -525,12 +440,17 @@ export class ToolSanitizationProxy {
         await this.forwardJsonBuffered(req, res, fullUpstreamUrl, modifiedBody, mapper);
       }
     } catch (error) {
-      const err = error as Error;
-      if (this.config.verbose) {
-        this.logger.error('tool-sanitization.proxy.request-error', `Error: ${err.message}`, {
-          error: err.message,
-        });
+      if (error instanceof RequestBodyTooLargeError) {
+        respondRequestTooLarge(req, res, error, this.logger);
+        return;
       }
+      const err = error as Error;
+      this.logger.warn('tool-sanitization.proxy.request-error', `Error: ${err.message}`, {
+        error: err.message,
+        method,
+        path: requestPath,
+      });
+      if (res.writableEnded || res.destroyed || req.socket?.destroyed) return;
       if (!res.headersSent) {
         res.writeHead(502, { 'Content-Type': 'application/json' });
       }
@@ -564,6 +484,7 @@ export class ToolSanitizationProxy {
       if (hopByHop.has(lower)) continue;
       headers[key] = value;
     }
+    setUpstreamAcceptEncoding(headers);
 
     if (bodyString !== undefined) {
       headers['Content-Type'] = headers['Content-Type'] || 'application/json';
@@ -705,7 +626,19 @@ export class ToolSanitizationProxy {
           upstreamRes.on('end', () => {
             clearUpstreamResponseTimeout();
             try {
-              const responseBody = Buffer.concat(chunks).toString('utf8');
+              const rawBody = Buffer.concat(chunks);
+              if (hasEncodedBody(upstreamRes.headers)) {
+                this.warnEncodedPassthrough(upstreamRes.headers);
+                const headers = { ...upstreamRes.headers };
+                delete headers['transfer-encoding'];
+                headers['content-length'] = String(rawBody.length);
+                clientRes.writeHead(upstreamRes.statusCode || 200, headers);
+                clientRes.end(rawBody);
+                resolve();
+                return;
+              }
+
+              const responseBody = rawBody.toString('utf8');
               const contentType = upstreamRes.headers['content-type'] || '';
 
               // Only process JSON responses with tool_use blocks
@@ -718,6 +651,7 @@ export class ToolSanitizationProxy {
 
                     // Update content-length header
                     const headers = { ...upstreamRes.headers };
+                    delete headers['transfer-encoding'];
                     headers['content-length'] = String(Buffer.byteLength(modifiedResponse));
 
                     clientRes.writeHead(upstreamRes.statusCode || 200, headers);
@@ -731,7 +665,10 @@ export class ToolSanitizationProxy {
               }
 
               // Pass through unchanged
-              clientRes.writeHead(upstreamRes.statusCode || 200, upstreamRes.headers);
+              const headers = { ...upstreamRes.headers };
+              delete headers['transfer-encoding'];
+              headers['content-length'] = String(Buffer.byteLength(responseBody));
+              clientRes.writeHead(upstreamRes.statusCode || 200, headers);
               clientRes.end(responseBody);
               resolve();
             } catch (err) {
@@ -787,6 +724,29 @@ export class ToolSanitizationProxy {
             onTimeout: () => resolve(),
           });
           writeForwardResponseHead(clientRes, upstreamRes.statusCode || 200, upstreamRes.headers);
+
+          // A compressed body can't be scanned or rewritten: forward it untouched,
+          // without tool-name restoration or the empty-response safety net.
+          if (hasEncodedBody(upstreamRes.headers)) {
+            this.warnEncodedPassthrough(upstreamRes.headers);
+            upstreamRes.on('data', (chunk: Buffer) => {
+              const canContinue = clientRes.write(chunk);
+              if (!canContinue) {
+                upstreamRes.pause();
+                clientRes.once('drain', () => upstreamRes.resume());
+              }
+            });
+            upstreamRes.on('end', () => {
+              clearUpstreamResponseTimeout();
+              clientRes.end();
+              resolve();
+            });
+            upstreamRes.on('error', (error) => {
+              clearUpstreamResponseTimeout();
+              reject(error);
+            });
+            return;
+          }
 
           // Track upstream SSE lifecycle events (guards against empty proxy responses)
           const lifecycle = {
@@ -920,6 +880,14 @@ export class ToolSanitizationProxy {
       upstreamReq.write(bodyString);
       upstreamReq.end();
     });
+  }
+
+  private warnEncodedPassthrough(headers: http.IncomingHttpHeaders): void {
+    this.logger.warn(
+      'tool-sanitization.proxy.encoded-passthrough',
+      'Upstream compressed the response despite Accept-Encoding: identity. Passing it through without tool-name restoration or the empty-response safety net.',
+      { contentEncoding: headers['content-encoding'] }
+    );
   }
 
   /**

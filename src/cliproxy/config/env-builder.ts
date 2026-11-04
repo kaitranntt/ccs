@@ -39,6 +39,7 @@ import {
 import { buildCliproxyProviderPath, buildLocalProviderBaseUrl } from './provider-route';
 import { ConfigError } from '../../errors/error-types';
 import { findModel } from '../model-catalog';
+import { hasExtendedContextSuffix } from '../../shared/extended-context-utils';
 
 export { buildCliproxyProviderPath, buildLocalProviderBaseUrl } from './provider-route';
 
@@ -90,7 +91,14 @@ export function applyClaudeAutoCompactWindow(
   const modelId = envVars.ANTHROPIC_MODEL;
   if (typeof modelId !== 'string' || modelId.trim().length === 0) return envVars;
 
-  const contextWindow = findModel(provider, modelId)?.contextWindow;
+  const model = findModel(provider, modelId);
+  if (!model) return envVars;
+
+  let contextWindow = model.contextWindow;
+  if (model.extendedContext && !hasExtendedContextSuffix(modelId)) {
+    contextWindow = 200_000;
+  }
+
   if (typeof contextWindow !== 'number' || !Number.isInteger(contextWindow) || contextWindow <= 0) {
     return envVars;
   }

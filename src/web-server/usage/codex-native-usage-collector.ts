@@ -13,7 +13,7 @@ interface CodexNativeUsageCollectorOptions {
   disableCache?: boolean;
 }
 
-const CODEX_NATIVE_USAGE_CACHE_VERSION = 1;
+const CODEX_NATIVE_USAGE_CACHE_VERSION = 2;
 const SECURE_CACHE_DIR_MODE = 0o700;
 const SECURE_CACHE_FILE_MODE = 0o600;
 
@@ -59,10 +59,13 @@ function hasUsage(snapshot: CodexTokenSnapshot): boolean {
 
 function normalizeTokenSnapshot(value: unknown): CodexTokenSnapshot | null {
   if (!isObject(value)) return null;
+  // Codex reports OpenAI semantics: input_tokens includes cached_input_tokens and
+  // output_tokens includes reasoning_output_tokens (total_tokens = input + output).
+  const cacheReadTokens = asNumber(value.cached_input_tokens);
   return {
-    inputTokens: asNumber(value.input_tokens),
-    cacheReadTokens: asNumber(value.cached_input_tokens),
-    outputTokens: asNumber(value.output_tokens) + asNumber(value.reasoning_output_tokens),
+    inputTokens: Math.max(0, asNumber(value.input_tokens) - cacheReadTokens),
+    cacheReadTokens,
+    outputTokens: asNumber(value.output_tokens),
   };
 }
 

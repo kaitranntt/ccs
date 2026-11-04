@@ -5,6 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 import type { CLIProxyBackend, CLIProxyProvider, ProviderConfig } from '../types';
 import { getProviderDisplayName } from '../provider-capabilities';
 import { getModelMappingFromConfig } from '../config/base-config-loader';
@@ -17,6 +18,7 @@ import { CLIPROXY_DEFAULT_PORT } from './port-manager';
 import { loadOrCreateUnifiedConfig } from '../../config/config-loader-facade';
 import { getActiveDockerLegacyApiKeys } from '../../docker/docker-key-rotation';
 import { isValidCliproxyRetryValue } from '../../config/schemas/cliproxy';
+import { isClaudeQuotaDrainOrderConfigured } from '../accounts/registry-config';
 import type { CLIProxyOAuthModelAliasConfig } from '../../config/schemas/cliproxy';
 import {
   mergeOAuthModelAliases,
@@ -28,6 +30,7 @@ import {
   parsePayloadSection,
   serializePayloadSection,
 } from './payload-rule-config';
+import { serializeFallbackChainSection } from './fallback-chain-serializer';
 
 /** Internal API key for CCS-managed requests */
 export const CCS_INTERNAL_API_KEY = 'ccs-internal-managed';
@@ -58,8 +61,15 @@ export const CCS_CONTROL_PANEL_SECRET = 'ccs';
  * v19: Persist backend-aware management panel repository from CCS unified config
  * v20: Pool-gated cooling/routing/retry-cap block; disable-cooling flips to false for pool users
  * v21: Persist user-defined OAuth aliases and scoped payload override rules
+ * v22: Opt-in Claude quota policy uses provider-scoped round-robin and priority precedence
  */
-export const CLIPROXY_CONFIG_VERSION = 21;
+export const CLIPROXY_CONFIG_VERSION = 22;
+
+/**
+ * Default CLIProxy listen address: loopback only, so other machines on the network
+ * cannot reach the proxy. CLIProxyAPI treats an empty host as "all interfaces".
+ */
+export const CLIPROXY_DEFAULT_HOST = '127.0.0.1';
 
 export const ORIGINAL_MANAGEMENT_PANEL_REPOSITORY =
   'https://github.com/router-for-me/Cli-Proxy-API-Management-Center';
@@ -207,7 +217,7 @@ function getSessionAffinityTtl(): string {
 
 /**
  * Number of times CLIProxy retries a request on a transient error
- * (403, 408, 500, 502, 503, 504). Opt-in via config.cliproxy.retry.request_retry;
+ * (403, 408, 429, 500, 502, 503, 504). Opt-in via config.cliproxy.retry.request_retry;
  * defaults to 0 (disabled) to avoid burning quota on multi-account pools.
  */
 function getRequestRetry(): number {
@@ -308,7 +318,7 @@ function addAliasEntry(
   if (getDeniedModelIdReasonForProvider(normalized.name, 'agy')) return;
   if (getDeniedModelIdReasonForProvider(normalized.alias, 'agy')) return;
 
-  const key = normalized.alias;
+  const key = `${normalized.name}\0${normalized.alias}`;
   const existingIndex = indexByKey.get(key);
   if (existingIndex !== undefined) {
     if (normalized.fork) entries[existingIndex].fork = true;
@@ -712,6 +722,20 @@ function generateOAuthModelAliasSection(
 }
 
 /**
+ * Resolve the CLIProxy listen address.
+ * Precedence: CCS_CLIPROXY_HOST env (the Docker images set 0.0.0.0 so published ports
+ * reach the proxy) > host already set in config.yaml > CLIPROXY_DEFAULT_HOST.
+ * A blank env value counts as unset, because Compose passes "" for unset variables.
+ */
+function resolveListenHost(existingHost?: string): string {
+  const envHost = process.env.CCS_CLIPROXY_HOST?.trim();
+  if (envHost) {
+    return envHost;
+  }
+  return existingHost ?? CLIPROXY_DEFAULT_HOST;
+}
+
+/**
  * Generate UNIFIED config.yaml content for ALL providers
  * This enables concurrent usage of gemini/codex/agy without config conflicts.
  * CLIProxyAPI routes requests by model name to the appropriate provider.
@@ -720,13 +744,16 @@ function generateOAuthModelAliasSection(
  * @param userApiKeys - User-added API keys to preserve (default: [])
  * @param existingAliases - Existing oauth-model-alias content to merge with defaults
  * @param existingPayload - Existing payload content to merge with structured CCS rules
+ * @param existingHost - Listen address found in the existing config, if any
  */
 function generateUnifiedConfigContent(
   port: number = CLIPROXY_DEFAULT_PORT,
   userApiKeys: string[] = [],
   existingAliases?: string,
-  existingPayload?: string
+  existingPayload?: string,
+  existingHost?: string
 ): string {
+  const host = resolveListenHost(existingHost);
   const authDir = getAuthDir(); // Base auth dir - CLIProxyAPI scans subdirectories
   // Convert Windows backslashes to forward slashes for YAML compatibility
   const authDirNormalized = authDir.split(path.sep).join('/');
@@ -774,11 +801,15 @@ function generateUnifiedConfigContent(
   const poolRoutingBlock = poolEnabled
     ? `\n# Max credentials to try per request before returning 429 to caller.\n# ONLY valid with cooling on (above). Without cooling a just-exhausted credential\n# remains "available" and retry-cap would not prevent re-targeting it.\nmax-retry-credentials: ${poolMaxRetry}\n`
     : '';
+  const claudeQuotaOverride =
+    poolEnabled && isClaudeQuotaDrainOrderConfigured()
+      ? '\n  session-affinity-overrides:\n    claude:\n      strategy: round-robin\n      precedence: priority'
+      : '';
   const routingBlock = `# Credential selection strategy when multiple matching accounts are available
 routing:
   strategy: ${poolEnabled ? 'fill-first' : routingStrategy}
   session-affinity: ${poolEnabled ? 'true' : sessionAffinityEnabled}
-  session-affinity-ttl: "${poolEnabled ? '1h' : sessionAffinityTtl}"`;
+  session-affinity-ttl: "${poolEnabled ? '1h' : sessionAffinityTtl}"${claudeQuotaOverride}`;
 
   // Unified config with enhanced CLIProxyAPI features
   const config = `# CLIProxyAPI config generated by CCS v${CLIPROXY_CONFIG_VERSION}
@@ -792,6 +823,9 @@ routing:
 # Server Settings
 # =============================================================================
 
+# Listen address. 127.0.0.1 keeps CLIProxy off the network; "" listens on all
+# interfaces. Set CCS_CLIPROXY_HOST to override (the Docker images use 0.0.0.0).
+host: ${quoteYamlString(host)}
 port: ${port}
 debug: false
 
@@ -834,7 +868,7 @@ remote-management:
 ${coolingComment}
 disable-cooling: ${disableCoolingValue}
 
-# Auto-retry on transient errors (403, 408, 500, 502, 503, 504)
+# Auto-retry on transient errors (403, 408, 429, 500, 502, 503, 504)
 request-retry: ${requestRetry}
 max-retry-interval: ${maxRetryInterval}
 ${poolRoutingBlock}
@@ -859,6 +893,7 @@ ${apiKeysYaml}
 auth-dir: "${authDirNormalized}"
 ${generateOAuthModelAliasSection(existingAliases, userRoutingConfig.oauth_model_alias)}
 ${payloadSection ? `${payloadSection}\n` : ''}
+${userRoutingConfig.fallback_chain ? `${serializeFallbackChainSection(userRoutingConfig.fallback_chain)}\n` : ''}
 `;
 
   return config;
@@ -963,8 +998,143 @@ function extractYamlSection(content: string, sectionKey: string): string {
 }
 
 /**
+ * CLIProxyAPI v8 roots that hold settings CCS writes in the legacy layout (server.port,
+ * observability.logs.*, management.*, routing.*, access.api-keys, oauth.auth-dir,
+ * oauth.model-alias, requests.payload, quota-exceeded.*). Regeneration rewrites them;
+ * keeping them would let their stale v8 values override the legacy ones CCS writes,
+ * because the v8 loader prefers the v8 path when both exist.
+ */
+const V8_REGENERATED_ROOTS = new Set([
+  'server',
+  'observability',
+  'management',
+  'routing',
+  'access',
+  'oauth',
+  'requests',
+  'quota-exceeded',
+]);
+
+/** Top-level keys the template emits only in some cases, so never carried over. */
+const CONDITIONALLY_GENERATED_KEYS = new Set([
+  'max-retry-credentials',
+  'payload',
+  'fallback-chain',
+]);
+
+interface TopLevelYamlSection {
+  key: string;
+  /** Key line plus its body and comments, exactly as written. */
+  text: string;
+}
+
+interface ExistingV8Config {
+  /** Settings CCS preserves, rewritten in the legacy layout for the existing parsers. */
+  legacyView: string;
+  sections: TopLevelYamlSection[];
+  /** `api-keys` holds v8's upstream key map, so CCS's client keys go to access.api-keys. */
+  hasUpstreamKeyMap: boolean;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Split YAML into top-level sections without parsing it, so comments and formatting survive. */
+function splitTopLevelYamlSections(content: string): TopLevelYamlSection[] {
+  const sections: TopLevelYamlSection[] = [];
+  for (const line of content.replace(/\r\n/g, '\n').split('\n')) {
+    const keyMatch = line.match(/^([^\s#][^:]*):/);
+    if (keyMatch) {
+      sections.push({ key: keyMatch[1], text: line });
+    } else if (sections.length > 0) {
+      sections[sections.length - 1].text += `\n${line}`;
+    }
+  }
+  return sections.map((section) => ({ ...section, text: section.text.replace(/\s+$/, '') }));
+}
+
+/**
+ * Read a config that CLIProxyAPI v8 has migrated to its nested layout (it adds
+ * `config-version:`). The v8 loader also accepts legacy keys and prefers the v8 path
+ * when both exist; this does the same. Returns null for legacy configs and for files
+ * js-yaml can't parse, which keeps the legacy handling.
+ */
+function readExistingV8Config(content: string): ExistingV8Config | null {
+  if (!/^config-version:/m.test(content)) {
+    return null;
+  }
+  let doc: unknown;
+  try {
+    doc = yaml.load(content);
+  } catch {
+    return null;
+  }
+  if (!isPlainObject(doc)) {
+    return null;
+  }
+  const root = doc;
+  const child = (key: string): Record<string, unknown> => {
+    const value = root[key];
+    return isPlainObject(value) ? value : {};
+  };
+  const server = child('server');
+  const clientKeys = child('access')['api-keys'] ?? root['api-keys'];
+  const view: Record<string, unknown> = {
+    host: server.host ?? root.host,
+    port: server.port ?? root.port,
+    'api-keys': Array.isArray(clientKeys)
+      ? clientKeys.filter((key) => typeof key === 'string')
+      : undefined,
+    'oauth-model-alias': child('oauth')['model-alias'] ?? root['oauth-model-alias'],
+    payload: child('requests').payload ?? root.payload,
+  };
+  const header = content.match(/^(?:#.*\r?\n)*/)?.[0] ?? '';
+  const definedView = Object.fromEntries(
+    Object.entries(view).filter(([, value]) => value !== undefined && value !== null)
+  );
+
+  return {
+    legacyView: `${header}${yaml.dump(definedView, { lineWidth: -1, forceQuotes: true, quotingType: '"' })}`,
+    sections: splitTopLevelYamlSections(content),
+    hasUpstreamKeyMap: isPlainObject(root['api-keys']),
+  };
+}
+
+/**
+ * Move the generated client key list from top-level `api-keys` (legacy layout) to
+ * `access.api-keys` (v8 layout), leaving `api-keys` to the v8 upstream key map.
+ */
+function nestClientApiKeysUnderAccess(configContent: string): string {
+  return configContent.replace(
+    /^api-keys:\n((?:[ \t]+-.*\n)*)/m,
+    (_match, items: string) => `access:\n  api-keys:\n${items.replace(/^(?=.)/gm, '  ')}`
+  );
+}
+
+/** Append the existing v8 sections that the regenerated config doesn't produce. */
+function appendKeptV8Sections(configContent: string, existing: ExistingV8Config): string {
+  let content = existing.hasUpstreamKeyMap
+    ? nestClientApiKeysUnderAccess(configContent)
+    : configContent;
+  const generatedKeys = new Set(splitTopLevelYamlSections(content).map((section) => section.key));
+  for (const section of existing.sections) {
+    if (
+      !generatedKeys.has(section.key) &&
+      !V8_REGENERATED_ROOTS.has(section.key) &&
+      !CONDITIONALLY_GENERATED_KEYS.has(section.key)
+    ) {
+      content += `${section.text}\n`;
+    }
+  }
+  return content;
+}
+
+/**
  * Force regenerate config.yaml with latest settings.
  * Preserves user-added API keys, claude-api-key section, and port settings.
+ * For a config in CLIProxyAPI's v8 layout, also keeps the sections CCS doesn't
+ * generate (upstream, the api-keys upstream map, config-version, ...).
  *
  * @param port - Default port to use if not found in existing config
  * @returns Path to new config file
@@ -978,19 +1148,30 @@ export function regenerateConfig(
 
   // Preserve user settings from existing config
   let effectivePort = port;
+  let existingHost: string | undefined;
   let userApiKeys: string[] = [];
   let existingAliases = '';
   let existingPayload = '';
   const preservedSections: PreservedYamlSection[] = [];
+  let existingV8: ExistingV8Config | null = null;
 
   if (fs.existsSync(configPath)) {
     try {
-      const content = fs.readFileSync(configPath, 'utf-8');
+      const rawContent = fs.readFileSync(configPath, 'utf-8');
+      // A v8-layout config is read through a legacy view; its other sections are kept below.
+      existingV8 = readExistingV8Config(rawContent);
+      const content = existingV8?.legacyView ?? rawContent;
 
       // Preserve port setting
       const portMatch = content.match(/^port:\s*(\d+)/m);
       if (portMatch) {
         effectivePort = parseInt(portMatch[1], 10);
+      }
+
+      // Preserve host setting (older generated configs had none, so a host line is the user's)
+      const hostMatch = content.match(/^host:[ \t]*(?:"([^"]*)"|'([^']*)'|([^\s#]*))/m);
+      if (hostMatch) {
+        existingHost = hostMatch[1] ?? hostMatch[2] ?? hostMatch[3] ?? '';
       }
 
       // Preserve user-added API keys (fix for issue #200)
@@ -1025,7 +1206,7 @@ export function regenerateConfig(
       existingAliases = serializeOAuthModelAliasBody(preservedAliasConfig);
       existingPayload = extractYamlSection(content, 'payload');
       if (preservedAliases.prunedLegacyAliasCount > 0) {
-        writeLegacyGeminiAliasCleanupBackup(configPath, content);
+        writeLegacyGeminiAliasCleanupBackup(configPath, rawContent);
       }
     } catch {
       // Use defaults if reading fails
@@ -1043,12 +1224,17 @@ export function regenerateConfig(
     effectivePort,
     userApiKeys,
     existingAliases,
-    existingPayload
+    existingPayload,
+    existingHost
   );
 
   // Re-append managed top-level sections that are not part of the generated defaults.
   for (const section of preservedSections) {
     configContent += `${section.key}:\n${section.body}\n`;
+  }
+
+  if (existingV8) {
+    configContent = appendKeptV8Sections(configContent, existingV8);
   }
 
   fs.writeFileSync(configPath, configContent, { mode: 0o600 });

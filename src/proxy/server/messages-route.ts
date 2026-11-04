@@ -12,6 +12,11 @@ import { createLogger } from '../../services/logging';
 import type { UpstreamAgentTimeoutOptions } from '../../utils/fetch-proxy-setup';
 import { pipeWebResponseToNode, readRawBody, writeJson } from './http-helpers';
 import {
+  logRequestTooLarge,
+  REQUEST_TOO_LARGE_ERROR_TYPE,
+  RequestBodyTooLargeError,
+} from '../../utils/request-body';
+import {
   closeUpstreamDispatcher,
   createUpstreamDispatcher,
   fetchWithUpstreamTransport,
@@ -657,6 +662,15 @@ export async function handleProxyMessagesRequest(
       }
     }
   } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      logRequestTooLarge(logger, req, error);
+      if (!error.drained) res.setHeader('Connection', 'close');
+      await pipeWebResponseToNode(
+        transformer.error(413, REQUEST_TOO_LARGE_ERROR_TYPE, error.message),
+        res
+      );
+      return;
+    }
     const message = error instanceof Error ? error.message : 'Unknown proxy error';
     const errInfo = toLogErrorInfo(error);
     logger.stage(
@@ -678,11 +692,9 @@ export async function handleProxyMessagesRequest(
         ? 502
         : error instanceof ProxyInputError
           ? 400
-          : message.includes('Request body too large')
-            ? 413
-            : message.includes('Invalid JSON')
-              ? 400
-              : 502;
+          : message.includes('Invalid JSON')
+            ? 400
+            : 502;
     const type = status >= 500 ? 'api_error' : 'invalid_request_error';
     await pipeWebResponseToNode(
       transformer.error(

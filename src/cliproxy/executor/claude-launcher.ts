@@ -24,6 +24,12 @@ import { CodexReasoningProxy } from '../ai-providers/codex-reasoning-proxy';
 import { ToolSanitizationProxy } from '../proxy/tool-sanitization-proxy';
 import { HttpsTunnelProxy } from '../proxy/https-tunnel-proxy';
 import { setupCleanupHandlers } from './session-bridge';
+import {
+  SESSION_NOTICES_ENV,
+  beginSessionNotices,
+  endSessionNotices,
+} from '../accounts/session-notices';
+import { buildSessionNoticesModArgs } from './claude-mods';
 import { prepareLaunchSettings } from './launch-settings';
 import { resolveRuntimeQuotaMonitorProviders } from './account-resolution';
 import {
@@ -148,13 +154,24 @@ export async function launchClaude(context: ClaudeLaunchContext): Promise<ChildP
   // Strip telemetry-disable env vars for subcommands; otherwise Claude's
   // `agents`/`mcp`/... TUIs silently fall back to non-interactive list mode.
   // Issue #1218.
-  const tracedEnv = isSubcommand ? stripSubcommandBlockingEnv(baseTracedEnv) : baseTracedEnv;
+  const strippedEnv = isSubcommand ? stripSubcommandBlockingEnv(baseTracedEnv) : baseTracedEnv;
+
+  // Claude's TUI owns the terminal while it runs: route CCS alerts (quota low /
+  // exhausted) to a notices file the session can read, and print them on exit.
+  const noticesFile = !isSubcommand && process.stderr.isTTY ? beginSessionNotices() : null;
+  const tracedEnv = noticesFile
+    ? { ...strippedEnv, [SESSION_NOTICES_ENV]: noticesFile }
+    : strippedEnv;
+  // The bundled ccs-notices mod shows those alerts in-app (toast + status line).
+  const sessionArgs = noticesFile
+    ? [...buildSessionNoticesModArgs(claudeCli), ...launchArgs]
+    : launchArgs;
 
   // Spawn: Windows .cmd/.bat/.ps1 need shell escaping; all others spawn directly
   let claude: ChildProcess;
   try {
     if (needsShell) {
-      const cmdString = [claudeCli, ...launchArgs].map(escapeShellArg).join(' ');
+      const cmdString = [claudeCli, ...sessionArgs].map(escapeShellArg).join(' ');
       claude = spawn(cmdString, {
         stdio: 'inherit',
         windowsHide: true,
@@ -162,7 +179,7 @@ export async function launchClaude(context: ClaudeLaunchContext): Promise<ChildP
         env: tracedEnv,
       });
     } else {
-      claude = spawn(claudeCli, launchArgs, {
+      claude = spawn(claudeCli, sessionArgs, {
         stdio: 'inherit',
         windowsHide: true,
         env: tracedEnv,
@@ -173,7 +190,15 @@ export async function launchClaude(context: ClaudeLaunchContext): Promise<ChildP
     // runtime settings overlay before propagating so the secret-bearing temp
     // file is not orphaned. cleanup is idempotent.
     cleanupLaunchSettings();
+    if (noticesFile) endSessionNotices();
     throw spawnError;
+  }
+
+  // Registered before setupCleanupHandlers' exit handler (which exits the
+  // process), so held-back notices print once the TUI has released the terminal.
+  if (noticesFile) {
+    claude.on('exit', endSessionNotices);
+    claude.on('error', endSessionNotices);
   }
 
   // Remove the runtime settings overlay once Claude has read it and exited.

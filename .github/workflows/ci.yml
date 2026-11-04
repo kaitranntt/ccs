@@ -18,7 +18,7 @@ jobs:
   validate:
     if: >-
       contains(fromJSON('["COLLABORATOR","MEMBER","OWNER"]'), github.event.pull_request.author_association)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     env:
       # Keep Bun cache isolated per job workspace so parallel self-hosted runs
       # do not race on ~/.bun/install/cache and corrupt restore/install state.
@@ -62,7 +62,7 @@ jobs:
   build:
     if: >-
       contains(fromJSON('["COLLABORATOR","MEMBER","OWNER"]'), github.event.pull_request.author_association)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     name: build
     env:
       BUN_INSTALL_CACHE_DIR: ${{ github.workspace }}/.bun/install/cache
@@ -104,7 +104,7 @@ jobs:
   test:
     if: >-
       contains(fromJSON('["COLLABORATOR","MEMBER","OWNER"]'), github.event.pull_request.author_association)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     name: test
     needs: [build]
     env:
@@ -150,7 +150,7 @@ jobs:
   compose-parity:
     if: >-
       contains(fromJSON('["COLLABORATOR","MEMBER","OWNER"]'), github.event.pull_request.author_association)
-    runs-on: [self-hosted, linux, x64, cliproxy]
+    runs-on: ubuntu-latest
     name: compose-parity
     steps:
       - name: Checkout code
@@ -177,7 +177,7 @@ jobs:
   ci-gate:
     if: always()
     needs: [validate, build, test, compose-parity]
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     name: CI Gate
     steps:
       - name: Verify gated jobs did not fail

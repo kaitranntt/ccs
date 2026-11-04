@@ -133,6 +133,26 @@ describe('buildClaudeEnvironment codex fallback normalization', () => {
     expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('gpt-5.4-mini(medium)');
     expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317');
   });
+  it('normalizes codex -max effort alias for direct upstream fallback', () => {
+    const settingsPath = createCodexSettingsFile({
+      defaultModel: 'gpt-6-astra-max',
+      opusModel: 'gpt-6-astra-max',
+      sonnetModel: 'gpt-6-astra-high',
+      haikuModel: 'gpt-5.4-mini-medium',
+    });
+
+    const env = buildClaudeEnvironment({
+      provider: 'codex',
+      useRemoteProxy: false,
+      localPort: 8317,
+      customSettingsPath: settingsPath,
+      verbose: false,
+    });
+
+    expect(env.ANTHROPIC_MODEL).toBe('gpt-6-astra(max)');
+    expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-6-astra(max)');
+    expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-6-astra(high)');
+  });
 
   it('keeps codex effort aliases when reasoning proxy is active', () => {
     const settingsPath = createCodexSettingsFile({

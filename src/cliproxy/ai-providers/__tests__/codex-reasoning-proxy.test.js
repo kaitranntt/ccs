@@ -4,6 +4,7 @@ const {
   buildCodexModelEffortMap,
   getEffortForModel,
   injectReasoningEffortIntoBody,
+  normalizeCodexEffortForModel,
 } = require('../../../../dist/cliproxy/ai-providers/codex-reasoning-proxy');
 
 describe('Codex Reasoning Proxy', () => {
@@ -55,12 +56,17 @@ describe('Codex Reasoning Proxy', () => {
   });
 
   describe('injectReasoningEffortIntoBody', () => {
-    it('overrides reasoning.effort on object bodies', () => {
+    it('encodes effort as a CLIProxy model suffix and leaves reasoning untouched', () => {
       const out = injectReasoningEffortIntoBody(
-        { model: 'm1', reasoning: { effort: 'xhigh' } },
+        { model: 'm1', reasoning: { summary: 'auto' } },
         'high'
       );
-      assert.deepStrictEqual(out, { model: 'm1', reasoning: { effort: 'high' } });
+      assert.deepStrictEqual(out, { model: 'm1(high)', reasoning: { summary: 'auto' } });
+    });
+
+    it('strips existing parenthesized suffix to avoid double-suffixing', () => {
+      const out = injectReasoningEffortIntoBody({ model: 'gpt-5.4(low)' }, 'high');
+      assert.deepStrictEqual(out, { model: 'gpt-5.4(high)' });
     });
 
     it('leaves non-object bodies unchanged', () => {
@@ -76,16 +82,12 @@ describe('Codex Reasoning Proxy', () => {
   describe('model suffix aliasing', () => {
     it('lets callers use model-id suffixes without changing upstream model ids', () => {
       // We can't call the full proxy in unit tests, but we can validate the intent:
-      // - injected effort is based on the suffix
-      // - callers should set request.model to the base model upstream (proxy does this)
-      const out = injectReasoningEffortIntoBody(
-        { model: 'gpt-5.2-codex', reasoning: { effort: 'medium' } },
-        'xhigh'
-      );
-      assert.deepStrictEqual(out, {
-        model: 'gpt-5.2-codex',
-        reasoning: { effort: 'xhigh' },
-      });
+      // - callers set request.model to the base model (proxy does this)
+      // - injected effort becomes the CLIProxy thinking suffix on that base model
+      const out = injectReasoningEffortIntoBody({ model: 'gpt-5.2-codex' }, 'xhigh');
+      assert.deepStrictEqual(out, { model: 'gpt-5.2-codex(xhigh)' });
+      const outMax = injectReasoningEffortIntoBody({ model: 'gpt-6-astra' }, 'max');
+      assert.deepStrictEqual(outMax, { model: 'gpt-6-astra(max)' });
     });
   });
 
@@ -195,6 +197,30 @@ describe('Codex Reasoning Proxy', () => {
       // /api/provider/codex should match /api/provider/codex/v1
       const result = stripPathPrefix('/api/provider/codex/v1', '/api/provider/codex');
       assert.strictEqual(result, '/v1');
+    });
+  });
+  describe('normalizeCodexEffortForModel', () => {
+    it('clamps unsupported lower efforts up to low for gpt-6.1-sol', () => {
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6.1-sol', 'none'), 'low');
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6.1-sol', 'minimal'), 'low');
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6.1-sol', 'medium'), 'medium');
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6.1-sol', 'max'), 'max');
+    });
+
+    it('preserves none for gpt-6-sol and gpt-6-luna', () => {
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6-sol', 'none'), 'none');
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6-sol', 'max'), 'max');
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6-luna', 'none'), 'none');
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6-luna', 'max'), 'max');
+    });
+
+    it('clamps unsupported max effort down to xhigh for models capped at xhigh', () => {
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-5.4', 'max'), 'xhigh');
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-5.5', 'max'), 'xhigh');
+    });
+    it('preserves minimal effort for gpt-6-astra and existing GPT-5 models', () => {
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-6-astra', 'minimal'), 'minimal');
+      assert.strictEqual(normalizeCodexEffortForModel('gpt-5.5', 'minimal'), 'minimal');
     });
   });
 });

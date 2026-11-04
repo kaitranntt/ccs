@@ -175,6 +175,8 @@ const fs = require('fs');
       ...process.env,
       CCS_HOME: tempDir,
       CCS_E2E_OUTPUT: outputPath,
+      // Pin the fake claude: an inherited CCS_CLAUDE_PATH outranks the PATH lookup below.
+      CCS_CLAUDE_PATH: fakeClaudePath,
       PATH: `${binDir}${path.delimiter}${process.env.PATH || ''}`,
     });
 

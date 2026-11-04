@@ -80,6 +80,8 @@ RUN npm install -g @google/gemini-cli @vibe-kit/grok-cli @anthropic-ai/claude-co
   && ln -sf /app/dist/ccs.js /usr/local/bin/ccs
 
 ENV CCS_PORT=3000
+# CLIProxy must listen on all container interfaces for the published 8317 port to reach it.
+ENV CCS_CLIPROXY_HOST=0.0.0.0
 EXPOSE 3000 8317
 
 ENTRYPOINT ["/usr/local/bin/ccs-entrypoint"]

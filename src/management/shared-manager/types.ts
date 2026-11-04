@@ -83,7 +83,10 @@ export const SHARED_PLUGIN_ENTRIES: readonly SharedItem[] = [
  * Plugin metadata filenames that are intentionally instance-local and must
  * NOT be linked from the shared plugins directory.
  */
-export const INSTANCE_LOCAL_PLUGIN_METADATA_FILES = new Set(['known_marketplaces.json']);
+export const INSTANCE_LOCAL_PLUGIN_METADATA_FILES = new Set([
+  'known_marketplaces.json',
+  '.last_inuse_sweep',
+]);
 
 /**
  * Advanced continuity artifacts linked per context group when the account

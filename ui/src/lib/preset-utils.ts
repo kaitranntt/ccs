@@ -48,18 +48,44 @@ async function fetchProviderCatalog(provider: string, catalog?: CliproxyProvider
 }
 
 /**
+ * Check whether the provider already has a settings file.
+ * Returns null when existence cannot be determined (callers must not write).
+ */
+async function providerSettingsExist(provider: string): Promise<boolean | null> {
+  try {
+    const response = await fetch(`/api/settings/${provider}`);
+    if (response.status === 404) return false;
+    return response.ok ? true : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Apply default preset for a provider to its settings
  * Uses the catalog default model's preset mapping or falls back to using defaultModel for all tiers
  *
+ * Only seeds a missing settings file. The PUT replaces the whole file, so writing over an
+ * existing one would drop the user's models, env keys and other settings.
+ *
+ * The claude built-in provider is model-neutral: its settings carry no model pins so Claude
+ * Code's own /model selection applies. The CLI creates its transport-only settings on launch.
+ *
  * @param provider - The provider ID (e.g., 'gemini', 'codex', 'agy')
  * @param port - Optional custom port (defaults to CLIPROXY_DEFAULT_PORT)
- * @returns Object with success status and applied preset name
+ * @returns Object with success status and applied preset name (no presetName when skipped)
  */
 export async function applyDefaultPreset(
   provider: string,
   port?: number,
   catalog?: CliproxyProviderCatalog
-): Promise<{ success: boolean; presetName?: string }> {
+): Promise<{ success: boolean; presetName?: string; skipped?: boolean }> {
+  if (provider === 'claude') return { success: true, skipped: true };
+
+  const settingsExist = await providerSettingsExist(provider);
+  if (settingsExist === null) return { success: false };
+  if (settingsExist) return { success: true, skipped: true };
+
   const resolvedCatalog = await fetchProviderCatalog(provider, catalog);
   if (!resolvedCatalog) return { success: false };
 

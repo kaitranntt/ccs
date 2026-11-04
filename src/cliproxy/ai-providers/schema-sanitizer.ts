@@ -5,7 +5,9 @@
  * Gemini/Vertex AI function_declarations Schema object.
  *
  * This sanitizer runs exclusively in the CLIProxy execution path (Gemini, Codex,
- * Antigravity, etc.), never for direct Anthropic API requests.
+ * Antigravity, etc.), never for direct Anthropic API requests. Single-provider
+ * Claude profiles also reach Anthropic through CLIProxy, so they skip it (see
+ * `sanitizeSchemas` in proxy-chain-builder).
  *
  * Gemini supports a subset of OpenAPI 3.0 schema — fields outside this subset
  * (like "examples", "$ref", "oneOf", etc.) cause 400 errors.

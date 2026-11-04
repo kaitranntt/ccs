@@ -3,6 +3,7 @@ import i18n from '@/lib/i18n';
 import { AddAccountDialog } from '@/components/account/add-account-dialog';
 import { render, screen, userEvent, waitFor } from '@tests/setup/test-utils';
 import { toast } from 'sonner';
+import type { OAuthAccount } from '@/lib/api-client';
 
 const authMocks = vi.hoisted(() => ({
   startAuth: vi.fn(),
@@ -14,10 +15,24 @@ const kiroImportMocks = vi.hoisted(() => ({
   mutate: vi.fn(),
 }));
 
+const authFlowState = vi.hoisted(() => ({
+  provider: null as string | null,
+  isAuthenticating: false,
+}));
+
+const presetMocks = vi.hoisted(() => ({
+  applyDefaultPreset: vi.fn(),
+}));
+
+vi.mock('@/lib/preset-utils', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/preset-utils')>()),
+  applyDefaultPreset: presetMocks.applyDefaultPreset,
+}));
+
 vi.mock('@/hooks/use-cliproxy-auth-flow', () => ({
   useCliproxyAuthFlow: () => ({
-    provider: null,
-    isAuthenticating: false,
+    provider: authFlowState.provider,
+    isAuthenticating: authFlowState.isAuthenticating,
     error: null,
     authUrl: null,
     oauthState: null,
@@ -57,7 +72,11 @@ describe('AddAccountDialog power user mode', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en');
     vi.clearAllMocks();
+    vi.mocked(window.localStorage.getItem).mockReturnValue(null);
     fetchMock.mockReset();
+    authFlowState.provider = null;
+    authFlowState.isAuthenticating = false;
+    presetMocks.applyDefaultPreset.mockResolvedValue({ success: true, skipped: true });
     vi.stubGlobal('fetch', fetchMock);
     Object.defineProperty(HTMLElement.prototype, 'hasPointerCapture', {
       configurable: true,
@@ -205,5 +224,103 @@ describe('AddAccountDialog power user mode', () => {
         startEndpoint: 'start',
       })
     );
+  });
+
+  async function completeOAuth(provider: string, displayName: string, isFirstAccount: boolean) {
+    const onClose = vi.fn();
+    const dialog = () => (
+      <AddAccountDialog
+        open
+        onClose={onClose}
+        provider={provider}
+        displayName={displayName}
+        isFirstAccount={isFirstAccount}
+      />
+    );
+    const { rerender } = render(dialog());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Authenticate' }));
+    authFlowState.provider = provider;
+    authFlowState.isAuthenticating = true;
+    rerender(dialog());
+    authFlowState.provider = null;
+    authFlowState.isAuthenticating = false;
+    rerender(dialog());
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  }
+
+  it('does not apply the default preset when adding another account', async () => {
+    await completeOAuth('claude', 'Claude', false);
+
+    expect(presetMocks.applyDefaultPreset).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('shows the saved nickname for reauthentication while sending the existing account ID and nickname', async () => {
+    const account: OAuthAccount = {
+      id: 'user@example.com#free',
+      email: 'user@example.com',
+      nickname: 'Personal',
+      provider: 'codex',
+      tokenFile: 'codex-user@example.com-free.json',
+      isDefault: true,
+      createdAt: '2026-01-01T00:00:00Z',
+    };
+    render(
+      <AddAccountDialog
+        open
+        onClose={vi.fn()}
+        provider="codex"
+        displayName="Codex"
+        account={account}
+      />
+    );
+    expect(screen.getAllByText('Personal')).toHaveLength(2);
+    expect(screen.getByText('user@example.com (Free)')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Reauthenticate' }));
+    expect(authMocks.startAuth).toHaveBeenCalledWith(
+      'codex',
+      expect.objectContaining({
+        accountId: account.id,
+        nickname: account.nickname,
+      })
+    );
+    expect(presetMocks.applyDefaultPreset).not.toHaveBeenCalled();
+  });
+
+  it('masks the nickname and secondary identity in the reauthentication dialog', () => {
+    vi.mocked(window.localStorage.getItem).mockImplementation((key) =>
+      key === 'ccs-privacy-mode' ? 'true' : null
+    );
+    const account: OAuthAccount = {
+      id: 'user@example.com#free',
+      email: 'user@example.com',
+      nickname: 'Personal',
+      provider: 'codex',
+      tokenFile: 'codex-user@example.com-free.json',
+      isDefault: true,
+      createdAt: '2026-01-01T00:00:00Z',
+    };
+    render(
+      <AddAccountDialog
+        open
+        onClose={vi.fn()}
+        provider="codex"
+        displayName="Codex"
+        account={account}
+      />
+    );
+    screen.getAllByText('Personal').forEach((label) => expect(label).toHaveClass('blur-[4px]'));
+    expect(screen.getByText('user@example.com (Free)')).toHaveClass('blur-[4px]');
+  });
+
+  it('applies the default preset when adding the first account', async () => {
+    presetMocks.applyDefaultPreset.mockResolvedValue({ success: true, presetName: 'GPT-5.5' });
+
+    await completeOAuth('codex', 'Codex', true);
+
+    expect(presetMocks.applyDefaultPreset).toHaveBeenCalledWith('codex', undefined, undefined);
+    expect(toast.success).toHaveBeenCalledWith('Applied "GPT-5.5" preset');
   });
 });

@@ -358,7 +358,8 @@ exit 0
     expect(launchedEnv).toContain('anthropicModel=gpt-5.4');
     expect(launchedEnv).toContain('maxOutputTokens=12345');
     expect(fs.readFileSync(claudeSettingsPathLogPath, 'utf8')).toBe(launchSettingsPath);
-    expect(fs.existsSync(launchSettingsPath as string)).toBe(false);
+    expect(launchSettingsPath).toContain(path.join(ccsDir, 'cache', 'isolated-settings'));
+    expect(fs.existsSync(launchSettingsPath as string)).toBe(true);
   });
 
   it('does not auto-enable browser reuse for settings-profile launches from env overrides alone', async () => {

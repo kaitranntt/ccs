@@ -1,58 +1,48 @@
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-
 import type { Settings } from '../types/config';
-import { stripAnthropicRoutingEnv } from './shell-executor';
+import {
+  createUnifiedLaunchSettings,
+  type UnifiedLaunchSettingsOptions,
+  type UnifiedLaunchSettingsResult,
+} from './launch-settings';
 
 export interface OpenAICompatLaunchSettings {
   settingsPath: string;
   cleanup: () => void;
 }
 
-// SIBLING HELPER: src/cliproxy/executor/launch-settings.ts (prepareLaunchSettings)
-// solves the same problem by OVERLAYING resolved routing values instead of
-// stripping them. This strip-based variant is required where callers deliberately
-// delete a routing key (e.g. ANTHROPIC_API_KEY in settings-flow) and need it
-// ABSENT from the launch settings. Do not unify without an explicit force-absent
-// key list — see issue #1609.
+export interface OpenAICompatLaunchSettingsOptions {
+  /**
+   * When true, snapshot the isolated settings to a durable, profile-scoped
+   * cache directory (~/.ccs/cache/isolated-settings/<hash>/) using atomic temp-and-rename.
+   */
+  durable?: boolean;
+}
+
+/**
+ * Creates isolated launch settings for OpenAI-compatible profiles.
+ * Strips Anthropic routing variables and guarantees ANTHROPIC_API_KEY is absent
+ * so spawned processes route exclusively through proxyEnv without auth bypass.
+ */
 export function createOpenAICompatLaunchSettings(
   settingsPath: string,
-  settings: Settings
+  settings: Settings,
+  options?: OpenAICompatLaunchSettingsOptions
 ): OpenAICompatLaunchSettings {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-openai-compat-settings-'));
-  fs.chmodSync(tempDir, 0o700);
-
-  const launchSettings = JSON.parse(JSON.stringify(settings)) as Settings;
-  const sanitizedEnv = Object.fromEntries(
-    Object.entries(stripAnthropicRoutingEnv({ ...(launchSettings.env ?? {}) })).filter(
-      (entry): entry is [string, string] => typeof entry[1] === 'string'
-    )
-  );
-
-  if (Object.keys(sanitizedEnv).length > 0) {
-    launchSettings.env = sanitizedEnv;
-  } else {
-    delete launchSettings.env;
-  }
-
-  const launchSettingsPath = path.join(tempDir, path.basename(settingsPath));
-  fs.writeFileSync(launchSettingsPath, JSON.stringify(launchSettings, null, 2) + '\n', {
-    encoding: 'utf8',
-    mode: 0o600,
-  });
-
-  let cleanedUp = false;
-  const cleanup = (): void => {
-    if (cleanedUp) {
-      return;
-    }
-    cleanedUp = true;
-    fs.rmSync(tempDir, { recursive: true, force: true });
+  const unifiedOptions: UnifiedLaunchSettingsOptions = {
+    stripAnthropicRouting: true,
+    stripKeys: ['ANTHROPIC_API_KEY'],
+    durable: options?.durable,
+    forceWrite: true,
   };
 
+  const result: UnifiedLaunchSettingsResult = createUnifiedLaunchSettings(
+    settingsPath,
+    settings,
+    unifiedOptions
+  );
+
   return {
-    settingsPath: launchSettingsPath,
-    cleanup,
+    settingsPath: result.settingsPath,
+    cleanup: result.cleanup,
   };
 }

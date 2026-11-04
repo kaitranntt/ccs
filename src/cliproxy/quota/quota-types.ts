@@ -104,6 +104,10 @@ export interface CodexQuotaResult extends QuotaErrorMetadata {
  * Claude policy limit window (5h/weekly/overage)
  */
 export interface ClaudeQuotaWindow {
+  /** Account-wide, model-specific, or unclassified limit. Optional for older clients. */
+  scope?: 'account' | 'model' | 'unknown';
+  cadence?: '5h' | 'weekly';
+  modelLabel?: string;
   /** Source identifier: five_hour, seven_day, seven_day_opus, seven_day_sonnet, overage, ... */
   rateLimitType: string;
   /** Human-friendly label for UI/CLI display */
@@ -156,6 +160,14 @@ export interface ClaudeCoreUsageSummary {
   weekly: ClaudeCoreUsageWindow | null;
 }
 
+/** Presence is independent of numeric quota windows retained in a stale response. */
+export type ClaudeGeneralWindowPresence = 'present' | 'absent' | 'unknown';
+
+export interface ClaudeGeneralWindowPresenceSummary {
+  fiveHour: ClaudeGeneralWindowPresence;
+  weekly: ClaudeGeneralWindowPresence;
+}
+
 /**
  * Claude quota fetch result
  */
@@ -166,6 +178,8 @@ export interface ClaudeQuotaResult extends QuotaErrorMetadata {
   windows: ClaudeQuotaWindow[];
   /** Explicit core usage windows (5h + weekly) */
   coreUsage?: ClaudeCoreUsageSummary;
+  /** General window presence confirmed from the original OAuth usage snapshot. */
+  generalWindowPresence?: ClaudeGeneralWindowPresenceSummary;
   /** Timestamp of fetch */
   lastUpdated: number;
   /** Error message if fetch failed */
@@ -174,6 +188,11 @@ export interface ClaudeQuotaResult extends QuotaErrorMetadata {
   accountId?: string;
   /** True if token is expired/invalid and re-auth is required */
   needsReauth?: boolean;
+  /**
+   * True when the live usage probe failed (e.g. HTTP 429) and this is the last
+   * successful result, served as-is. lastUpdated is when that data was fetched.
+   */
+  stale?: boolean;
 }
 
 /**

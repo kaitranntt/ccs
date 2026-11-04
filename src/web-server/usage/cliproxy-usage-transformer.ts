@@ -12,6 +12,7 @@ import type {
 import { calculateCost } from '../model-pricing';
 import type { ModelBreakdown, DailyUsage, HourlyUsage, MonthlyUsage } from './types';
 import { getModelsUsed, normalizeUsageProvider } from './model-identity';
+import { ConfigError } from '../../errors/error-types';
 
 // ============================================================================
 // INTERNAL HELPERS
@@ -23,6 +24,12 @@ export interface CliproxyUsageHistoryDetail {
   provider?: string;
   /** CLIProxy account email/id derived from auth_index lookup. Populated when an accountMap is supplied. */
   accountId?: string;
+  /** Opaque SHA-256 client-key fingerprint, independent of upstream accountId. */
+  clientKeyId?: string;
+  /** Legacy snapshot identity; not proof that the bucket is a registered client key. */
+  usageBucketId?: string;
+  /** Proxy-reported total; cache inclusion differs by provider. Absent in old history. */
+  totalTokens?: number;
   timestamp: string;
   inputTokens: number;
   outputTokens: number;
@@ -84,6 +91,9 @@ function createHistoryDetail(
     model,
     provider: pricingProvider,
     ...(accountId !== undefined && { accountId }),
+    ...(detail.client_key_id && { clientKeyId: detail.client_key_id }),
+    ...(detail.usage_bucket_id && { usageBucketId: detail.usage_bucket_id }),
+    totalTokens: detail.tokens.total_tokens,
     timestamp: detail.timestamp,
     inputTokens,
     outputTokens,
@@ -171,10 +181,25 @@ export function normalizeCliproxyUsageHistoryDetail(
       ? candidate.accountId
       : undefined;
 
+  const clientKeyId =
+    typeof candidate.clientKeyId === 'string' && /^[a-f0-9]{64}$/.test(candidate.clientKeyId)
+      ? candidate.clientKeyId
+      : undefined;
+
+  const usageBucketId =
+    typeof candidate.usageBucketId === 'string' && /^[a-f0-9]{64}$/.test(candidate.usageBucketId)
+      ? candidate.usageBucketId
+      : undefined;
+
   return {
     model: candidate.model,
     ...(provider && { provider }),
     ...(accountId !== undefined && { accountId }),
+    ...(clientKeyId && { clientKeyId }),
+    ...(usageBucketId && { usageBucketId }),
+    ...(typeof candidate.totalTokens === 'number' && Number.isFinite(candidate.totalTokens)
+      ? { totalTokens: candidate.totalTokens }
+      : {}),
     timestamp: candidate.timestamp,
     inputTokens,
     outputTokens,
@@ -236,6 +261,9 @@ function sanitizeHistoryDetail(detail: CliproxyUsageHistoryDetail): CliproxyUsag
     model: detail.model,
     ...(detail.provider && { provider: detail.provider }),
     ...(detail.accountId !== undefined && { accountId: detail.accountId }),
+    ...(detail.clientKeyId && { clientKeyId: detail.clientKeyId }),
+    ...(detail.usageBucketId && { usageBucketId: detail.usageBucketId }),
+    ...(detail.totalTokens !== undefined && { totalTokens: detail.totalTokens }),
     timestamp: detail.timestamp,
     inputTokens: detail.inputTokens,
     outputTokens: detail.outputTokens,
@@ -249,7 +277,8 @@ function sanitizeHistoryDetail(detail: CliproxyUsageHistoryDetail): CliproxyUsag
 function createHistorySignature(detail: CliproxyUsageHistoryDetail): string {
   return [
     detail.model,
-    detail.provider ?? '',
+    detail.usageBucketId ? `snapshot:${detail.usageBucketId}` : (detail.provider ?? ''),
+    detail.usageBucketId ? '' : (detail.clientKeyId ?? ''),
     detail.timestamp,
     detail.inputTokens,
     detail.outputTokens,
@@ -262,6 +291,8 @@ function createHistorySignature(detail: CliproxyUsageHistoryDetail): string {
 function createProviderlessHistorySignature(detail: CliproxyUsageHistoryDetail): string {
   return [
     detail.model,
+    detail.clientKeyId ?? '',
+    detail.usageBucketId ?? '',
     detail.timestamp,
     detail.inputTokens,
     detail.outputTokens,
@@ -305,6 +336,38 @@ export function mergeCliproxyUsageHistoryDetails(
   existing: CliproxyUsageHistoryDetail[],
   incoming: CliproxyUsageHistoryDetail[]
 ): CliproxyUsageHistoryDetail[] {
+  // Old credential-bucket history has no reliable identity. Do not guess its
+  // owner or silently append a possibly replayed request during an upgrade.
+  if (
+    existing.some((detail) => detail.usageBucketId) ||
+    incoming.some((detail) => detail.usageBucketId)
+  ) {
+    const legacySignature = (detail: CliproxyUsageHistoryDetail): string =>
+      createHistorySignature({
+        ...detail,
+        provider: undefined,
+        clientKeyId: undefined,
+        usageBucketId: undefined,
+      });
+    const unidentified = new Set(
+      existing.filter((detail) => !detail.usageBucketId).map(legacySignature)
+    );
+    const identified = new Set(
+      existing.filter((detail) => detail.usageBucketId).map(legacySignature)
+    );
+    if (
+      incoming.some((detail) =>
+        detail.usageBucketId
+          ? unidentified.has(legacySignature(detail))
+          : identified.has(legacySignature(detail))
+      )
+    ) {
+      throw new ConfigError(
+        'Legacy usage overlaps history without stable bucket identities; history was not changed. ' +
+          'Back up usage history and establish a non-overlapping proxy collection cutoff before retrying.'
+      );
+    }
+  }
   const hydratedExisting = hydrateProviderlessHistoryDetails(existing, incoming);
   const existingCounts = new Map<string, { detail: CliproxyUsageHistoryDetail; count: number }>();
   for (const detail of hydratedExisting) {
@@ -330,6 +393,22 @@ export function mergeCliproxyUsageHistoryDetails(
 
   for (const [signature, incomingEntry] of incomingCounts) {
     const existingEntry = existingCounts.get(signature);
+    if (existingEntry?.detail.usageBucketId) {
+      // Metadata can disappear after a management failure or key rotation. It
+      // must neither create a second request nor erase verified attribution.
+      const attributed = existingEntry.detail.clientKeyId
+        ? existingEntry.detail
+        : incomingEntry.detail;
+      existingCounts.set(signature, {
+        detail: {
+          ...existingEntry.detail,
+          ...(attributed.clientKeyId && { clientKeyId: attributed.clientKeyId }),
+          ...(attributed.clientKeyId && { provider: attributed.provider, cost: attributed.cost }),
+        },
+        count: Math.max(existingEntry.count, incomingEntry.count),
+      });
+      continue;
+    }
     if (!existingEntry || incomingEntry.count > existingEntry.count) {
       existingCounts.set(signature, {
         detail: incomingEntry.detail,

@@ -74,7 +74,11 @@ struct BarServerLauncher: Sendable {
   /// exactly "bar serve". This blocks shell descriptors such as
   /// /bin/sh -c attacker-command while preserving the installed launch path.
   private func isSafeDescriptor(_ descriptor: BarLaunchDescriptor) -> Bool {
-    guard descriptor.schema == 1, descriptor.args.count == 3 else { return false }
+    guard descriptor.schema == 1 else { return false }
+    let hasValidPortSuffix = descriptor.args.count == 5
+      && descriptor.args[3] == "--port"
+      && (Int(descriptor.args[4]).map { (1...65535).contains($0) } ?? false)
+    guard descriptor.args.count == 3 || hasValidPortSuffix else { return false }
     guard descriptor.args[1] == "bar", descriptor.args[2] == "serve" else { return false }
     guard isAbsolutePath(descriptor.runtime), isAbsolutePath(descriptor.args[0]) else { return false }
     guard descriptor.home == home else { return false }

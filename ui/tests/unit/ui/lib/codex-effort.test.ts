@@ -12,6 +12,7 @@ import {
 
 describe('parseCodexEffort', () => {
   it('parses lowercase suffixes', () => {
+    expect(parseCodexEffort('gpt-6-astra-max')).toBe('max');
     expect(parseCodexEffort('gpt-5.3-codex-high')).toBe('high');
     expect(parseCodexEffort('gpt-5.4-high-fast')).toBe('high');
     expect(parseCodexEffort('gpt-5.4-fast-high')).toBe('high');
@@ -23,6 +24,7 @@ describe('parseCodexEffort', () => {
 
   it('parses mixed-case suffixes', () => {
     expect(parseCodexEffort('gpt-5.3-codex-XHIGH')).toBe('xhigh');
+    expect(parseCodexEffort('gpt-6-astra-MAX')).toBe('max');
   });
 
   it('returns undefined for unsuffixed or unsupported values', () => {
@@ -44,6 +46,10 @@ describe('getCodexEffortDisplay', () => {
   it('returns pinned label for suffixed models', () => {
     expect(getCodexEffortDisplay('gpt-5.3-codex-high')).toEqual({
       label: 'Pinned high',
+      explicit: true,
+    });
+    expect(getCodexEffortDisplay('gpt-6-astra-max')).toEqual({
+      label: 'Pinned max',
       explicit: true,
     });
   });
@@ -69,7 +75,7 @@ describe('codex effort helpers', () => {
     expect(applyCodexEffortSuffix('gpt-5.3-codex', undefined)).toBe('gpt-5.3-codex');
   });
 
-  it('builds ordered codex effort variants up to the supported max level', () => {
+  it('builds ordered codex effort variants up to the supported max level for legacy models', () => {
     expect(getCodexEffortVariants('gpt-5.3-codex', 'xhigh')).toEqual([
       'gpt-5.3-codex',
       'gpt-5.3-codex-minimal',
@@ -84,6 +90,30 @@ describe('codex effort helpers', () => {
       'gpt-5.4-mini-low',
       'gpt-5.4-mini-medium',
       'gpt-5.4-mini-high',
+    ]);
+  });
+
+  it('builds ordered effort variants from explicit model-specific effort sets (GPT-6)', () => {
+    expect(
+      getCodexEffortVariants(
+        'gpt-6-astra',
+        'max',
+        ['fast'],
+        ['low', 'medium', 'high', 'xhigh', 'max']
+      )
+    ).toEqual([
+      'gpt-6-astra',
+      'gpt-6-astra-fast',
+      'gpt-6-astra-low',
+      'gpt-6-astra-low-fast',
+      'gpt-6-astra-medium',
+      'gpt-6-astra-medium-fast',
+      'gpt-6-astra-high',
+      'gpt-6-astra-high-fast',
+      'gpt-6-astra-xhigh',
+      'gpt-6-astra-xhigh-fast',
+      'gpt-6-astra-max',
+      'gpt-6-astra-max-fast',
     ]);
   });
 
@@ -167,7 +197,7 @@ describe('getSelectableCodexEfforts', () => {
     expect(getSelectableCodexEfforts('medium')).toEqual(['minimal', 'low', 'medium']);
   });
 
-  it('returns all efforts for custom models without catalog metadata', () => {
+  it('returns all legacy efforts for custom models without catalog metadata', () => {
     expect(getSelectableCodexEfforts(undefined)).toEqual([
       'minimal',
       'low',

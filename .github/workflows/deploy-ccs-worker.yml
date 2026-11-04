@@ -24,7 +24,7 @@ jobs:
     if: >-
       github.event_name != 'pull_request' ||
       contains(fromJSON('["COLLABORATOR","MEMBER","OWNER"]'), github.event.pull_request.author_association)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     name: Deploy ccs-installer to CloudFlare
 
     steps:

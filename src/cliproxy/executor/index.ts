@@ -146,11 +146,12 @@ export async function execClaudeWithCLIProxy(
   });
 
   const {
-    browserLaunchOverride,
+    browserLaunchOverride: argsBrowserLaunchOverride,
     argsWithoutBrowserFlags,
     parseFailed: browserLaunchParseFailed,
   } = resolveBrowserLaunchFlags(proxyResolution.argsWithoutProxy);
   if (browserLaunchParseFailed) return;
+  const browserLaunchOverride = cfg.browserLaunchOverride ?? argsBrowserLaunchOverride;
 
   const { proxyConfig, useRemoteProxy, localBackend, binaryPath, argsWithoutProxy } =
     await resolveExecutorProxy(proxyResolution, {

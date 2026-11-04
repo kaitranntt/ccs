@@ -3,10 +3,7 @@ import express from 'express';
 import type { Server } from 'node:http';
 import type { QuotaResult } from '../../../src/cliproxy/quota/quota-fetcher';
 import type { ClaudeQuotaResult } from '../../../src/cliproxy/quota/quota-types';
-import {
-  clearQuotaCache,
-  getCachedQuota,
-} from '../../../src/cliproxy/quota/quota-response-cache';
+import { clearQuotaCache, getCachedQuota } from '../../../src/cliproxy/quota/quota-response-cache';
 import {
   createBarPoolAccountQuotaFetcher,
   getCachedBarPoolAccountQuota,
@@ -29,7 +26,26 @@ it('stores normalized Claude quota in the existing Bar cache', async () => {
       fetchCount += 1;
       return {
         success: true,
-        windows: [],
+        windows: [
+          {
+            rateLimitType: 'five_hour',
+            label: '5h usage limit',
+            status: 'allowed',
+            utilization: 0.28,
+            usedPercent: 28,
+            remainingPercent: 72,
+            resetAt: '2026-07-18T16:00:00.000Z',
+          },
+          {
+            rateLimitType: 'seven_day',
+            label: 'Weekly usage limit',
+            status: 'allowed_warning',
+            utilization: 0.55,
+            usedPercent: 55,
+            remainingPercent: 45,
+            resetAt: '2026-07-21T12:00:00.000Z',
+          },
+        ],
         coreUsage: {
           fiveHour: {
             rateLimitType: 'five_hour',
@@ -111,7 +127,10 @@ it('stores normalized Claude quota in the existing Bar cache', async () => {
       cached: true,
     });
     const sharedCache = getCachedQuota<ClaudeQuotaResult>('claude', 'claude@example.com');
-    expect(sharedCache?.windows).toEqual([]);
+    expect(sharedCache?.windows.map((window) => window.rateLimitType)).toEqual([
+      'five_hour',
+      'seven_day',
+    ]);
     expect((sharedCache as ClaudeQuotaResult & Partial<QuotaResult>)?.models).toBeUndefined();
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));

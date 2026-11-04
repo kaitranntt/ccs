@@ -6,6 +6,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'bun:test';
 import * as http from 'http';
+import * as zlib from 'zlib';
 import { ToolSanitizationProxy } from '../tool-sanitization-proxy';
 import { CodexReasoningProxy } from '../../ai-providers/codex-reasoning-proxy';
 
@@ -14,8 +15,13 @@ let mockUpstream: http.Server;
 let mockUpstreamPort: number;
 let lastRequest: { path: string; body: unknown; headers: http.IncomingHttpHeaders } | null = null;
 
-// Track response to send back
-let mockResponse: { status: number; body: unknown; stream?: boolean } = {
+// Track response to send back. `raw` sends exact bytes and headers (e.g. a compressed body).
+let mockResponse: {
+  status: number;
+  body: unknown;
+  stream?: boolean;
+  raw?: { headers: http.OutgoingHttpHeaders; body: Buffer };
+} = {
   status: 200,
   body: { content: [] },
 };
@@ -34,7 +40,10 @@ beforeAll(async () => {
           headers: req.headers,
         };
 
-        if (mockResponse.stream) {
+        if (mockResponse.raw) {
+          res.writeHead(mockResponse.status, mockResponse.raw.headers);
+          res.end(mockResponse.raw.body);
+        } else if (mockResponse.stream) {
           // SSE streaming response
           res.writeHead(mockResponse.status, {
             'Content-Type': 'text/event-stream',
@@ -219,14 +228,46 @@ describe('ToolSanitizationProxy Integration', () => {
         expect(response.ok).toBe(true);
         expect(lastRequest).not.toBeNull();
         expect(lastRequest!.path).toBe('/api/provider/codex/v1/messages');
-        expect((lastRequest!.body as Record<string, unknown>).model).toBe('gpt-5.5');
-        expect(
-          ((lastRequest!.body as Record<string, unknown>).reasoning as Record<string, unknown>)
-            .effort
-        ).toBe('high');
+        expect((lastRequest!.body as Record<string, unknown>).model).toBe('gpt-5.5(high)');
+        expect((lastRequest!.body as Record<string, unknown>).reasoning).toBeUndefined();
       } finally {
         reasoningProxy.stop();
         toolProxy.stop();
+      }
+    });
+    it('normalizes gpt-6.1-sol-none effort to low and gpt-6-sol-none to none in tool sanitization proxy', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      try {
+        await fetch(`http://127.0.0.1:${port}/api/provider/codex/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'gpt-6.1-sol-none' }),
+        });
+        expect((lastRequest!.body as Record<string, unknown>).model).toBe('gpt-6.1-sol(low)');
+        expect((lastRequest!.body as Record<string, unknown>).reasoning).toBeUndefined();
+
+        await fetch(`http://127.0.0.1:${port}/api/provider/codex/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'gpt-6-sol-none' }),
+        });
+        expect((lastRequest!.body as Record<string, unknown>).model).toBe('gpt-6-sol(none)');
+        expect((lastRequest!.body as Record<string, unknown>).reasoning).toBeUndefined();
+
+        await fetch(`http://127.0.0.1:${port}/api/provider/codex/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'gpt-6-luna-none-fast' }),
+        });
+        expect((lastRequest!.body as Record<string, unknown>).model).toBe('gpt-6-luna(none)');
+        expect((lastRequest!.body as Record<string, unknown>).reasoning).toBeUndefined();
+        expect((lastRequest!.body as Record<string, unknown>).service_tier).toBe('priority');
+      } finally {
+        proxy.stop();
       }
     });
 
@@ -367,6 +408,46 @@ describe('ToolSanitizationProxy Integration', () => {
 
         expect(lastRequest).not.toBeNull();
         expect((lastRequest!.body as Record<string, unknown>).model).toBe('kimi-k2');
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    it('forwards input_schema untouched when schema sanitization is disabled', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+        sanitizeSchemas: false,
+      });
+      const port = await proxy.start();
+      // Claude Code-shaped schema using keywords outside Gemini's subset
+      const inputSchema = {
+        $schema: 'https://json-schema.org/draft/2020-12/schema',
+        type: 'object',
+        properties: {
+          action: { const: 'publish' },
+          limit: { type: 'integer', exclusiveMinimum: 0 },
+          files: { type: 'object', propertyNames: { maxLength: 512 } },
+          opts: { allOf: [{ type: 'object' }, { required: ['x'] }] },
+        },
+        additionalProperties: false,
+      };
+
+      try {
+        await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-opus-5-5',
+            tools: [{ name: 'tool__with__duplicate__duplicate', input_schema: inputSchema }],
+          }),
+        });
+
+        const sentTools = (lastRequest!.body as Record<string, unknown>).tools as Array<
+          Record<string, unknown>
+        >;
+        expect(sentTools[0].input_schema).toEqual(inputSchema);
+        // Tool-name sanitization still applies
+        expect(sentTools[0].name).toBe('tool__with__duplicate');
       } finally {
         proxy.stop();
       }
@@ -524,75 +605,37 @@ describe('ToolSanitizationProxy Integration', () => {
         });
 
         const sentBody = lastRequest!.body as Record<string, unknown>;
-        expect(sentBody.model).toBe('gpt-5.5');
-        expect((sentBody.reasoning as Record<string, unknown>).summary).toBe('auto');
-        expect((sentBody.reasoning as Record<string, unknown>).effort).toBe('high');
+        expect(sentBody.model).toBe('gpt-5.5(high)');
+        expect(sentBody.reasoning).toEqual({ summary: 'auto' });
         expect(sentBody.service_tier).toBe('priority');
       } finally {
         proxy.stop();
       }
     });
 
-    it('folds Codex system messages into the first user message before forwarding', async () => {
+    it('forwards Codex system prompt and system messages unchanged for CLIProxy to convert', async () => {
       const proxy = new ToolSanitizationProxy({
         upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
       });
       const port = await proxy.start();
+      const system = [{ type: 'text', text: 'Always be concise.' }];
+      const messages = [
+        { role: 'user', content: [{ type: 'text', text: 'hello' }] },
+        { role: 'system', content: '<total_tokens>1000 tokens left</total_tokens>' },
+        { role: 'assistant', content: 'Hi.' },
+        { role: 'user', content: 'next' },
+      ];
 
       try {
         await fetch(`http://127.0.0.1:${port}/api/provider/codex/v1/messages?beta=true`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'gpt-5.4',
-            system: [{ type: 'text', text: 'Always be concise.' }],
-            messages: [
-              { role: 'system', content: 'Use JSON.' },
-              { role: 'user', content: [{ type: 'text', text: 'hello' }] },
-            ],
-          }),
+          body: JSON.stringify({ model: 'gpt-5.4', system, messages }),
         });
 
         const sentBody = lastRequest!.body as Record<string, unknown>;
-        const sentMessages = sentBody.messages as Array<Record<string, unknown>>;
-
-        expect(sentBody.system).toBeUndefined();
-        expect(sentMessages).toHaveLength(1);
-        expect(sentMessages[0].role).toBe('user');
-        expect(sentMessages[0].content).toEqual([
-          { type: 'text', text: 'Always be concise.\n\nUse JSON.' },
-          { type: 'text', text: 'hello' },
-        ]);
-      } finally {
-        proxy.stop();
-      }
-    });
-
-    it('strips blank Codex system messages before forwarding', async () => {
-      const proxy = new ToolSanitizationProxy({
-        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
-      });
-      const port = await proxy.start();
-
-      try {
-        await fetch(`http://127.0.0.1:${port}/api/provider/codex/v1/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'gpt-5.4',
-            system: '   ',
-            messages: [
-              { role: 'system', content: [{ type: 'text', text: '  ' }] },
-              { role: 'user', content: 'hello' },
-            ],
-          }),
-        });
-
-        const sentBody = lastRequest!.body as Record<string, unknown>;
-        const sentMessages = sentBody.messages as Array<Record<string, unknown>>;
-
-        expect(sentBody.system).toBeUndefined();
-        expect(sentMessages).toEqual([{ role: 'user', content: 'hello' }]);
+        expect(sentBody.system).toEqual(system);
+        expect(sentBody.messages).toEqual(messages);
       } finally {
         proxy.stop();
       }
@@ -1383,6 +1426,261 @@ describe('ToolSanitizationProxy Integration', () => {
         proxy.stop();
         await new Promise<void>((resolve) => upstream.close(() => resolve()));
       }
+    });
+  });
+
+  describe('Content-Encoding', () => {
+    // fetch() would decompress the reply; read the exact bytes the proxy sends instead.
+    function requestRaw(
+      port: number,
+      options: {
+        method?: string;
+        path?: string;
+        body?: unknown;
+        headers?: http.OutgoingHttpHeaders;
+      }
+    ): Promise<{ status: number; headers: http.IncomingHttpHeaders; body: Buffer }> {
+      const payload = options.body === undefined ? undefined : JSON.stringify(options.body);
+      return new Promise((resolve, reject) => {
+        const req = http.request(
+          {
+            hostname: '127.0.0.1',
+            port,
+            path: options.path ?? '/v1/messages',
+            method: options.method ?? 'POST',
+            headers: {
+              ...(payload === undefined ? {} : { 'Content-Type': 'application/json' }),
+              ...options.headers,
+            },
+          },
+          (res) => {
+            const chunks: Buffer[] = [];
+            res.on('data', (chunk: Buffer) => chunks.push(chunk));
+            res.on('end', () =>
+              resolve({
+                status: res.statusCode ?? 0,
+                headers: res.headers,
+                body: Buffer.concat(chunks),
+              })
+            );
+            res.on('error', reject);
+          }
+        );
+        req.on('error', reject);
+        req.end(payload);
+      });
+    }
+
+    const CLIENT_ACCEPT_ENCODING = 'gzip, deflate, br, zstd';
+
+    // No content blocks: unencoded, this would trigger the empty-response safety net.
+    const EMPTY_SSE =
+      'event: message_start\n' +
+      'data: {"type":"message_start","message":{"id":"msg_gz","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null}}\n\n' +
+      'event: message_stop\n' +
+      'data: {"type":"message_stop"}\n\n';
+
+    function gzipSse(text: string) {
+      return {
+        headers: { 'Content-Type': 'text/event-stream', 'Content-Encoding': 'gzip' },
+        body: zlib.gzipSync(text),
+      };
+    }
+
+    it('asks upstream for identity instead of forwarding the client Accept-Encoding', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      try {
+        await requestRaw(port, {
+          body: { tools: [{ name: 'valid_tool' }] },
+          headers: { 'Accept-Encoding': CLIENT_ACCEPT_ENCODING },
+        });
+        expect(lastRequest!.headers['accept-encoding']).toBe('identity');
+
+        await requestRaw(port, {
+          method: 'GET',
+          path: '/v1/models',
+          headers: { 'Accept-Encoding': CLIENT_ACCEPT_ENCODING },
+        });
+        expect(lastRequest!.headers['accept-encoding']).toBe('identity');
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    it('sets identity even when the client sends no Accept-Encoding', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      try {
+        await requestRaw(port, { body: { tools: [{ name: 'valid_tool' }] } });
+        expect(lastRequest!.headers['accept-encoding']).toBe('identity');
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    it('passes a compressed SSE stream through byte-for-byte without a synthetic response', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+      const raw = gzipSse(EMPTY_SSE);
+      mockResponse = { status: 200, body: null, raw };
+
+      try {
+        const response = await requestRaw(port, {
+          body: { stream: true, tools: [{ name: 'valid_tool' }] },
+          headers: { 'Accept-Encoding': CLIENT_ACCEPT_ENCODING },
+        });
+
+        expect(response.status).toBe(200);
+        expect(response.headers['content-encoding']).toBe('gzip');
+        expect(response.body.equals(raw.body)).toBe(true);
+        expect(zlib.gunzipSync(response.body).toString('utf8')).toBe(EMPTY_SSE);
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    it('passes a compressed SSE stream through untouched when tool names were sanitized', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+      const sse =
+        'event: content_block_start\n' +
+        'data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"call_1","name":"foo__bar","input":{}}}\n\n';
+      const raw = gzipSse(sse);
+      mockResponse = { status: 200, body: null, raw };
+
+      try {
+        const response = await requestRaw(port, {
+          body: { stream: true, tools: [{ name: 'foo__bar__bar' }] },
+        });
+
+        expect(response.status).toBe(200);
+        expect(response.headers['content-encoding']).toBe('gzip');
+        expect(response.body.equals(raw.body)).toBe(true);
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    it('passes a compressed buffered JSON response through byte-for-byte', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+      const body = zlib.gzipSync(
+        JSON.stringify({
+          content: [{ type: 'tool_use', id: 'call_1', name: 'foo__bar', input: {} }],
+        })
+      );
+      mockResponse = {
+        status: 200,
+        body: null,
+        raw: { headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' }, body },
+      };
+
+      try {
+        const response = await requestRaw(port, { body: { tools: [{ name: 'foo__bar__bar' }] } });
+
+        expect(response.status).toBe(200);
+        expect(response.headers['content-encoding']).toBe('gzip');
+        expect(response.headers['content-length']).toBe(String(body.length));
+        expect(response.body.equals(body)).toBe(true);
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    it('still restores tool names in an uncompressed SSE stream', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+      mockResponse = {
+        status: 200,
+        stream: true,
+        body: [
+          'event: content_block_start\n' +
+            'data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"call_1","name":"foo__bar","input":{}}}\n\n',
+        ],
+      };
+
+      try {
+        const response = await requestRaw(port, {
+          body: { stream: true, tools: [{ name: 'foo__bar__bar' }] },
+          headers: { 'Accept-Encoding': CLIENT_ACCEPT_ENCODING },
+        });
+
+        expect(response.headers['content-encoding']).toBeUndefined();
+        expect(response.body.toString('utf8')).toContain('"name":"foo__bar__bar"');
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    describe('CodexReasoningProxy', () => {
+      function startCodexProxy() {
+        const proxy = new CodexReasoningProxy({
+          upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+          modelMap: { defaultModel: 'gpt-5.5' },
+          defaultEffort: 'medium',
+        });
+        return { proxy, portPromise: proxy.start() };
+      }
+
+      it('asks upstream for identity instead of forwarding the client Accept-Encoding', async () => {
+        const { proxy, portPromise } = startCodexProxy();
+        const port = await portPromise;
+
+        try {
+          await requestRaw(port, {
+            path: '/api/provider/codex/v1/messages',
+            body: { model: 'gpt-5.5', messages: [{ role: 'user', content: 'hi' }] },
+            headers: { 'Accept-Encoding': CLIENT_ACCEPT_ENCODING },
+          });
+          expect(lastRequest!.headers['accept-encoding']).toBe('identity');
+        } finally {
+          proxy.stop();
+        }
+      });
+
+      it('passes a compressed error response through byte-for-byte', async () => {
+        const { proxy, portPromise } = startCodexProxy();
+        const port = await portPromise;
+        const body = zlib.gzipSync(
+          JSON.stringify({ error: { type: 'invalid_request_error', message: 'bad request' } })
+        );
+        mockResponse = {
+          status: 400,
+          body: null,
+          raw: {
+            headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' },
+            body,
+          },
+        };
+
+        try {
+          const response = await requestRaw(port, {
+            path: '/api/provider/codex/v1/messages',
+            body: { model: 'gpt-5.5', messages: [{ role: 'user', content: 'hi' }] },
+          });
+
+          expect(response.status).toBe(400);
+          expect(response.headers['content-encoding']).toBe('gzip');
+          expect(response.body.equals(body)).toBe(true);
+        } finally {
+          proxy.stop();
+        }
+      });
     });
   });
 });

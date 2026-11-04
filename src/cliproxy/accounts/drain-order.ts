@@ -20,6 +20,11 @@ import {
   buildManagementHeaders,
 } from '../proxy/proxy-target-resolver';
 import { loadDrainOrderConfig } from './registry';
+import {
+  claudePoolClassPriority,
+  effectiveClaudePoolClass,
+  readClaudePoolPolicyState,
+} from './claude-pool-policy-state';
 import type { AccountTier } from './types';
 import type { CLIProxyBackend, CLIProxyProvider } from '../types';
 import {
@@ -546,7 +551,7 @@ export function tieBreakKey(
 }
 
 /** How the effective drain order was derived. */
-export type EffectiveDrainOrderMode = 'manual' | 'tier' | 'file';
+export type EffectiveDrainOrderMode = 'manual' | 'tier' | 'file' | 'quota';
 
 /**
  * Effective drain order as the selector actually sees it: computed from the
@@ -615,6 +620,21 @@ export function resolveEffectiveDrainOrder(
   if (manualValidIds && manualValidIds.length > 0) {
     entries = computeManualDrainOrder(manualValidIds, activeAccounts);
     mode = 'manual';
+  } else if (drainCfg?.mode === 'quota' && provider === 'claude') {
+    const state = readClaudePoolPolicyState();
+    const now = Date.now();
+    entries = activeAccounts.map((account) => {
+      const entry = state?.entries[account.accountId];
+      return {
+        accountId: account.accountId,
+        tokenFile: account.tokenFile,
+        priority: entry ? claudePoolClassPriority(effectiveClaudePoolClass(entry, now)) : 1,
+        tier: account.tier,
+        tierDerived: false,
+        currentPriority: undefined,
+      };
+    });
+    mode = 'quota';
   } else if (drainCfg?.mode === 'tier') {
     entries = computeTierDrainOrder(activeAccounts);
     mode = 'tier';
@@ -729,4 +749,107 @@ export async function fetchProxyAuthCooldowns(): Promise<ProxyAuthCooldown[]> {
   } finally {
     clearTimeout(timeoutId);
   }
+}
+/**
+ * Re-apply the stored drain order for a provider if configured.
+ *
+ * Idempotent: uses applyDrainOrder which reads the on-disk priority first
+ * and skips any write when priority matches target, preventing reload/watcher loops.
+ *
+ * @param provider The CLIProxy provider
+ * @param activeAccounts Active accounts for the provider
+ * @param proxyRunning Whether the proxy is currently running
+ * @returns Result summary or undefined if no stored order configured
+ */
+export async function reapplyDrainOrderForProvider(
+  provider: CLIProxyProvider,
+  activeAccounts: DrainOrderInput[],
+  proxyRunning: boolean
+): Promise<ApplyDrainOrderResult | undefined> {
+  const drainCfg = loadDrainOrderConfig(provider);
+  if (!drainCfg) {
+    return undefined;
+  }
+
+  const effective = resolveEffectiveDrainOrder(provider, activeAccounts);
+  if (effective.mode === 'file' || effective.entries.length === 0) {
+    return undefined;
+  }
+
+  return applyDrainOrder(effective.entries, proxyRunning);
+}
+/**
+ * Re-apply stored drain orders across all configured providers.
+ *
+ * Idempotent: applies each provider's effective drain order only when the
+ * on-disk file priority differs from the target priority. If all priorities
+ * match, zero writes occur and no reload loops are triggered.
+ *
+ * @param registry The current accounts registry
+ * @param proxyRunning Whether the proxy is currently running (defaults to false)
+ * @returns Map of provider to apply result
+ */
+export async function reapplyAllManagedDrainOrders(
+  registry: {
+    providers: Record<
+      string,
+      { accounts: Record<string, { tokenFile: string; paused?: boolean; tier?: AccountTier }> }
+    >;
+  },
+  proxyRunning?: boolean
+): Promise<Record<string, ApplyDrainOrderResult>> {
+  let isProxyRunning = proxyRunning;
+  if (isProxyRunning === undefined) {
+    try {
+      const target = getProxyTarget();
+      // Remote targets: remote drain order writing is out of scope (v1). Refuse direct writes.
+      if (target.isRemote) {
+        return {};
+      }
+
+      const { resolveLifecyclePort } = require('../config/port-manager');
+      const { detectRunningProxy } = require('../proxy/proxy-detector');
+      const status = await detectRunningProxy(resolveLifecyclePort());
+
+      // Ambiguous state: process alive but not verified responding to HTTP.
+      // Refuse rather than risk a direct write being clobbered by MarkResult persist.
+      if (status.running && !status.verified) {
+        return {};
+      }
+
+      isProxyRunning = status.running && status.verified;
+    } catch {
+      isProxyRunning = false;
+    }
+  }
+  const results: Record<string, ApplyDrainOrderResult> = {};
+
+  for (const [providerName, providerAccounts] of Object.entries(registry.providers)) {
+    if (!providerAccounts) continue;
+    const provider = providerName as CLIProxyProvider;
+    const activeAccounts: DrainOrderInput[] = [];
+
+    for (const [accountId, meta] of Object.entries(providerAccounts.accounts)) {
+      if (!meta.paused && meta.tokenFile) {
+        activeAccounts.push({
+          accountId,
+          tokenFile: meta.tokenFile,
+          tier: meta.tier,
+        });
+      }
+    }
+
+    if (activeAccounts.length === 0) continue;
+
+    const res = await reapplyDrainOrderForProvider(
+      provider,
+      activeAccounts,
+      isProxyRunning ?? false
+    );
+    if (res) {
+      results[providerName] = res;
+    }
+  }
+
+  return results;
 }

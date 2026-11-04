@@ -8,6 +8,8 @@ FROM eceasy/cli-proxy-api:latest@sha256:4fa722b9ff83adfbe6e350d433b7dcb754756aa6
 ARG CCS_NPM_VERSION=latest
 
 ENV CCS_CLIPROXY_NO_PLUGIN_ASSET=1
+# CLIProxy must listen on all container interfaces for the published 8317 port to reach it.
+ENV CCS_CLIPROXY_HOST=0.0.0.0
 
 # CCS integrated image: CCS CLI + CLIProxy + supervisord.
 # Design choice (issue #1251 final scope): single-image strategy. The originally-

@@ -34,7 +34,7 @@ jobs:
     # Skip on prerelease release events — only stable vX.Y.Z GitHub releases
     # publish the legacy image. workflow_dispatch always passes through.
     if: ${{ github.event_name != 'release' || !github.event.release.prerelease }}
-    runs-on: [self-hosted, linux, x64, cliproxy]
+    runs-on: ubuntu-latest
 
     permissions:
       contents: read
@@ -165,7 +165,7 @@ jobs:
   # ---------------------------------------------------------------------------
   publish-integrated:
     name: Publish integrated image
-    runs-on: [self-hosted, linux, x64, cliproxy]
+    runs-on: ubuntu-latest
 
     permissions:
       contents: read
@@ -308,7 +308,7 @@ jobs:
     # is not met, preventing the immutable tag from being verified.
     needs: [publish-integrated]
     if: ${{ needs.publish-integrated.outputs.publish == 'true' }}
-    runs-on: [self-hosted, linux, x64, cliproxy]
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout release tag (for test scripts)
@@ -457,7 +457,7 @@ jobs:
     if: |
       needs.publish-integrated.outputs.publish == 'true' &&
       github.event_name == 'workflow_dispatch' && inputs.promote_to_latest == true
-    runs-on: [self-hosted, linux, x64, cliproxy]
+    runs-on: ubuntu-latest
 
     permissions:
       contents: read

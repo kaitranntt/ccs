@@ -10,6 +10,7 @@ import SharedManager, {
   normalizePluginMetadataContent as normalizeSharedManagerPluginMetadataContent,
   normalizePluginMetadataPathString as normalizeSharedManagerPluginMetadataPathString,
 } from '../../src/management/shared-manager';
+import { reconcileLocalMarketplaceRegistry } from '../../src/management/shared-manager/plugin-metadata-normalizer';
 
 describe('SharedManager', () => {
   let tempRoot = '';
@@ -315,6 +316,42 @@ describe('SharedManager', () => {
       expect(
         path.resolve(path.dirname(sharedSettingsPath), fs.readlinkSync(sharedSettingsPath))
       ).toBe(claudeSettingsPath);
+    });
+
+    it('keeps correct instance symlinks in place when relinking', () => {
+      const manager = new SharedManager();
+      const instancePath = instanceDir('work');
+      const names = ['settings.json', 'CLAUDE.md', 'commands', 'skills', 'agents'];
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      fs.mkdirSync(instancePath, { recursive: true });
+      writeJson(path.join(claudeDir(), 'settings.json'), { theme: 'dark' });
+
+      manager.linkSharedDirectories(instancePath);
+      const before = names.map((name) => fs.lstatSync(path.join(instancePath, name)).ino);
+
+      manager.linkSharedDirectories(instancePath);
+      const after = names.map((name) => fs.lstatSync(path.join(instancePath, name)).ino);
+
+      expect(after).toEqual(before);
+      expect(readJson(path.join(instancePath, 'settings.json'))).toEqual({ theme: 'dark' });
+    });
+
+    it('re-points instance symlinks that target the wrong path', () => {
+      const manager = new SharedManager();
+      const instancePath = instanceDir('work');
+      const instanceSettingsPath = path.join(instancePath, 'settings.json');
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      fs.mkdirSync(instancePath, { recursive: true });
+      writeJson(path.join(claudeDir(), 'settings.json'), { theme: 'dark' });
+      fs.symlinkSync(path.join(tempRoot, 'missing.json'), instanceSettingsPath, 'file');
+
+      manager.linkSharedDirectories(instancePath);
+
+      expect(
+        path.resolve(path.dirname(instanceSettingsPath), fs.readlinkSync(instanceSettingsPath))
+      ).toBe(path.join(ccsDir(), 'shared', 'settings.json'));
     });
   });
 
@@ -1031,6 +1068,141 @@ describe('SharedManager', () => {
       });
       expect(reconciled.stale).toBeUndefined();
     });
+    it('preserves directory-source marketplaces when source path exists (issue #1737)', () => {
+      const manager = new SharedManager();
+      const instancePath = instanceDir('work');
+      fs.mkdirSync(instancePath, { recursive: true });
+      manager.linkSharedDirectories(instancePath);
+
+      const localMarketplaceDir = path.join(claudeDir(), 'plugins', 'my-local-marketplace');
+      fs.mkdirSync(localMarketplaceDir, { recursive: true });
+
+      const directoryEntry = {
+        source: { source: 'directory', path: localMarketplaceDir },
+        installLocation: localMarketplaceDir,
+        label: 'My Local Marketplace',
+      };
+
+      writeJson(path.join(instancePath, 'plugins', 'known_marketplaces.json'), {
+        'local-marketplace': directoryEntry,
+      });
+
+      manager.normalizeMarketplaceRegistryPaths(instancePath);
+
+      const reconciled = readJson(
+        path.join(instancePath, 'plugins', 'known_marketplaces.json')
+      ) as Record<string, typeof directoryEntry>;
+      expect(reconciled['local-marketplace']).toEqual(directoryEntry);
+      expect(reconciled['local-marketplace'].installLocation).toBe(localMarketplaceDir);
+      expect(reconciled['local-marketplace'].source.path).toBe(localMarketplaceDir);
+    });
+
+    it('does not overwrite installLocation of directory-source marketplace even if a directory exists at clone location (issue #1737)', () => {
+      const manager = new SharedManager();
+      const instancePath = instanceDir('work');
+      fs.mkdirSync(instancePath, { recursive: true });
+      manager.linkSharedDirectories(instancePath);
+
+      const localMarketplaceDir = path.join(tempRoot, 'local-store');
+      fs.mkdirSync(localMarketplaceDir, { recursive: true });
+
+      // Simulate an empty directory created at clone path plugins/marketplaces/local-store
+      fs.mkdirSync(marketplacePath(claudeDir(), 'local-store'), { recursive: true });
+
+      const directoryEntry = {
+        source: { source: 'directory', path: localMarketplaceDir },
+        installLocation: localMarketplaceDir,
+        label: 'Local Store',
+      };
+
+      writeJson(path.join(instancePath, 'plugins', 'known_marketplaces.json'), {
+        'local-store': directoryEntry,
+      });
+
+      manager.normalizeMarketplaceRegistryPaths(instancePath);
+
+      const reconciled = readJson(
+        path.join(instancePath, 'plugins', 'known_marketplaces.json')
+      ) as Record<string, typeof directoryEntry>;
+      // Must NOT be overwritten with marketplacePath(...)
+      expect(reconciled['local-store'].installLocation).toBe(localMarketplaceDir);
+    });
+
+    it('prunes directory-source marketplaces when their source path does not exist (issue #1737)', () => {
+      const manager = new SharedManager();
+      const instancePath = instanceDir('work');
+      fs.mkdirSync(instancePath, { recursive: true });
+      manager.linkSharedDirectories(instancePath);
+
+      writeJson(path.join(instancePath, 'plugins', 'known_marketplaces.json'), {
+        'missing-local-marketplace': {
+          source: { source: 'directory', path: path.join(tempRoot, 'nonexistent-dir') },
+          installLocation: path.join(tempRoot, 'nonexistent-dir'),
+          label: 'Missing Marketplace',
+        },
+      });
+
+      manager.normalizeMarketplaceRegistryPaths(instancePath);
+
+      const reconciled = readJson(
+        path.join(instancePath, 'plugins', 'known_marketplaces.json')
+      ) as Record<string, unknown>;
+      expect(reconciled['missing-local-marketplace']).toBeUndefined();
+    });
+    it('reconcileLocalMarketplaceRegistry preserves directory-source marketplaces when no clone directories exist', () => {
+      const instancePath = instanceDir('work');
+      fs.mkdirSync(path.join(instancePath, 'plugins'), { recursive: true });
+
+      const localMarketplaceDir = path.join(tempRoot, 'my-offline-pack');
+      fs.mkdirSync(localMarketplaceDir, { recursive: true });
+
+      const directoryEntry = {
+        source: { source: 'directory', path: localMarketplaceDir },
+        installLocation: localMarketplaceDir,
+        label: 'My Offline Pack',
+      };
+
+      const registryPath = path.join(instancePath, 'plugins', 'known_marketplaces.json');
+      writeJson(registryPath, {
+        'offline-pack': directoryEntry,
+      });
+
+      // No clone directories under plugins/marketplaces exist
+      reconcileLocalMarketplaceRegistry(
+        { claudeDir: claudeDir(), instancesDir: ccsDir() },
+        instancePath
+      );
+
+      expect(fs.existsSync(registryPath)).toBe(true);
+      const reconciled = readJson(registryPath) as Record<string, typeof directoryEntry>;
+      expect(reconciled['offline-pack']).toEqual(directoryEntry);
+    });
+
+    it('reconcileLocalMarketplaceRegistry does not resurrect stale directory-source entry as a clone when same-name clone dir exists', () => {
+      const instancePath = instanceDir('work');
+      fs.mkdirSync(path.join(instancePath, 'plugins'), { recursive: true });
+
+      // Create a leftover directory under plugins/marketplaces/stale-pack
+      fs.mkdirSync(marketplacePath(instancePath, 'stale-pack'), { recursive: true });
+
+      const registryPath = path.join(instancePath, 'plugins', 'known_marketplaces.json');
+      writeJson(registryPath, {
+        'stale-pack': {
+          source: { source: 'directory', path: path.join(tempRoot, 'vanished-source') },
+          installLocation: path.join(tempRoot, 'vanished-source'),
+          label: 'Stale Pack',
+        },
+      });
+
+      reconcileLocalMarketplaceRegistry(
+        { claudeDir: claudeDir(), instancesDir: ccsDir() },
+        instancePath
+      );
+
+      const reconciled = readJson(registryPath) as Record<string, unknown>;
+      // The stale directory source must NOT be resurrected using the clone directory
+      expect(reconciled['stale-pack']).toBeUndefined();
+    });
 
     it('does not register transient marketplace directories left behind by interrupted auto-updates', () => {
       // Regression: CCS used to write bare { installLocation } entries for marketplace
@@ -1190,6 +1362,29 @@ describe('SharedManager', () => {
       expect(readMarketplaceLocation(globalRegistryPath)).toBe(marketplacePath(claudeDir()));
       expect(readMarketplaceLocation(instanceRegistryPath)).toBe(marketplacePath(instancePath));
       expect(fs.existsSync(path.join(instancePath, 'plugins', 'marketplaces'))).toBe(true);
+    });
+
+    it('treats .last_inuse_sweep as instance-local and unlinks legacy symlinks (Issue #1756)', () => {
+      const globalPluginsDir = path.join(claudeDir(), 'plugins');
+      fs.mkdirSync(globalPluginsDir, { recursive: true });
+      fs.writeFileSync(path.join(globalPluginsDir, '.last_inuse_sweep'), '2026-10-20T00:00:00.000Z');
+
+      const instancePath = instanceDir('work');
+      const instancePluginsDir = path.join(instancePath, 'plugins');
+      fs.mkdirSync(instancePluginsDir, { recursive: true });
+
+      // Create a legacy symlink pointing to the global sweep file
+      fs.symlinkSync(
+        path.join(globalPluginsDir, '.last_inuse_sweep'),
+        path.join(instancePluginsDir, '.last_inuse_sweep'),
+        'file'
+      );
+
+      const manager = new SharedManager();
+      manager.linkSharedDirectories(instancePath);
+
+      // The legacy symlink must have been removed and not recreated
+      expect(fs.existsSync(path.join(instancePluginsDir, '.last_inuse_sweep'))).toBe(false);
     });
   });
 });

@@ -251,6 +251,13 @@ export function linkSharedDirectories(roots: LinkerRoots, instancePath: string):
 
       const linkPath = path.join(instancePath, item.name);
       const targetPath = path.join(sharedDir, item.name);
+
+      // Re-creating a correct link swaps the file under running Claude Code
+      // sessions, whose settings watcher can drop it and fall back to empty settings.
+      if (symlinkPointsTo(linkPath, targetPath)) {
+        return;
+      }
+
       let adoption: ReturnType<typeof adoptDivergedFileContent> = 'not-claimed';
 
       if (item.type === 'file' && item.divergencePolicy === 'canonical-first') {

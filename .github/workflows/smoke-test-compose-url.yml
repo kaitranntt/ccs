@@ -21,7 +21,7 @@ on:
 jobs:
   smoke-test:
     name: curl + parse (+ optional up/down + network-contract)
-    runs-on: [self-hosted, linux, x64, cliproxy]
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout (for test scripts)

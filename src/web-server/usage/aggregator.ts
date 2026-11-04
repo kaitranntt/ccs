@@ -69,8 +69,30 @@ function getDefaultProjectsDirForAnalytics(): string {
 }
 
 /**
+ * Resolve symlinks so instances sharing one transcript store compare equal.
+ * Uses realpathSync.native for the same reason instance-directory.ts does: it
+ * canonicalizes on-disk casing on case-insensitive filesystems.
+ */
+function resolveProjectsDir(projectsPath: string): string {
+  try {
+    return fs.realpathSync.native(projectsPath);
+  } catch {
+    return projectsPath;
+  }
+}
+
+/**
  * Get list of CCS instance paths that have usage data
  * Only returns instances with existing projects/ directory
+ *
+ * Instances can share one transcript store, either by symlinking
+ * <instance>/projects at a shared context group or at the default config dir.
+ * Each shared store is read once: loading it per instance would multiply every
+ * day's usage by the number of instances pointing at it.
+ *
+ * A shared store cannot be attributed to more than one profile without
+ * reintroducing that multiplication, so it is reported under the first instance
+ * by name; the other instances sharing it report no usage of their own.
  */
 function getInstancePaths(): string[] {
   const instancesDir = getCcsInstancesDir();
@@ -79,10 +101,28 @@ function getInstancePaths(): string[] {
   }
 
   try {
-    return listAccountInstancePaths(instancesDir).filter((instancePath) => {
+    const seenProjectsDirs = new Set([resolveProjectsDir(getDefaultProjectsDirForAnalytics())]);
+
+    // Sorted so the instance that reports a shared store is stable across runs
+    // and platforms; readdir order is not guaranteed.
+    const instancePaths = listAccountInstancePaths(instancesDir).sort((a, b) =>
+      path.basename(a).localeCompare(path.basename(b))
+    );
+
+    return instancePaths.filter((instancePath) => {
       // Only include instances that have a projects directory
       const projectsPath = path.join(instancePath, 'projects');
-      return fs.existsSync(projectsPath);
+      if (!fs.existsSync(projectsPath)) {
+        return false;
+      }
+
+      const resolved = resolveProjectsDir(projectsPath);
+      if (seenProjectsDirs.has(resolved)) {
+        return false;
+      }
+
+      seenProjectsDirs.add(resolved);
+      return true;
     });
   } catch {
     process.stderr.write(String(fail('Failed to read CCS instances directory')) + '\n');

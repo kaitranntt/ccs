@@ -151,6 +151,30 @@ describe('buildProxyChain — tool sanitization: start failure swallowed', () =>
   });
 });
 
+// ── Tool sanitization: schema sanitization only for non-Anthropic targets ────
+
+describe('buildProxyChain — tool sanitization: schema sanitization by provider', () => {
+  const sanitizeSchemasFor = async (overrides: Partial<ProxyChainContext>) => {
+    const { ctor } = makeStubCtor(13001);
+    await buildProxyChain(baseCtx({ ...overrides, _ToolSanitizationProxy: ctor as never }));
+    return (ctor.mock.calls[0][0] as { sanitizeSchemas?: boolean }).sanitizeSchemas;
+  };
+
+  it('disables Gemini schema sanitization for single-provider claude', async () => {
+    expect(await sanitizeSchemasFor({ provider: 'claude' })).toBe(false);
+  });
+
+  it('keeps schema sanitization for composite claude (tiers may route to Gemini)', async () => {
+    expect(
+      await sanitizeSchemasFor({ provider: 'claude', cfg: makeCfg({ isComposite: true }) })
+    ).toBe(true);
+  });
+
+  it('keeps schema sanitization for gemini', async () => {
+    expect(await sanitizeSchemasFor({ provider: 'gemini' })).toBe(true);
+  });
+});
+
 // ── Codex reasoning: started for single-provider codex ───────────────────────
 
 describe('buildProxyChain — codex reasoning: started for single-provider codex', () => {

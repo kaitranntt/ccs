@@ -68,6 +68,9 @@ export function buildDaemonProcessEnv(daemonToken: string): NodeJS.ProcessEnv {
  * Uses 127.0.0.1 instead of localhost for more reliable local connections.
  */
 export async function isDaemonRunning(port: number, daemonToken?: string): Promise<boolean> {
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    return false;
+  }
   return new Promise((resolve) => {
     const req = http.request(
       {
@@ -149,6 +152,11 @@ export async function startDaemon(
       : randomBytes(32).toString('hex');
   const effectiveConfig: CursorDaemonConfig = { ...config, daemon_token: daemonToken };
 
+  // Validate port before probing or interpolation (prevents injection and bad port RangeError)
+  if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535) {
+    return { success: false, error: `Invalid port: ${config.port}` };
+  }
+
   // Check if already running
   if (await isDaemonRunning(effectiveConfig.port, effectiveConfig.daemon_token)) {
     logger.stage('dispatch', 'cursor.daemon.already_running', 'Cursor daemon already running', {
@@ -160,11 +168,6 @@ export async function startDaemon(
       pid: getPidFromFile() ?? undefined,
       daemonToken: effectiveConfig.daemon_token,
     };
-  }
-
-  // Validate port before interpolation (prevents injection)
-  if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535) {
-    return { success: false, error: `Invalid port: ${config.port}` };
   }
 
   const daemonEntry = await resolveDaemonEntrypoint();

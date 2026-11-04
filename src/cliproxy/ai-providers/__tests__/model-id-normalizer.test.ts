@@ -134,6 +134,8 @@ describe('model-id-normalizer', () => {
       );
       expect(normalizeModelIdForProvider('gpt-5.2-codex', 'codex')).toBe('gpt-5.2');
       expect(normalizeModelIdForProvider('gpt-5.1-codex-mini', 'codex')).toBe('gpt-5.4-mini');
+      expect(normalizeModelIdForProvider('gpt-5.1-codex-max', 'codex')).toBe('gpt-5.4');
+      expect(normalizeCodexLegacyModelAliases('gpt-5.1-codex-max')).toBe('gpt-5.4');
       expect(canonicalizeModelIdForProvider('gpt-5-codex-high', 'codex')).toBe('gpt-5.4-high');
       expect(canonicalizeModelIdForProvider('gpt-5-codex-fast-high', 'codex')).toBe(
         'gpt-5.4-high-fast'
@@ -159,6 +161,26 @@ describe('model-id-normalizer', () => {
       expect(parseCodexModelTuningAlias('gpt-5.5-fast-high')).toEqual({
         baseModel: 'gpt-5.5',
         effort: 'high',
+        serviceTier: 'fast',
+      });
+      expect(parseCodexModelTuningAlias('gpt-6-astra-max')).toEqual({
+        baseModel: 'gpt-6-astra',
+        effort: 'max',
+        serviceTier: null,
+      });
+      expect(parseCodexModelTuningAlias('gpt-6-astra-max-fast')).toEqual({
+        baseModel: 'gpt-6-astra',
+        effort: 'max',
+        serviceTier: 'fast',
+      });
+      expect(parseCodexModelTuningAlias('gpt-6-sol-none')).toEqual({
+        baseModel: 'gpt-6-sol',
+        effort: 'none',
+        serviceTier: null,
+      });
+      expect(parseCodexModelTuningAlias('gpt-6-luna-none-fast')).toEqual({
+        baseModel: 'gpt-6-luna',
+        effort: 'none',
         serviceTier: 'fast',
       });
       expect(parseCodexModelTuningAlias('gpt-5.5[1m]')).toBeNull();

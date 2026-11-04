@@ -9,6 +9,7 @@ export type AccountTier = 'free' | 'pro' | 'ultra' | 'unknown';
 
 export interface AccountRow {
   id: string;
+  nickname?: string;
   email: string;
   tokenFile: string;
   provider: string;

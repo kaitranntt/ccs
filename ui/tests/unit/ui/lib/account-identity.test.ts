@@ -4,9 +4,34 @@ import {
   formatAccountDisplayName,
   formatAccountVariantLabel,
   getAccountIdentityPresentation,
+  getAccountDisplayLabels,
 } from '@/lib/account-identity';
 
 describe('account identity presentation', () => {
+  it('uses nicknames as primary labels and keeps identity secondary', () => {
+    expect(getAccountDisplayLabels('opaque-id', 'user@example.com', undefined, '  Work  ')).toEqual(
+      {
+        primary: 'Work',
+        secondary: 'user@example.com · opaque-id',
+      }
+    );
+    expect(
+      formatAccountDisplayName('user@example.com#free', 'user@example.com', undefined, 'Personal')
+    ).toBe('Personal (user@example.com (Free))');
+  });
+
+  it.each([undefined, '', '   '])(
+    'falls back from an empty nickname (%s) to email or ID',
+    (nickname) => {
+      expect(getAccountDisplayLabels('opaque-id', 'user@example.com', undefined, nickname)).toEqual(
+        { primary: 'user@example.com' }
+      );
+      expect(getAccountDisplayLabels('opaque-id', undefined, undefined, nickname)).toEqual({
+        primary: 'opaque-id',
+      });
+    }
+  );
+
   it('formats duplicate-email team accounts as business workspace labels', () => {
     const presentation = getAccountIdentityPresentation(
       'kaidu.kd@gmail.com#04a0f049-team',

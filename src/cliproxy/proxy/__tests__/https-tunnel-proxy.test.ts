@@ -277,35 +277,41 @@ describe('HttpsTunnelProxy', () => {
     it('should handle client disconnect (premature close)', async () => {
       // Test that tunnel handles client-side aborts gracefully
       // No need for mock - just test tunnel's resilience to client errors
-      tunnel = new HttpsTunnelProxy({
+      const testTunnel = new HttpsTunnelProxy({
         remoteHost: 'example.com',
         timeoutMs: 10000,
       });
 
-      const port = await tunnel.start();
+      const port = await testTunnel.start();
 
-      // Make request and immediately abort
-      const req = http.request({
-        hostname: '127.0.0.1',
-        port,
-        path: '/v1/messages',
-        method: 'POST',
-      });
+      try {
+        // Make request and immediately abort
+        const req = http.request({
+          hostname: '127.0.0.1',
+          port,
+          path: '/v1/messages',
+          method: 'POST',
+        });
+        req.on('error', () => {
+          // Client abort emits ECONNRESET, which is expected
+        });
 
-      req.write('{}');
-      req.end();
+        req.write('{}');
+        req.end();
 
-      // Abort after a short delay to trigger premature close
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      req.destroy();
+        // Abort after a short delay to trigger premature close
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        req.destroy();
 
-      // Give time for error handling
-      await new Promise((resolve) => setTimeout(resolve, 100));
+        // Give time for error handling
+        await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Tunnel should still be operational
-      expect(tunnel.getPort()).toBe(port);
+        // Tunnel should still be operational
+        expect(testTunnel.getPort()).toBe(port);
+      } finally {
+        testTunnel.stop();
+      }
     });
-
     it('should handle client request error', async () => {
       tunnel = new HttpsTunnelProxy({
         remoteHost: 'example.com',

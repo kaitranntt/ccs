@@ -98,6 +98,7 @@ export function useAuthMonitorData(): AuthMonitorData {
 
         const row: AccountRow = {
           id: groupedAccount.id,
+          nickname: groupedAccount.nickname,
           email: groupedAccount.email,
           tokenFile: groupedAccount.tokenFile,
           provider: status.provider,
