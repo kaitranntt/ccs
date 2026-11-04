@@ -104,5 +104,5 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 | `src/cliproxy/proxy/tool-sanitization-proxy.ts` | 988 |
 | `src/cliproxy/quota/quota-manager.ts` | 946 |
 | `src/web-server/services/codex-dashboard-service.ts` | 940 |
-| `src/cliproxy/accounts/registry.ts` | 926 |
+| `src/cliproxy/accounts/registry.ts` | 927 |
 
