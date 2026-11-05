@@ -60,6 +60,21 @@ Local target traffic uses a provider-compatible endpoint and an internal
 credential. CLIProxy owns upstream OAuth token use and request translation
 according to the selected provider.
 
+### Claude Code context hints on Codex routes
+
+The [model catalog](../../src/cliproxy/model-catalog.ts) declares both the
+backend context window and whether a model supports Claude Code's `[1m]`
+launch hint. A numeric `contextWindow` alone does not enable `--1m`.
+GPT-6.1 Sol supports the explicit `ccs codex --1m` opt-in; smaller Codex
+models remain subject to their own catalog capability checks.
+
+The [launch environment builder](../../src/cliproxy/executor/env-resolver.ts)
+must keep `[1m]` on the model passed to Claude Code, including when the
+Codex reasoning proxy is unavailable and effort aliases are normalized for
+direct CLIProxy routing. The hint describes the harness context window;
+it is not an upstream model name. Without the opt-in, the standard 200K
+launch window remains in effect for GPT-6.1 Sol.
+
 ## Remote CLIProxy
 
 Remote mode delegates proxy lifecycle and stored authentication to another

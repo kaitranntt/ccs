@@ -1,7 +1,7 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2667,
+    "totalOccurrences": 2670,
     "filesAffected": 282,
     "hotpathOccurrences": 1220,
     "hotpathFilesAffected": 163,
@@ -767,7 +767,7 @@
         },
         {
           "file": "src/cliproxy/model-catalog.ts",
-          "loc": 1001
+          "loc": 1002
         },
         {
           "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",

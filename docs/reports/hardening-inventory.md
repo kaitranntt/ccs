@@ -6,7 +6,7 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 
 | Metric | Value |
 |---|---:|
-| Sync fs occurrences (all) | 2667 |
+| Sync fs occurrences (all) | 2670 |
 | Sync fs files affected (all) | 282 |
 | Sync fs occurrences (runtime hotpaths) | 1220 |
 | Sync fs files affected (runtime hotpaths) | 163 |
@@ -100,7 +100,7 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 | `src/cliproxy/auth/oauth-process.ts` | 1048 |
 | `src/web-server/routes/settings-routes.ts` | 1042 |
 | `src/commands/cliproxy/variant-subcommand.ts` | 1003 |
-| `src/cliproxy/model-catalog.ts` | 1001 |
+| `src/cliproxy/model-catalog.ts` | 1002 |
 | `src/cliproxy/proxy/tool-sanitization-proxy.ts` | 988 |
 | `src/cliproxy/quota/quota-manager.ts` | 946 |
 | `src/web-server/services/codex-dashboard-service.ts` | 940 |
