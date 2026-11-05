@@ -213,6 +213,7 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
         tier: 'pro',
         description: 'Latest frontier agentic coding model (1.05M context, 128K output).',
         contextWindow: 1050000,
+        extendedContext: true,
         thinking: {
           type: 'levels',
           levels: ['low', 'medium', 'high', 'xhigh', 'max'],

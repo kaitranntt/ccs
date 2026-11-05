@@ -119,15 +119,18 @@ const CODEX_EFFORT_SUFFIX_REGEX = /^(.*)-(none|minimal|low|medium|high|xhigh|max
 const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
 
 function normalizeCodexModelForDirectUpstream(model: string): string {
+  // This is still a Claude Code launch model, not an upstream request model.
+  // Keep its context hint while converting effort aliases for direct routing.
+  const extendedContextSuffix = model.trim().match(EXTENDED_CONTEXT_SUFFIX_REGEX)?.[0] ?? '';
   const withoutExtendedContext = model.trim().replace(EXTENDED_CONTEXT_SUFFIX_REGEX, '').trim();
   if (!withoutExtendedContext) return withoutExtendedContext;
 
   const effortMatch = withoutExtendedContext.match(CODEX_EFFORT_SUFFIX_REGEX);
   if (!effortMatch?.[1] || !effortMatch[2]) {
-    return withoutExtendedContext;
+    return `${withoutExtendedContext}${extendedContextSuffix}`;
   }
 
-  return `${effortMatch[1].trim()}(${effortMatch[2].toLowerCase()})`;
+  return `${effortMatch[1].trim()}(${effortMatch[2].toLowerCase()})${extendedContextSuffix}`;
 }
 
 function normalizeCodexEnvForDirectUpstream(envVars: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
