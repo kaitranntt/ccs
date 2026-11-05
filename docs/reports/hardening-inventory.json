@@ -581,9 +581,9 @@
       "targetRatio": 0.4
     },
     "loggerCoverage": {
-      "filesWithCreateLogger": 69,
+      "filesWithCreateLogger": 68,
       "totalSourceFiles": 781,
-      "coverageRatio": 0.0883,
+      "coverageRatio": 0.0871,
       "subdomainsWithZeroCreateLogger": [
         "api",
         "bin",
@@ -722,7 +722,7 @@
       ]
     },
     "largeFiles": {
-      "countOver400": 97,
+      "countOver400": 96,
       "countOver600": 44,
       "topOver400": [
         {
