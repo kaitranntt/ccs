@@ -258,6 +258,165 @@ describe('InstanceManager MCP sync', () => {
     expect(fs.statSync(instanceClaudeJson).mode & 0o777).toBe(0o640);
   });
 
+  /** Seed only temporary config files; exercise the production MCP sync entry point. */
+  function seedPublication(instanceBytes = '{"existing":true,"authSentinel":"keep"}\n') {
+    fs.writeFileSync(
+      path.join(tempRoot, '.claude.json'),
+      JSON.stringify({ mcpServers: { globalOnly: { command: 'global-cmd' } } })
+    );
+    const manager = new InstanceManager();
+    const instancePath = manager.getInstancePath('publication');
+    fs.mkdirSync(instancePath, { recursive: true });
+    const configPath = path.join(instancePath, '.claude.json');
+    fs.writeFileSync(configPath, instanceBytes, { mode: 0o640 });
+    fs.chmodSync(configPath, 0o640);
+    return { manager, instancePath, configPath, instanceBytes };
+  }
+
+  it('publishes via rename while readers retain the previous complete config', () => {
+    const { manager, instancePath, configPath, instanceBytes } = seedPublication();
+    const originalWrite = fs.writeFileSync;
+    const originalRename = fs.renameSync;
+    const directWrites: unknown[] = [];
+    let publications = 0;
+    spyOn(fs, 'writeFileSync').mockImplementation((target, data, options) => {
+      if (target === configPath) directWrites.push(target);
+      return originalWrite(target, data, options);
+    });
+    spyOn(fs, 'renameSync').mockImplementation((source, destination) => {
+      if (destination === configPath) {
+        publications++;
+        expect(path.dirname(String(source))).toBe(instancePath);
+        expect(fs.readFileSync(configPath, 'utf8')).toBe(instanceBytes);
+        expect(JSON.parse(fs.readFileSync(source, 'utf8')).authSentinel).toBe('keep');
+        expect(fs.statSync(source).mode & 0o777).toBe(0o640);
+      }
+      return originalRename(source, destination);
+    });
+
+    expect(manager.syncMcpServers(instancePath)).toBe(true);
+    expect(directWrites).toEqual([]);
+    expect(publications).toBe(1);
+    expect(readJson(configPath)).toEqual({
+      existing: true,
+      authSentinel: 'keep',
+      mcpServers: { globalOnly: { command: 'global-cmd' } },
+    });
+  });
+
+  for (const bytes of ['{"unfinished":', 'null', '[]', '"scalar"', '42']) {
+    it(`does not replace an existing invalid object config: ${bytes}`, () => {
+      const { manager, instancePath, configPath } = seedPublication(bytes);
+      spyOn(console, 'warn').mockImplementation(() => {});
+      expect(manager.syncMcpServers(instancePath)).toBe(false);
+      expect(fs.readFileSync(configPath, 'utf8')).toBe(bytes);
+    });
+  }
+
+  for (const existing of [true, false]) {
+    it(`preserves destination after a partial write failure (existing=${existing})`, () => {
+      const { manager, instancePath, configPath, instanceBytes } = seedPublication();
+      if (!existing) fs.unlinkSync(configPath);
+      spyOn(console, 'warn').mockImplementation(() => {});
+      const originalWrite = fs.writeFileSync;
+      let failed = false;
+      spyOn(fs, 'writeFileSync').mockImplementation((target, data, options) => {
+        // The failpoint writes partial bytes to the REAL writer's chosen destination.
+        // A safe writer corrupts only its temp; the old implementation corrupts config.
+        if (
+          !failed &&
+          (typeof target === 'number' || String(target).includes('.tmp-') || target === configPath)
+        ) {
+          failed = true;
+          originalWrite(target, '{"partial":', options);
+          throw Object.assign(new Error('injected partial write'), { code: 'EIO' });
+        }
+        return originalWrite(target, data, options);
+      });
+      expect(manager.syncMcpServers(instancePath)).toBe(false);
+      expect(failed).toBe(true);
+      if (existing) expect(fs.readFileSync(configPath, 'utf8')).toBe(instanceBytes);
+      else expect(fs.existsSync(configPath)).toBe(false);
+      expect(fs.readdirSync(instancePath).filter((entry) => entry.includes('.tmp-'))).toEqual([]);
+    });
+  }
+
+  for (const code of ['EXDEV', 'EPERM', 'EEXIST', 'EBUSY']) {
+    it(`never falls back to the live config when rename fails with ${code}`, () => {
+      const { manager, instancePath, configPath, instanceBytes } = seedPublication();
+      spyOn(console, 'warn').mockImplementation(() => {});
+      const originalRename = fs.renameSync;
+      spyOn(fs, 'renameSync').mockImplementation((source, destination) => {
+        if (destination === configPath) throw Object.assign(new Error(code), { code });
+        return originalRename(source, destination);
+      });
+      expect(manager.syncMcpServers(instancePath)).toBe(false);
+      expect(fs.readFileSync(configPath, 'utf8')).toBe(instanceBytes);
+      expect(fs.statSync(configPath).mode & 0o777).toBe(0o640);
+      expect(fs.readdirSync(instancePath).filter((entry) => entry.includes('.tmp-'))).toEqual([]);
+    });
+  }
+
+  it('preserves config when setting staged file permissions fails', () => {
+    const { manager, instancePath, configPath, instanceBytes } = seedPublication();
+    spyOn(console, 'warn').mockImplementation(() => {});
+    spyOn(fs, 'fchmodSync').mockImplementation(() => {
+      throw Object.assign(new Error('injected chmod failure'), { code: 'EPERM' });
+    });
+    expect(manager.syncMcpServers(instancePath)).toBe(false);
+    expect(fs.readFileSync(configPath, 'utf8')).toBe(instanceBytes);
+    expect(fs.readdirSync(instancePath).filter((entry) => entry.includes('.tmp-'))).toEqual([]);
+  });
+
+  it('serializes cooperating subprocess writers and rereads the first publication', async () => {
+    const { instancePath, configPath } = seedPublication();
+    const worker = path.join(__dirname, 'instance-manager-mcp-sync-worker.ts');
+    const start = (role: string) =>
+      Bun.spawn([process.execPath, worker, instancePath, role], {
+        env: { ...process.env, HOME: tempRoot, CCS_HOME: tempRoot },
+        stdin: 'pipe',
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+    const first = start('first');
+    const firstReader = first.stdout.getReader();
+    let second: ReturnType<typeof start> | undefined;
+    try {
+      expect(new TextDecoder().decode((await firstReader.read()).value)).toContain('read-first');
+      second = start('second');
+      const secondReader = second.stdout.getReader();
+      expect(new TextDecoder().decode((await secondReader.read()).value)).toContain('contended');
+      first.stdin.write('x');
+      first.stdin.end();
+      expect(await first.exited).toBe(0);
+      second.stdin.write('x');
+      second.stdin.end();
+      expect(await second.exited).toBe(0);
+      expect(readJson(configPath)).toMatchObject({
+        first: true,
+        second: true,
+        authSentinel: 'keep',
+      });
+    } finally {
+      first.kill();
+      second?.kill();
+      await first.exited;
+      if (second) await second.exited;
+    }
+  }, 10000);
+
+  it('releases its config lock after a failed publication', () => {
+    const { manager, instancePath } = seedPublication();
+    spyOn(console, 'warn').mockImplementation(() => {});
+    const rename = fs.renameSync;
+    const renameSpy = spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw Object.assign(new Error('injected failure'), { code: 'EPERM' });
+    });
+    expect(manager.syncMcpServers(instancePath)).toBe(false);
+    renameSpy.mockImplementation(rename);
+    expect(manager.syncMcpServers(instancePath)).toBe(true);
+  });
+
   it('logs warning when global MCP sync fails', () => {
     fs.writeFileSync(path.join(tempRoot, '.claude.json'), '{invalid-json', 'utf8');
     const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
