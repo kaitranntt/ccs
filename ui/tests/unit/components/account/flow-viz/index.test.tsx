@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, userEvent } from '@tests/setup/test-utils';
 import { AccountFlowViz } from '@/components/account-flow-viz';
 import type { ProviderData } from '@/components/account/flow-viz/types';
+import type { RecentRequest } from '@/hooks/use-cliproxy-stats';
 
 vi.mock(import('react-i18next'), async (importOriginal) => {
   const actual = await importOriginal();
@@ -77,6 +78,19 @@ vi.mock('@/components/account/flow-viz/path-utils', () => ({
   calculateBezierPaths: () => [],
 }));
 
+const recentRequests: RecentRequest[] = [
+  ...Array.from({ length: 4 }, (_, index) => ({
+    accountKey: 'codex:paused-account',
+    timestamp: `2026-03-26T10:0${index}:00.000Z`,
+    failed: false,
+  })),
+  ...Array.from({ length: 3 }, (_, index) => ({
+    accountKey: 'codex:active@company.com',
+    timestamp: `2026-03-26T09:0${index}:00.000Z`,
+    failed: index === 0,
+  })),
+];
+
 const providerData: ProviderData = {
   provider: 'codex',
   displayName: 'OpenAI Codex',
@@ -116,7 +130,7 @@ describe('AccountFlowViz paused account visibility', () => {
   });
 
   it('hides and restores paused accounts from the provider detail visualization', async () => {
-    render(<AccountFlowViz providerData={providerData} />);
+    render(<AccountFlowViz providerData={providerData} recentRequests={recentRequests} />);
 
     expect(screen.getByRole('button', { name: 'Show Details' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Hide Paused (1)' })).toBeInTheDocument();
@@ -158,7 +172,7 @@ describe('AccountFlowViz paused account visibility', () => {
         : null
     );
 
-    render(<AccountFlowViz providerData={providerData} />);
+    render(<AccountFlowViz providerData={providerData} recentRequests={recentRequests} />);
 
     expect(screen.getByRole('button', { name: 'Reset layout' })).toBeInTheDocument();
 

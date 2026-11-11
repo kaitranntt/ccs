@@ -9,7 +9,7 @@ import { PROVIDER_COLORS } from '@/lib/provider-config';
 import { usePrivacy } from '@/contexts/privacy-context';
 
 import type { AccountFlowVizProps } from './types';
-import { MAX_TIMELINE_EVENTS, generateConnectionEvents } from './utils';
+import { MAX_TIMELINE_EVENTS, buildConnectionEvents } from './utils';
 import { calculateBezierPaths } from './path-utils';
 import { splitAccountsIntoZones, getProviderSizeClass } from './zone-utils';
 import { useDragPositions, useContainerExpansion, usePulseAnimation } from './hooks';
@@ -26,6 +26,7 @@ const SHOW_PAUSED_STORAGE_KEY = 'ccs-auth-monitor-show-paused';
 
 export function AccountFlowViz({
   providerData,
+  recentRequests,
   onBack,
   onPauseToggle,
   isPausingAccount,
@@ -99,8 +100,8 @@ export function AccountFlowViz({
   const pulsingAccounts = usePulseAnimation(visibleAccounts);
 
   const connectionEvents = useMemo(
-    () => generateConnectionEvents(visibleAccounts).slice(0, MAX_TIMELINE_EVENTS),
-    [visibleAccounts]
+    () => buildConnectionEvents(recentRequests, visibleAccounts).slice(0, MAX_TIMELINE_EVENTS),
+    [recentRequests, visibleAccounts]
   );
 
   useEffect(() => {

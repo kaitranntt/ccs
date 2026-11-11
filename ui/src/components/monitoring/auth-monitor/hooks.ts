@@ -4,7 +4,11 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useCliproxyAuth } from '@/hooks/use-cliproxy';
-import { useCliproxyStats, useCliproxyStatus } from '@/hooks/use-cliproxy-stats';
+import {
+  useCliproxyStats,
+  useCliproxyStatus,
+  type RecentRequest,
+} from '@/hooks/use-cliproxy-stats';
 import { buildAccountVisualGroups } from '@/lib/account-visual-groups';
 import { getProviderDisplayName } from '@/lib/provider-config';
 import type { AuthStatus, OAuthAccount } from '@/lib/api-client';
@@ -17,6 +21,7 @@ export interface AuthMonitorData {
   totalFailure: number;
   totalRequests: number;
   providerStats: ProviderStats[];
+  recentRequests: RecentRequest[];
   overallSuccessRate: number;
   isLoading: boolean;
   error: Error | null;
@@ -154,6 +159,7 @@ export function useAuthMonitorData(): AuthMonitorData {
     totalFailure,
     totalRequests,
     providerStats,
+    recentRequests: activeStatsData?.recentRequests ?? [],
     overallSuccessRate,
     isLoading: isLoading || (statsEnabled && statsLoading),
     error: error ?? null,

@@ -2,6 +2,8 @@
  * Utility functions for Account Flow Visualization
  */
 
+import type { RecentRequest } from '@/hooks/use-cliproxy-stats';
+import { buildQualifiedAccountStatsKey } from '@/lib/cliproxy-account-stats';
 import type { AccountData, ConnectionEvent } from './types';
 
 // Maximum events to display in the Connection Timeline to prevent performance issues
@@ -40,62 +42,34 @@ export function formatTimelineTime(date: Date): string {
   return `${Math.floor(diffHours / 24)}d`;
 }
 
-/** Generate connection events from real account data */
-export function generateConnectionEvents(accounts: AccountData[]): ConnectionEvent[] {
-  const events: ConnectionEvent[] = [];
-
-  // Use a shared base time so events from all accounts interleave in the timeline.
-  // Without this, accounts with more recent lastUsedAt dominate the sorted output.
-  const now = Date.now();
-  const latestLastUsedAt = accounts.reduce<number | undefined>((latest, account) => {
-    if (!account.lastUsedAt) return latest;
-
-    const timestamp = new Date(account.lastUsedAt).getTime();
-    if (Number.isNaN(timestamp)) return latest;
-
-    return latest === undefined ? timestamp : Math.max(latest, timestamp);
-  }, undefined);
-  const sharedBaseTime = latestLastUsedAt ?? now;
-
-  accounts.forEach((account) => {
-    const lastUsed = new Date(sharedBaseTime);
-
-    // Helper to add events
-    const addEvents = (count: number, status: 'success' | 'failed') => {
-      for (let i = 0; i < count; i++) {
-        // Simulate timestamps:
-        // - Distribute events over a 24-hour window relative to lastUsed
-        // - Add random jitter so events from different accounts mix
-        const timeOffset = Math.floor(Math.random() * 24 * 60 * 60 * 1000 * (i / (count || 1)));
-        const timestamp = new Date(lastUsed.getTime() - timeOffset);
-
-        // Add small random jitter (+/-5 mins) to avoid exact overlaps
-        const jitter = Math.floor((Math.random() - 0.5) * 10 * 60 * 1000);
-        timestamp.setTime(timestamp.getTime() + jitter);
-
-        // Sanity check: don't go into the future relative to "now"
-        const now = new Date();
-        if (timestamp > now) timestamp.setTime(now.getTime());
-
-        events.push({
-          id: `${account.id}-${status}-${i}`,
-          timestamp,
-          accountEmail: account.email,
-          accountNickname: account.nickname,
-          status,
-          // Simulate realistic latency (success: 50-200ms, failed: 200-5000ms)
-          latencyMs:
-            status === 'success'
-              ? 50 + Math.floor(Math.random() * 150)
-              : 200 + Math.floor(Math.random() * 4800),
-        });
+/** Map proxied requests (newest first) onto the account cards that served them */
+export function buildConnectionEvents(
+  requests: RecentRequest[],
+  accounts: AccountData[]
+): ConnectionEvent[] {
+  const accountByKey = new Map<string, AccountData>();
+  for (const account of accounts) {
+    for (const identity of [account, ...(account.variants ?? [])]) {
+      for (const source of [identity.id, identity.email]) {
+        if (source.trim()) {
+          accountByKey.set(buildQualifiedAccountStatsKey(account.provider, source), account);
+        }
       }
-    };
+    }
+  }
 
-    addEvents(account.successCount, 'success');
-    addEvents(account.failureCount, 'failed');
+  return requests.flatMap((request, index) => {
+    const account = accountByKey.get(request.accountKey);
+    if (!account) return [];
+
+    return [
+      {
+        id: `${request.accountKey}-${request.timestamp}-${index}`,
+        timestamp: new Date(request.timestamp),
+        accountEmail: account.email,
+        accountNickname: account.nickname,
+        status: request.failed ? 'failed' : 'success',
+      },
+    ];
   });
-
-  // Sort by timestamp descending (most recent first)
-  return events.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 }
