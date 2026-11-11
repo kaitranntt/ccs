@@ -158,6 +158,7 @@ const authMonitorData: AuthMonitorData = {
   totalFailure: 7,
   totalRequests: 42,
   providerStats,
+  recentRequests: [],
   overallSuccessRate: 83,
   isLoading: false,
   error: null,

@@ -3,6 +3,7 @@
  */
 
 import type { AccountVisualVariant } from '@/lib/account-visual-groups';
+import type { RecentRequest } from '@/hooks/use-cliproxy-stats';
 
 /** Account tier for subscription level */
 export type AccountTier = 'free' | 'pro' | 'ultra' | 'unknown';
@@ -42,6 +43,7 @@ export interface ProviderData {
 
 export interface AccountFlowVizProps {
   providerData: ProviderData;
+  recentRequests: RecentRequest[];
   onBack?: () => void;
   onPauseToggle?: (accountIds: string[], paused: boolean) => void;
   isPausingAccount?: boolean;
@@ -53,7 +55,6 @@ export interface ConnectionEvent {
   accountEmail: string;
   accountNickname?: string;
   status: 'success' | 'failed' | 'pending';
-  latencyMs?: number;
 }
 
 /** Zone type for account card placement */

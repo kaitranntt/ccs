@@ -582,4 +582,61 @@ describe('buildCliproxyStatsFromUsageResponse', () => {
     });
     expect(stats.accountStats['codex:user@example.com']).toBeUndefined();
   });
+
+  it('returns the latest requests of each provider, newest first', () => {
+    const codexDetails = Array.from({ length: 101 }, (_, index) =>
+      createDetail({
+        source: index % 2 === 0 ? 'even@example.com' : 'odd@example.com',
+        auth_index: 0,
+        timestamp: new Date(Date.UTC(2026, 2, 26, 10, index)).toISOString(),
+        failed: index === 100,
+      })
+    );
+    const usage: CliproxyUsageApiResponse = {
+      usage: {
+        total_requests: 103,
+        apis: {
+          codex: {
+            total_requests: 102,
+            models: {
+              'gpt-5': {
+                total_requests: 102,
+                details: [
+                  ...codexDetails,
+                  createDetail({ source: 'even@example.com', timestamp: 'not-a-date' }),
+                ],
+              },
+            },
+          },
+          gemini: {
+            total_requests: 1,
+            models: {
+              'gemini-2.5-pro': {
+                total_requests: 1,
+                details: [createDetail({ source: 'gemini@example.com' })],
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const stats = buildCliproxyStatsFromUsageResponse(usage);
+    const codexRequests = stats.recentRequests.filter((request) =>
+      request.accountKey.startsWith('codex:')
+    );
+
+    expect(codexRequests).toHaveLength(100);
+    expect(codexRequests[0]).toEqual({
+      accountKey: 'codex:even@example.com',
+      timestamp: codexDetails[100].timestamp,
+      failed: true,
+    });
+    expect(codexRequests.at(-1)?.timestamp).toBe(codexDetails[1].timestamp);
+    expect(stats.recentRequests).toContainEqual({
+      accountKey: 'gemini:gemini@example.com',
+      timestamp: '2025-03-26T10:00:00.000Z',
+      failed: false,
+    });
+  });
 });
