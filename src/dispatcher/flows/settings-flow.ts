@@ -95,6 +95,8 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
     process.stderr.write(`${warn(browserAttachRuntime.warning)}\n`);
   }
   const webSearchLaunch = resolveWebSearchLaunchState(profileInfo.name);
+  const withWebSearchArgs = (args: string[]) =>
+    appendThirdPartyWebSearchToolArgs(args, webSearchLaunch.enabled, webSearchLaunch.native);
   if (resolvedTarget === 'claude') {
     ensureWebSearchMcpForLaunch(webSearchLaunch.config);
     if (browserRuntimeEnv) {
@@ -397,20 +399,8 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
       : createOpenAICompatLaunchSettings(expandedSettingsPath, settings, { durable: true });
 
     const launchArgs = isSubcommand
-      ? appendThirdPartyWebSearchToolArgs(
-          subcommandArgs,
-          webSearchLaunch.enabled,
-          webSearchLaunch.native
-        )
-      : [
-          '--settings',
-          launchSettings.settingsPath,
-          ...appendThirdPartyWebSearchToolArgs(
-            browserArgs,
-            webSearchLaunch.enabled,
-            webSearchLaunch.native
-          ),
-        ];
+      ? withWebSearchArgs(subcommandArgs)
+      : ['--settings', launchSettings.settingsPath, ...withWebSearchArgs(browserArgs)];
     const traceEnv = createWebSearchTraceContext({
       launcher: 'ccs.settings-profile.proxy',
       args: launchArgs,
@@ -428,20 +418,8 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
   const isSubcommand = isClaudeSubcommandInvocation(browserArgs);
   const subcommandArgs = isSubcommand ? stripClaudeSubcommandSessionArgs(browserArgs) : browserArgs;
   const launchArgs = isSubcommand
-    ? appendThirdPartyWebSearchToolArgs(
-        subcommandArgs,
-        webSearchLaunch.enabled,
-        webSearchLaunch.native
-      )
-    : [
-        '--settings',
-        expandedSettingsPath,
-        ...appendThirdPartyWebSearchToolArgs(
-          browserArgs,
-          webSearchLaunch.enabled,
-          webSearchLaunch.native
-        ),
-      ];
+    ? withWebSearchArgs(subcommandArgs)
+    : ['--settings', expandedSettingsPath, ...withWebSearchArgs(browserArgs)];
   const traceEnv = createWebSearchTraceContext({
     launcher: 'ccs.settings-profile',
     args: launchArgs,
