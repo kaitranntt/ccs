@@ -146,6 +146,13 @@ export interface WebSearchConfig {
   enabled?: boolean;
   /** Individual provider configurations */
   providers?: WebSearchProvidersConfig;
+  /**
+   * Profiles whose backend serves Claude Code's native WebSearch
+   * (the `web_search` server tool). CCS leaves native WebSearch available for
+   * these launches instead of replacing it with the managed MCP tool.
+   * Names match the launched profile, CLIProxy provider, or variant (default: []).
+   */
+  native_profiles?: string[];
   // Legacy fields (deprecated, kept for backwards compatibility)
   /** @deprecated Use providers.gemini instead */
   gemini?: {

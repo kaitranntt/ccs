@@ -315,6 +315,27 @@ describe('websearch routes', () => {
     });
   });
 
+  it('persists native_profiles and keeps them when other settings change', async () => {
+    const saved = await putWebsearch({ native_profiles: [' gateway ', 'gateway', 'codex'] });
+    expect(saved.status).toBe(200);
+    expect((await saved.json()).websearch.native_profiles).toEqual(['gateway', 'codex']);
+
+    const updated = await putWebsearch({ enabled: false });
+    expect(updated.status).toBe(200);
+    expect((await updated.json()).websearch.native_profiles).toEqual(['gateway', 'codex']);
+    expect(loadOrCreateUnifiedConfig().websearch?.native_profiles).toEqual(['gateway', 'codex']);
+  });
+
+  it('rejects non-array native_profiles values', async () => {
+    for (const nativeProfiles of ['gateway', [1], null]) {
+      const response = await putWebsearch({ native_profiles: nativeProfiles });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        error: 'Invalid value for native_profiles. Must be an array of profile names.',
+      });
+    }
+  });
+
   it('normalizes searxng endpoint-style urls to the instance base URL', async () => {
     const response = await putWebsearch({
       providers: {

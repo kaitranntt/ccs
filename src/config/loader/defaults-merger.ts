@@ -32,7 +32,10 @@ import { canonicalizeBrowserConfig, normalizeSessionAffinityTtl } from './normal
 import { normalizeContinuityConfig, normalizeOfficialChannelsConfig } from './normalizers';
 import type { LegacyDiscordChannelsConfig } from './normalizers';
 import { canonicalizeImageAnalysisConfig } from '../../utils/hooks/image-analysis-backend-resolver';
-import { normalizeSearxngBaseUrl } from '../../utils/websearch/types';
+import {
+  normalizeNativeWebSearchProfiles,
+  normalizeSearxngBaseUrl,
+} from '../../utils/websearch/types';
 
 // ---------------------------------------------------------------------------
 // mergeWithDefaults
@@ -186,6 +189,7 @@ export function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfi
           timeout: partial.websearch?.providers?.grok?.timeout ?? 55,
         },
       },
+      native_profiles: normalizeNativeWebSearchProfiles(partial.websearch?.native_profiles),
       // Legacy fields (keep for backwards compatibility during read)
       gemini: partial.websearch?.gemini,
     },

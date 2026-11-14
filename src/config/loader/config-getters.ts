@@ -34,7 +34,10 @@ import type {
 import { canonicalizeBrowserConfig } from './normalizers';
 import { canonicalizeImageAnalysisConfig } from '../../utils/hooks/image-analysis-backend-resolver';
 import { normalizeOfficialChannelIds } from '../../channels/official-channels-ids';
-import { normalizeSearxngBaseUrl } from '../../utils/websearch/types';
+import {
+  normalizeNativeWebSearchProfiles,
+  normalizeSearxngBaseUrl,
+} from '../../utils/websearch/types';
 
 // ---------------------------------------------------------------------------
 // Circular-import safety: loadOrCreateUnifiedConfig lives in
@@ -95,6 +98,7 @@ export function getWebSearchConfig(): {
     opencode?: { enabled?: boolean; model?: string; timeout?: number };
     grok?: { enabled?: boolean; timeout?: number };
   };
+  native_profiles: string[];
   // Legacy fields (deprecated)
   gemini?: { enabled?: boolean; timeout?: number };
 } {
@@ -178,6 +182,7 @@ export function getWebSearchConfig(): {
       opencode: opencodeConfig,
       grok: grokConfig,
     },
+    native_profiles: normalizeNativeWebSearchProfiles(config.websearch?.native_profiles),
     // Legacy field for backwards compatibility
     gemini: config.websearch?.gemini,
   };

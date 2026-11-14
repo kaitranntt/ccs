@@ -174,6 +174,7 @@ export function createEmptyUnifiedConfig(): UnifiedConfig {
           timeout: 55,
         },
       },
+      native_profiles: [],
     },
     global_env: {
       enabled: true,
