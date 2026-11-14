@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import * as fs from 'fs';
+import getPort from 'get-port';
 import * as os from 'os';
 import * as path from 'path';
 
@@ -17,11 +18,22 @@ function writeAuthFile(authDir: string, fileName: string, content: Record<string
   fs.writeFileSync(path.join(authDir, fileName), JSON.stringify(content, null, 2), 'utf8');
 }
 
+async function writeFreePortConfig(ccsDir: string): Promise<void> {
+  const port = await getPort();
+  fs.mkdirSync(ccsDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(ccsDir, 'config.yaml'),
+    `version: 14\ncliproxy_server:\n  local:\n    port: ${port}\n`,
+    'utf8'
+  );
+}
+
 describe('End-to-end automatic drain order re-apply after discovery/sync and re-auth', () => {
   it('automatically restores effective priorities through discoverExistingAccounts alone, preserving tiers and idempotency', async () => {
     const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-auto-drain-e2e-'));
     try {
       await runWithScopedCcsHome(tempHome, async () => {
+        await writeFreePortConfig(path.join(tempHome, '.ccs'));
         const authDir = path.join(tempHome, '.ccs', 'cliproxy', 'auth');
         fs.mkdirSync(authDir, { recursive: true, mode: 0o700 });
 
@@ -96,6 +108,7 @@ describe('End-to-end automatic drain order re-apply after discovery/sync and re-
     const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-auto-drain-tier-reauth-'));
     try {
       await runWithScopedCcsHome(tempHome, async () => {
+        await writeFreePortConfig(path.join(tempHome, '.ccs'));
         const authDir = path.join(tempHome, '.ccs', 'cliproxy', 'auth');
         fs.mkdirSync(authDir, { recursive: true, mode: 0o700 });
 
