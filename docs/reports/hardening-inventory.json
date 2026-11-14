@@ -743,7 +743,7 @@
         },
         {
           "file": "src/web-server/model-pricing.ts",
-          "loc": 1268
+          "loc": 1280
         },
         {
           "file": "src/cursor/cursor-executor.ts",
