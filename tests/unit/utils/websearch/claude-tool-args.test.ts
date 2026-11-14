@@ -19,6 +19,11 @@ describe('appendThirdPartyWebSearchToolArgs', () => {
     ]);
   });
 
+  it('leaves args untouched for profiles that keep native WebSearch', () => {
+    expect(appendThirdPartyWebSearchToolArgs(['smoke'], true, true)).toEqual(['smoke']);
+    expect(appendThirdPartyWebSearchToolArgs(['smoke'], false, true)).toEqual(['smoke']);
+  });
+
   it('does not append duplicate suppression or steering prompt when both are already present', () => {
     expect(
       appendEnabledWebSearchArgs([

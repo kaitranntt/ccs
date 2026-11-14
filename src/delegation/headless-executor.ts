@@ -159,7 +159,7 @@ export class HeadlessExecutor {
       );
     }
 
-    const webSearchLaunch = resolveWebSearchLaunchState();
+    const webSearchLaunch = resolveWebSearchLaunchState(profile);
     ensureWebSearchMcpForLaunch(webSearchLaunch.config);
     const imageAnalysisMcpReady = ensureImageAnalysisMcpOrThrow();
     syncWebSearchMcpToConfigDir(inheritedClaudeConfigDir);
@@ -384,7 +384,8 @@ export class HeadlessExecutor {
       : args;
     const launchArgs = appendThirdPartyWebSearchToolArgs(
       imageAnalysisArgs,
-      webSearchLaunch.enabled
+      webSearchLaunch.enabled,
+      webSearchLaunch.native
     );
     const traceEnv = createWebSearchTraceContext({
       launcher: 'delegation.headless-executor',

@@ -137,11 +137,14 @@ function ensureWebSearchSteeringPrompt(args: string[]): string[] {
 
 export function appendThirdPartyWebSearchToolArgs(
   args: string[],
-  webSearchEnabled = true
+  webSearchEnabled = true,
+  nativeWebSearch = false
 ): string[] {
   // Claude subcommands (agents, doctor, mcp, ...) reject top-level session flags
   // like `--append-system-prompt` and `--disallowedTools`. Issue #1218.
   if (isClaudeSubcommandInvocation(args)) return args;
+  // Profiles in `websearch.native_profiles` use a backend that serves native WebSearch.
+  if (nativeWebSearch) return args;
 
   const disallowedArgs = ensureDisallowedNativeWebSearchTool(args);
   return webSearchEnabled ? ensureWebSearchSteeringPrompt(disallowedArgs) : disallowedArgs;

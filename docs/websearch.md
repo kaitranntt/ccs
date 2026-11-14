@@ -8,8 +8,9 @@ behavior.
 
 For a third-party Claude launch, CCS:
 
-1. suppresses the native `WebSearch` tool because the third-party backend cannot
-   execute it;
+1. suppresses the native `WebSearch` tool because most third-party backends
+   cannot execute it (see [Native WebSearch profiles](#native-websearch-profiles)
+   for the opt-out);
 2. when WebSearch is enabled, adds a short steering prompt that prefers the CCS
    MCP `WebSearch` tool;
 3. when WebSearch is enabled, installs the managed MCP server and adds the
@@ -24,6 +25,32 @@ profiles; the model can use ordinary network or shell tools when allowed.
 
 Claude subcommands that reject session flags are passed through without
 WebSearch argument injection.
+
+### Native WebSearch profiles
+
+Some third-party backends do serve the native tool. Claude Code runs
+`WebSearch` as a separate request that uses the small/fast model
+(`ANTHROPIC_DEFAULT_HAIKU_MODEL`) and carries only the `web_search_20250305`
+server tool, so any backend that executes that server tool works. Examples:
+CLIProxy translates it to OpenAI `web_search` for Codex, and some
+Anthropic-compatible gateways run it with their own search.
+
+List those profiles in `websearch.native_profiles`. The name is the launched
+settings profile, CLIProxy provider, or CLIProxy variant. For a listed profile
+CCS skips steps 1–3 above: native `WebSearch` stays available, no steering
+prompt is added, and the managed MCP runtime is not required for the launch.
+
+```yaml
+websearch:
+  native_profiles:
+    - my-gateway   # settings profile whose backend serves web_search
+    - codex        # CLIProxy translates web_search for Codex
+```
+
+Search runs on whichever backend serves the small/fast model. A profile routed
+through CLIProxy can therefore point `ANTHROPIC_DEFAULT_HAIKU_MODEL` at a Codex
+model so that searches use the Codex subscription while the main model stays on
+another upstream.
 
 Implementation sources:
 
@@ -79,7 +106,8 @@ section in the unified CCS configuration:
 
 The runtime schema supports Antigravity through `providers.agy`; the current
 dashboard editor does not expose that provider, so configure it in
-`config.yaml`.
+`config.yaml`. The same applies to `native_profiles`; the dashboard save route
+keeps the stored list.
 
 ```yaml
 websearch:
@@ -116,6 +144,7 @@ websearch:
     grok:
       enabled: false
       timeout: 55
+  native_profiles: []
 ```
 
 The schema is

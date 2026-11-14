@@ -134,11 +134,19 @@ export async function launchClaude(context: ClaudeLaunchContext): Promise<ChildP
     ? appendBrowserToolArgs(imageAnalysisArgs)
     : imageAnalysisArgs;
   const launchArgs = isSubcommand
-    ? appendThirdPartyWebSearchToolArgs(browserArgs, webSearchLaunch.enabled)
+    ? appendThirdPartyWebSearchToolArgs(
+        browserArgs,
+        webSearchLaunch.enabled,
+        webSearchLaunch.native
+      )
     : [
         '--settings',
         settingsPath,
-        ...appendThirdPartyWebSearchToolArgs(browserArgs, webSearchLaunch.enabled),
+        ...appendThirdPartyWebSearchToolArgs(
+          browserArgs,
+          webSearchLaunch.enabled,
+          webSearchLaunch.native
+        ),
       ];
 
   // Inject web search trace context into env
