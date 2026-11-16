@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>#1819 CLIProxy update evidence</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; color: #1f2328; background: #fff; }
+  h1 { font-size: 1.4rem; } h2 { font-size: 1.1rem; margin-top: 2rem; }
+  img { max-width: 100%; border: 1px solid #d0d7de; border-radius: 6px; }
+  pre { background: #f6f8fa; padding: 12px; border-radius: 6px; overflow-x: auto; }
+  .pass { color: #1a7f37; font-weight: 600; } .fail { color: #cf222e; font-weight: 600; }
+  table { border-collapse: collapse; } td, th { border: 1px solid #d0d7de; padding: 6px 10px; text-align: left; }
+</style>
+</head>
+<body>
+<h1>#1819: dashboard CLIProxy update keeps the proxy running during download</h1>
+<p>Hybrid evidence: proxy uptime measured during a real install, installer log order, and the update badge's new pending state. Captured locally against CLIProxy Plus 8.0.53-0 &rarr; 8.0.56-0 on macOS arm64.</p>
+
+<h2>1. Proxy downtime during an update</h2>
+<table>
+  <tr><th></th><th>Before (8.11.1)</th><th>After (this branch)</th></tr>
+  <tr><td>Proxy state during the ~30s download</td><td class="fail">stopped the whole time</td><td class="pass">running</td></tr>
+  <tr><td>Downtime</td><td class="fail">~31s (21:04:53 &rarr; 21:05:24)</td><td class="pass">~1s (swap + restart only)</td></tr>
+  <tr><td>Download fails</td><td class="fail">proxy already stopped</td><td class="pass">proxy untouched</td></tr>
+</table>
+<pre>Before: proxy-status polled every 2s after clicking the badge
+21:05:03 {"running":false}   ... 10 samples ...   21:05:22 {"running":false}
+21:05:24 {"running":true, ...}
+
+After: proxy-status polled every 1s during the badge install
+  17 x 21:16:07.. 8.0.53-0 "running":true      &lt;- downloading, proxy still serving
+   1 x 21:16:25   8.0.56-0 "running":false     &lt;- swap
+   1 x 21:16:26   8.0.56-0 "running":true</pre>
+
+<h2>2. Installer log order</h2>
+<pre>Before                                       After
+[i] Stopping running CLIProxy before update  [i] Downloading CLIProxy Plus v8.0.56-0...
+[i] Downloading CLIProxy Plus v8.0.56-0...   [cliproxy] Extracted: cli-proxy-api-plus -> .cliproxy-install-*/
+[cliproxy] Extracted: ...                    [i] Stopping running CLIProxy before update...
+[OK] CLIProxy Plus ready                     [OK] CLIProxy Plus ready</pre>
+
+<h2>3. Update badge</h2>
+<p>Before clicking: the badge offers the update.</p>
+<img src="01-badge-before-click.png" alt="Update badge before click">
+<p>While installing: spinner, <code>aria-busy</code>, "Updating..." tooltip, repeat clicks ignored. The status dot stays green because the proxy is still running.</p>
+<img src="02-badge-updating-proxy-running.png" alt="Update badge spinning while proxy keeps running">
+<p>After: the widget shows v8.0.56-0 and the badge is gone.</p>
+<img src="03-after-update.png" alt="Widget after update">
+
+<h2>4. Tests</h2>
+<pre><span class="pass">binary-manager-install.test.ts    10 pass</span>  (2 new; both fail on the old ordering)
+<span class="pass">binary-installer-atomic.test.ts   11 pass</span>  (2 new)
+<span class="pass">cliproxy-dashboard-install-service 6 pass</span>
+<span class="pass">ui validate (typecheck, lint, format) pass</span></pre>
+</body>
+</html>
