@@ -12,7 +12,10 @@ import {
   WEBSEARCH_API_KEY_PROVIDERS,
   type WebSearchApiKeyProviderId,
 } from '../../utils/websearch/provider-secrets';
-import { normalizeSearxngBaseUrl } from '../../utils/websearch/types';
+import {
+  normalizeNativeWebSearchProfiles,
+  normalizeSearxngBaseUrl,
+} from '../../utils/websearch/types';
 import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
 import { getWebSearchConfig, mutateConfig } from '../../config/config-loader-facade';
 
@@ -75,11 +78,26 @@ router.put('/', (req: Request, res: Response): void => {
     return;
   }
 
-  const { enabled, providers, apiKeys } = req.body as WebSearchDashboardPayload;
+  const {
+    enabled,
+    providers,
+    apiKeys,
+    native_profiles: nativeProfiles,
+  } = req.body as WebSearchDashboardPayload;
 
   // Validate enabled
   if (enabled !== undefined && typeof enabled !== 'boolean') {
     res.status(400).json({ error: 'Invalid value for enabled. Must be a boolean.' });
+    return;
+  }
+
+  if (
+    nativeProfiles !== undefined &&
+    (!Array.isArray(nativeProfiles) || nativeProfiles.some((name) => typeof name !== 'string'))
+  ) {
+    res
+      .status(400)
+      .json({ error: 'Invalid value for native_profiles. Must be an array of profile names.' });
     return;
   }
 
@@ -240,6 +258,9 @@ router.put('/', (req: Request, res: Response): void => {
               },
             }
           : config.websearch?.providers,
+        native_profiles: normalizeNativeWebSearchProfiles(
+          nativeProfiles ?? config.websearch?.native_profiles
+        ),
       };
 
       if (apiKeys) {

@@ -45,4 +45,37 @@ describe('WebSearch launch state', () => {
     expect(args).toContain('WebSearch');
     expect(args).not.toContain('--append-system-prompt');
   });
+
+  it('keeps native WebSearch only for profiles listed in native_profiles', () => {
+    fs.writeFileSync(
+      configPath,
+      [
+        'version: 12',
+        'websearch:',
+        '  enabled: true',
+        '  native_profiles:',
+        '    - " gateway "',
+        '    - gateway',
+        '    - ""',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+
+    const native = resolveWebSearchLaunchState('gateway');
+    expect(native.config.native_profiles).toEqual(['gateway']);
+    expect(native.native).toBe(true);
+    expect(native.enabled).toBe(false);
+    expect(native.hookEnv.CCS_WEBSEARCH_SKIP).toBe('1');
+    expect(appendThirdPartyWebSearchToolArgs(['smoke'], native.enabled, native.native)).toEqual([
+      'smoke',
+    ]);
+
+    const managed = resolveWebSearchLaunchState('other');
+    expect(managed.native).toBe(false);
+    expect(managed.enabled).toBe(true);
+    expect(
+      appendThirdPartyWebSearchToolArgs(['smoke'], managed.enabled, managed.native)
+    ).toContain('--disallowedTools');
+  });
 });

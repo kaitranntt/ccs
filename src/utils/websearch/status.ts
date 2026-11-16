@@ -393,8 +393,14 @@ export function getWebSearchReadiness(
  * Display WebSearch status (single line, equilibrium UX).
  */
 export function displayWebSearchStatus(
-  wsConfig: WebSearchConfigSnapshot = getWebSearchConfig()
+  wsConfig: WebSearchConfigSnapshot = getWebSearchConfig(),
+  nativeWebSearch = false
 ): void {
+  if (nativeWebSearch) {
+    console.error(info('WebSearch: native (served by this profile backend)'));
+    return;
+  }
+
   const status = getWebSearchReadiness(wsConfig);
 
   switch (status.readiness) {

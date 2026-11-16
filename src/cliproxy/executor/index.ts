@@ -277,9 +277,9 @@ export async function execClaudeWithCLIProxy(
   await handleImport(authCtx);
 
   // Setup first-class CCS WebSearch runtime for non-strict user launches.
-  const webSearchLaunch = resolveWebSearchLaunchState();
+  const webSearchLaunch = resolveWebSearchLaunchState(cfg.profileName || provider);
   ensureWebSearchMcpForLaunch(webSearchLaunch.config);
-  displayWebSearchStatus(webSearchLaunch.config);
+  displayWebSearchStatus(webSearchLaunch.config, webSearchLaunch.native);
 
   // 3. Ensure OAuth completed (if provider requires it)
   const remoteAuthToken = proxyConfig.authToken?.trim();
