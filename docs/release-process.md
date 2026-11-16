@@ -45,6 +45,22 @@ publishes npm `@latest`, creates the stable Git tag and GitHub release, and
 pushes the generated release commit to `main`. Do not bump versions or create
 release tags manually.
 
+## npm authentication
+
+Both npm lanes publish with
+[npm trusted publishing](https://docs.npmjs.com/trusted-publishers) (GitHub
+OIDC). There is no npm token secret. `@kaitranntt/ccs` on npmjs.com has two
+trusted publishers for `kaitranntt/ccs`: `release.yml` and `dev-release.yml`,
+both allowed to run `npm publish`.
+
+- Each job needs `id-token: write` and npm >= 11.5.1. `dev-release.yml`
+  upgrades npm before `scripts/dev-release.sh` runs `npm publish`;
+  `release.yml` uses the npm bundled with `@semantic-release/npm`.
+- Renaming either workflow file breaks publishing until the matching trusted
+  publisher is recreated on npmjs.com.
+- A new trusted publisher must complete a publish within 2 days or it expires.
+  Delete and recreate an expired one before the next release on that lane.
+
 ## Docker publication and promotion
 
 The supported integrated image is `ghcr.io/kaitranntt/ccs`.

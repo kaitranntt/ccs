@@ -339,24 +339,16 @@ export async function installCliproxyVersion(
 ): Promise<void> {
   const configuredBackend = backend ?? getConfiguredOrDefaultBackend();
   const effectiveBackend = resolveLocalBackend(configuredBackend, { notifyOnPlus: true });
-  const manager =
-    deps.createManager?.(
-      { version, verbose, forceVersion: true, replaceExisting: true },
-      effectiveBackend
-    ) ??
-    new BinaryManager(
-      { version, verbose, forceVersion: true, replaceExisting: true },
-      effectiveBackend
-    );
   const stopProxyFn = deps.stopProxyFn ?? stopProxy;
   const waitForPortFreeFn = deps.waitForPortFreeFn ?? waitForPortFree;
   const formatInfo = deps.formatInfo ?? info;
   const formatWarn = deps.formatWarn ?? warn;
   const withLifecycleLock = deps.withInstallLifecycleLockFn ?? withCliproxyInstallLifecycleLock;
 
-  await withLifecycleLock(effectiveBackend, async () => {
-    // Always attempt a best-effort stop first so we also catch untracked proxies
-    // that are running without a session lock.
+  // Stop the proxy only once the new binary is downloaded and staged, so it keeps
+  // serving during the download and stays up if the download fails. The stop is
+  // best-effort and also catches untracked proxies running without a session lock.
+  const stopRunningProxy = async (): Promise<void> => {
     if (verbose) console.log(formatInfo('Stopping running CLIProxy before update...'));
     const result = await stopProxyFn();
     if (result.stopped) {
@@ -368,7 +360,20 @@ export async function installCliproxyVersion(
     } else if (verbose && result.error && result.error !== 'No active CLIProxy session found') {
       console.log(formatWarn(`Could not stop proxy: ${result.error}`));
     }
+  };
 
+  const managerConfig: Partial<BinaryManagerConfig> = {
+    version,
+    verbose,
+    forceVersion: true,
+    replaceExisting: true,
+    beforeReplace: stopRunningProxy,
+  };
+  const manager =
+    deps.createManager?.(managerConfig, effectiveBackend) ??
+    new BinaryManager(managerConfig, effectiveBackend);
+
+  await withLifecycleLock(effectiveBackend, async () => {
     await manager.ensureBinary();
 
     if (verbose) {
