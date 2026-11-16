@@ -1,7 +1,7 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2668,
+    "totalOccurrences": 2674,
     "filesAffected": 283,
     "hotpathOccurrences": 1221,
     "hotpathFilesAffected": 164,
@@ -231,7 +231,7 @@
       },
       {
         "file": "src/cliproxy/binary/__tests__/binary-installer-atomic.test.ts",
-        "count": 41,
+        "count": 47,
         "calls": [
           "existsSync",
           "mkdirSync",

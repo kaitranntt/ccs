@@ -149,13 +149,14 @@ describe('installCliproxyVersion', () => {
 
     await binaryManager.installCliproxyVersion('6.7.1', false, 'plus', {
       withInstallLifecycleLockFn: async (_backend, operation) => operation(),
-      createManager: () => ({
+      createManager: (config: { beforeReplace?: () => Promise<void> }) => ({
         isBinaryInstalled: () => false,
         deleteBinary: () => {
           calls.deleteBinary += 1;
         },
         ensureBinary: async () => {
           calls.ensureBinary += 1;
+          await config.beforeReplace?.();
           return '/tmp/ccs-bin/plus/cliproxy';
         },
       }),
@@ -220,10 +221,13 @@ describe('installCliproxyVersion', () => {
 
     await binaryManager.installCliproxyVersion('6.7.1', false, 'plus', {
       withInstallLifecycleLockFn: async (_backend, operation) => operation(),
-      createManager: () => ({
+      createManager: (config: { beforeReplace?: () => Promise<void> }) => ({
         isBinaryInstalled: () => false,
         deleteBinary: () => undefined,
-        ensureBinary: async () => '/tmp/ccs-bin/plus/cliproxy',
+        ensureBinary: async () => {
+          await config.beforeReplace?.();
+          return '/tmp/ccs-bin/plus/cliproxy';
+        },
       }),
       stopProxyFn: async () => ({ stopped: true, port: 8317 }),
       waitForPortFreeFn: async (port: number) => {
@@ -236,6 +240,72 @@ describe('installCliproxyVersion', () => {
     });
 
     expect(waitedPort).toBe(8317);
+  });
+
+  it('keeps the proxy running until the new binary is staged, then stops it before the swap', async () => {
+    const events: string[] = [];
+
+    const binaryManager = await import(
+      `../../binary-manager?binary-manager-stop-after-download=${Date.now()}`
+    );
+
+    await binaryManager.installCliproxyVersion('8.0.56-0', false, 'plus', {
+      withInstallLifecycleLockFn: async (_backend, operation) => operation(),
+      createManager: (config: { beforeReplace?: () => Promise<void> }) => ({
+        isBinaryInstalled: () => true,
+        deleteBinary: () => undefined,
+        ensureBinary: async () => {
+          events.push('download');
+          await config.beforeReplace?.();
+          events.push('swap');
+          return '/tmp/ccs-bin/plus/cli-proxy-api-plus';
+        },
+      }),
+      stopProxyFn: async () => {
+        events.push('stop');
+        return { stopped: true, port: 8317 };
+      },
+      waitForPortFreeFn: async () => {
+        events.push('port-free');
+        return true;
+      },
+      formatInfo: (message: string) => message,
+      formatWarn: (message: string) => message,
+      getInstalledVersion: () => '7.2.127-3',
+    });
+
+    expect(events).toEqual(['download', 'stop', 'port-free', 'swap']);
+  });
+
+  it('leaves the running proxy alone when the download fails', async () => {
+    let stopCalls = 0;
+
+    const binaryManager = await import(
+      `../../binary-manager?binary-manager-download-fails=${Date.now()}`
+    );
+
+    await expect(
+      binaryManager.installCliproxyVersion('8.0.56-0', false, 'plus', {
+        withInstallLifecycleLockFn: async (_backend, operation) => operation(),
+        createManager: () => ({
+          isBinaryInstalled: () => true,
+          deleteBinary: () => undefined,
+          ensureBinary: async () => {
+            throw new Error('Download failed after retries');
+          },
+        }),
+        stopProxyFn: async () => {
+          stopCalls += 1;
+          return { stopped: true, port: 8317 };
+        },
+        waitForPortFreeFn: async () => true,
+        formatInfo: (message: string) => message,
+        formatWarn: (message: string) => message,
+        getInstalledVersion: () => '7.2.127-3',
+      })
+    ).rejects.toThrow('Download failed after retries');
+
+    expect(stopCalls).toBe(0);
   });
 
   it('fails fast when runtime startup forbids installing a missing binary', async () => {

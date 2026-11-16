@@ -457,6 +457,7 @@ const resources = {
         installAnyway: 'Install Anyway',
         clickToDowngrade: 'Click to downgrade',
         clickToUpdate: 'Click to update',
+        updatingVersion: 'Updating... the proxy keeps running until the new binary is ready',
       },
       syncStatusCard: {
         profileSync: 'Profile Sync',
@@ -3257,6 +3258,7 @@ const resources = {
         installAnyway: 'Instalar Mesmo Assim',
         clickToDowngrade: 'Clique para fazer downgrade',
         clickToUpdate: 'Clique para atualizar',
+        updatingVersion: 'Atualizando... o proxy continua ativo até o novo binário ficar pronto',
       },
       syncStatusCard: {
         profileSync: 'Sincronização de Perfil',
@@ -6086,6 +6088,7 @@ const resources = {
         installAnyway: '仍要安装',
         clickToDowngrade: '点击降级',
         clickToUpdate: '点击更新',
+        updatingVersion: '更新中... 新二进制文件就绪前代理会保持运行',
       },
       syncStatusCard: {
         profileSync: '配置同步',
@@ -8768,6 +8771,7 @@ const resources = {
         installAnyway: 'Vẫn cài đặt',
         clickToDowngrade: 'Bấm để hạ cấp',
         clickToUpdate: 'Bấm để cập nhật',
+        updatingVersion: 'Đang cập nhật... proxy vẫn chạy cho đến khi bản mới sẵn sàng',
       },
       syncStatusCard: {
         profileSync: 'Đồng bộ hồ sơ',
@@ -11551,6 +11555,7 @@ const resources = {
         installAnyway: 'このままインストール',
         clickToDowngrade: 'クリックしてダウングレード',
         clickToUpdate: 'クリックして更新',
+        updatingVersion: '更新中... 新しいバイナリの準備ができるまでプロキシは動作を続けます',
       },
       syncStatusCard: {
         profileSync: 'プロファイル同期',
@@ -14359,6 +14364,7 @@ const resources = {
         installAnyway: '그래도 설치',
         clickToDowngrade: '다운그레이드하려면 클릭',
         clickToUpdate: '업데이트하려면 클릭',
+        updatingVersion: '업데이트 중... 새 바이너리가 준비될 때까지 프록시는 계속 실행됩니다',
       },
       syncStatusCard: {
         profileSync: '프로필 동기화',

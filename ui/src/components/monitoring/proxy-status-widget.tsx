@@ -510,16 +510,25 @@ export function ProxyStatusWidget() {
                   'text-[10px] h-4 px-1.5 gap-0.5 cursor-pointer transition-colors',
                   isUnstable
                     ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50'
-                    : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50'
+                    : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50',
+                  installVersion.isPending && 'cursor-wait opacity-80'
                 )}
-                onClick={() => void handleInstallVersion(targetVersion)}
+                aria-busy={installVersion.isPending}
+                onClick={() => {
+                  if (installVersion.isPending) return;
+                  void handleInstallVersion(targetVersion);
+                }}
                 title={
-                  isUnstable
-                    ? t('proxyStatusWidget.clickToDowngrade')
-                    : t('proxyStatusWidget.clickToUpdate')
+                  installVersion.isPending
+                    ? t('proxyStatusWidget.updatingVersion')
+                    : isUnstable
+                      ? t('proxyStatusWidget.clickToDowngrade')
+                      : t('proxyStatusWidget.clickToUpdate')
                 }
               >
-                {isUnstable ? (
+                {installVersion.isPending ? (
+                  <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                ) : isUnstable ? (
                   <ArrowDown className="w-2.5 h-2.5" />
                 ) : (
                   <ArrowUp className="w-2.5 h-2.5" />
