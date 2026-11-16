@@ -33,7 +33,9 @@ const {
 const { setGlobalConfigDir } = require('../../../dist/utils/config-manager');
 
 describe('Session Tracker', function () {
-  const testPort = 18317;
+  // Derive the fixed test port from the process id so parallel test files in
+  // isolated Bun processes do not collide on a shared hard-coded port.
+  const testPort = 18000 + (process.pid % 1500);
   let sessionLockPath;
   let cliproxyDir;
 
