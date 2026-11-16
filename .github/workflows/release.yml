@@ -59,8 +59,8 @@ jobs:
           # version bump + CHANGELOG commits directly to main.
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # npm auth uses trusted publishing (OIDC via id-token: write);
+          # @semantic-release/npm bundles npm >= 11.5.1, so no npm token secret.
         run: |
           auth_header=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')
           echo "::add-mask::${auth_header}"
