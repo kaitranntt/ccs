@@ -112,6 +112,10 @@ export async function downloadAndInstall(
     }
 
     fs.writeFileSync(stagedVersion, config.version, 'utf8');
+    if (config.beforeReplace) {
+      spinner.update(`Replacing ${backendLabel} binary`);
+      await config.beforeReplace();
+    }
     if (hadInstalledBinary) {
       fs.copyFileSync(installedBinary, backupBinary);
       if (platform.os !== 'windows') fs.chmodSync(backupBinary, 0o755);
