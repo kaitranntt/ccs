@@ -1,3 +1,13 @@
+## [8.11.1](https://github.com/kaitranntt/ccs/compare/v8.11.0...v8.11.1) (2026-11-16)
+
+### Bug Fixes
+
+* **update:** report success when the target version lands despite a package-manager error ([#1816](https://github.com/kaitranntt/ccs/issues/1816)) ([77094a5](https://github.com/kaitranntt/ccs/commit/77094a5cd1160843a10e58babce6e486a965ecf9)), closes [#1815](https://github.com/kaitranntt/ccs/issues/1815)
+
+### CI
+
+* **release:** publish to npm via trusted publishing ([#1817](https://github.com/kaitranntt/ccs/issues/1817)) ([c53d92b](https://github.com/kaitranntt/ccs/commit/c53d92b36d52cfb8803cefbc413fb928f4e49caf))
+
 ## [8.11.0](https://github.com/kaitranntt/ccs/compare/v8.10.0...v8.11.0) (2026-11-04)
 
 ### Features

@@ -35,6 +35,8 @@ describe('stable release workflow', () => {
     expect(releaseSection).toContain('GIT_CONFIG_VALUE_1="AUTHORIZATION: basic ${auth_header}"');
     expect(releaseSection).toContain('GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}');
     expect(releaseSection).toContain('GH_TOKEN: ${{ secrets.PAT_TOKEN }}');
-    expect(releaseSection).toContain('NPM_TOKEN: ${{ secrets.NPM_TOKEN }}');
+    expect(workflow).toContain('id-token: write');
+    expect(workflow).not.toContain('NPM_TOKEN');
+    expect(workflow).not.toContain('NODE_AUTH_TOKEN');
   });
 });

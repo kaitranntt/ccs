@@ -17,6 +17,7 @@ import {
 } from '../utils/package-manager-detector';
 import { compareVersionsWithPrerelease, type UpdateResult } from '../utils/update-checker';
 import { getVersion } from '../utils/version';
+import { findGlobalManifestIssues, type GlobalManifestIssue } from '../utils/bun-global-manifest';
 
 /**
  * Options for the update command
@@ -45,6 +46,15 @@ export interface UpdateCommandDeps {
     targetTag: TargetTag
   ) => Promise<UpdateResult>;
   spawn: typeof spawn;
+  findGlobalManifestIssues: typeof findGlobalManifestIssues;
+}
+
+function logGlobalManifestIssue(issue: GlobalManifestIssue, deps: UpdateCommandDeps): void {
+  const names = issue.invalidNames.map((name) => JSON.stringify(name)).join(', ');
+  deps.log(warn(`bun global manifest has invalid dependency name(s): ${names}`));
+  deps.log(`    File: ${issue.manifestPath} (and bun.lock next to it)`);
+  deps.log('    Remove those entries, then re-run the update.');
+  deps.log('');
 }
 
 async function loadCheckForUpdates(
@@ -69,6 +79,7 @@ const defaultDeps: UpdateCommandDeps = {
   compareVersionsWithPrerelease,
   checkForUpdates: loadCheckForUpdates,
   spawn,
+  findGlobalManifestIssues,
 };
 
 async function resolveTargetVersion(
@@ -448,16 +459,45 @@ async function performNpmUpdate(
       deps.log(`Run ${color('ccs --version', 'command')} to verify`);
       deps.log(info(`Tip: Use ${color('ccs config', 'command')} for web-based configuration`));
       deps.log('');
-    } else {
-      deps.log('');
-      deps.log(fail(`${isReinstall ? 'Reinstall' : 'Update'} failed`));
-      deps.log('');
-      deps.log('Try manually:');
-      deps.log(color(`  ${deps.formatManualUpdateCommand(targetTag, currentInstall)}`, 'command'));
-      deps.log('');
+      deps.exit(0);
+      return;
     }
 
-    deps.exit(exitCode || 0);
+    const manifestIssue = deps.findGlobalManifestIssues(currentInstall, childEnv);
+    const installedVersion = deps.readInstalledPackageState(currentInstall).version;
+    const landedDespiteError =
+      !isReinstall &&
+      !!expectedVersion &&
+      installedVersion === expectedVersion &&
+      installedVersion !== previousState?.version;
+
+    deps.log('');
+    if (landedDespiteError) {
+      deps.log(
+        warn(
+          `${packageManager} exited with code ${exitCode}, but CCS ${installedVersion} is installed.`
+        )
+      );
+      deps.log(info('The error above came from the package manager, not from the CCS package.'));
+      deps.log('');
+      if (manifestIssue) {
+        logGlobalManifestIssue(manifestIssue, deps);
+      }
+      deps.log(ok('Update successful!'));
+      deps.log('');
+      deps.exit(0);
+      return;
+    }
+
+    deps.log(fail(`${isReinstall ? 'Reinstall' : 'Update'} failed`));
+    deps.log('');
+    if (manifestIssue) {
+      logGlobalManifestIssue(manifestIssue, deps);
+    }
+    deps.log('Try manually:');
+    deps.log(color(`  ${deps.formatManualUpdateCommand(targetTag, currentInstall)}`, 'command'));
+    deps.log('');
+    deps.exit(exitCode || 1);
   } catch {
     deps.log('');
     deps.log(fail(`Failed to run ${packageManager} ${isReinstall ? 'reinstall' : 'update'}`));

@@ -38,6 +38,10 @@ describe('dev release workflow', () => {
     expect(releaseSection).toContain('GH_TOKEN: ${{ secrets.PAT_TOKEN }}');
     expect(releaseSection).not.toContain('GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}');
     expect(releaseSection).not.toContain('GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}');
+    expect(workflow).toContain('id-token: write');
+    expect(workflow).toContain('npm install -g npm@^11.5.1');
+    expect(workflow).not.toContain('NPM_TOKEN');
+    expect(workflow).not.toContain('NODE_AUTH_TOKEN');
   });
 
   test('keeps release commits visible to promotion PR CI', () => {
