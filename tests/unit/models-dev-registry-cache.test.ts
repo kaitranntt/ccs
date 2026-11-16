@@ -1,8 +1,9 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
 import { getCcsDir } from '../../src/utils/config-manager';
+import { resolveModelsDevPricing } from '../../src/web-server/models-dev/pricing-resolver';
 import {
   clearModelsDevRegistryCache,
   getCachedModelsDevRegistry,
@@ -111,13 +112,98 @@ describe('models.dev registry cache', () => {
     expect(registry?.openai.models?.['gpt-5.5']?.cost?.input).toBe(5);
     expect(registry?.openai.models?.['null-entry']).toBeUndefined();
     expect(registry?.openai.models?.['string-entry']).toBeUndefined();
-    expect(getCachedModelsDevRegistry({ allowStale: true })?.openai.models?.['null-entry']).toBeUndefined();
-    expect(getCachedModelsDevRegistry({ allowStale: true })?.openai.models?.['string-entry']).toBeUndefined();
+    expect(
+      getCachedModelsDevRegistry({ allowStale: true })?.openai.models?.['null-entry']
+    ).toBeUndefined();
+    expect(
+      getCachedModelsDevRegistry({ allowStale: true })?.openai.models?.['string-entry']
+    ).toBeUndefined();
   });
 
   it('ignores malformed cache files', () => {
     fs.mkdirSync(getCcsDir(), { recursive: true });
     fs.writeFileSync(path.join(getCcsDir(), 'models-dev-registry-cache.json'), '{not json');
+    expect(getCachedModelsDevRegistry({ allowStale: true })).toBeNull();
+  });
+
+  it('reads an unchanged registry once across repeated pricing lookups', () => {
+    setCachedModelsDevRegistry({ openai: { id: 'openai', models: { test: { id: 'test' } } } });
+    const filePath = path.join(getCcsDir(), 'models-dev-registry-cache.json');
+    const read = spyOn(fs, 'readFileSync');
+    try {
+      for (let index = 0; index < 1_000; index++) {
+        expect(getCachedModelsDevRegistry({ allowStale: true })?.openai.id).toBe('openai');
+      }
+      expect(read.mock.calls.filter(([file]) => file === filePath)).toHaveLength(1);
+    } finally {
+      read.mockRestore();
+    }
+  });
+
+  it('checks freshness even when the normalized registry is already in memory', () => {
+    setCachedModelsDevRegistry({ openai: { id: 'openai', models: { test: { id: 'test' } } } }, 1);
+    expect(getCachedModelsDevRegistry({ now: 1 })).not.toBeNull();
+    expect(getCachedModelsDevRegistry({ now: 86_400_002 })).toBeNull();
+    expect(getCachedModelsDevRegistry({ now: 86_400_002, allowStale: true })).not.toBeNull();
+  });
+
+  it('reuses model indexes and resolves fresh prices after a registry replacement', () => {
+    const model = { id: 'lookup-test', cost: { input: 1, output: 2 } };
+    setCachedModelsDevRegistry({ openai: { id: 'openai', models: { 'Lookup-Test': model } } });
+    expect(
+      resolveModelsDevPricing('lookup-test', { provider: 'codex' })?.pricing.inputPerMillion
+    ).toBe(1);
+    expect(
+      resolveModelsDevPricing('LOOKUP-TEST', { provider: 'codex' })?.pricing.outputPerMillion
+    ).toBe(2);
+    setCachedModelsDevRegistry({
+      openai: {
+        id: 'openai',
+        models: { 'Lookup-Test': { ...model, cost: { input: 3, output: 4 } } },
+      },
+    });
+    expect(
+      resolveModelsDevPricing('lookup-test', { provider: 'codex' })?.pricing.inputPerMillion
+    ).toBe(3);
+  });
+
+  it('reloads external replacements and never serves a deleted or malformed file', () => {
+    const providers = { openai: { id: 'openai', models: { test: { id: 'test' } } } };
+    setCachedModelsDevRegistry(providers, 1);
+    expect(getCachedModelsDevRegistry({ allowStale: true })?.openai.id).toBe('openai');
+    const filePath = path.join(getCcsDir(), 'models-dev-registry-cache.json');
+    const replacement = `${filePath}.replacement`;
+    fs.writeFileSync(
+      replacement,
+      JSON.stringify({
+        version: 1,
+        fetchedAt: 2,
+        providers: { other: { ...providers.openai, id: 'other' } },
+      })
+    );
+    fs.renameSync(replacement, filePath);
+    expect(getCachedModelsDevRegistry({ allowStale: true })?.other.id).toBe('other');
+    fs.writeFileSync(filePath, '{bad');
+    expect(getCachedModelsDevRegistry({ allowStale: true })).toBeNull();
+    fs.unlinkSync(filePath);
+    expect(getCachedModelsDevRegistry({ allowStale: true })).toBeNull();
+    setCachedModelsDevRegistry(providers, 3);
+    expect(getCachedModelsDevRegistry({ allowStale: true })?.openai.id).toBe('openai');
+  });
+
+  it('invalidates writes and keeps the memoized snapshot scoped to the active CCS home', () => {
+    const providers = { openai: { id: 'openai', models: { test: { id: 'test' } } } };
+    setCachedModelsDevRegistry(providers, 1);
+    expect(getCachedModelsDevRegistry({ allowStale: true })?.openai.id).toBe('openai');
+    setCachedModelsDevRegistry({ other: { ...providers.openai, id: 'other' } }, 2);
+    expect(getCachedModelsDevRegistry({ allowStale: true })?.other.id).toBe('other');
+    process.env.CCS_HOME = path.join(tempRoot, 'second');
+    expect(getCachedModelsDevRegistry({ allowStale: true })).toBeNull();
+    setCachedModelsDevRegistry(providers, 3);
+    expect(getCachedModelsDevRegistry({ allowStale: true })?.openai.id).toBe('openai');
+    process.env.CCS_HOME = tempRoot;
+    expect(getCachedModelsDevRegistry({ allowStale: true })?.other.id).toBe('other');
+    clearModelsDevRegistryCache();
     expect(getCachedModelsDevRegistry({ allowStale: true })).toBeNull();
   });
 

@@ -296,6 +296,43 @@ describe('cliproxy usage transformer', () => {
       fs.rmSync(tempRoot, { recursive: true, force: true });
     });
 
+    it.each([
+      ['', 7],
+      ['   ', 7],
+      ['bbb', 3],
+    ])('preserves prefix precedence for provider key %j', (provider, expectedCost) => {
+      setCachedModelsDevRegistry({
+        aaa: { id: 'aaa', models: { zzmodel: { id: 'zzmodel', cost: { input: 7, output: 0 } } } },
+        bbb: { id: 'bbb', models: { zzmodel: { id: 'zzmodel', cost: { input: 3, output: 0 } } } },
+      });
+      const response: CliproxyUsageApiResponse = {
+        usage: {
+          apis: {
+            [provider]: {
+              models: {
+                'aaa/zzmodel': {
+                  details: [
+                    {
+                      timestamp: '2026-03-03T10:00:00.000Z',
+                      source: 'synthetic',
+                      auth_index: 0,
+                      tokens: {
+                        input_tokens: 1_000_000,
+                        output_tokens: 0,
+                        total_tokens: 1_000_000,
+                      },
+                      failed: false,
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      };
+      expect(extractCliproxyUsageHistoryDetails(response)[0].cost).toBe(expectedCost);
+    });
+
     it('keeps same model IDs separated by provider in CLIProxy usage', () => {
       const response: CliproxyUsageApiResponse = {
         usage: {
