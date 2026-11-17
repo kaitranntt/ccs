@@ -49,7 +49,7 @@ describe('applyExtendedContextConfig', () => {
 
       applyExtendedContextConfig(env, 'claude');
 
-      expect(env.ANTHROPIC_DEFAULT_FABLE_MODEL).toBe('claude-fable-5-1[1m]');
+      expect(env.ANTHROPIC_DEFAULT_FABLE_MODEL).toBe('claude-fable-5-2[1m]');
     });
 
     it('fills a missing fable tier when --1m is passed', () => {
@@ -60,7 +60,7 @@ describe('applyExtendedContextConfig', () => {
       applyExtendedContextConfig(env, 'claude', true);
 
       expect(env.ANTHROPIC_MODEL).toBe('claude-opus-5[1m]');
-      expect(env.ANTHROPIC_DEFAULT_FABLE_MODEL).toBe('claude-fable-5-1[1m]');
+      expect(env.ANTHROPIC_DEFAULT_FABLE_MODEL).toBe('claude-fable-5-2[1m]');
     });
 
     it('fills a missing fable tier on a model-neutral claude launch when --1m is passed', () => {
@@ -68,7 +68,7 @@ describe('applyExtendedContextConfig', () => {
 
       applyExtendedContextConfig(env, 'claude', true);
 
-      expect(env.ANTHROPIC_DEFAULT_FABLE_MODEL).toBe('claude-fable-5-1[1m]');
+      expect(env.ANTHROPIC_DEFAULT_FABLE_MODEL).toBe('claude-fable-5-2[1m]');
       expect(Object.keys(env)).toEqual(['ANTHROPIC_DEFAULT_FABLE_MODEL']);
     });
 
