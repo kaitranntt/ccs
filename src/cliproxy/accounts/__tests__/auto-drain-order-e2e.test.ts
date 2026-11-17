@@ -1,7 +1,19 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+
+// discoverExistingAccounts and registerAccount re-apply drain orders through
+// triggerReapplyManagedDrainOrders, which probes the real CLIProxy lifecycle
+// port (8317 by default). On a machine with a local CLIProxy running, the probe
+// reports a live proxy and the re-apply goes through the management API instead
+// of writing the temp auth files, so the priority assertions below fail. Pin
+// the proxy as stopped so this test always covers the direct-write path.
+mock.module('../../proxy/proxy-detector', () => ({
+  detectRunningProxy: async () => ({ running: false, verified: false }),
+  waitForProxyHealthy: async () => ({ running: false, verified: false }),
+  reclaimOrphanedProxy: () => {},
+}));
 
 import {
   saveDrainOrderConfig,
