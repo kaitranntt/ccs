@@ -23,7 +23,7 @@ export interface ProviderConfig {
   max_results?: number;
 }
 
-export type WebSearchApiKeyProviderId = 'exa' | 'tavily' | 'brave';
+export type WebSearchApiKeyProviderId = 'exa' | 'tavily' | 'keenable' | 'brave';
 export type WebSearchApiKeySource = 'global_env' | 'process_env' | 'both' | 'none';
 
 export interface WebSearchApiKeyState {
@@ -37,6 +37,7 @@ export interface WebSearchApiKeyState {
 export interface WebSearchProvidersConfig {
   exa?: ProviderConfig;
   tavily?: ProviderConfig;
+  keenable?: ProviderConfig;
   brave?: ProviderConfig;
   searxng?: ProviderConfig;
   duckduckgo?: ProviderConfig;
@@ -58,7 +59,16 @@ export interface WebSearchSavePayload {
 }
 
 export interface CliStatus {
-  id: 'exa' | 'tavily' | 'brave' | 'searxng' | 'duckduckgo' | 'gemini' | 'grok' | 'opencode';
+  id:
+    | 'exa'
+    | 'tavily'
+    | 'keenable'
+    | 'brave'
+    | 'searxng'
+    | 'duckduckgo'
+    | 'gemini'
+    | 'grok'
+    | 'opencode';
   kind: 'backend' | 'legacy-cli';
   name?: string;
   enabled: boolean;

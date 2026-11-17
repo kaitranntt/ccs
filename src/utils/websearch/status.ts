@@ -261,6 +261,24 @@ export function getWebSearchCliProviders(
           : 'Set TAVILY_API_KEY',
     },
     {
+      id: 'keenable',
+      kind: 'backend',
+      name: 'Keenable',
+      enabled: wsConfig.providers?.keenable?.enabled ?? false,
+      available:
+        (wsConfig.providers?.keenable?.enabled ?? false) && apiKeyStates.keenable.available,
+      version: null,
+      docsUrl: 'https://docs.keenable.ai/api-reference',
+      requiresApiKey: true,
+      apiKeyEnvVar: 'KEENABLE_API_KEY',
+      description: 'Search API returning source URLs with query-relevant page snippets.',
+      detail: apiKeyStates.keenable.available
+        ? `API key detected (${wsConfig.providers?.keenable?.max_results ?? 5} results)`
+        : apiKeyStates.keenable.configured
+          ? 'Stored in dashboard, but Global Env is disabled'
+          : 'Set KEENABLE_API_KEY',
+    },
+    {
       id: 'brave',
       kind: 'backend',
       name: 'Brave Search',
@@ -331,7 +349,7 @@ export function getCliInstallHints(): string[] {
     'WebSearch: no ready providers',
     '    Enable DuckDuckGo in Settings > WebSearch for zero-setup search',
     '    Or enable SearXNG and set a valid base URL (must support /search?format=json)',
-    '    Or export EXA_API_KEY, TAVILY_API_KEY, or BRAVE_API_KEY for API-backed search',
+    '    Or export EXA_API_KEY, TAVILY_API_KEY, KEENABLE_API_KEY, or BRAVE_API_KEY for API-backed search',
     '    Optional LLM CLI fallback: curl -fsSL https://antigravity.google/cli/install.sh | bash',
   ];
 }

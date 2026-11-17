@@ -72,6 +72,7 @@ export type {
   BraveWebSearchConfig,
   ExaWebSearchConfig,
   TavilyWebSearchConfig,
+  KeenableWebSearchConfig,
   SearxngWebSearchConfig,
   AgyWebSearchConfig,
   GeminiWebSearchConfig,

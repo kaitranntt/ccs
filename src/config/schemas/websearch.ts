@@ -2,7 +2,7 @@
  * WebSearch backend configuration types.
  *
  * Covers all supported search backends:
- * - API-backed: Exa, Tavily, Brave
+ * - API-backed: Exa, Tavily, Keenable, Brave
  * - Self-hosted: SearXNG
  * - Zero-setup: DuckDuckGo
  * - LLM CLI fallbacks: Antigravity (agy, recommended), Gemini (deprecated), Grok, OpenCode
@@ -43,6 +43,16 @@ export interface ExaWebSearchConfig {
  */
 export interface TavilyWebSearchConfig {
   /** Enable Tavily Search when TAVILY_API_KEY is available (default: false) */
+  enabled?: boolean;
+  /** Number of results to fetch (default: 5) */
+  max_results?: number;
+}
+
+/**
+ * Keenable WebSearch configuration.
+ */
+export interface KeenableWebSearchConfig {
+  /** Enable Keenable Search when KEENABLE_API_KEY is available (default: false) */
   enabled?: boolean;
   /** Number of results to fetch (default: 5) */
   max_results?: number;
@@ -120,6 +130,8 @@ export interface WebSearchProvidersConfig {
   exa?: ExaWebSearchConfig;
   /** Tavily Search API - API-backed search optimized for agent/tool usage */
   tavily?: TavilyWebSearchConfig;
+  /** Keenable Search API - API-backed search returning source URLs with relevant snippets */
+  keenable?: KeenableWebSearchConfig;
   /** Brave Search API - higher quality results when BRAVE_API_KEY is set */
   brave?: BraveWebSearchConfig;
   /** SearXNG JSON search - self-hosted or public instance backend */

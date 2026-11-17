@@ -87,6 +87,7 @@ export function getWebSearchConfig(): {
   providers?: {
     exa?: { enabled?: boolean; max_results?: number };
     tavily?: { enabled?: boolean; max_results?: number };
+    keenable?: { enabled?: boolean; max_results?: number };
     brave?: { enabled?: boolean; max_results?: number };
     searxng?: { enabled?: boolean; url?: string; max_results?: number };
     duckduckgo?: { enabled?: boolean; max_results?: number };
@@ -109,6 +110,11 @@ export function getWebSearchConfig(): {
   const tavilyConfig = {
     enabled: config.websearch?.providers?.tavily?.enabled ?? false,
     max_results: config.websearch?.providers?.tavily?.max_results ?? 5,
+  };
+
+  const keenableConfig = {
+    enabled: config.websearch?.providers?.keenable?.enabled ?? false,
+    max_results: config.websearch?.providers?.keenable?.max_results ?? 5,
   };
 
   const duckDuckGoConfig = {
@@ -156,6 +162,7 @@ export function getWebSearchConfig(): {
   const anyProviderEnabled =
     exaConfig.enabled ||
     tavilyConfig.enabled ||
+    keenableConfig.enabled ||
     braveConfig.enabled ||
     searxngConfig.enabled ||
     duckDuckGoConfig.enabled ||
@@ -170,6 +177,7 @@ export function getWebSearchConfig(): {
     providers: {
       exa: exaConfig,
       tavily: tavilyConfig,
+      keenable: keenableConfig,
       brave: braveConfig,
       searxng: searxngConfig,
       duckduckgo: duckDuckGoConfig,

@@ -8,7 +8,7 @@
  *
  * Runtime Architecture:
  *   - User-scope MCP server in ~/.claude.json for third-party profiles
- *   - Real search providers first (Exa, Tavily, Brave Search, DuckDuckGo)
+ *   - Real search providers first (Exa, Tavily, Keenable, Brave Search, DuckDuckGo)
  *   - Gemini/OpenCode/Grok retained as optional legacy fallback
  *
  * @module utils/websearch-manager

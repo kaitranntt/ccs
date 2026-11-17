@@ -26,6 +26,7 @@ export function getWebSearchHookEnv(
     CCS_WEBSEARCH_SKIP: '0',
     CCS_WEBSEARCH_EXA: '0',
     CCS_WEBSEARCH_TAVILY: '0',
+    CCS_WEBSEARCH_KEENABLE: '0',
     CCS_WEBSEARCH_BRAVE: '0',
     CCS_WEBSEARCH_SEARXNG: '0',
     CCS_WEBSEARCH_DUCKDUCKGO: '0',
@@ -62,6 +63,11 @@ export function getWebSearchHookEnv(
   if (wsConfig.providers?.tavily?.enabled) {
     env.CCS_WEBSEARCH_TAVILY = '1';
     env.CCS_WEBSEARCH_TAVILY_MAX_RESULTS = String(wsConfig.providers.tavily.max_results || 5);
+  }
+
+  if (wsConfig.providers?.keenable?.enabled) {
+    env.CCS_WEBSEARCH_KEENABLE = '1';
+    env.CCS_WEBSEARCH_KEENABLE_MAX_RESULTS = String(wsConfig.providers.keenable.max_results || 5);
   }
 
   if (wsConfig.providers?.duckduckgo?.enabled) {

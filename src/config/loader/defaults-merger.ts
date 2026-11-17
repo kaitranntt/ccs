@@ -147,6 +147,10 @@ export function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfi
           enabled: partial.websearch?.providers?.tavily?.enabled ?? false,
           max_results: partial.websearch?.providers?.tavily?.max_results ?? 5,
         },
+        keenable: {
+          enabled: partial.websearch?.providers?.keenable?.enabled ?? false,
+          max_results: partial.websearch?.providers?.keenable?.max_results ?? 5,
+        },
         brave: {
           enabled: partial.websearch?.providers?.brave?.enabled ?? false,
           max_results: partial.websearch?.providers?.brave?.max_results ?? 5,

@@ -38,13 +38,14 @@ The managed runtime tries eligible providers sequentially:
 
 1. Exa
 2. Tavily
-3. Brave Search
-4. SearXNG
-5. DuckDuckGo
-6. Antigravity CLI
-7. Gemini CLI compatibility fallback
-8. OpenCode
-9. Grok CLI
+3. Keenable
+4. Brave Search
+5. SearXNG
+6. DuckDuckGo
+7. Antigravity CLI
+8. Gemini CLI compatibility fallback
+9. OpenCode
+10. Grok CLI
 
 The first successful provider wins. Temporarily failing providers can enter a
 bounded cooldown and be skipped on later calls. Runtime attempt eligibility is
@@ -58,6 +59,7 @@ The transformer and dashboard answer related but different questions:
 | --- | --- | --- |
 | Exa | Enabled and `EXA_API_KEY` is present. | Enabled and the key is available through the active process or enabled Global Env. |
 | Tavily | Enabled and `TAVILY_API_KEY` is present. | Enabled and the key is available through the active process or enabled Global Env. |
+| Keenable | Enabled and `KEENABLE_API_KEY` is present. | Enabled and the key is available through the active process or enabled Global Env. |
 | Brave Search | Enabled and `BRAVE_API_KEY` is present. | Enabled and the key is available through the active process or enabled Global Env. |
 | SearXNG | Enabled and a base URL is present. | Enabled with a valid normalized base URL. |
 | DuckDuckGo | Enabled. | Enabled. |
@@ -89,6 +91,9 @@ websearch:
       enabled: false
       max_results: 5
     tavily:
+      enabled: false
+      max_results: 5
+    keenable:
       enabled: false
       max_results: 5
     brave:
