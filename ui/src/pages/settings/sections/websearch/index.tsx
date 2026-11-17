@@ -31,6 +31,7 @@ import { ProviderCard, type ProviderFieldConfig } from './provider-card';
 type ProviderId =
   | 'exa'
   | 'tavily'
+  | 'keenable'
   | 'brave'
   | 'searxng'
   | 'duckduckgo'
@@ -66,6 +67,7 @@ interface ProviderDefinition {
 const CHAIN_STEPS = [
   { id: 'exa', title: 'Exa', defaultEnabled: false },
   { id: 'tavily', title: 'Tavily', defaultEnabled: false },
+  { id: 'keenable', title: 'Keenable', defaultEnabled: false },
   { id: 'brave', title: 'Brave', defaultEnabled: false },
   { id: 'searxng', title: 'SearXNG', defaultEnabled: false },
   { id: 'duckduckgo', title: 'DuckDuckGo', defaultEnabled: true },
@@ -120,6 +122,28 @@ const BACKEND_PROVIDERS: ProviderDefinition[] = [
     ],
   },
   {
+    id: 'keenable',
+    title: 'Keenable',
+    description: 'API backend returning source URLs with query-relevant page snippets.',
+    badge: 'KEENABLE_API_KEY',
+    badgeTone: 'green',
+    defaultEnabled: false,
+    fallbackDetail: 'Set KEENABLE_API_KEY',
+    footerNote: 'Runs after Tavily and before Brave when enabled and ready.',
+    fields: [
+      {
+        key: 'max_results',
+        label: 'Max results',
+        type: 'number',
+        placeholder: '5',
+        helpText: 'Clamp between 1 and 10 results.',
+        defaultValue: 5,
+        min: 1,
+        max: 10,
+      },
+    ],
+  },
+  {
     id: 'brave',
     title: 'Brave Search',
     description: 'API-backed search with clean metadata and broad web coverage.',
@@ -127,7 +151,7 @@ const BACKEND_PROVIDERS: ProviderDefinition[] = [
     badgeTone: 'blue',
     defaultEnabled: false,
     fallbackDetail: 'Set BRAVE_API_KEY',
-    footerNote: 'Runs after Exa and Tavily, before DuckDuckGo.',
+    footerNote: 'Runs after Exa, Tavily and Keenable, before DuckDuckGo.',
     fields: [
       {
         key: 'max_results',
@@ -376,7 +400,12 @@ function getConfiguredValue(
 }
 
 function isApiKeyProvider(providerId: ProviderId): providerId is WebSearchApiKeyProviderId {
-  return providerId === 'exa' || providerId === 'tavily' || providerId === 'brave';
+  return (
+    providerId === 'exa' ||
+    providerId === 'tavily' ||
+    providerId === 'keenable' ||
+    providerId === 'brave'
+  );
 }
 
 // TODO i18n: missing keys for getApiKeySummary return values

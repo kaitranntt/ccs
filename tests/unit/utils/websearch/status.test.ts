@@ -124,6 +124,7 @@ describe('websearch readiness', () => {
       providers: {
         exa: { enabled: false, max_results: 5 },
         tavily: { enabled: false, max_results: 5 },
+        keenable: { enabled: false, max_results: 5 },
         brave: { enabled: false, max_results: 5 },
         searxng: {
           enabled: true,
@@ -139,6 +140,12 @@ describe('websearch readiness', () => {
     const apiKeySpy = spyOn(providerSecrets, 'getWebSearchApiKeyStates').mockReturnValue({
       exa: { envVar: 'EXA_API_KEY', configured: false, available: false, source: 'none' },
       tavily: { envVar: 'TAVILY_API_KEY', configured: false, available: false, source: 'none' },
+      keenable: {
+        envVar: 'KEENABLE_API_KEY',
+        configured: false,
+        available: false,
+        source: 'none',
+      },
       brave: { envVar: 'BRAVE_API_KEY', configured: false, available: false, source: 'none' },
     });
     const geminiStatusSpy = spyOn(geminiCli, 'getGeminiCliStatus').mockReturnValue({
@@ -183,6 +190,7 @@ describe('websearch readiness', () => {
       providers: {
         exa: { enabled: false, max_results: 5 },
         tavily: { enabled: false, max_results: 5 },
+        keenable: { enabled: false, max_results: 5 },
         brave: { enabled: false, max_results: 5 },
         searxng: {
           enabled: true,
@@ -198,6 +206,12 @@ describe('websearch readiness', () => {
     const apiKeySpy = spyOn(providerSecrets, 'getWebSearchApiKeyStates').mockReturnValue({
       exa: { envVar: 'EXA_API_KEY', configured: false, available: false, source: 'none' },
       tavily: { envVar: 'TAVILY_API_KEY', configured: false, available: false, source: 'none' },
+      keenable: {
+        envVar: 'KEENABLE_API_KEY',
+        configured: false,
+        available: false,
+        source: 'none',
+      },
       brave: { envVar: 'BRAVE_API_KEY', configured: false, available: false, source: 'none' },
     });
     const geminiStatusSpy = spyOn(geminiCli, 'getGeminiCliStatus').mockReturnValue({
@@ -242,6 +256,7 @@ describe('websearch readiness', () => {
       providers: {
         exa: { enabled: false, max_results: 5 },
         tavily: { enabled: false, max_results: 5 },
+        keenable: { enabled: false, max_results: 5 },
         brave: { enabled: false, max_results: 5 },
         searxng: { enabled: false, url: '', max_results: 5 },
         duckduckgo: { enabled: false, max_results: 5 },
@@ -254,6 +269,12 @@ describe('websearch readiness', () => {
     const apiKeySpy = spyOn(providerSecrets, 'getWebSearchApiKeyStates').mockReturnValue({
       exa: { envVar: 'EXA_API_KEY', configured: false, available: false, source: 'none' },
       tavily: { envVar: 'TAVILY_API_KEY', configured: false, available: false, source: 'none' },
+      keenable: {
+        envVar: 'KEENABLE_API_KEY',
+        configured: false,
+        available: false,
+        source: 'none',
+      },
       brave: { envVar: 'BRAVE_API_KEY', configured: false, available: false, source: 'none' },
     });
     const agyStatusSpy = spyOn(agyCli, 'getAgyCliStatus').mockReturnValue({
@@ -307,6 +328,7 @@ describe('websearch readiness', () => {
       providers: {
         exa: { enabled: false, max_results: 5 },
         tavily: { enabled: false, max_results: 5 },
+        keenable: { enabled: false, max_results: 5 },
         brave: { enabled: false, max_results: 5 },
         searxng: { enabled: false, url: '', max_results: 5 },
         duckduckgo: { enabled: true, max_results: 5 },
@@ -319,6 +341,12 @@ describe('websearch readiness', () => {
     const apiKeySpy = spyOn(providerSecrets, 'getWebSearchApiKeyStates').mockReturnValue({
       exa: { envVar: 'EXA_API_KEY', configured: false, available: false, source: 'none' },
       tavily: { envVar: 'TAVILY_API_KEY', configured: false, available: false, source: 'none' },
+      keenable: {
+        envVar: 'KEENABLE_API_KEY',
+        configured: false,
+        available: false,
+        source: 'none',
+      },
       brave: { envVar: 'BRAVE_API_KEY', configured: false, available: false, source: 'none' },
     });
     const agyStatusSpy = spyOn(agyCli, 'getAgyCliStatus').mockReturnValue({
@@ -358,6 +386,7 @@ describe('websearch readiness', () => {
       providers: {
         exa: { enabled: false, max_results: 5 },
         tavily: { enabled: false, max_results: 5 },
+        keenable: { enabled: false, max_results: 5 },
         brave: { enabled: false, max_results: 5 },
         searxng: { enabled: false, url: '', max_results: 5 },
         duckduckgo: { enabled: false, max_results: 5 },
@@ -370,6 +399,12 @@ describe('websearch readiness', () => {
     const apiKeySpy = spyOn(providerSecrets, 'getWebSearchApiKeyStates').mockReturnValue({
       exa: { envVar: 'EXA_API_KEY', configured: false, available: false, source: 'none' },
       tavily: { envVar: 'TAVILY_API_KEY', configured: false, available: false, source: 'none' },
+      keenable: {
+        envVar: 'KEENABLE_API_KEY',
+        configured: false,
+        available: false,
+        source: 'none',
+      },
       brave: { envVar: 'BRAVE_API_KEY', configured: false, available: false, source: 'none' },
     });
     const agyStatusSpy = spyOn(agyCli, 'getAgyCliStatus').mockReturnValue({
@@ -437,6 +472,7 @@ describe('websearch readiness', () => {
       providers: {
         exa: { enabled: true, max_results: 5 },
         tavily: { enabled: false, max_results: 5 },
+        keenable: { enabled: false, max_results: 5 },
         brave: { enabled: false, max_results: 5 },
         searxng: { enabled: false, url: '', max_results: 5 },
         duckduckgo: { enabled: false, max_results: 5 },
@@ -454,6 +490,12 @@ describe('websearch readiness', () => {
       },
       tavily: {
         envVar: 'TAVILY_API_KEY',
+        configured: false,
+        available: false,
+        source: 'none',
+      },
+      keenable: {
+        envVar: 'KEENABLE_API_KEY',
         configured: false,
         available: false,
         source: 'none',

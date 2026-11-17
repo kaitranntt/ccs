@@ -141,11 +141,12 @@ export function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push("# Anthropic's WebSearch tool. CCS intercepts that tool and runs local search.");
     lines.push('#');
     lines.push(
-      '# Priority: Exa -> Tavily -> Brave -> DuckDuckGo -> optional legacy AI CLI fallbacks'
+      '# Priority: Exa -> Tavily -> Keenable -> Brave -> DuckDuckGo -> optional legacy AI CLI fallbacks'
     );
     lines.push('#');
     lines.push('# Exa requires EXA_API_KEY in your environment.');
     lines.push('# Tavily requires TAVILY_API_KEY in your environment.');
+    lines.push('# Keenable requires KEENABLE_API_KEY in your environment.');
     lines.push('# Brave requires BRAVE_API_KEY in your environment.');
     lines.push('# DuckDuckGo works with zero extra setup and is enabled by default.');
     lines.push('#');

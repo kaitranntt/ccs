@@ -1,7 +1,7 @@
 import { maskSensitiveValue } from '../sensitive-keys';
 import { getGlobalEnvConfig } from '../../config/config-loader-facade';
 
-export type WebSearchApiKeyProviderId = 'exa' | 'tavily' | 'brave';
+export type WebSearchApiKeyProviderId = 'exa' | 'tavily' | 'keenable' | 'brave';
 export type WebSearchApiKeySource = 'global_env' | 'process_env' | 'both' | 'none';
 
 export interface WebSearchApiKeyState {
@@ -28,6 +28,10 @@ export const WEBSEARCH_API_KEY_PROVIDERS: Record<
   tavily: {
     envVar: 'TAVILY_API_KEY',
     alternateEnvVar: 'CCS_WEBSEARCH_TAVILY_API_KEY',
+  },
+  keenable: {
+    envVar: 'KEENABLE_API_KEY',
+    alternateEnvVar: 'CCS_WEBSEARCH_KEENABLE_API_KEY',
   },
   brave: {
     envVar: 'BRAVE_API_KEY',

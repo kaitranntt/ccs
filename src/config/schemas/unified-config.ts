@@ -141,6 +141,10 @@ export function createEmptyUnifiedConfig(): UnifiedConfig {
           enabled: false,
           max_results: 5,
         },
+        keenable: {
+          enabled: false,
+          max_results: 5,
+        },
         brave: {
           enabled: false,
           max_results: 5,

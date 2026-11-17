@@ -168,6 +168,16 @@ router.put('/', (req: Request, res: Response): void => {
                   config.websearch?.providers?.tavily?.max_results ??
                   5,
               },
+              keenable: {
+                enabled:
+                  providers.keenable?.enabled ??
+                  config.websearch?.providers?.keenable?.enabled ??
+                  false,
+                max_results:
+                  providers.keenable?.max_results ??
+                  config.websearch?.providers?.keenable?.max_results ??
+                  5,
+              },
               duckduckgo: {
                 enabled:
                   providers.duckduckgo?.enabled ??

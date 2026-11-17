@@ -42,7 +42,7 @@ export function checkWebSearchClis(): HealthCheck[] {
       name: 'WebSearch Status',
       status: 'warning',
       message: 'No ready provider',
-      fix: 'Enable DuckDuckGo, configure SearXNG URL, or set EXA_API_KEY/TAVILY_API_KEY/BRAVE_API_KEY',
+      fix: 'Enable DuckDuckGo, configure SearXNG URL, or set EXA_API_KEY/TAVILY_API_KEY/KEENABLE_API_KEY/BRAVE_API_KEY',
       details: 'Third-party profiles need a local WebSearch backend.',
     });
   }
