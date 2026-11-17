@@ -31,6 +31,16 @@ export interface AccountUsageStats {
   lastUsedAt?: string;
 }
 
+/** A single proxied request taken from CLIProxyAPI usage details */
+export interface RecentRequest {
+  /** Same provider-qualified key as accountStats */
+  accountKey: string;
+  /** Request timestamp */
+  timestamp: string;
+  /** Whether the request failed */
+  failed: boolean;
+}
+
 /** CLIProxy usage statistics */
 export interface CliproxyStats {
   totalRequests: number;
@@ -45,6 +55,8 @@ export interface CliproxyStats {
   requestsByProvider: Record<string, number>;
   /** Per-account usage breakdown */
   accountStats: Record<string, AccountUsageStats>;
+  /** Latest requests of each provider, newest first */
+  recentRequests: RecentRequest[];
   quotaExceededCount: number;
   retryCount: number;
   collectedAt: string;
