@@ -526,4 +526,51 @@ describe('websearch routes', () => {
       error: 'Invalid value for providers.searxng.max_results. Must be a number.',
     });
   });
+  it('round-trips opt-in Parallel config and preserves it during unrelated updates', async () => {
+    const initial = await (await fetch(`${baseUrl}/api/websearch`)).json();
+    expect(initial.providers.parallel.enabled).toBe(false);
+    const response = await putWebsearch({
+      providers: {
+        parallel: {
+          enabled: true,
+          url: 'https://mcp.parallel.ai/mcp',
+          max_results: 100,
+        },
+      },
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.websearch.providers.parallel).toEqual({
+      enabled: true,
+      url: 'https://mcp.parallel.ai/mcp',
+      max_results: 10,
+    });
+    await putWebsearch({ providers: { duckduckgo: { enabled: false } } });
+    const stored = loadOrCreateUnifiedConfig();
+    expect(stored.websearch?.providers?.parallel).toEqual(body.websearch.providers.parallel);
+    const status = await (await fetch(`${baseUrl}/api/websearch/status`)).json();
+    expect(status.providers.find((p: { id: string }) => p.id === 'parallel')).toMatchObject({
+      enabled: true,
+      available: true,
+      requiresApiKey: false,
+    });
+  });
+
+  for (const parallel of [
+    null,
+    [],
+    { enabled: 'yes' },
+    { url: 42 },
+    { url: 'https://user:secret@mcp.parallel.ai/mcp' },
+    { url: 'https://mcp.parallel.ai/mcp?login' },
+    { url: 'https://mcp.parallel.ai/mcp#fragment' },
+    { url: 'file:///private' },
+    { max_results: '5' },
+  ]) {
+    it(`rejects invalid Parallel config ${JSON.stringify(parallel)}`, async () => {
+      const response = await putWebsearch({ providers: { parallel } });
+      expect(response.status).toBe(400);
+      expect(loadOrCreateUnifiedConfig().websearch?.providers?.parallel?.enabled).toBe(false);
+    });
+  }
 });

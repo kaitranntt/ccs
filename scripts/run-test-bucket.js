@@ -32,6 +32,7 @@ const slowTests = [
   'tests/unit/hooks/browser-mcp-orchestration-and-artifacts.test.ts',
   'tests/unit/hooks/browser-mcp-recording-and-replay.test.ts',
   'tests/unit/hooks/browser-mcp-session-and-intercepts.test.ts',
+  'tests/unit/hooks/parallel-websearch.test.ts',
   'tests/unit/targets/codex-runtime-integration.test.ts',
   'tests/unit/targets/codex-settings-bridge-launch.test.ts',
   'tests/unit/targets/default-profile-browser-launch.test.ts',

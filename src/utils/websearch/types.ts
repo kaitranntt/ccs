@@ -45,6 +45,7 @@ export type WebSearchProviderId =
   | 'tavily'
   | 'brave'
   | 'searxng'
+  | 'parallel'
   | 'duckduckgo'
   | 'agy'
   | 'gemini'
@@ -118,6 +119,7 @@ export interface WebSearchConfig {
     tavily?: WebSearchProviderConfig;
     brave?: WebSearchProviderConfig;
     searxng?: WebSearchProviderConfig;
+    parallel?: WebSearchProviderConfig;
     duckduckgo?: WebSearchProviderConfig;
     agy?: WebSearchProviderConfig;
     gemini?: WebSearchProviderConfig;
@@ -163,6 +165,25 @@ export function normalizeSearxngBaseUrl(url: string | undefined): string | null 
     parsed.hash = '';
 
     return parsed.toString().replace(/\/+$/, '');
+  } catch {
+    return null;
+  }
+}
+
+/** Validate a full MCP endpoint without credentials, query parameters, or fragments. */
+export function normalizeParallelMcpUrl(url: string | undefined): string | null {
+  try {
+    const parsed = new URL(url ?? 'https://mcp.parallel.ai/mcp');
+    if (
+      !['http:', 'https:'].includes(parsed.protocol) ||
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash
+    ) {
+      return null;
+    }
+    return parsed.toString();
   } catch {
     return null;
   }

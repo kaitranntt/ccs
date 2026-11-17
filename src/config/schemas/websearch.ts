@@ -49,6 +49,18 @@ export interface TavilyWebSearchConfig {
 }
 
 /**
+ * Parallel Unified MCP WebSearch configuration.
+ */
+export interface ParallelWebSearchConfig {
+  /** Enable keyless Parallel web_search (default: false) */
+  enabled?: boolean;
+  /** Streamable HTTP MCP endpoint (default: https://mcp.parallel.ai/mcp) */
+  url?: string;
+  /** Number of results to display (default: 5) */
+  max_results?: number;
+}
+
+/**
  * SearXNG WebSearch configuration.
  */
 export interface SearxngWebSearchConfig {
@@ -124,6 +136,8 @@ export interface WebSearchProvidersConfig {
   brave?: BraveWebSearchConfig;
   /** SearXNG JSON search - self-hosted or public instance backend */
   searxng?: SearxngWebSearchConfig;
+  /** Parallel Unified MCP - opt-in keyless public web search */
+  parallel?: ParallelWebSearchConfig;
   /** DuckDuckGo HTML search - zero setup default backend */
   duckduckgo?: DuckDuckGoWebSearchConfig;
   /** Antigravity CLI (agy) - recommended LLM CLI fallback (Gemini CLI successor) */

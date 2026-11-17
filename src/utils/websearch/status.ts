@@ -16,7 +16,12 @@ import { getGeminiCliStatus, isGeminiAuthenticated } from './gemini-cli';
 import { getGrokCliStatus } from './grok-cli';
 import { getOpenCodeCliStatus } from './opencode-cli';
 import { getWebSearchApiKeyStates } from './provider-secrets';
-import { normalizeSearxngBaseUrl, type WebSearchCliInfo, type WebSearchStatus } from './types';
+import {
+  normalizeParallelMcpUrl,
+  normalizeSearxngBaseUrl,
+  type WebSearchCliInfo,
+  type WebSearchStatus,
+} from './types';
 import { getWebSearchConfig } from '../../config/config-loader-facade';
 import type { WebSearchConfigSnapshot } from './launch-state';
 
@@ -292,6 +297,22 @@ export function getWebSearchCliProviders(
       detail: hasValidSearxngUrl(wsConfig.providers?.searxng?.url)
         ? `Configured (${wsConfig.providers?.searxng?.max_results ?? 5} results)`
         : 'Set a valid SearXNG base URL',
+    },
+    {
+      id: 'parallel',
+      kind: 'backend',
+      name: 'Parallel',
+      enabled: wsConfig.providers?.parallel?.enabled ?? false,
+      available:
+        (wsConfig.providers?.parallel?.enabled ?? false) &&
+        Boolean(normalizeParallelMcpUrl(wsConfig.providers?.parallel?.url)),
+      version: null,
+      docsUrl: 'https://docs.parallel.ai/integrations/mcp/quickstart',
+      requiresApiKey: false,
+      description: 'Opt-in public web search through Parallel Unified MCP.',
+      detail: normalizeParallelMcpUrl(wsConfig.providers?.parallel?.url)
+        ? `Configured (${wsConfig.providers?.parallel?.max_results ?? 5} results; keyless, rate limited)`
+        : 'Set a valid Parallel MCP endpoint URL',
     },
     {
       id: 'duckduckgo',

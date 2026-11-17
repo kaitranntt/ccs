@@ -6,7 +6,7 @@
  * @module utils/websearch/hook-env
  */
 
-import { normalizeSearxngBaseUrl } from './types';
+import { normalizeParallelMcpUrl, normalizeSearxngBaseUrl } from './types';
 import { resolveAllowedWebSearchTraceFile } from './trace';
 import { getWebSearchConfig } from '../../config/config-loader-facade';
 import type { WebSearchConfigSnapshot } from './launch-state';
@@ -28,6 +28,7 @@ export function getWebSearchHookEnv(
     CCS_WEBSEARCH_TAVILY: '0',
     CCS_WEBSEARCH_BRAVE: '0',
     CCS_WEBSEARCH_SEARXNG: '0',
+    CCS_WEBSEARCH_PARALLEL: '0',
     CCS_WEBSEARCH_DUCKDUCKGO: '0',
     CCS_WEBSEARCH_AGY: '0',
     CCS_WEBSEARCH_GEMINI: '0',
@@ -81,6 +82,13 @@ export function getWebSearchHookEnv(
     env.CCS_WEBSEARCH_SEARXNG = '1';
     env.CCS_WEBSEARCH_SEARXNG_URL = searxngBaseUrl;
     env.CCS_WEBSEARCH_SEARXNG_MAX_RESULTS = String(wsConfig.providers.searxng.max_results || 5);
+  }
+
+  const parallelUrl = normalizeParallelMcpUrl(wsConfig.providers?.parallel?.url);
+  if (wsConfig.providers?.parallel?.enabled && parallelUrl) {
+    env.CCS_WEBSEARCH_PARALLEL = '1';
+    env.CCS_WEBSEARCH_PARALLEL_URL = parallelUrl;
+    env.CCS_WEBSEARCH_PARALLEL_MAX_RESULTS = String(wsConfig.providers.parallel.max_results || 5);
   }
 
   if (wsConfig.providers?.agy?.enabled) {

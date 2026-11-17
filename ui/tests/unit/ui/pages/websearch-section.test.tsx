@@ -154,4 +154,22 @@ describe('WebSearchSection', () => {
     await screen.findByText('Stored in dashboard');
     expect(await screen.findByText('Ready')).toBeInTheDocument();
   });
+  it('offers Parallel as an opt-in backend and saves it alongside existing providers', async () => {
+    render(<WebSearchSection />, { withSettingsProvider: true });
+    const description = await screen.findByText(
+      'Opt-in public web search through Parallel Unified MCP. No key required.'
+    );
+    const card = description.closest('.group');
+    const toggle = card?.querySelector('[role="switch"]') as HTMLElement;
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(toggle);
+    await waitFor(() => {
+      const puts = fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT');
+      expect(puts.length).toBeGreaterThan(0);
+      const body = JSON.parse(String(puts[0][1]?.body));
+      expect(body.providers.parallel).toMatchObject({ enabled: true });
+      expect(body.providers.exa.enabled).toBe(true);
+    });
+    expect(await screen.findByLabelText('MCP URL')).toHaveValue('https://mcp.parallel.ai/mcp');
+  });
 });

@@ -12,7 +12,7 @@ import {
   WEBSEARCH_API_KEY_PROVIDERS,
   type WebSearchApiKeyProviderId,
 } from '../../utils/websearch/provider-secrets';
-import { normalizeSearxngBaseUrl } from '../../utils/websearch/types';
+import { normalizeParallelMcpUrl, normalizeSearxngBaseUrl } from '../../utils/websearch/types';
 import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
 import { getWebSearchConfig, mutateConfig } from '../../config/config-loader-facade';
 
@@ -89,6 +89,25 @@ router.put('/', (req: Request, res: Response): void => {
     (providers === null || Array.isArray(providers) || typeof providers !== 'object')
   ) {
     res.status(400).json({ error: 'Invalid value for providers. Must be an object.' });
+    return;
+  }
+
+  const parallel = providers?.parallel;
+  if (
+    parallel !== undefined &&
+    (parallel === null ||
+      typeof parallel !== 'object' ||
+      Array.isArray(parallel) ||
+      (parallel.enabled !== undefined && typeof parallel.enabled !== 'boolean') ||
+      (parallel.url !== undefined &&
+        (typeof parallel.url !== 'string' || !normalizeParallelMcpUrl(parallel.url))) ||
+      (parallel.max_results !== undefined &&
+        (typeof parallel.max_results !== 'number' || !Number.isFinite(parallel.max_results))))
+  ) {
+    res.status(400).json({
+      error:
+        'Invalid Parallel provider configuration. Use a boolean enabled, an http(s) MCP URL without credentials, query, or hash, and a numeric max_results.',
+    });
     return;
   }
 
@@ -195,6 +214,19 @@ router.put('/', (req: Request, res: Response): void => {
                 max_results: clampWebSearchMaxResults(
                   providers.searxng?.max_results,
                   config.websearch?.providers?.searxng?.max_results ?? DEFAULT_WEBSEARCH_MAX_RESULTS
+                ),
+              },
+              parallel: {
+                enabled:
+                  parallel?.enabled ?? config.websearch?.providers?.parallel?.enabled ?? false,
+                url:
+                  parallel?.url ??
+                  config.websearch?.providers?.parallel?.url ??
+                  'https://mcp.parallel.ai/mcp',
+                max_results: clampWebSearchMaxResults(
+                  parallel?.max_results,
+                  config.websearch?.providers?.parallel?.max_results ??
+                    DEFAULT_WEBSEARCH_MAX_RESULTS
                 ),
               },
               agy: {
