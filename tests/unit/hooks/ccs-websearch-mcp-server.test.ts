@@ -166,13 +166,13 @@ describe('ccs-websearch MCP server', () => {
 
       expect(toolsList?.result).toEqual({
         tools: [
-              {
-                name: 'WebSearch',
-                description:
-                  'Third-party WebSearch replacement for CCS-managed Claude launches. Use this instead of Bash/curl/http fetches for web lookups. Provider order: Exa, Tavily, Brave Search, SearXNG, DuckDuckGo, then optional legacy CLI fallback.',
-                inputSchema: {
-                  type: 'object',
-                  properties: {
+          {
+            name: 'WebSearch',
+            description:
+              'Third-party WebSearch replacement for CCS-managed Claude launches. Use this instead of Bash/curl/http fetches for web lookups. Provider order: Exa, Tavily, Brave Search, SearXNG, Parallel (opt-in), DuckDuckGo, then optional legacy CLI fallback.',
+            inputSchema: {
+              type: 'object',
+              properties: {
                 query: {
                   type: 'string',
                   description:

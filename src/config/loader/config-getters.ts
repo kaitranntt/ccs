@@ -89,6 +89,7 @@ export function getWebSearchConfig(): {
     tavily?: { enabled?: boolean; max_results?: number };
     brave?: { enabled?: boolean; max_results?: number };
     searxng?: { enabled?: boolean; url?: string; max_results?: number };
+    parallel?: { enabled?: boolean; url?: string; max_results?: number };
     duckduckgo?: { enabled?: boolean; max_results?: number };
     agy?: { enabled?: boolean; model?: string; timeout?: number };
     gemini?: GeminiWebSearchInfo;
@@ -127,6 +128,12 @@ export function getWebSearchConfig(): {
     max_results: config.websearch?.providers?.searxng?.max_results ?? 5,
   };
 
+  const parallelConfig = {
+    enabled: config.websearch?.providers?.parallel?.enabled ?? false,
+    url: config.websearch?.providers?.parallel?.url ?? 'https://mcp.parallel.ai/mcp',
+    max_results: config.websearch?.providers?.parallel?.max_results ?? 5,
+  };
+
   const agyConfig = {
     enabled: config.websearch?.providers?.agy?.enabled ?? false,
     model: config.websearch?.providers?.agy?.model ?? 'gemini-2.5-flash',
@@ -158,6 +165,7 @@ export function getWebSearchConfig(): {
     tavilyConfig.enabled ||
     braveConfig.enabled ||
     searxngConfig.enabled ||
+    parallelConfig.enabled ||
     duckDuckGoConfig.enabled ||
     agyConfig.enabled ||
     geminiConfig.enabled ||
@@ -172,6 +180,7 @@ export function getWebSearchConfig(): {
       tavily: tavilyConfig,
       brave: braveConfig,
       searxng: searxngConfig,
+      parallel: parallelConfig,
       duckduckgo: duckDuckGoConfig,
       agy: agyConfig,
       gemini: geminiConfig,

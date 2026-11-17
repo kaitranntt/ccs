@@ -150,6 +150,11 @@ export function createEmptyUnifiedConfig(): UnifiedConfig {
           url: '',
           max_results: 5,
         },
+        parallel: {
+          enabled: false,
+          url: 'https://mcp.parallel.ai/mcp',
+          max_results: 5,
+        },
         duckduckgo: {
           enabled: true,
           max_results: 5,

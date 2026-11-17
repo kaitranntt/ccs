@@ -39,6 +39,7 @@ export interface WebSearchProvidersConfig {
   tavily?: ProviderConfig;
   brave?: ProviderConfig;
   searxng?: ProviderConfig;
+  parallel?: ProviderConfig;
   duckduckgo?: ProviderConfig;
   gemini?: ProviderConfig;
   grok?: ProviderConfig;
@@ -58,7 +59,16 @@ export interface WebSearchSavePayload {
 }
 
 export interface CliStatus {
-  id: 'exa' | 'tavily' | 'brave' | 'searxng' | 'duckduckgo' | 'gemini' | 'grok' | 'opencode';
+  id:
+    | 'exa'
+    | 'tavily'
+    | 'brave'
+    | 'searxng'
+    | 'parallel'
+    | 'duckduckgo'
+    | 'gemini'
+    | 'grok'
+    | 'opencode';
   kind: 'backend' | 'legacy-cli';
   name?: string;
   enabled: boolean;

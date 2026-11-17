@@ -33,6 +33,7 @@ type ProviderId =
   | 'tavily'
   | 'brave'
   | 'searxng'
+  | 'parallel'
   | 'duckduckgo'
   | 'gemini'
   | 'opencode'
@@ -68,6 +69,7 @@ const CHAIN_STEPS = [
   { id: 'tavily', title: 'Tavily', defaultEnabled: false },
   { id: 'brave', title: 'Brave', defaultEnabled: false },
   { id: 'searxng', title: 'SearXNG', defaultEnabled: false },
+  { id: 'parallel', title: 'Parallel', defaultEnabled: false },
   { id: 'duckduckgo', title: 'DuckDuckGo', defaultEnabled: true },
   { id: 'legacy', title: 'Legacy CLI', defaultEnabled: false },
 ] as const;
@@ -149,7 +151,7 @@ const BACKEND_PROVIDERS: ProviderDefinition[] = [
     badgeTone: 'cyan',
     defaultEnabled: false,
     fallbackDetail: 'Set a valid base URL',
-    footerNote: 'Runs after Brave and before DuckDuckGo when enabled and ready.',
+    footerNote: 'Runs after Brave and before Parallel when enabled and ready.',
     fields: [
       {
         key: 'url',
@@ -166,6 +168,38 @@ const BACKEND_PROVIDERS: ProviderDefinition[] = [
         type: 'number',
         placeholder: '5',
         helpText: 'Clamp between 1 and 10 results.',
+        defaultValue: 5,
+        min: 1,
+        max: 10,
+      },
+    ],
+  },
+  {
+    id: 'parallel',
+    title: 'Parallel',
+    description: 'Opt-in public web search through Parallel Unified MCP. No key required.',
+    badge: 'MCP',
+    badgeTone: 'cyan',
+    defaultEnabled: false,
+    fallbackDetail: 'Disabled by default',
+    footerNote:
+      'Runs after SearXNG and before DuckDuckGo. Send only public queries you authorize for this service; keyless access is rate limited.',
+    fields: [
+      {
+        key: 'url',
+        label: 'MCP URL',
+        type: 'text',
+        placeholder: 'https://mcp.parallel.ai/mcp',
+        helpText:
+          'Full Streamable HTTP endpoint without credentials, query parameters, or fragments.',
+        defaultValue: 'https://mcp.parallel.ai/mcp',
+      },
+      {
+        key: 'max_results',
+        label: 'Max results',
+        type: 'number',
+        placeholder: '5',
+        helpText: 'Display between 1 and 10 results.',
         defaultValue: 5,
         min: 1,
         max: 10,

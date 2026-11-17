@@ -156,6 +156,11 @@ export function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfi
           url: normalizeSearxngBaseUrl(partial.websearch?.providers?.searxng?.url) ?? '',
           max_results: partial.websearch?.providers?.searxng?.max_results ?? 5,
         },
+        parallel: {
+          enabled: partial.websearch?.providers?.parallel?.enabled ?? false,
+          url: partial.websearch?.providers?.parallel?.url ?? 'https://mcp.parallel.ai/mcp',
+          max_results: partial.websearch?.providers?.parallel?.max_results ?? 5,
+        },
         duckduckgo: {
           enabled: partial.websearch?.providers?.duckduckgo?.enabled ?? true,
           max_results: partial.websearch?.providers?.duckduckgo?.max_results ?? 5,

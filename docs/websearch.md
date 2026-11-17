@@ -40,11 +40,12 @@ The managed runtime tries eligible providers sequentially:
 2. Tavily
 3. Brave Search
 4. SearXNG
-5. DuckDuckGo
-6. Antigravity CLI
-7. Gemini CLI compatibility fallback
-8. OpenCode
-9. Grok CLI
+5. Parallel (opt-in)
+6. DuckDuckGo
+7. Antigravity CLI
+8. Gemini CLI compatibility fallback
+9. OpenCode
+10. Grok CLI
 
 The first successful provider wins. Temporarily failing providers can enter a
 bounded cooldown and be skipped on later calls. Runtime attempt eligibility is
@@ -60,6 +61,7 @@ The transformer and dashboard answer related but different questions:
 | Tavily | Enabled and `TAVILY_API_KEY` is present. | Enabled and the key is available through the active process or enabled Global Env. |
 | Brave Search | Enabled and `BRAVE_API_KEY` is present. | Enabled and the key is available through the active process or enabled Global Env. |
 | SearXNG | Enabled and a base URL is present. | Enabled with a valid normalized base URL. |
+| Parallel | Explicitly enabled with a valid MCP endpoint URL. | Enabled with a valid endpoint URL; this is configuration readiness, not a live reachability probe. |
 | DuckDuckGo | Enabled. | Enabled. |
 | Antigravity | Enabled and the `agy` executable is available. | Enabled and the CLI is installed. |
 | Gemini compatibility | Enabled and the `gemini` executable is available. | Enabled, installed, and authenticated. |
@@ -98,6 +100,10 @@ websearch:
       enabled: false
       url: ""
       max_results: 5
+    parallel:
+      enabled: false
+      url: "https://mcp.parallel.ai/mcp"
+      max_results: 5
     duckduckgo:
       enabled: true
       max_results: 5
@@ -124,6 +130,28 @@ defaults are in
 [`src/config/schemas/unified-config.ts`](../src/config/schemas/unified-config.ts).
 Deprecated top-level WebSearch fields remain load-compatible but must not be
 used for new configuration.
+
+### Parallel Unified MCP
+
+Enable `websearch.providers.parallel.enabled` in `config.yaml`, or use
+`ccs config` → `Settings` → `WebSearch` → `Parallel`. The endpoint defaults to
+`https://mcp.parallel.ai/mcp`. Only `web_search` is called, without credentials;
+keyless access is rate limited. See [Parallel MCP setup](https://docs.parallel.ai/integrations/mcp/quickstart).
+Custom endpoints must implement the same stateless Streamable HTTP tool-call
+contract. URLs with credentials, query parameters, or fragments are rejected.
+
+Enable this provider only for public web queries you authorize sending to the
+configured service. For example, ask a managed third-party session to look up
+public Bun test-runner documentation and cite its sources. CCS passes the query
+to `web_search`, then returns titles, excerpts, and original HTTP(S) source URLs
+through the existing MCP `WebSearch` response. `max_results` limits displayed
+results; it does not change the remote search request.
+
+Parallel runs after SearXNG and before DuckDuckGo when enabled. Failures use the
+existing retry, cooldown, and fallback policy. An empty successful search
+returns "No results found", matching the existing structured backends. Disabled
+configurations make no Parallel requests, and existing provider defaults remain
+unchanged. Network and response-body reads share the provider timeout.
 
 ### SearXNG URL
 
