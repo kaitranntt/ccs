@@ -32,6 +32,7 @@ export const PROVIDER_PRESET_IDS = [
   'runcrate',
   'obscurifyai',
   'cloudgpu',
+  'standardcompute',
 ] as const;
 
 export type ProviderPresetId = (typeof PROVIDER_PRESET_IDS)[number];
@@ -403,6 +404,20 @@ const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
     category: 'alternative',
     requiresApiKey: true,
     badge: 'OpenAI-compatible',
+  },
+  {
+    id: 'standardcompute',
+    name: 'Standard Compute',
+    description:
+      'Anthropic-compatible API with model routing across Claude, GPT, Gemini, DeepSeek and others via api.stdcmpt.com',
+    baseUrl: 'https://api.stdcmpt.com',
+    defaultProfileName: 'standardcompute',
+    defaultModel: 'StandardCompute',
+    apiKeyPlaceholder: 'sk_live_...',
+    apiKeyHint: 'Create an API key at standardcompute.com/dashboard/api-keys',
+    category: 'alternative',
+    requiresApiKey: true,
+    badge: 'Anthropic-compatible',
   },
 ];
 
