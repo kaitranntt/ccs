@@ -605,9 +605,27 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
         extendedContext: true,
       },
       {
+        id: 'claude-fable-5-2',
+        name: 'Claude Fable 5.2',
+        description: 'Most powerful model (1M context, 128K output)',
+        contextWindow: 1000000,
+        nativeImageInput: true,
+        // Same request surface as Fable 5.1: thinking is always on, `disabled` and
+        // manual budget_tokens are rejected with 400, and depth is steered only
+        // through effort levels (default `high`). Listed first so it backs the
+        // Claude Code `fable` tier by default (getDefaultFableTierModel).
+        thinking: {
+          type: 'levels',
+          levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          maxLevel: 'max',
+          dynamicAllowed: true,
+        },
+        extendedContext: true,
+      },
+      {
         id: 'claude-fable-5-1',
         name: 'Claude Fable 5.1',
-        description: 'Most powerful model (1M context, 128K output)',
+        description: 'Previous most powerful model (1M context, 128K output)',
         contextWindow: 1000000,
         nativeImageInput: true,
         // Thinking is always on and cannot be disabled: Anthropic rejects both
@@ -624,7 +642,7 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
       {
         id: 'claude-fable-5',
         name: 'Claude Fable 5',
-        description: 'Previous most powerful model',
+        description: 'Older most powerful model',
         contextWindow: 1000000,
         nativeImageInput: true,
         // New tier above Opus. Same adaptive-thinking surface as Opus 4.8:

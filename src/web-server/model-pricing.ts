@@ -430,13 +430,31 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
   },
   // Claude Fable 5.1 ($10/$50) — same tier and base rates as Fable 5, but cache
   // hits are billed at 0.025x base input ($0.25/MTok) instead of the usual 0.1x.
-  // Anthropic applies that reduced multiplier only to Fable 5.1 and Mythos 5.1,
+  // Anthropic applies that reduced multiplier only to Fable/Mythos 5.1 and 5.2,
   // so this entry cannot use CACHE_READ_MULTIPLIER-derived rates.
   'claude-fable-5-1': {
     inputPerMillion: 10.0,
     outputPerMillion: 50.0,
     cacheCreationPerMillion: 12.5,
     cacheReadPerMillion: 0.25,
+  },
+  // Claude Fable 5.2 ($8/$40) — successor to Fable 5.1 at a lower price. Cache
+  // writes $10 (1.25x), cache hits $0.20 (0.025x, the same reduced multiplier
+  // as Fable 5.1), so this entry cannot use CACHE_READ_MULTIPLIER-derived rates.
+  // Fast mode: 2x ($16/$80, cache write $20, cache read $0.40).
+  'claude-fable-5-2': {
+    inputPerMillion: 8.0,
+    outputPerMillion: 40.0,
+    cacheCreationPerMillion: 10.0,
+    cacheReadPerMillion: 0.2,
+    serviceTiers: {
+      fast: {
+        inputPerMillion: 16.0,
+        outputPerMillion: 80.0,
+        cacheCreationPerMillion: 20.0,
+        cacheReadPerMillion: 0.4,
+      },
+    },
   },
 
   // ---------------------------------------------------------------------------

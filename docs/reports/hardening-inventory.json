@@ -743,7 +743,7 @@
         },
         {
           "file": "src/web-server/model-pricing.ts",
-          "loc": 1268
+          "loc": 1286
         },
         {
           "file": "src/cursor/cursor-executor.ts",
@@ -762,12 +762,12 @@
           "loc": 1042
         },
         {
-          "file": "src/commands/cliproxy/variant-subcommand.ts",
-          "loc": 1003
+          "file": "src/cliproxy/model-catalog.ts",
+          "loc": 1019
         },
         {
-          "file": "src/cliproxy/model-catalog.ts",
-          "loc": 1001
+          "file": "src/commands/cliproxy/variant-subcommand.ts",
+          "loc": 1003
         },
         {
           "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",

@@ -273,6 +273,28 @@ describe('Model Catalog', () => {
       assert.strictEqual(opus48.extendedContext, true);
     });
 
+    it('includes Claude Fable 5.2 as the newest Fable, backing the fable tier', () => {
+      const { MODEL_CATALOG, getDefaultFableTierModel } = modelCatalog;
+      const fable52 = MODEL_CATALOG.claude.models.find((m) => m.id === 'claude-fable-5-2');
+      assert(fable52, 'Should include Claude Fable 5.2');
+      assert.strictEqual(fable52.name, 'Claude Fable 5.2');
+      assert.strictEqual(fable52.contextWindow, 1000000);
+      // Thinking is always on; Anthropic accepts only effort levels.
+      assert.strictEqual(fable52.thinking.type, 'levels');
+      assert.deepStrictEqual(fable52.thinking.levels, ['low', 'medium', 'high', 'xhigh', 'max']);
+      assert.strictEqual(fable52.thinking.maxLevel, 'max');
+      assert.strictEqual(fable52.thinking.zeroAllowed, undefined);
+      assert.strictEqual(fable52.nativeImageInput, true);
+      assert.strictEqual(fable52.extendedContext, true);
+
+      // Newest Fable is listed first, so it is the default fable tier model.
+      const fableIds = MODEL_CATALOG.claude.models
+        .map((m) => m.id)
+        .filter((id) => id.startsWith('claude-fable-'));
+      assert.deepStrictEqual(fableIds, ['claude-fable-5-2', 'claude-fable-5-1', 'claude-fable-5']);
+      assert.strictEqual(getDefaultFableTierModel('claude'), 'claude-fable-5-2');
+    });
+
     it('includes Claude Fable 5 with adaptive levels and extended context', () => {
       const { MODEL_CATALOG } = modelCatalog;
       const fable5 = MODEL_CATALOG.claude.models.find((m) => m.id === 'claude-fable-5');
