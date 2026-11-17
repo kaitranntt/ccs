@@ -32,6 +32,7 @@ export const PROVIDER_PRESET_IDS = [
   'runcrate',
   'obscurifyai',
   'cloudgpu',
+  'uberllm',
 ] as const;
 
 export type ProviderPresetId = (typeof PROVIDER_PRESET_IDS)[number];
@@ -403,6 +404,20 @@ const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
     category: 'alternative',
     requiresApiKey: true,
     badge: 'OpenAI-compatible',
+  },
+  {
+    id: 'uberllm',
+    name: 'UberLLM',
+    description:
+      'Anthropic-compatible API for Claude, GPT, Gemini, DeepSeek, Kimi and more via api.uberllm.dev',
+    baseUrl: 'https://api.uberllm.dev',
+    defaultProfileName: 'uberllm',
+    defaultModel: 'deepseek/deepseek-v4-flash',
+    apiKeyPlaceholder: 'ull_...',
+    apiKeyHint: 'Create an API key at uberllm.dev/dashboard/keys',
+    category: 'alternative',
+    requiresApiKey: true,
+    badge: 'Anthropic-compatible',
   },
 ];
 
