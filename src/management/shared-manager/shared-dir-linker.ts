@@ -49,7 +49,7 @@ import {
   preserveCanonicalFirstDivergence,
   reconcileCanonicalFirstFile,
 } from './canonical-first-file-reconciler';
-import { SHARED_ITEMS } from './types';
+import { SHARED_ITEMS, type SharedItem } from './types';
 
 /**
  * Roots for the shared-dir linker. Reuses PluginMetadataRoots because the
@@ -114,6 +114,42 @@ export function detectCircularSymlink(target: string, sharedDir: string): boolea
 }
 
 /**
+ * True when ~/.claude/<item> is a symlink whose own target is exactly
+ * ~/.ccs/shared/<item>, that shared entry is a real file or directory of the
+ * item's type, and the link really resolves to it (same device and inode).
+ * Both paths already reach the same object, so there is nothing to link and
+ * nothing circular: the loop that detectCircularSymlink guards against forms
+ * only if the shared entry were re-pointed at ~/.claude, and the caller skips
+ * the item before that. Any other link into the shared root still goes
+ * through detectCircularSymlink.
+ */
+function isLinkToRealSharedEntry(
+  claudePath: string,
+  sharedPath: string,
+  itemType: SharedItem['type']
+): boolean {
+  try {
+    if (!fs.lstatSync(claudePath).isSymbolicLink()) {
+      return false;
+    }
+    const target = path.resolve(path.dirname(claudePath), fs.readlinkSync(claudePath));
+    if (target !== sharedPath) {
+      return false;
+    }
+    const shared = fs.lstatSync(sharedPath, { bigint: true });
+    const isExpectedType = itemType === 'directory' ? shared.isDirectory() : shared.isFile();
+    if (!isExpectedType || shared.ino === 0n) {
+      return false;
+    }
+    const resolved = fs.statSync(claudePath, { bigint: true });
+    return resolved.dev === shared.dev && resolved.ino === shared.ino;
+  } catch {
+    // Anything unreadable is left to detectCircularSymlink, exactly as before.
+    return false;
+  }
+}
+
+/**
  * Ensure shared directories exist as symlinks to ~/.claude/ and that the
  * plugin layout default directories and registry files are present.
  */
@@ -160,6 +196,10 @@ export function ensureSharedDirectories(
         } else if (item.type === 'file') {
           fs.writeFileSync(claudePath, item.seedContent, 'utf8');
         }
+      }
+
+      if (isLinkToRealSharedEntry(claudePath, sharedPath, item.type)) {
+        return;
       }
 
       if (detectCircularSymlink(claudePath, sharedDir)) {
