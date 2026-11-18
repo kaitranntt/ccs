@@ -242,6 +242,132 @@ describe('shared CLAUDE.md memory', () => {
     expectLinkTo(instanceFile('work'), sharedFile());
   });
 
+  it('keeps the shared file that ~/.claude/CLAUDE.md links to', () => {
+    writeFile(sharedFile(), '# Only copy\n');
+    fs.mkdirSync(path.dirname(claudeFile()), { recursive: true });
+    fs.symlinkSync(sharedFile(), claudeFile());
+
+    new SharedManager().ensureSharedDirectories();
+
+    expect(fs.lstatSync(sharedFile()).isFile()).toBe(true);
+    expect(fs.readFileSync(sharedFile(), 'utf8')).toBe('# Only copy\n');
+    expectLinkTo(claudeFile(), sharedFile());
+    expect(conflictFiles(sharedFile())).toEqual([]);
+  });
+
+  it('keeps an instance file that ~/.claude/CLAUDE.md links to', () => {
+    writeFile(instanceFile('work'), '# Only copy\n');
+    fs.mkdirSync(path.dirname(claudeFile()), { recursive: true });
+    fs.symlinkSync(instanceFile('work'), claudeFile());
+
+    new SharedManager().linkSharedDirectories(instanceDir('work'));
+
+    expect(fs.lstatSync(instanceFile('work')).isFile()).toBe(true);
+    expect(fs.readFileSync(instanceFile('work'), 'utf8')).toBe('# Only copy\n');
+    expectLinkTo(claudeFile(), instanceFile('work'));
+    expect(conflictFiles(instanceFile('work'))).toEqual([]);
+  });
+
+  it('still replaces an identical instance copy the canonical link does not resolve to', () => {
+    writeFile(sharedFile(), '# Only copy\n');
+    writeFile(instanceFile('work'), '# Only copy\n');
+    fs.mkdirSync(path.dirname(claudeFile()), { recursive: true });
+    fs.symlinkSync(sharedFile(), claudeFile());
+
+    new SharedManager().linkSharedDirectories(instanceDir('work'));
+
+    expect(fs.readFileSync(sharedFile(), 'utf8')).toBe('# Only copy\n');
+    expectLinkTo(instanceFile('work'), sharedFile());
+    expect(conflictFiles(instanceFile('work'))).toEqual([]);
+  });
+
+  it('still replaces an instance hard link to a regular canonical file', () => {
+    writeFile(claudeFile(), '# Canonical\n');
+    fs.mkdirSync(instanceDir('work'), { recursive: true });
+    fs.linkSync(claudeFile(), instanceFile('work'));
+
+    new SharedManager().linkSharedDirectories(instanceDir('work'));
+
+    expect(fs.readFileSync(claudeFile(), 'utf8')).toBe('# Canonical\n');
+    expectLinkTo(instanceFile('work'), sharedFile());
+    expect(conflictFiles(instanceFile('work'))).toEqual([]);
+  });
+
+  it('still replaces an instance hard link to the file ~/.claude/CLAUDE.md links to', () => {
+    const externalFile = path.join(tempHome, 'dotfiles', 'CLAUDE.md');
+    writeFile(externalFile, '# External\n');
+    fs.mkdirSync(path.dirname(claudeFile()), { recursive: true });
+    fs.symlinkSync(externalFile, claudeFile());
+    fs.mkdirSync(instanceDir('work'), { recursive: true });
+    fs.linkSync(externalFile, instanceFile('work'));
+
+    new SharedManager().linkSharedDirectories(instanceDir('work'));
+
+    expect(fs.readFileSync(externalFile, 'utf8')).toBe('# External\n');
+    expectLinkTo(claudeFile(), externalFile);
+    expectLinkTo(instanceFile('work'), sharedFile());
+    expect(conflictFiles(instanceFile('work'))).toEqual([]);
+  });
+
+  it('still relinks a shared symlink that reaches the canonical file by another route', () => {
+    const externalFile = path.join(tempHome, 'dotfiles', 'CLAUDE.md');
+    writeFile(externalFile, '# External\n');
+    fs.mkdirSync(path.dirname(claudeFile()), { recursive: true });
+    fs.mkdirSync(path.dirname(sharedFile()), { recursive: true });
+    fs.symlinkSync(externalFile, claudeFile());
+    fs.symlinkSync(externalFile, sharedFile());
+
+    new SharedManager().ensureSharedDirectories();
+
+    expect(fs.readFileSync(externalFile, 'utf8')).toBe('# External\n');
+    expectLinkTo(claudeFile(), externalFile);
+    expectLinkTo(sharedFile(), claudeFile());
+  });
+
+  it('still preserves a divergent shared file that the canonical link only names lexically', () => {
+    const elsewhere = path.join(tempHome, 'elsewhere');
+    writeFile(path.join(elsewhere, 'CLAUDE.md'), '# Canonical\n');
+    fs.mkdirSync(path.join(elsewhere, 'child'), { recursive: true });
+    writeFile(sharedFile(), '# Divergent\n');
+    fs.symlinkSync(path.join(elsewhere, 'child'), path.join(ccsDir(), 'shared', 'hop'));
+    fs.mkdirSync(path.dirname(claudeFile()), { recursive: true });
+    // `hop/..` is `elsewhere`, not the shared root, once `hop` is followed.
+    fs.symlinkSync(`${ccsDir()}/shared/hop/../CLAUDE.md`, claudeFile());
+
+    new SharedManager().ensureSharedDirectories();
+
+    expect(fs.readFileSync(claudeFile(), 'utf8')).toBe('# Canonical\n');
+    const recoveries = conflictFiles(sharedFile());
+    expect(recoveries).toHaveLength(1);
+    expect(fs.readFileSync(recoveries[0], 'utf8')).toBe('# Divergent\n');
+  });
+
+  it.skipIf(process.platform !== 'linux')(
+    'still preserves a divergent shared file whose real path differs only in non-UTF-8 bytes',
+    () => {
+      const byteDir = (byte: number) =>
+        Buffer.concat([Buffer.from(path.join(tempHome, 'real-')), Buffer.from([byte])]);
+      const inDir = (dir: Buffer, name: string) => Buffer.concat([dir, Buffer.from(`/${name}`)]);
+      const sharedTarget = byteDir(0x80);
+      const canonicalTarget = byteDir(0x81);
+      fs.mkdirSync(sharedTarget);
+      fs.mkdirSync(canonicalTarget);
+      fs.writeFileSync(inDir(sharedTarget, 'CLAUDE.md'), '# Divergent\n');
+      fs.writeFileSync(inDir(canonicalTarget, 'CLAUDE.md'), '# Canonical\n');
+      fs.mkdirSync(ccsDir(), { recursive: true });
+      fs.symlinkSync(sharedTarget, path.join(ccsDir(), 'shared'));
+      fs.mkdirSync(path.dirname(claudeFile()), { recursive: true });
+      fs.symlinkSync(inDir(canonicalTarget, 'CLAUDE.md'), claudeFile());
+
+      new SharedManager().ensureSharedDirectories();
+
+      expect(fs.readFileSync(claudeFile(), 'utf8')).toBe('# Canonical\n');
+      const recoveries = conflictFiles(sharedFile());
+      expect(recoveries).toHaveLength(1);
+      expect(fs.readFileSync(recoveries[0], 'utf8')).toBe('# Divergent\n');
+    }
+  );
+
   for (const linkErrorCode of ['EPERM', 'EACCES', 'ENOTSUP']) {
     it(`copies conflict recovery when hard links fail with ${linkErrorCode}`, () => {
       const manager = new SharedManager();

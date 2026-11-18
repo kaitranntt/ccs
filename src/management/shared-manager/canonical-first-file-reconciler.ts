@@ -46,6 +46,26 @@ function candidatePaths(roots: CanonicalFirstRoots, fileName: string): string[] 
   ];
 }
 
+/**
+ * True when this regular file is the one the canonical path resolves to. Such a
+ * file is not a copy of the canonical content; it is that content, so it always
+ * compares equal to itself and claiming it would delete it. Real paths are
+ * compared as bytes from the native resolver: the JS resolver collapses `..`
+ * before following links, and decoded strings can collide on invalid UTF-8.
+ */
+function isCanonicalTarget(filePath: string, canonicalPath: string): boolean {
+  try {
+    return (
+      fs.lstatSync(filePath).isFile() &&
+      fs.realpathSync
+        .native(filePath, 'buffer')
+        .equals(fs.realpathSync.native(canonicalPath, 'buffer'))
+    );
+  } catch {
+    return false;
+  }
+}
+
 function reconcileCandidatesAgainstCanonical(
   canonicalPath: string,
   candidates: readonly string[]
@@ -58,6 +78,7 @@ function reconcileCandidatesAgainstCanonical(
   }
 
   for (const candidatePath of candidates) {
+    if (isCanonicalTarget(candidatePath, canonicalPath)) continue;
     claimCanonicalFirstCopy(
       candidatePath,
       canonicalContent,
@@ -122,11 +143,20 @@ export function reconcileCanonicalFirstFile(roots: CanonicalFirstRoots, fileName
   );
 }
 
-/** Preserve a later divergent copy without allowing it to replace canonical content. */
+/**
+ * Preserve a later divergent copy without allowing it to replace canonical content.
+ * Returns true when the caller must not remove the path: it was claimed, or it is
+ * the file the canonical path resolves to.
+ */
 export function preserveCanonicalFirstDivergence(
   divergedPath: string,
   canonicalPath: string
 ): boolean {
+  if (isCanonicalTarget(divergedPath, canonicalPath)) {
+    console.log(warn(`Keeping ${divergedPath}: ${canonicalPath} resolves to it`));
+    return true;
+  }
+
   let canonicalContent: Buffer | null = null;
   try {
     canonicalContent = fs.readFileSync(canonicalPath);
