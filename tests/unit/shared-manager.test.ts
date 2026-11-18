@@ -273,7 +273,7 @@ describe('SharedManager', () => {
       ).toBe(claudeSettingsPath);
     });
 
-    it('still blocks real circular links back into ~/.ccs/shared', () => {
+    it('leaves a ~/.claude link to a real shared directory in place without warning', () => {
       const manager = new SharedManager();
       const claudeCommandsPath = path.join(claudeDir(), 'commands');
       const sharedCommandsPath = path.join(ccsDir(), 'shared', 'commands');
@@ -285,12 +285,157 @@ describe('SharedManager', () => {
 
       manager.ensureSharedDirectories();
 
+      expect(logSpy.mock.calls.some(([message]) => /circular symlink/i.test(String(message)))).toBe(
+        false
+      );
+      expect(fs.lstatSync(sharedCommandsPath).isDirectory()).toBe(true);
+      expect(fs.lstatSync(claudeCommandsPath).isSymbolicLink()).toBe(true);
+      expect(
+        path.resolve(path.dirname(claudeCommandsPath), fs.readlinkSync(claudeCommandsPath))
+      ).toBe(sharedCommandsPath);
+    });
+
+    it('leaves a ~/.claude link to a real shared settings.json in place without warning', () => {
+      const manager = new SharedManager();
+      const claudeSettingsPath = path.join(claudeDir(), 'settings.json');
+      const sharedSettingsPath = path.join(ccsDir(), 'shared', 'settings.json');
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      writeJson(sharedSettingsPath, { model: 'opus' });
+      fs.symlinkSync(sharedSettingsPath, claudeSettingsPath, 'file');
+
+      manager.ensureSharedDirectories();
+
+      expect(logSpy.mock.calls.some(([message]) => /circular symlink/i.test(String(message)))).toBe(
+        false
+      );
+      expect(fs.lstatSync(sharedSettingsPath).isFile()).toBe(true);
+      expect(readJson(sharedSettingsPath)).toEqual({ model: 'opus' });
+      expect(fs.lstatSync(claudeSettingsPath).isSymbolicLink()).toBe(true);
+      expect(
+        path.resolve(path.dirname(claudeSettingsPath), fs.readlinkSync(claudeSettingsPath))
+      ).toBe(sharedSettingsPath);
+      expect(findRecovery(sharedSettingsPath)).toBeUndefined();
+    });
+
+    it('still warns for a ~/.claude link to a different path inside ~/.ccs/shared', () => {
+      const manager = new SharedManager();
+      const claudeCommandsPath = path.join(claudeDir(), 'commands');
+      const sharedCommandsPath = path.join(ccsDir(), 'shared', 'commands');
+      const sharedOtherPath = path.join(ccsDir(), 'shared', 'other-commands');
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      fs.mkdirSync(sharedCommandsPath, { recursive: true });
+      fs.symlinkSync(sharedCommandsPath, sharedOtherPath, 'dir');
+      fs.symlinkSync(sharedOtherPath, claudeCommandsPath, 'dir');
+
+      manager.ensureSharedDirectories();
+
+      expect(
+        logSpy.mock.calls.some(([message]) =>
+          String(message).includes('Skipping commands: circular symlink detected')
+        )
+      ).toBe(true);
+      expect(
+        path.resolve(path.dirname(claudeCommandsPath), fs.readlinkSync(claudeCommandsPath))
+      ).toBe(sharedOtherPath);
+      expect(fs.lstatSync(sharedCommandsPath).isDirectory()).toBe(true);
+    });
+
+    it('still warns when a ~/.claude link only names the shared entry lexically', () => {
+      const manager = new SharedManager();
+      const claudeCommandsPath = path.join(claudeDir(), 'commands');
+      const sharedCommandsPath = path.join(ccsDir(), 'shared', 'commands');
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      fs.mkdirSync(sharedCommandsPath, { recursive: true });
+      // `missing/..` collapses to the shared entry on paper, but the link cannot be followed.
+      fs.symlinkSync(`${tempRoot}/missing/../.ccs/shared/commands`, claudeCommandsPath, 'dir');
+
+      manager.ensureSharedDirectories();
+
       expect(
         logSpy.mock.calls.some(([message]) =>
           String(message).includes('Skipping commands: circular symlink detected')
         )
       ).toBe(true);
       expect(fs.lstatSync(sharedCommandsPath).isDirectory()).toBe(true);
+    });
+
+    it('still warns when a ~/.claude link reaches a different object than the shared entry', () => {
+      const manager = new SharedManager();
+      const claudeCommandsPath = path.join(claudeDir(), 'commands');
+      const sharedCommandsPath = path.join(ccsDir(), 'shared', 'commands');
+      const elsewhereRoot = path.join(tempRoot, 'elsewhere');
+      const aliasPath = path.join(tempRoot, 'alias');
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      fs.mkdirSync(sharedCommandsPath, { recursive: true });
+      fs.mkdirSync(path.join(elsewhereRoot, 'sub'), { recursive: true });
+      fs.mkdirSync(path.join(elsewhereRoot, '.ccs', 'shared', 'commands'), { recursive: true });
+      fs.symlinkSync(path.join(elsewhereRoot, 'sub'), aliasPath, 'dir');
+      // Names the shared entry on paper; the kernel follows `alias` first and lands under `elsewhere`.
+      fs.symlinkSync(`${tempRoot}/alias/../.ccs/shared/commands`, claudeCommandsPath, 'dir');
+
+      manager.ensureSharedDirectories();
+
+      expect(
+        logSpy.mock.calls.some(([message]) =>
+          String(message).includes('Skipping commands: circular symlink detected')
+        )
+      ).toBe(true);
+      expect(fs.lstatSync(sharedCommandsPath).isDirectory()).toBe(true);
+    });
+
+    it('still warns when the shared entry is not the type the item expects', () => {
+      const manager = new SharedManager();
+      const claudeCommandsPath = path.join(claudeDir(), 'commands');
+      const sharedCommandsPath = path.join(ccsDir(), 'shared', 'commands');
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      fs.mkdirSync(path.dirname(sharedCommandsPath), { recursive: true });
+      fs.writeFileSync(sharedCommandsPath, 'not a directory', 'utf8');
+      fs.symlinkSync(sharedCommandsPath, claudeCommandsPath, 'dir');
+
+      manager.ensureSharedDirectories();
+
+      expect(
+        logSpy.mock.calls.some(([message]) =>
+          String(message).includes('Skipping commands: circular symlink detected')
+        )
+      ).toBe(true);
+      expect(fs.lstatSync(sharedCommandsPath).isFile()).toBe(true);
+    });
+
+    it('still blocks real circular links back into ~/.ccs/shared', () => {
+      const manager = new SharedManager();
+      const claudeCommandsPath = path.join(claudeDir(), 'commands');
+      const sharedCommandsPath = path.join(ccsDir(), 'shared', 'commands');
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      fs.mkdirSync(path.join(ccsDir(), 'shared'), { recursive: true });
+      fs.symlinkSync(sharedCommandsPath, claudeCommandsPath, 'dir');
+      fs.symlinkSync(claudeCommandsPath, sharedCommandsPath, 'dir');
+
+      manager.ensureSharedDirectories();
+
+      expect(
+        logSpy.mock.calls.some(([message]) =>
+          String(message).includes('Skipping commands: circular symlink detected')
+        )
+      ).toBe(true);
+      expect(
+        path.resolve(path.dirname(claudeCommandsPath), fs.readlinkSync(claudeCommandsPath))
+      ).toBe(sharedCommandsPath);
+      expect(
+        path.resolve(path.dirname(sharedCommandsPath), fs.readlinkSync(sharedCommandsPath))
+      ).toBe(claudeCommandsPath);
     });
 
     it('does not materialize dangling external settings symlinks', () => {
