@@ -49,7 +49,7 @@ export function formatStatus(notice: Notice): string {
 // Notice ids already toasted; starts over when the module reloads.
 const seen = new Set<string>()
 
-async function poll($: EngineInterface, file: string): Promise<void> {
+async function poll($: EngineInterface, file: string, showStatus: boolean): Promise<void> {
   let text: string
   try {
     text = await $.fs.read(file)
@@ -62,16 +62,22 @@ async function poll($: EngineInterface, file: string): Promise<void> {
     seen.add(notice.id)
     $.ui.toast(formatNotice(notice), { timeoutMs: TOAST_MS })
   }
+  if (!showStatus) return
   const latest = notices[notices.length - 1]
   $.ui.status(latest ? formatStatus(latest) : undefined)
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  // userConfig `status_line` (default on); off leaves toasts only, a row
+  // saved on a phone-sized terminal.
+  const showStatus = options.status_line !== false
   on('session.start', async ($, e, next) => {
+    // Turned off mid-session: take down the line the last load pinned.
+    if (!showStatus) $.ui.status(undefined)
     const file = await $.env.get('CCS_SESSION_NOTICES_FILE')
     if (file) {
-      void poll($, file)
-      $.clock.every(POLL_MS, () => void poll($, file))
+      void poll($, file, showStatus)
+      $.clock.every(POLL_MS, () => void poll($, file, showStatus))
     }
     return next(e)
   })

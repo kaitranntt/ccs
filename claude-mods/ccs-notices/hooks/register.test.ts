@@ -74,3 +74,29 @@ test('does nothing outside a CCS session', async ($, on) => {
   await clock.advance(60_000)
   expect(reads).toBe(0)
 })
+
+test('toasts only when the status line option is off', { options: { status_line: false } }, async ($, on) => {
+  mock.env(on, { CCS_SESSION_NOTICES_FILE: FILE })
+  const clock = mock.clock(on)
+  const file = noticesFile([
+    { id: 'a', level: 'warning', title: 'Quota low (9% left): ken***@example.com', details: [] },
+  ])
+  const toasts: string[] = []
+  const statuses: Array<string | undefined> = []
+  on('fs.read', (_$, e) => (e.path === FILE ? { value: file } : { deny: 'ENOENT' }))
+  on('ui.toast', (_$, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.status', (_$, e) => {
+    statuses.push(e.text)
+    return { value: undefined }
+  })
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await clock.advance(15_000)
+  expect(toasts).toEqual(['[!] Quota low (9% left): ken***@example.com'])
+  // Only the clear at session start: no alert is ever pinned.
+  expect(statuses).toEqual([undefined])
+})
