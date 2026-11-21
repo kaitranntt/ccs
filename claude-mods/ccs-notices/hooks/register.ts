@@ -30,9 +30,20 @@ export function parseNotices(text: string): Notice[] {
   }
 }
 
+function headline(notice: Notice): string {
+  return `${notice.level === 'error' ? '[X]' : '[!]'} ${notice.title}`
+}
+
+// The toast wraps to the terminal, so it carries the whole notice.
 export function formatNotice(notice: Notice): string {
-  const prefix = notice.level === 'error' ? '[X]' : '[!]'
-  return [`${prefix} ${notice.title}`, ...notice.details].join(' - ')
+  return [headline(notice), ...notice.details].join(' - ')
+}
+
+// The status line is one row, cut at the terminal's width (about 43
+// characters in a 62-column phone SSH client), so it holds the title alone;
+// CCS puts the title's key fact first.
+export function formatStatus(notice: Notice): string {
+  return headline(notice)
 }
 
 // Notice ids already toasted; starts over when the module reloads.
@@ -52,7 +63,7 @@ async function poll($: EngineInterface, file: string): Promise<void> {
     $.ui.toast(formatNotice(notice), { timeoutMs: TOAST_MS })
   }
   const latest = notices[notices.length - 1]
-  $.ui.status(latest ? formatNotice(latest) : undefined)
+  $.ui.status(latest ? formatStatus(latest) : undefined)
 }
 
 export const register: Register = on => {
