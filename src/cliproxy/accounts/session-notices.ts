@@ -22,7 +22,10 @@ export interface SessionNotice {
   /** Stable per notice; a reader shows each id once. */
   id: string;
   level: 'warning' | 'error';
-  /** One-line summary, e.g. "Quota low: ken***@example.com (9% remaining)". */
+  /**
+   * One-line summary, most important part first, since a narrow status line
+   * cuts the end: e.g. "Quota low (9% left): ken***@example.com".
+   */
   title: string;
   /** Follow-up lines (what CCS will do about it). */
   details: string[];
@@ -67,10 +70,66 @@ function removeLeftoverNoticeFiles(dir: string): void {
   }
 }
 
-/** ASCII-bordered box, as CCS has always printed quota alerts. */
-export function formatNoticeBox(notice: SessionNotice): string {
+const CONTINUATION_INDENT = '    ';
+/** Below this inner width a box is mostly border: print plain lines instead. */
+const MIN_BOX_INNER_WIDTH = 24;
+
+/**
+ * Word-wraps `line` to `width` columns. Continuation lines get `indent`; a
+ * word longer than the room left (an email, a path) is split hard.
+ */
+function wrapLine(line: string, width: number, indent: string): string[] {
+  if (line.length <= width) return [line];
+  const lead = line.match(/^ */)?.[0] ?? '';
+  const out: string[] = [];
+  let current = lead;
+  let hasText = false;
+  for (const word of line.slice(lead.length).split(/ +/)) {
+    const sep = hasText ? ' ' : '';
+    if (current.length + sep.length + word.length <= width) {
+      current += sep + word;
+      hasText = true;
+      continue;
+    }
+    if (hasText) {
+      out.push(current);
+      current = indent;
+    }
+    let rest = word;
+    while (current.length + rest.length > width) {
+      const take = width - current.length;
+      out.push(current + rest.slice(0, take));
+      current = indent;
+      rest = rest.slice(take);
+    }
+    current += rest;
+    hasText = true;
+  }
+  if (hasText) out.push(current);
+  return out;
+}
+
+/**
+ * ASCII-bordered box, as CCS has always printed quota alerts, fitted to
+ * `columns` (the terminal width; unknown when stderr is not a TTY). A box
+ * wider than the terminal wraps and breaks its borders, e.g. on a phone's SSH
+ * client, so long lines wrap inside it; too narrow for a box, plain lines.
+ */
+export function formatNoticeBox(
+  notice: SessionNotice,
+  columns: number | undefined = process.stderr.columns
+): string {
   const prefix = notice.level === 'error' ? '[X]' : '[!]';
-  const lines = [`${prefix} ${notice.title}`, ...notice.details.map((line) => `    ${line}`)];
+  const raw = [
+    `${prefix} ${notice.title}`,
+    ...notice.details.map((line) => `${CONTINUATION_INDENT}${line}`),
+  ];
+  // "║ " + line + " ║" takes 4 columns around the text.
+  const inner = columns && columns > 0 ? columns - 4 : Number.POSITIVE_INFINITY;
+  if (inner < MIN_BOX_INNER_WIDTH) {
+    return ['', ...raw, '', ''].join('\n');
+  }
+  const lines = raw.flatMap((line) => wrapLine(line, inner, CONTINUATION_INDENT));
   const maxLen = Math.max(...lines.map((line) => line.length));
   const border = '═'.repeat(maxLen + 2);
   return [

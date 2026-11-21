@@ -6,7 +6,7 @@ function noticesFile(notices: Array<{ id: string; level: 'warning' | 'error'; ti
   return JSON.stringify({ version: 1, notices: notices.map(n => ({ ...n, createdAt: 0 })) })
 }
 
-test('toasts each new notice once and keeps the latest on the status line', async ($, on) => {
+test('toasts each new notice once and keeps the latest title on the status line', async ($, on) => {
   mock.env(on, { CCS_SESSION_NOTICES_FILE: FILE })
   const clock = mock.clock(on)
   let file: string | null = noticesFile([])
@@ -35,28 +35,29 @@ test('toasts each new notice once and keeps the latest on the status line', asyn
     {
       id: 'a',
       level: 'warning',
-      title: 'Quota Low: ken***@example.com (9% remaining)',
+      title: 'Quota low (9% left): ken***@example.com',
       details: ['Next session will use a different account if available'],
     },
   ])
   await clock.advance(15_000)
   expect(toasts).toEqual([
-    '[!] Quota Low: ken***@example.com (9% remaining) - Next session will use a different account if available',
+    '[!] Quota low (9% left): ken***@example.com - Next session will use a different account if available',
   ])
-  expect(statuses[statuses.length - 1]).toBe(toasts[0])
+  // One row, cut at the terminal's width: the title alone, key fact first.
+  expect(statuses[statuses.length - 1]).toBe('[!] Quota low (9% left): ken***@example.com')
 
   // Same file on the next poll: no second toast.
   await clock.advance(15_000)
   expect(toasts).toHaveLength(1)
 
   file = noticesFile([
-    { id: 'a', level: 'warning', title: 'Quota Low: ken***@example.com (9% remaining)', details: [] },
-    { id: 'b', level: 'error', title: 'Quota Exhausted: ken***@example.com', details: ['Cooldown: 5 minutes'] },
+    { id: 'a', level: 'warning', title: 'Quota low (9% left): ken***@example.com', details: [] },
+    { id: 'b', level: 'error', title: 'Quota exhausted: ken***@example.com', details: ['Cooldown: 5 minutes'] },
   ])
   await clock.advance(15_000)
   expect(toasts).toHaveLength(2)
-  expect(toasts[1]).toBe('[X] Quota Exhausted: ken***@example.com - Cooldown: 5 minutes')
-  expect(statuses[statuses.length - 1]).toBe(toasts[1])
+  expect(toasts[1]).toBe('[X] Quota exhausted: ken***@example.com - Cooldown: 5 minutes')
+  expect(statuses[statuses.length - 1]).toBe('[X] Quota exhausted: ken***@example.com')
 })
 
 test('does nothing outside a CCS session', async ($, on) => {
@@ -72,4 +73,30 @@ test('does nothing outside a CCS session', async ($, on) => {
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await clock.advance(60_000)
   expect(reads).toBe(0)
+})
+
+test('toasts only when the status line option is off', { options: { status_line: false } }, async ($, on) => {
+  mock.env(on, { CCS_SESSION_NOTICES_FILE: FILE })
+  const clock = mock.clock(on)
+  const file = noticesFile([
+    { id: 'a', level: 'warning', title: 'Quota low (9% left): ken***@example.com', details: [] },
+  ])
+  const toasts: string[] = []
+  const statuses: Array<string | undefined> = []
+  on('fs.read', (_$, e) => (e.path === FILE ? { value: file } : { deny: 'ENOENT' }))
+  on('ui.toast', (_$, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.status', (_$, e) => {
+    statuses.push(e.text)
+    return { value: undefined }
+  })
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await clock.advance(15_000)
+  expect(toasts).toEqual(['[!] Quota low (9% left): ken***@example.com'])
+  // Only the clear at session start: no alert is ever pinned.
+  expect(statuses).toEqual([undefined])
 })
