@@ -32,6 +32,7 @@ export const PROVIDER_PRESET_IDS = [
   'runcrate',
   'obscurifyai',
   'cloudgpu',
+  'aigrow',
 ] as const;
 
 export type ProviderPresetId = (typeof PROVIDER_PRESET_IDS)[number];
@@ -403,6 +404,20 @@ const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
     category: 'alternative',
     requiresApiKey: true,
     badge: 'OpenAI-compatible',
+  },
+  {
+    id: 'aigrow',
+    name: 'AIGROW',
+    description:
+      'Anthropic-compatible API for verified Claude models (Opus, Sonnet, Haiku) via aigrow.gg',
+    baseUrl: 'https://aigrow.gg',
+    defaultProfileName: 'aigrow',
+    defaultModel: 'claude-opus-5.5',
+    apiKeyPlaceholder: 'ag_...',
+    apiKeyHint: 'Create an API key at aigrow.gg/dashboard/api',
+    category: 'alternative',
+    requiresApiKey: true,
+    badge: 'Anthropic-compatible',
   },
 ];
 
