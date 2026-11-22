@@ -27,6 +27,7 @@ import {
   injectCodexRequestTuningIntoBody,
   normalizeCodexEffortForModel,
 } from '../ai-providers/codex-reasoning-proxy';
+import { stripModelConfigurationSuffixes } from '../../shared/extended-context-utils';
 
 import { createLogger } from '../../services/logging';
 import {
@@ -80,6 +81,56 @@ const CODEX_UNSUPPORTED_TOOL_FIELDS = new Set(['cache_control']);
 const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
 const THINKING_SUFFIX_REGEX = /\([^()]*\)$/;
 const LEGACY_CODEX_MODEL_ID_REGEX = /^gpt-5(?:\.\d+)?-codex(?:-(?:mini|max))?$/i;
+
+/** Claude Code's advisor tool carries its own model id in the tool definition. */
+const ADVISOR_TOOL_TYPE_PREFIX = 'advisor_';
+
+/**
+ * Strip transient CCS configuration suffixes from advisor tool model ids.
+ *
+ * Claude Code's advisor tool (`type: "advisor_*"`) sends the advisor model in
+ * the tool definition's own `model` field, and that copy inherits the effort
+ * suffix that CCS puts on `ANTHROPIC_MODEL` (for example
+ * `claude-opus-5-5(high)`). Anthropic rejects that suffix inside a tool with
+ * `400 invalid_request_error: tools.N.model`, after which Claude Code turns
+ * the advisor off for the conversation.
+ *
+ * CLIProxyAPI only cleans the top-level `model`, so the per-tool copy has to
+ * be cleaned here. `stripModelConfigurationSuffixes` removes the `[1m]`
+ * extended-context marker and the trailing `(level)` effort marker, both of
+ * which are CCS-only decorations that never belong in a model id sent to the
+ * Anthropic API. The two markers can be appended in either order, so strip
+ * repeatedly until the id stops changing.
+ */
+function stripAdvisorToolModelSuffixes(tools: Tool[]): {
+  tools: Tool[];
+  changedByTool: Array<{ name: string; from: string; to: string }>;
+} {
+  const changedByTool: Array<{ name: string; from: string; to: string }> = [];
+
+  const sanitizedTools = tools.map((tool) => {
+    const toolType = typeof tool.type === 'string' ? tool.type : null;
+    const toolModel = typeof tool.model === 'string' ? tool.model : null;
+    if (!toolType?.startsWith(ADVISOR_TOOL_TYPE_PREFIX) || toolModel === null) {
+      return tool;
+    }
+
+    let strippedModel = toolModel;
+    for (;;) {
+      const next = stripModelConfigurationSuffixes(strippedModel);
+      if (next === strippedModel) break;
+      strippedModel = next;
+    }
+    if (strippedModel === toolModel || strippedModel.length === 0) {
+      return tool;
+    }
+
+    changedByTool.push({ name: tool.name, from: toolModel, to: strippedModel });
+    return { ...tool, model: strippedModel };
+  });
+
+  return { tools: sanitizedTools, changedByTool };
+}
 
 function canonicalizeCodexModelId(model: string | undefined): string | null {
   const normalizedModel = model?.trim().toLowerCase();
@@ -393,7 +444,20 @@ export class ToolSanitizationProxy {
           rewrittenTools = fieldResult.tools;
         }
 
-        // Step 2: Sanitize tool names (truncate to 64 chars for Gemini)
+        // Step 2: Drop CCS config suffixes from per-tool model ids (Claude Code advisor)
+        const toolModelResult = stripAdvisorToolModelSuffixes(rewrittenTools);
+        if (toolModelResult.changedByTool.length > 0) {
+          for (const entry of toolModelResult.changedByTool) {
+            this.logger.warn(
+              'tool-sanitization.proxy.tool-model-normalized',
+              `Tool model suffix stripped for "${entry.name}": "${entry.from}" -> "${entry.to}"`,
+              { tool: entry.name, from: entry.from, to: entry.to }
+            );
+          }
+          rewrittenTools = toolModelResult.tools;
+        }
+
+        // Step 3: Sanitize tool names (truncate to 64 chars for Gemini)
         const sanitizedTools = mapper.registerTools(rewrittenTools);
         modifiedBody = { ...modifiedBody, tools: sanitizedTools };
 
