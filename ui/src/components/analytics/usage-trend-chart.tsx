@@ -6,7 +6,7 @@
  * Respects privacy mode to blur sensitive data.
  */
 
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   XAxis,
   YAxis,
@@ -22,7 +22,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { DailyUsage, HourlyUsage } from '@/hooks/use-usage';
 import { usePrivacy, PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
-// TODO i18n: import { useTranslation } from 'react-i18next'; when keys are ready
 
 type ChartData = DailyUsage | HourlyUsage;
 
@@ -31,6 +30,66 @@ interface UsageTrendChartProps {
   isLoading?: boolean;
   granularity?: 'daily' | 'monthly' | 'hourly';
   className?: string;
+}
+
+interface PrivacyTickProps {
+  x?: number;
+  y?: number;
+  payload?: { value: string | number };
+  isRight?: boolean;
+  privacyMode: boolean;
+}
+
+function PrivacyTick({ x = 0, y = 0, payload, isRight, privacyMode }: PrivacyTickProps) {
+  const rawValue = payload?.value ?? '';
+  const displayValue = isRight ? `$${rawValue}` : formatNumber(Number(rawValue));
+
+  return (
+    <text
+      x={x}
+      y={y}
+      dy={4}
+      textAnchor={isRight ? 'start' : 'end'}
+      fontSize={12}
+      fill="currentColor"
+      className={cn('fill-muted-foreground', privacyMode && 'blur-[4px]')}
+    >
+      {displayValue}
+    </text>
+  );
+}
+
+interface TooltipPayloadEntry {
+  name?: string;
+  value?: string | number;
+  color?: string;
+}
+
+interface UsageTrendTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayloadEntry[];
+  label?: string | number;
+  privacyMode: boolean;
+}
+
+function UsageTrendTooltip({ active, payload, label, privacyMode }: UsageTrendTooltipProps) {
+  if (!active || !payload || !payload.length) return null;
+
+  return (
+    <div className="rounded-lg border bg-background p-3 shadow-lg">
+      <p className="font-medium mb-2">{label}</p>
+      {payload.map((entry, index) => (
+        <p
+          key={index}
+          className={cn('text-sm', privacyMode && PRIVACY_BLUR_CLASS)}
+          style={{ color: entry.color }}
+        >
+          {entry.name}:{' '}
+          {entry.name === 'Tokens' ? formatNumber(Number(entry.value) || 0) : `$${entry.value}`}
+        </p>
+      ))}
+    </div>
+  );
 }
 
 export function UsageTrendChart({
@@ -59,6 +118,32 @@ export function UsageTrendChart({
     });
   }, [data, granularity]);
 
+  const renderLeftTick = useCallback(
+    (props: Omit<PrivacyTickProps, 'isRight' | 'privacyMode'>) => (
+      <PrivacyTick {...props} isRight={false} privacyMode={privacyMode} />
+    ),
+    [privacyMode]
+  );
+
+  const renderRightTick = useCallback(
+    (props: Omit<PrivacyTickProps, 'isRight' | 'privacyMode'>) => (
+      <PrivacyTick {...props} isRight={true} privacyMode={privacyMode} />
+    ),
+    [privacyMode]
+  );
+
+  const renderTooltip = useCallback(
+    (props: { active?: boolean; payload?: unknown; label?: string | number }) => (
+      <UsageTrendTooltip
+        active={props.active}
+        payload={props.payload as TooltipPayloadEntry[] | undefined}
+        label={props.label}
+        privacyMode={privacyMode}
+      />
+    ),
+    [privacyMode]
+  );
+
   if (isLoading) {
     return <Skeleton className={cn('h-full w-full', className)} />;
   }
@@ -72,35 +157,6 @@ export function UsageTrendChart({
       </div>
     );
   }
-
-  // Custom tick component for privacy-aware axis labels
-  const PrivacyTick = ({
-    x,
-    y,
-    payload,
-    isRight,
-  }: {
-    x: number;
-    y: number;
-    payload: { value: string | number };
-    isRight?: boolean;
-  }) => {
-    const displayValue = isRight ? `$${payload.value}` : formatNumber(Number(payload.value));
-
-    return (
-      <text
-        x={x}
-        y={y}
-        dy={4}
-        textAnchor={isRight ? 'start' : 'end'}
-        fontSize={12}
-        fill="currentColor"
-        className={cn('fill-muted-foreground', privacyMode && 'blur-[4px]')}
-      >
-        {displayValue}
-      </text>
-    );
-  };
 
   return (
     <div className={cn('w-full h-full', className)}>
@@ -129,7 +185,7 @@ export function UsageTrendChart({
           <YAxis
             yAxisId="left"
             orientation="left"
-            tick={(props) => <PrivacyTick {...props} isRight={false} />}
+            tick={renderLeftTick}
             tickLine={false}
             axisLine={{ className: 'stroke-muted' }}
           />
@@ -137,34 +193,12 @@ export function UsageTrendChart({
           <YAxis
             yAxisId="right"
             orientation="right"
-            tick={(props) => <PrivacyTick {...props} isRight={true} />}
+            tick={renderRightTick}
             tickLine={false}
             axisLine={{ className: 'stroke-muted' }}
           />
 
-          <Tooltip
-            content={({ active, payload, label }) => {
-              if (!active || !payload || !payload.length) return null;
-
-              return (
-                <div className="rounded-lg border bg-background p-3 shadow-lg">
-                  <p className="font-medium mb-2">{label}</p>
-                  {payload.map((entry, index) => (
-                    <p
-                      key={index}
-                      className={cn('text-sm', privacyMode && PRIVACY_BLUR_CLASS)}
-                      style={{ color: entry.color }}
-                    >
-                      {entry.name}:{' '}
-                      {entry.name === 'Tokens'
-                        ? formatNumber(Number(entry.value) || 0)
-                        : `$${entry.value}`}
-                    </p>
-                  ))}
-                </div>
-              );
-            }}
-          />
+          <Tooltip content={renderTooltip} />
 
           <Area
             yAxisId="left"

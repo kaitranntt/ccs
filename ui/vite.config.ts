@@ -78,7 +78,6 @@ export default defineConfig({
             '@codemirror/lang-yaml',
             '@codemirror/legacy-modes/mode/toml',
           ],
-          'code-highlight': ['prism-react-renderer'],
           // Animation
           'framer-motion': ['framer-motion'],
           // Notifications
