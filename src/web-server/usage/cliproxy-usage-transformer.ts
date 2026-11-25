@@ -9,7 +9,7 @@ import type {
   CliproxyUsageApiResponse,
   CliproxyRequestDetail,
 } from '../../cliproxy/services/stats-fetcher';
-import { calculateCost } from '../model-pricing';
+import { calculateCost, createCostCalculator, type TokenUsage } from '../model-pricing';
 import type { ModelBreakdown, DailyUsage, HourlyUsage, MonthlyUsage } from './types';
 import { getModelsUsed, normalizeUsageProvider } from './model-identity';
 import { ConfigError } from '../../errors/error-types';
@@ -69,7 +69,8 @@ function createHistoryDetail(
   provider: string,
   model: string,
   detail: CliproxyRequestDetail,
-  accountMap?: Map<string, string>
+  accountMap?: Map<string, string>,
+  costForUsage?: (usage: TokenUsage) => number
 ): CliproxyUsageHistoryDetail {
   const pricingProvider = normalizeUsageProvider(provider) ?? provider.trim().toLowerCase();
   const inputTokens = detail.tokens?.input_tokens ?? 0;
@@ -99,13 +100,15 @@ function createHistoryDetail(
     outputTokens,
     cacheReadTokens,
     requestCount: 1,
-    cost: calculateHistoryDetailCost(
-      model,
-      pricingProvider,
-      inputTokens,
-      outputTokens,
-      cacheReadTokens
-    ),
+    cost: costForUsage
+      ? costForUsage({ inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens: 0 })
+      : calculateHistoryDetailCost(
+          model,
+          pricingProvider,
+          inputTokens,
+          outputTokens,
+          cacheReadTokens
+        ),
     failed: detail.failed,
   };
 }
@@ -247,9 +250,15 @@ export function extractCliproxyUsageHistoryDetails(
     for (const [model, modelData] of Object.entries(models)) {
       const details = modelData?.details;
       if (!details) continue;
+      let costForUsage: ((usage: TokenUsage) => number) | undefined;
+      const pricingProvider = normalizeUsageProvider(provider) ?? provider.trim().toLowerCase();
       for (const detail of details) {
         if (detail.failed && !hasTrackedUsage(detail)) continue;
-        results.push(createHistoryDetail(provider, model, detail, accountMap));
+        costForUsage ??= createCostCalculator(
+          model,
+          pricingProvider ? { provider: pricingProvider } : undefined
+        );
+        results.push(createHistoryDetail(provider, model, detail, accountMap, costForUsage));
       }
     }
   }

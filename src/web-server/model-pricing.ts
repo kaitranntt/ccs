@@ -1240,7 +1240,19 @@ export function calculateCost(
   options: PricingLookupOptions = {}
 ): number {
   const pricing = getModelPricing(model, options);
+  return calculateCostWithPricing(usage, pricing);
+}
 
+/** Reuse one price lookup for a batch without changing the token arithmetic. */
+export function createCostCalculator(
+  model: string,
+  options: PricingLookupOptions = {}
+): (usage: TokenUsage) => number {
+  const pricing = getModelPricing(model, options);
+  return (usage) => calculateCostWithPricing(usage, pricing);
+}
+
+function calculateCostWithPricing(usage: TokenUsage, pricing: ModelPricing): number {
   const inputCost = (usage.inputTokens / 1_000_000) * pricing.inputPerMillion;
   const outputCost = (usage.outputTokens / 1_000_000) * pricing.outputPerMillion;
   const cacheCreationCost =

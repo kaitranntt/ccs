@@ -11,6 +11,11 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const LIVE_FETCH_TIMEOUT_MS = 3000;
 
 let pendingBackgroundRefresh: Promise<ModelsDevRegistry | null> | null = null;
+let memoryCache: {
+  filePath: string;
+  identity: string;
+  data: ModelsDevCacheData | null;
+} | null = null;
 
 export interface RegistryCacheReadOptions {
   allowStale?: boolean;
@@ -75,15 +80,22 @@ export function getCachedModelsDevRegistry(
 ): ModelsDevRegistry | null {
   try {
     const filePath = getCacheFilePath();
-    if (!fs.existsSync(filePath)) return null;
-
-    const cache = normalizeCachePayload(JSON.parse(fs.readFileSync(filePath, 'utf8')));
+    const stat = fs.statSync(filePath);
+    const identity = [stat.dev, stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs].join(':');
+    // Pricing resolves once per usage record. Parse an unchanged registry only once,
+    // while still noticing another CCS process replacing or removing the file.
+    if (memoryCache?.filePath !== filePath || memoryCache.identity !== identity) {
+      const data = normalizeCachePayload(JSON.parse(fs.readFileSync(filePath, 'utf8')));
+      memoryCache = { filePath, identity, data };
+    }
+    const cache = memoryCache.data;
     if (!cache) return null;
 
     const now = options.now ?? Date.now();
     if (!options.allowStale && now - cache.fetchedAt > CACHE_TTL_MS) return null;
     return cache.providers;
   } catch {
+    memoryCache = null;
     return null;
   }
 }
@@ -92,6 +104,7 @@ export function setCachedModelsDevRegistry(
   providers: ModelsDevRegistry,
   fetchedAt = Date.now()
 ): void {
+  memoryCache = null;
   try {
     const filePath = getCacheFilePath();
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -103,6 +116,7 @@ export function setCachedModelsDevRegistry(
 }
 
 export function clearModelsDevRegistryCache(): boolean {
+  memoryCache = null;
   try {
     const filePath = getCacheFilePath();
     if (!fs.existsSync(filePath)) return false;
