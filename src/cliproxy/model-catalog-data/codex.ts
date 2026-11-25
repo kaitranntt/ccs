@@ -1,0 +1,185 @@
+/**
+ * Codex Provider Model Catalog Definition
+ */
+
+import type { ProviderCatalog } from '../model-catalog-types';
+
+export const CODEX_MODEL_CATALOG: ProviderCatalog = {
+  provider: 'codex',
+  displayName: 'Copilot Codex',
+  defaultModel: 'gpt-5.4',
+  models: [
+    {
+      id: 'gpt-6-astra',
+      name: 'GPT-6 Astra',
+      description: 'Most capable model for complex, demanding work.',
+      contextWindow: 272000,
+      thinking: {
+        type: 'levels',
+        levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+        maxLevel: 'max',
+        dynamicAllowed: false,
+      },
+      codexServiceTiers: ['fast'],
+    },
+    {
+      id: 'gpt-6.1-sol',
+      name: 'GPT-6.1 Sol',
+      tier: 'pro',
+      description: 'Latest frontier agentic coding model (1.05M context, 128K output).',
+      contextWindow: 1050000,
+      extendedContext: true,
+      thinking: {
+        type: 'levels',
+        levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+        maxLevel: 'max',
+        dynamicAllowed: false,
+      },
+      codexServiceTiers: ['fast'],
+    },
+    {
+      id: 'gpt-6-sol',
+      name: 'GPT-6 Sol',
+      tier: 'pro',
+      description: 'Frontier agentic coding model (1.05M context, 128K output).',
+      contextWindow: 1050000,
+      thinking: {
+        type: 'levels',
+        levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+        maxLevel: 'max',
+        zeroAllowed: true,
+        dynamicAllowed: false,
+      },
+      codexServiceTiers: ['fast'],
+    },
+    {
+      id: 'gpt-6-luna',
+      name: 'GPT-6 Luna',
+      description: 'Fast and affordable lightweight agentic reasoning model (1.05M context).',
+      contextWindow: 1050000,
+      thinking: {
+        type: 'levels',
+        levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+        maxLevel: 'max',
+        zeroAllowed: true,
+        dynamicAllowed: false,
+      },
+      codexServiceTiers: ['fast'],
+    },
+    {
+      id: 'gpt-5.6-sol',
+      name: 'GPT-5.6 Sol',
+      description: 'Latest frontier agentic coding model.',
+      contextWindow: 272000,
+      thinking: {
+        type: 'levels',
+        levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+        maxLevel: 'max',
+        dynamicAllowed: false,
+      },
+      codexServiceTiers: ['fast'],
+    },
+    {
+      id: 'gpt-5.6-terra',
+      name: 'GPT-5.6 Terra',
+      description: 'Balanced agentic coding model for everyday work.',
+      contextWindow: 372000,
+      thinking: {
+        type: 'levels',
+        levels: ['low', 'medium', 'high', 'xhigh'],
+        maxLevel: 'xhigh',
+        dynamicAllowed: false,
+      },
+      codexServiceTiers: ['fast'],
+    },
+    {
+      id: 'gpt-5.6-luna',
+      name: 'GPT-5.6 Luna',
+      description: 'Fast and affordable agentic coding model.',
+      contextWindow: 272000,
+      thinking: {
+        type: 'levels',
+        levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+        maxLevel: 'max',
+        dynamicAllowed: false,
+      },
+      codexServiceTiers: ['fast'],
+    },
+    {
+      id: 'gpt-5.5',
+      name: 'GPT-5.5',
+      tier: 'pro',
+      description: 'Newest Codex-released GPT-5 family model; falls back to GPT-5.4 on free plans',
+      contextWindow: 272000,
+      thinking: {
+        type: 'levels',
+        levels: ['low', 'medium', 'high', 'xhigh'],
+        maxLevel: 'xhigh',
+        dynamicAllowed: false,
+      },
+      codexServiceTiers: ['fast'],
+    },
+    {
+      id: 'gpt-5.4',
+      name: 'GPT-5.4',
+      description: 'Recommended Codex default for most coding and agentic tasks',
+      contextWindow: 1050000,
+      thinking: {
+        type: 'levels',
+        levels: ['low', 'medium', 'high', 'xhigh'],
+        maxLevel: 'xhigh',
+        dynamicAllowed: false,
+      },
+      codexServiceTiers: ['fast'],
+    },
+    {
+      id: 'gpt-5.4-mini',
+      name: 'GPT-5.4 Mini',
+      description: 'Fast, lower-cost Codex option for lighter tasks and haiku-tier routing',
+      contextWindow: 400000,
+      thinking: {
+        type: 'levels',
+        levels: ['low', 'medium', 'high'],
+        maxLevel: 'high',
+        dynamicAllowed: false,
+      },
+    },
+    {
+      id: 'gpt-5.3-codex',
+      name: 'GPT-5.3 Codex',
+      tier: 'pro',
+      description: 'Previous flagship coding model whose capabilities now power GPT-5.4',
+      thinking: {
+        type: 'levels',
+        levels: ['low', 'medium', 'high', 'xhigh'],
+        maxLevel: 'xhigh',
+        dynamicAllowed: false,
+      },
+    },
+    {
+      id: 'gpt-5.3-codex-spark',
+      name: 'GPT-5.3 Codex Spark',
+      tier: 'pro',
+      description:
+        'Research preview model for ChatGPT Pro subscribers, optimized for near-instant coding iteration',
+      contextWindow: 128000,
+      thinking: {
+        type: 'levels',
+        levels: ['low', 'medium', 'high', 'xhigh'],
+        maxLevel: 'xhigh',
+        dynamicAllowed: false,
+      },
+    },
+    {
+      id: 'gpt-5.2',
+      name: 'GPT-5.2',
+      description: 'Previous general-purpose Codex model',
+      thinking: {
+        type: 'levels',
+        levels: ['low', 'medium', 'high', 'xhigh'],
+        maxLevel: 'xhigh',
+        dynamicAllowed: false,
+      },
+    },
+  ],
+};
