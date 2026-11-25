@@ -50,6 +50,9 @@ export const apiRoutes = Router();
 
 const REMOTE_WRITE_ACCESS_ERROR =
   'Remote dashboard writes require localhost access when dashboard auth is disabled.';
+const REMOTE_READ_ACCESS_ERROR =
+  'Remote dashboard reads require localhost access when dashboard auth is disabled.';
+const PUBLIC_REMOTE_READ_PATHS = new Set(['/health', '/auth/check', '/auth/setup']);
 
 // CCS Bar endpoints (/api/bar/*) expose the user's native quota, tier, and cost
 // snapshot. Unlike the rest of the read API these are sensitive even on GET, so
@@ -65,6 +68,28 @@ function isMutationMethod(method: string): boolean {
     normalized === 'PUT' ||
     normalized === 'PATCH' ||
     normalized === 'DELETE'
+  );
+}
+
+function normalizeRoutePath(reqPath: string): string {
+  const normalized = reqPath.toLowerCase().replace(/\/+$/, '');
+  return normalized || '/';
+}
+
+function isPublicRemoteReadRequest(method: string, reqPath: string): boolean {
+  const normalizedMethod = method.toUpperCase();
+  if (normalizedMethod !== 'GET' && normalizedMethod !== 'HEAD') {
+    return false;
+  }
+  return PUBLIC_REMOTE_READ_PATHS.has(normalizeRoutePath(reqPath));
+}
+
+function hasSubrouterLocalAccessGuard(reqPath: string): boolean {
+  const normalized = normalizeRoutePath(reqPath);
+  return (
+    normalized === '/codex/config' ||
+    normalized.startsWith('/codex/config/') ||
+    normalized === '/codex/profiles'
   );
 }
 
@@ -87,12 +112,19 @@ apiRoutes.use((req, res, next) => {
     return;
   }
 
-  if (!isMutationMethod(req.method)) {
+  if (isMutationMethod(req.method)) {
+    if (requireLocalAccessWhenAuthDisabled(req, res, REMOTE_WRITE_ACCESS_ERROR)) {
+      next();
+    }
+    return;
+  }
+
+  if (isPublicRemoteReadRequest(req.method, req.path) || hasSubrouterLocalAccessGuard(req.path)) {
     next();
     return;
   }
 
-  if (requireLocalAccessWhenAuthDisabled(req, res, REMOTE_WRITE_ACCESS_ERROR)) {
+  if (requireLocalAccessWhenAuthDisabled(req, res, REMOTE_READ_ACCESS_ERROR)) {
     next();
   }
 });

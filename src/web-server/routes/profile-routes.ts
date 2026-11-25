@@ -27,9 +27,16 @@ import {
 import { normalizeDroidProvider } from '../../targets/droid-provider';
 import { getPersistedTargetChoices } from '../../targets/target-metadata';
 import { isCLIProxyProvider } from '../../cliproxy/provider-capabilities';
-import { isAnthropicDirectProfile, updateSettingsFile, parseTarget } from './route-helpers';
+import { ConfigError, ValidationError } from '../../errors/error-types';
+import {
+  createRouteErrorHelpers,
+  isAnthropicDirectProfile,
+  updateSettingsFile,
+  parseTarget,
+} from './route-helpers';
 
 const router = Router();
+const { respondInternalError } = createRouteErrorHelpers('profile-routes');
 
 const LOCAL_RUNTIME_READINESS_LOCAL_ACCESS_ERROR =
   'Local runtime readiness requires localhost access when dashboard auth is disabled.';
@@ -79,7 +86,7 @@ router.get('/', (_req: Request, res: Response): void => {
     }));
     res.json({ profiles });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to list profiles.');
   }
 });
 
@@ -87,7 +94,7 @@ router.get('/cliproxy-bridge/providers', (_req: Request, res: Response): void =>
   try {
     res.json({ providers: listCliproxyBridgeProviders() });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to list CLIProxy bridge providers.');
   }
 });
 
@@ -99,7 +106,7 @@ router.get('/local-runtime-readiness', async (req: Request, res: Response): Prom
   try {
     res.json({ runtimes: await getLocalRuntimeReadiness() });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to check local runtime readiness.');
   }
 });
 
@@ -233,7 +240,15 @@ router.post('/', (req: Request, res: Response): void => {
 
   if (!result.success) {
     const errorMessage = result.error || 'Failed to create profile';
-    res.status(isDenylistError(errorMessage) ? 400 : 500).json({ error: errorMessage });
+    if (isDenylistError(errorMessage)) {
+      res.status(400).json({ error: errorMessage });
+      return;
+    }
+    respondInternalError(
+      res,
+      result.error ?? new ConfigError(errorMessage),
+      'Failed to create profile.'
+    );
     return;
   }
 
@@ -253,7 +268,7 @@ router.get('/orphans', (_req: Request, res: Response): void => {
     const result = discoverApiProfileOrphans();
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to discover orphan profiles.');
   }
 });
 
@@ -306,7 +321,7 @@ router.post('/orphans/register', (req: Request, res: Response): void => {
     });
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to register orphan profiles.');
   }
 });
 
@@ -506,7 +521,11 @@ router.put('/:name', (req: Request, res: Response): void => {
     if (hasTargetUpdate && parsedTarget) {
       const targetUpdate = updateApiProfileTarget(name, parsedTarget);
       if (!targetUpdate.success) {
-        res.status(500).json({ error: targetUpdate.error || 'Failed to update target' });
+        respondInternalError(
+          res,
+          targetUpdate.error ?? new ConfigError('Failed to update target'),
+          'Failed to update target.'
+        );
         return;
       }
     }
@@ -517,8 +536,16 @@ router.put('/:name', (req: Request, res: Response): void => {
       ...(hasTargetUpdate && parsedTarget && { target: parsedTarget }),
     });
   } catch (error) {
-    const errorMessage = (error as Error).message;
-    res.status(isDenylistError(errorMessage) ? 400 : 500).json({ error: errorMessage });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (error instanceof ValidationError || isDenylistError(errorMessage)) {
+      res.status(400).json({ error: errorMessage });
+      return;
+    }
+    if (error instanceof ConfigError && errorMessage === 'Settings file not found') {
+      res.status(404).json({ error: errorMessage });
+      return;
+    }
+    respondInternalError(res, error, 'Failed to update profile.');
   }
 });
 
@@ -538,7 +565,11 @@ router.delete('/:name', (req: Request, res: Response): void => {
   const result = removeApiProfile(name);
 
   if (!result.success) {
-    res.status(500).json({ error: result.error || 'Failed to delete profile' });
+    respondInternalError(
+      res,
+      result.error ?? new ConfigError('Failed to delete profile'),
+      'Failed to delete profile.'
+    );
     return;
   }
 

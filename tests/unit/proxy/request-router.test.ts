@@ -1,8 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { resolveProxyRequestRoute } from '../../../src/proxy/request-router';
+import {
+  invalidateProxyRequestRouterCache,
+  resolveProxyRequestRoute,
+} from '../../../src/proxy/request-router';
 import { resolveOpenAICompatProfileConfig } from '../../../src/proxy/profile-router';
 import { loadSettings } from '../../../src/utils/config-manager';
 
@@ -33,6 +36,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  invalidateProxyRequestRouterCache();
   if (originalCcsHome !== undefined) {
     process.env.CCS_HOME = originalCcsHome;
   } else {
@@ -200,5 +204,118 @@ describe('resolveProxyRequestRoute', () => {
     expect(route.profile.profileName).toBe('background');
     expect(route.model).toBe('qwen-small');
     expect(route.scenario).toBe('background');
+  });
+
+  it('caches parsed config and profile settings across repeated requests until files change', () => {
+    const activeProfile = buildProfile('hf');
+    const readSpy = spyOn(fs, 'readFileSync');
+
+    try {
+      const firstRoute = resolveProxyRequestRoute(activeProfile, {
+        model: 'deepseek-chat',
+        stream: true,
+        messages: [{ role: 'user', content: 'first' }],
+      });
+      const readsAfterWarmup = readSpy.mock.calls.length;
+      expect(readsAfterWarmup).toBeGreaterThan(0);
+      expect(firstRoute.profile.profileName).toBe('deepseek');
+
+      const secondRoute = resolveProxyRequestRoute(activeProfile, {
+        model: 'deepseek-chat',
+        stream: true,
+        messages: [{ role: 'user', content: 'second' }],
+      });
+      expect(secondRoute.profile.profileName).toBe('deepseek');
+      expect(readSpy.mock.calls.length).toBe(readsAfterWarmup);
+
+      // Modify a profile settings file and ensure mtime/size change invalidates cache
+      const deepseekPath = writeSettings('deepseek', {
+        ANTHROPIC_BASE_URL: 'https://api.deepseek.com/v1',
+        ANTHROPIC_AUTH_TOKEN: 'deepseek_token',
+        ANTHROPIC_MODEL: 'deepseek-v3-updated',
+        CCS_DROID_PROVIDER: 'generic-chat-completion-api',
+      });
+      const futureTime = new Date(Date.now() + 5000);
+      fs.utimesSync(deepseekPath, futureTime, futureTime);
+
+      const thirdRoute = resolveProxyRequestRoute(activeProfile, {
+        model: 'deepseek-v3-updated',
+        stream: true,
+        messages: [{ role: 'user', content: 'third' }],
+      });
+      expect(thirdRoute.profile.profileName).toBe('deepseek');
+      expect(thirdRoute.source).toBe('profile-model-match');
+      expect(readSpy.mock.calls.length).toBeGreaterThan(readsAfterWarmup);
+
+      const readsAfterSettingsUpdate = readSpy.mock.calls.length;
+      const configPath = path.join(tempDir, '.ccs', 'config.json');
+      const rawConfig = JSON.parse(fs.readFileSync(configPath, 'utf8')) as {
+        profiles: Record<string, string>;
+        proxy: { routing: Record<string, unknown> };
+      };
+      rawConfig.proxy.routing.think = 'deepseek:deepseek-v3-updated';
+      fs.writeFileSync(configPath, JSON.stringify(rawConfig, null, 2), 'utf8');
+      const configFuture = new Date(Date.now() + 10000);
+      fs.utimesSync(configPath, configFuture, configFuture);
+
+      const fourthRoute = resolveProxyRequestRoute(activeProfile, {
+        model: 'hf-default',
+        stream: true,
+        reasoning_effort: 'high',
+        messages: [{ role: 'user', content: 'think' }],
+      });
+      expect(fourthRoute.profile.profileName).toBe('deepseek');
+      expect(fourthRoute.scenario).toBe('think');
+      expect(readSpy.mock.calls.length).toBeGreaterThan(readsAfterSettingsUpdate);
+    } finally {
+      readSpy.mockRestore();
+    }
+  });
+
+  it('invalidates profile cache when CCS_CONFIG points to a different config file', () => {
+    const activeProfile = buildProfile('hf');
+    const originalCcsConfig = process.env.CCS_CONFIG;
+    const overridePath = path.join(tempDir, 'override-config.json');
+    const altSettingsPath = writeSettings('alt', {
+      ANTHROPIC_BASE_URL: 'https://alt.example.com/v1',
+      ANTHROPIC_AUTH_TOKEN: 'alt_token',
+      ANTHROPIC_MODEL: 'alt-model-only',
+      CCS_DROID_PROVIDER: 'generic-chat-completion-api',
+    });
+
+    try {
+      const beforeOverride = resolveProxyRequestRoute(activeProfile, {
+        model: 'alt-model-only',
+        stream: true,
+        messages: [{ role: 'user', content: 'before' }],
+      });
+      expect(beforeOverride.source).toBe('request-model');
+
+      fs.writeFileSync(
+        overridePath,
+        JSON.stringify({
+          profiles: {
+            hf: path.join(tempDir, '.ccs', 'hf.settings.json'),
+            alt: altSettingsPath,
+          },
+        }),
+        'utf8'
+      );
+      process.env.CCS_CONFIG = overridePath;
+
+      const afterOverride = resolveProxyRequestRoute(activeProfile, {
+        model: 'alt-model-only',
+        stream: true,
+        messages: [{ role: 'user', content: 'after' }],
+      });
+      expect(afterOverride.profile.profileName).toBe('alt');
+      expect(afterOverride.source).toBe('profile-model-match');
+    } finally {
+      if (originalCcsConfig === undefined) {
+        delete process.env.CCS_CONFIG;
+      } else {
+        process.env.CCS_CONFIG = originalCcsConfig;
+      }
+    }
   });
 });

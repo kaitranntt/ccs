@@ -22,9 +22,12 @@
  * - Cross-platform (Windows, macOS, Linux)
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { getCliproxyDir } from '../config/config-generator';
+import { ProxyError } from '../../errors/error-types';
 import { createLogger } from '../../services/logging';
 
 /** Lock file structure */
@@ -32,6 +35,7 @@ interface LockData {
   pid: number;
   timestamp: number;
   hostname: string;
+  token?: string;
 }
 
 /** Lock acquisition result */
@@ -46,6 +50,8 @@ const LOCK_FILE = '.startup.lock';
 
 /** Lock timeout in ms (stale lock auto-released) */
 const LOCK_TIMEOUT_MS = 10000; // 10 seconds - see module docstring for rationale
+const CLEANUP_GUARD_STALE_MS = 2000;
+const NEW_EMPTY_LOCK_GRACE_MS = 1000;
 
 /** Optional logger function for verbose output */
 type LogFn = (msg: string) => void;
@@ -61,6 +67,19 @@ function getLockPath(): string {
   return path.join(getCliproxyDir(), LOCK_FILE);
 }
 
+function getCleanupGuardPath(lockPath: string): string {
+  return `${lockPath}.cleanup`;
+}
+
+function processExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Check if a lock is stale (old or from dead process)
  */
@@ -71,12 +90,124 @@ function isLockStale(lockData: LockData): boolean {
   }
 
   // Check if PID is still running
-  try {
-    process.kill(lockData.pid, 0);
-    return false; // Process exists
-  } catch {
-    return true; // Process dead
+  return !processExists(lockData.pid);
+}
+
+function tryAcquireCleanupGuard(cleanupPath: string): string | null {
+  const guardToken = crypto.randomUUID();
+  const guardData = `${process.pid}\n${Date.now()}\n${guardToken}`;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      fs.writeFileSync(cleanupPath, guardData, { flag: 'wx', mode: 0o600 });
+      return guardToken;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST' || attempt > 0) {
+        return null;
+      }
+
+      try {
+        const stat = fs.statSync(cleanupPath);
+        const content = fs.readFileSync(cleanupPath, 'utf-8');
+        const [pidStr, timestampStr] = content.trim().split('\n');
+        const pid = Number.parseInt(pidStr, 10);
+        const timestamp = Number.parseInt(timestampStr, 10);
+        const hasLiveOwner = Number.isInteger(pid) && pid > 0 && processExists(pid);
+        const isExpired =
+          Date.now() - stat.mtimeMs > CLEANUP_GUARD_STALE_MS &&
+          (!Number.isFinite(timestamp) || Date.now() - timestamp > CLEANUP_GUARD_STALE_MS);
+
+        if (hasLiveOwner || !isExpired) {
+          return null;
+        }
+
+        const verifyStat = fs.statSync(cleanupPath);
+        const verifyContent = fs.readFileSync(cleanupPath, 'utf-8');
+        if (verifyStat.ino === stat.ino && verifyContent === content) {
+          fs.unlinkSync(cleanupPath);
+        }
+      } catch {
+        return null;
+      }
+    }
   }
+
+  return null;
+}
+
+function releaseCleanupGuard(cleanupPath: string, guardToken: string): void {
+  try {
+    const content = fs.readFileSync(cleanupPath, 'utf-8');
+    const fileToken = content.trim().split('\n')[2];
+    if (fileToken === guardToken) {
+      fs.unlinkSync(cleanupPath);
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
+function sleepSync(ms: number): void {
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      /* busy-wait */
+    }
+  }
+}
+
+function isObservedLockUnchanged(
+  lockPath: string,
+  expectedStat: fs.Stats,
+  expectedContent: string
+): boolean {
+  try {
+    const currentStat = fs.statSync(lockPath);
+    const currentContent = fs.readFileSync(lockPath, 'utf-8');
+    return (
+      currentStat.ino === expectedStat.ino &&
+      currentStat.mtimeMs === expectedStat.mtimeMs &&
+      currentContent === expectedContent
+    );
+  } catch {
+    return false;
+  }
+}
+
+function buildReleaseFn(lockPath: string, lockToken: string, log: LogFn): () => void {
+  return () => {
+    const cleanupPath = getCleanupGuardPath(lockPath);
+    let guardToken: string | null = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      guardToken = tryAcquireCleanupGuard(cleanupPath);
+      if (guardToken) {
+        break;
+      }
+      sleepSync(2);
+    }
+
+    try {
+      // Only release if we still own the exact token (or legacy same-PID lock without token)
+      const content = fs.readFileSync(lockPath, 'utf-8');
+      const currentLock = JSON.parse(content) as LockData;
+      const ownsToken =
+        typeof currentLock.token === 'string'
+          ? currentLock.token === lockToken
+          : currentLock.pid === process.pid;
+      if (ownsToken) {
+        fs.unlinkSync(lockPath);
+        log('Lock released');
+      }
+    } catch {
+      // Ignore release errors
+    } finally {
+      if (guardToken) {
+        releaseCleanupGuard(cleanupPath, guardToken);
+      }
+    }
+  };
 }
 
 /**
@@ -95,49 +226,110 @@ function tryAcquireLockOnce(log: LogFn): LockResult {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
 
-  // Check for existing lock
-  if (fs.existsSync(lockPath)) {
-    try {
-      const content = fs.readFileSync(lockPath, 'utf-8');
-      const lockData = JSON.parse(content) as LockData;
+  const lockToken = crypto.randomUUID();
+  const lockData: LockData = {
+    pid: process.pid,
+    timestamp: Date.now(),
+    hostname: os.hostname(),
+    token: lockToken,
+  };
+  const serializedLockData = JSON.stringify(lockData);
 
-      if (!isLockStale(lockData)) {
-        // Lock is held by another active process
-        log(`Lock held by PID ${lockData.pid} (age: ${Date.now() - lockData.timestamp}ms)`);
+  // Fast path: exclusive creation
+  try {
+    fs.writeFileSync(lockPath, serializedLockData, { flag: 'wx', mode: 0o600 });
+    log(`Lock acquired by PID ${process.pid}`);
+    return {
+      acquired: true,
+      lockPath,
+      release: buildReleaseFn(lockPath, lockToken, log),
+    };
+  } catch (err) {
+    const error = err as NodeJS.ErrnoException;
+    if (error.code !== 'EEXIST') {
+      throw error;
+    }
+  }
+
+  const cleanupPath = getCleanupGuardPath(lockPath);
+  const guardToken = tryAcquireCleanupGuard(cleanupPath);
+  if (!guardToken) {
+    log('Lock cleanup guard held by another process');
+    return {
+      acquired: false,
+      lockPath,
+      release: () => {},
+    };
+  }
+
+  try {
+    let stat: fs.Stats;
+    let content: string;
+    try {
+      stat = fs.statSync(lockPath);
+      content = fs.readFileSync(lockPath, 'utf-8');
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        try {
+          fs.writeFileSync(lockPath, serializedLockData, { flag: 'wx', mode: 0o600 });
+          log(`Lock acquired by PID ${process.pid}`);
+          return {
+            acquired: true,
+            lockPath,
+            release: buildReleaseFn(lockPath, lockToken, log),
+          };
+        } catch (writeErr) {
+          if ((writeErr as NodeJS.ErrnoException).code === 'EEXIST') {
+            return { acquired: false, lockPath, release: () => {} };
+          }
+          throw writeErr;
+        }
+      }
+      throw err;
+    }
+
+    if (!content.trim() && Date.now() - stat.mtimeMs < NEW_EMPTY_LOCK_GRACE_MS) {
+      log('Lock file is newly created; waiting before stale evaluation');
+      return { acquired: false, lockPath, release: () => {} };
+    }
+
+    let shouldRemove = false;
+    try {
+      const existingLock = JSON.parse(content) as LockData;
+      if (!isLockStale(existingLock)) {
+        log(`Lock held by PID ${existingLock.pid} (age: ${Date.now() - existingLock.timestamp}ms)`);
         return {
           acquired: false,
           lockPath,
           release: () => {},
         };
       }
-      // Lock is stale - remove and continue
-      log(`Removing stale lock from PID ${lockData.pid}`);
+      log(`Removing stale lock from PID ${existingLock.pid}`);
+      shouldRemove = true;
     } catch {
-      // Invalid lock file - remove and continue
+      if (Date.now() - stat.mtimeMs < NEW_EMPTY_LOCK_GRACE_MS) {
+        log('Lock file parse failed within grace window; waiting');
+        return { acquired: false, lockPath, release: () => {} };
+      }
       log('Removing invalid lock file');
+      shouldRemove = true;
     }
-    try {
-      fs.unlinkSync(lockPath);
-    } catch {
-      // Ignore removal errors
+
+    if (!shouldRemove || !isObservedLockUnchanged(lockPath, stat, content)) {
+      return { acquired: false, lockPath, release: () => {} };
     }
-  }
 
-  // Try to create lock atomically
-  const lockData: LockData = {
-    pid: process.pid,
-    timestamp: Date.now(),
-    hostname: require('os').hostname(),
-  };
-
-  try {
-    // Use 'wx' flag for exclusive creation (fails if exists)
-    fs.writeFileSync(lockPath, JSON.stringify(lockData), { flag: 'wx', mode: 0o600 });
+    fs.unlinkSync(lockPath);
+    fs.writeFileSync(lockPath, serializedLockData, { flag: 'wx', mode: 0o600 });
     log(`Lock acquired by PID ${process.pid}`);
+    return {
+      acquired: true,
+      lockPath,
+      release: buildReleaseFn(lockPath, lockToken, log),
+    };
   } catch (err) {
     const error = err as NodeJS.ErrnoException;
     if (error.code === 'EEXIST') {
-      // Another process created lock between our check and write
       log('Lock acquisition race - another process won');
       return {
         acquired: false,
@@ -146,28 +338,9 @@ function tryAcquireLockOnce(log: LogFn): LockResult {
       };
     }
     throw error;
+  } finally {
+    releaseCleanupGuard(cleanupPath, guardToken);
   }
-
-  // Lock acquired - return release function
-  const release = () => {
-    try {
-      // Only release if we still own it
-      const content = fs.readFileSync(lockPath, 'utf-8');
-      const currentLock = JSON.parse(content) as LockData;
-      if (currentLock.pid === process.pid) {
-        fs.unlinkSync(lockPath);
-        log('Lock released');
-      }
-    } catch {
-      // Ignore release errors
-    }
-  };
-
-  return {
-    acquired: true,
-    lockPath,
-    release,
-  };
 }
 
 /**
@@ -205,7 +378,7 @@ export async function acquireStartupLock(options?: {
   }
 
   log(`Failed to acquire lock after ${retries} attempts`);
-  throw new Error(
+  throw new ProxyError(
     `Failed to acquire startup lock after ${retries} attempts. ` +
       `Another CCS process may be starting CLIProxy.`
   );

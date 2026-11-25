@@ -10,6 +10,8 @@ import * as os from 'os';
 import * as path from 'path';
 import { getDashboardAuthConfig } from '../../../src/config/unified-config-loader';
 import {
+  authMiddleware,
+  isDashboardRequestOriginAllowed,
   isDashboardWebSocketOriginAllowed,
   getDashboardWebSocketRejectionStatus,
   isDashboardWebSocketUpgradeAllowed,
@@ -273,6 +275,156 @@ describe('Dashboard Auth', () => {
     it('max attempts is 5', () => {
       const maxAttempts = 5;
       expect(maxAttempts).toBe(5);
+    });
+  });
+
+  describe('CSRF Origin/Referer checks when dashboard auth is enabled', () => {
+    function makeMiddlewareRequest(
+      method: string,
+      pathValue: string,
+      headers: Record<string, string> = {},
+      authenticated = true
+    ) {
+      return {
+        method,
+        path: pathValue,
+        headers,
+        session: { authenticated },
+      } as never;
+    }
+
+    function runAuthMiddleware(req: ReturnType<typeof makeMiddlewareRequest>) {
+      let statusCode = 200;
+      let jsonBody: unknown;
+      let nextCalled = false;
+
+      const res = {
+        status(code: number) {
+          statusCode = code;
+          return this;
+        },
+        json(payload: unknown) {
+          jsonBody = payload;
+          return this;
+        },
+      } as never;
+
+      authMiddleware(req, res, () => {
+        nextCalled = true;
+      });
+
+      return { statusCode, jsonBody, nextCalled };
+    }
+
+    it('allows same-origin Origin and Referer headers and rejects cross-origin ones', () => {
+      expect(
+        isDashboardRequestOriginAllowed({
+          headers: { host: 'dash.example.test:3000', origin: 'https://dash.example.test:3000' },
+        } as never)
+      ).toBe(true);
+
+      expect(
+        isDashboardRequestOriginAllowed({
+          headers: { host: '127.0.0.1:3000', origin: 'http://localhost:3000' },
+        } as never)
+      ).toBe(true);
+
+      expect(
+        isDashboardRequestOriginAllowed({
+          headers: {
+            host: 'dash.example.test:3000',
+            referer: 'https://dash.example.test:3000/settings',
+          },
+        } as never)
+      ).toBe(true);
+
+      expect(
+        isDashboardRequestOriginAllowed({
+          headers: { host: 'dash.example.test:3000' },
+        } as never)
+      ).toBe(true);
+
+      expect(
+        isDashboardRequestOriginAllowed({
+          headers: { host: 'dash.example.test:3000', origin: 'https://evil.example.test' },
+        } as never)
+      ).toBe(false);
+
+      expect(
+        isDashboardRequestOriginAllowed({
+          headers: { host: 'dash.example.test:3000', origin: 'null' },
+        } as never)
+      ).toBe(false);
+
+      expect(
+        isDashboardRequestOriginAllowed({
+          headers: {
+            host: 'dash.example.test:3000',
+            referer: 'https://evil.example.test/csrf.html',
+          },
+        } as never)
+      ).toBe(false);
+    });
+
+    it('blocks cross-origin POST/PUT/PATCH/DELETE requests even with an authenticated session', () => {
+      process.env.CCS_DASHBOARD_AUTH_ENABLED = 'true';
+
+      for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+        const result = runAuthMiddleware(
+          makeMiddlewareRequest(method, '/api/profiles', {
+            host: 'dash.example.test:3000',
+            origin: 'https://evil.example.test',
+          })
+        );
+        expect(result.nextCalled).toBe(false);
+        expect(result.statusCode).toBe(403);
+        expect(result.jsonBody).toEqual({
+          error: 'Cross-origin state-changing requests are not allowed.',
+        });
+      }
+
+      const refererResult = runAuthMiddleware(
+        makeMiddlewareRequest('POST', '/api/profiles', {
+          host: 'dash.example.test:3000',
+          referer: 'https://evil.example.test/form.html',
+        })
+      );
+      expect(refererResult.nextCalled).toBe(false);
+      expect(refererResult.statusCode).toBe(403);
+
+      const loginCsrfResult = runAuthMiddleware(
+        makeMiddlewareRequest(
+          'POST',
+          '/api/auth/login',
+          {
+            host: 'dash.example.test:3000',
+            origin: 'https://evil.example.test',
+          },
+          false
+        )
+      );
+      expect(loginCsrfResult.nextCalled).toBe(false);
+      expect(loginCsrfResult.statusCode).toBe(403);
+    });
+
+    it('allows same-origin mutations and safe GETs when auth is enabled', () => {
+      process.env.CCS_DASHBOARD_AUTH_ENABLED = 'true';
+
+      const sameOriginPost = runAuthMiddleware(
+        makeMiddlewareRequest('POST', '/api/profiles', {
+          host: 'dash.example.test:3000',
+          origin: 'https://dash.example.test:3000',
+        })
+      );
+      expect(sameOriginPost.nextCalled).toBe(true);
+
+      const crossOriginGet = runAuthMiddleware(
+        makeMiddlewareRequest('GET', '/api/profiles', {
+          host: 'dash.example.test:3000',
+          origin: 'https://evil.example.test',
+        })
+      );
+      expect(crossOriginGet.nextCalled).toBe(true);
     });
   });
 });

@@ -5,8 +5,10 @@ import { getBrowserStatus } from '../../utils/browser';
 import { getUserFacingBrowserConfig } from '../../utils/browser/browser-status';
 import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
 import { mutateConfig } from '../../config/config-loader-facade';
+import { createRouteErrorHelpers } from './route-helpers';
 
 const router = Router();
+const { respondInternalError } = createRouteErrorHelpers('browser-routes');
 const BROWSER_LOCAL_ACCESS_ERROR =
   'Browser endpoints require localhost access when dashboard auth is disabled.';
 
@@ -56,7 +58,7 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
       status,
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to load browser configuration.');
   }
 });
 
@@ -64,7 +66,7 @@ router.get('/status', async (_req: Request, res: Response): Promise<void> => {
   try {
     res.json(await getBrowserStatus());
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to load browser status.');
   }
 });
 
@@ -201,7 +203,7 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to update browser configuration.');
   }
 });
 

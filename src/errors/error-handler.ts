@@ -11,7 +11,7 @@
 import { ExitCode, EXIT_CODE_DESCRIPTIONS } from './exit-codes';
 import { isCCSError } from './error-types';
 import { runCleanup } from './cleanup-registry';
-import { createLogger } from '../services/logging';
+import { createLogger, flushStructuredLogsSync } from '../services/logging';
 
 const logger = createLogger('cli:error-handler');
 
@@ -105,6 +105,8 @@ export function handleError(error: unknown): never {
   // Log debug info if enabled
   logDebugInfo(error, code);
 
+  flushStructuredLogsSync();
+
   // Exit with appropriate code
   process.exit(code);
 }
@@ -130,6 +132,7 @@ export function exitWithError(message: string, code: ExitCode = ExitCode.GENERAL
     console.error(`[i] Exit code: ${code} (${EXIT_CODE_DESCRIPTIONS[code] || 'Unknown'})`);
   }
 
+  flushStructuredLogsSync();
   process.exit(code);
 }
 
@@ -148,6 +151,7 @@ export function exitWithSuccess(message?: string): never {
   if (message) {
     console.log(`[OK] ${message}`);
   }
+  flushStructuredLogsSync();
   process.exit(ExitCode.SUCCESS);
 }
 

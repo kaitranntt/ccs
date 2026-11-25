@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, spyOn } from 'bun:test';
 import express from 'express';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -835,5 +835,50 @@ describe('cliproxy-auth-routes manual callback nickname persistence', () => {
       },
     });
     expect(getCachedQuota('claude', accountId)).toBeNull();
+  });
+
+  it('caps pendingManualAuthState at 200 entries by evicting the oldest entries', async () => {
+    let counter = 0;
+    const originalFetch = globalThis.fetch;
+    const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(
+      async (input: RequestInfo | URL): Promise<Response> => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (url.includes('/v0/management/codex-auth-url')) {
+          counter += 1;
+          return new Response(
+            JSON.stringify({
+              auth_url: `https://auth.example.com/authorize?state=cap-state-${counter}`,
+              state: `cap-state-${counter}`,
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+        if (url.includes('/v0/management/get-auth-status')) {
+          return new Response(JSON.stringify({ status: 'ok' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return originalFetch(input);
+      }
+    );
+
+    try {
+      for (let i = 1; i <= 205; i++) {
+        const res = await postJson('/api/cliproxy/auth/codex/start-url', {});
+        expect(res.status).toBe(200);
+      }
+
+      // Oldest entries (1..5) should have been evicted -> 409 unknown active session
+      const evictedStatus = await getJson('/api/cliproxy/auth/codex/status?state=cap-state-1');
+      expect(evictedStatus.status).toBe(409);
+
+      // Newest entries (e.g. 205) should remain tracked -> 200 { status: 'wait' }
+      const retainedStatus = await getJson('/api/cliproxy/auth/codex/status?state=cap-state-205');
+      expect(retainedStatus.status).toBe(200);
+      expect(retainedStatus.body).toEqual({ status: 'wait' });
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });

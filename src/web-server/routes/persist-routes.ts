@@ -8,9 +8,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getClaudeSettingsPath } from '../../utils/claude-config-path';
 import { createLogger } from '../../services/logging';
+import { createRouteErrorHelpers } from './route-helpers';
 
 const router = Router();
 const logger = createLogger('web-server:routes:persist');
+const { respondInternalError } = createRouteErrorHelpers('persist-routes');
 
 /** Rate limiter for restore endpoint - prevents abuse */
 const restoreRateLimiter = rateLimit({
@@ -128,7 +130,7 @@ router.get('/backups', (_req: Request, res: Response): void => {
       })),
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to list backups.');
   }
 });
 
@@ -283,7 +285,7 @@ router.post('/restore', restoreRateLimiter, async (req: Request, res: Response):
       throw error;
     }
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to restore backup.');
   } finally {
     restoreMutex.release();
   }

@@ -18,8 +18,10 @@ import {
 } from '../../utils/websearch/types';
 import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
 import { getWebSearchConfig, mutateConfig } from '../../config/config-loader-facade';
+import { createRouteErrorHelpers } from './route-helpers';
 
 const router = Router();
+const { respondInternalError } = createRouteErrorHelpers('websearch-routes');
 const WEBSEARCH_LOCAL_ACCESS_ERROR =
   'WebSearch endpoints require localhost access when dashboard auth is disabled.';
 const DEFAULT_WEBSEARCH_MAX_RESULTS = 5;
@@ -59,7 +61,7 @@ router.get('/', (_req: Request, res: Response): void => {
       apiKeys: getWebSearchApiKeyStates(),
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to load WebSearch configuration.');
   }
 });
 
@@ -279,7 +281,7 @@ router.put('/', (req: Request, res: Response): void => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to update WebSearch configuration.');
   }
 });
 
@@ -300,7 +302,7 @@ router.get('/status', (_req: Request, res: Response): void => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to load WebSearch status.');
   }
 });
 

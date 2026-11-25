@@ -28,6 +28,7 @@ declare module 'express-session' {
 
 /** Public paths that bypass auth (lowercase for case-insensitive matching) */
 const PUBLIC_PATHS = ['/api/auth/login', '/api/auth/check', '/api/auth/setup', '/api/health'];
+const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** Path to persistent session secret file */
 function getSessionSecretPath() {
@@ -121,14 +122,21 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     return next();
   }
 
-  // Allow public paths (case-insensitive)
-  const pathLower = req.path.toLowerCase();
-  if (PUBLIC_PATHS.some((p) => pathLower.startsWith(p))) {
+  // Allow static assets and SPA routes (non-API)
+  if (!req.path.startsWith('/api/')) {
     return next();
   }
 
-  // Allow static assets and SPA routes (non-API)
-  if (!req.path.startsWith('/api/')) {
+  // Enforce same-origin Origin/Referer checks on state-changing requests even when
+  // dashboard auth is enabled (defense in depth beyond sameSite: 'strict').
+  if (isStateChangingMethod(req.method) && !isDashboardRequestOriginAllowed(req)) {
+    res.status(403).json({ error: 'Cross-origin state-changing requests are not allowed.' });
+    return;
+  }
+
+  // Allow public paths (case-insensitive)
+  const pathLower = req.path.toLowerCase();
+  if (PUBLIC_PATHS.some((p) => pathLower.startsWith(p))) {
     return next();
   }
 
@@ -184,22 +192,16 @@ function isHttpOrigin(origin: URL): boolean {
   return origin.protocol === 'http:' || origin.protocol === 'https:';
 }
 
-export function isDashboardWebSocketOriginAllowed(req: IncomingMessage): boolean {
-  const originHeader = getSingleHeader(req.headers.origin);
-  if (!originHeader) return true;
+function isStateChangingMethod(method: string | undefined): boolean {
+  return typeof method === 'string' && STATE_CHANGING_METHODS.has(method.toUpperCase());
+}
 
-  let origin: URL;
-  try {
-    origin = new URL(originHeader);
-  } catch {
-    return false;
-  }
-
+function isAllowedDashboardOrigin(origin: URL, hostHeader: string | undefined): boolean {
   if (!isHttpOrigin(origin)) {
     return false;
   }
 
-  const host = parseHostHeader(getSingleHeader(req.headers.host));
+  const host = parseHostHeader(hostHeader);
   if (!host) {
     return false;
   }
@@ -213,6 +215,49 @@ export function isDashboardWebSocketOriginAllowed(req: IncomingMessage): boolean
     isLoopbackHostname(host.hostname) &&
     origin.port === host.port
   );
+}
+
+export function isDashboardRequestOriginAllowed(req: IncomingMessage): boolean {
+  const hostHeader = getSingleHeader(req.headers.host);
+  const originHeader = getSingleHeader(req.headers.origin);
+  if (originHeader !== undefined) {
+    if (!originHeader.trim()) {
+      return false;
+    }
+    try {
+      return isAllowedDashboardOrigin(new URL(originHeader), hostHeader);
+    } catch {
+      return false;
+    }
+  }
+
+  const refererHeader = getSingleHeader(req.headers.referer);
+  if (refererHeader !== undefined) {
+    if (!refererHeader.trim()) {
+      return false;
+    }
+    try {
+      return isAllowedDashboardOrigin(new URL(refererHeader), hostHeader);
+    } catch {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+export function isDashboardWebSocketOriginAllowed(req: IncomingMessage): boolean {
+  const originHeader = getSingleHeader(req.headers.origin);
+  if (!originHeader) return true;
+
+  let origin: URL;
+  try {
+    origin = new URL(originHeader);
+  } catch {
+    return false;
+  }
+
+  return isAllowedDashboardOrigin(origin, getSingleHeader(req.headers.host));
 }
 
 export function isDashboardWebSocketUpgradeAllowed(req: IncomingMessage): boolean {

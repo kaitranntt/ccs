@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -10,6 +10,8 @@ import { invalidateLoggingConfigCache } from '../../../../src/services/logging/l
 import { getCurrentLogPath, getLogArchiveDir } from '../../../../src/services/logging/log-paths';
 import {
   appendStructuredLogEntry,
+  flushStructuredLogs,
+  flushStructuredLogsSync,
   pruneExpiredLogArchives,
 } from '../../../../src/services/logging/log-storage';
 import type { LogEntry } from '../../../../src/services/logging/log-types';
@@ -41,6 +43,7 @@ describe('log storage', () => {
   });
 
   afterEach(() => {
+    flushStructuredLogsSync();
     if (originalCcsHome !== undefined) {
       process.env.CCS_HOME = originalCcsHome;
     } else {
@@ -53,7 +56,113 @@ describe('log storage', () => {
     tempHome = '';
   });
 
-  it('rotates the current log into the archive when the file exceeds the age threshold', () => {
+  it('buffers writes asynchronously and flushes via flushStructuredLogs()', async () => {
+    const config = createEmptyUnifiedConfig();
+    config.logging.enabled = true;
+    config.logging.level = 'info';
+    saveUnifiedConfig(config);
+    invalidateLoggingConfigCache();
+
+    const currentLogPath = getCurrentLogPath();
+    appendStructuredLogEntry(
+      createEntry({
+        id: 'async-1',
+        message: 'first buffered entry',
+      })
+    );
+    appendStructuredLogEntry(
+      createEntry({
+        id: 'async-2',
+        message: 'second buffered entry',
+      })
+    );
+
+    expect(fs.existsSync(currentLogPath)).toBe(false);
+
+    await flushStructuredLogs();
+
+    const content = fs.readFileSync(currentLogPath, 'utf8');
+    expect(content).toContain('"id":"async-1"');
+    expect(content).toContain('"id":"async-2"');
+  });
+
+  it('flushes buffered entries synchronously via flushStructuredLogsSync()', () => {
+    const config = createEmptyUnifiedConfig();
+    config.logging.enabled = true;
+    config.logging.level = 'info';
+    saveUnifiedConfig(config);
+    invalidateLoggingConfigCache();
+
+    const currentLogPath = getCurrentLogPath();
+    appendStructuredLogEntry(
+      createEntry({
+        id: 'sync-flush-1',
+        message: 'entry flushed before exit',
+      })
+    );
+
+    flushStructuredLogsSync();
+
+    const content = fs.readFileSync(currentLogPath, 'utf8');
+    expect(content).toContain('"id":"sync-flush-1"');
+  });
+
+  it('flushes in-flight async batches synchronously without dropping or duplicating entries', async () => {
+    const config = createEmptyUnifiedConfig();
+    config.logging.enabled = true;
+    config.logging.level = 'info';
+    saveUnifiedConfig(config);
+    invalidateLoggingConfigCache();
+
+    let releaseMkdir!: () => void;
+    const mkdirBlocked = new Promise<void>((resolve) => {
+      releaseMkdir = resolve;
+    });
+    const originalMkdir = fs.promises.mkdir.bind(fs.promises);
+    const mkdirSpy = spyOn(fs.promises, 'mkdir').mockImplementation(async (target, options) => {
+      await mkdirBlocked;
+      return await originalMkdir(target, options);
+    });
+
+    try {
+      const currentLogPath = getCurrentLogPath();
+      appendStructuredLogEntry(
+        createEntry({
+          id: 'inflight-sync-1',
+          message: 'entry captured mid-async-flush',
+        })
+      );
+
+      // Move batch into inFlightBatches and pause inside fs.promises.mkdir
+      const asyncFlushPromise = flushStructuredLogs();
+      await Promise.resolve();
+
+      // Simulate process.exit path calling flushStructuredLogsSync() before async flush completes
+      flushStructuredLogsSync();
+
+      const linesAfterSync = fs
+        .readFileSync(currentLogPath, 'utf8')
+        .trim()
+        .split('\n')
+        .filter(Boolean);
+      expect(linesAfterSync).toHaveLength(1);
+      expect(linesAfterSync[0]).toContain('"id":"inflight-sync-1"');
+
+      releaseMkdir();
+      await asyncFlushPromise;
+
+      const linesAfterAsync = fs
+        .readFileSync(currentLogPath, 'utf8')
+        .trim()
+        .split('\n')
+        .filter(Boolean);
+      expect(linesAfterAsync).toHaveLength(1);
+    } finally {
+      mkdirSpy.mockRestore();
+    }
+  });
+
+  it('rotates the current log into the archive when the file exceeds the age threshold', async () => {
     const config = createEmptyUnifiedConfig();
     config.logging.retain_days = 7;
     config.logging.rotate_mb = 10;
@@ -76,6 +185,7 @@ describe('log storage', () => {
         message: 'new log entry after rotation',
       })
     );
+    await flushStructuredLogs();
 
     const archiveDir = getLogArchiveDir();
     const archives = fs.readdirSync(archiveDir);
