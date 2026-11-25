@@ -1,10 +1,10 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2646,
-    "filesAffected": 285,
-    "hotpathOccurrences": 1138,
-    "hotpathFilesAffected": 164,
+    "totalOccurrences": 2642,
+    "filesAffected": 290,
+    "hotpathOccurrences": 1134,
+    "hotpathFilesAffected": 169,
     "topHotpathFiles": [
       {
         "file": "src/management/shared-manager/diverged-file-adopter.ts",
@@ -41,17 +41,6 @@
           "statSync",
           "symlinkSync",
           "unlinkSync"
-        ],
-        "markers": []
-      },
-      {
-        "file": "src/cliproxy/config/env-builder.ts",
-        "count": 25,
-        "calls": [
-          "existsSync",
-          "mkdirSync",
-          "readFileSync",
-          "writeFileSync"
         ],
         "markers": []
       },
@@ -150,6 +139,22 @@
           "mkdirSync",
           "readFileSync",
           "statSync",
+          "unlinkSync",
+          "writeFileSync"
+        ],
+        "markers": []
+      },
+      {
+        "file": "src/commands/bar/install-subcommand.ts",
+        "count": 20,
+        "calls": [
+          "existsSync",
+          "mkdirSync",
+          "mkdtempSync",
+          "readdirSync",
+          "readFileSync",
+          "renameSync",
+          "rmSync",
           "unlinkSync",
           "writeFileSync"
         ],
@@ -303,8 +308,8 @@
     ]
   },
   "legacyShim": {
-    "totalMarkers": 495,
-    "filesAffected": 187,
+    "totalMarkers": 469,
+    "filesAffected": 188,
     "topFiles": [
       {
         "file": "src/auth/profile-detector.ts",
@@ -328,28 +333,6 @@
           "// Priority 0.25: Check explicit legacy Cursor bridge profile.",
           "// Priority 3: Check settings-based profiles (glm, km) - LEGACY FALLBACK",
           "// Priority 4: Check account-based profiles (work, personal) - LEGACY FALLBACK"
-        ]
-      },
-      {
-        "file": "src/web-server/usage/native-quota-collector.ts",
-        "count": 15,
-        "calls": [],
-        "markers": [
-          "* are used for backward compatibility.",
-          "* Kept for backward compatibility with existing tests.",
-          "* Legacy Codex collector — uses the old getDefaultCodexAccountId dep.",
-          "* List all Claude profiles from the profile registry (merged legacy + unified).",
-          "* profile name. Kept for backward compatibility with existing tests that stub",
-          "* When no enumeration deps are injected (legacy mode / old tests that stub only",
-          "/** Legacy Codex network row builder. */",
-          "/** Legacy Codex row builder (local quota). */",
-          "/** Legacy row builder — no surface/profile/is_subscription fields. */",
-          "// everything except the legacy harness takes the multi-profile path below.",
-          "// For the network fallback: the legacy getDefaultCodexAccountId is the",
-          "// Legacy path: backward-compatible with old tests that only inject",
-          "// Legacy single-profile collectors (unchanged; used by old tests + back-compat)",
-          "// Multi-profile enumeration is the DEFAULT (production) behavior. The legacy",
-          "// Use the legacy single-state approach via profile key '__legacy__' to avoid"
         ]
       },
       {
@@ -404,23 +387,6 @@
           "// Legacy mode - read from config.json only",
           "// Legacy mode: read config.json",
           "// Merge legacy profiles into available list (avoid duplicates)"
-        ]
-      },
-      {
-        "file": "src/cliproxy/config/generator.ts",
-        "count": 10,
-        "calls": [],
-        "markers": [
-          "* `config-version:`). The v8 loader also accepts legacy keys and prefers the v8 path",
-          "* CLIProxyAPI v8 roots that hold settings CCS writes in the legacy layout (server.port,",
-          "* js-yaml can't parse, which keeps the legacy handling.",
-          "* keeping them would let their stale v8 values override the legacy ones CCS writes,",
-          "* Move the generated client key list from top-level `api-keys` (legacy layout) to",
-          "* when both exist; this does the same. Returns null for legacy configs and for files",
-          "/** Settings CCS preserves, rewritten in the legacy layout for the existing parsers. */",
-          "// A v8-layout config is read through a legacy view; its other sections are kept below.",
-          "// Backward compatibility: legacy sonnet thinking alias now routes to canonical model ID.",
-          "// Preserve user customizations while pruning legacy generated Gemini preview noise."
         ]
       },
       {
@@ -482,6 +448,33 @@
           "name: 'legacy-iflow',",
           "name: 'legacy',"
         ]
+      },
+      {
+        "file": "src/cliproxy/executor/__tests__/variant-port-edge-cases.test.js",
+        "count": 8,
+        "calls": [],
+        "markers": [
+          "* legacy migration, permission errors, and config corruption.",
+          "// Create legacy variant without port",
+          "assert.strictEqual(variants.legacy.port, undefined);",
+          "describe('Legacy Variant Migration', function () {",
+          "it('legacy variant does not block port allocation', function () {",
+          "legacy: {"
+        ]
+      },
+      {
+        "file": "src/cliproxy/config/__tests__/config-generator.test.js",
+        "count": 7,
+        "calls": [],
+        "markers": [
+          "'Should preserve lone manual high-version aliases during legacy cleanup'",
+          "'Should preserve manual aliases after legacy migration has already run'",
+          "'Should preserve the manual 3.2 compatibility cluster during legacy cleanup'",
+          "'Should preserve the pruned legacy alias in the migration backup'",
+          "assert(fs.existsSync(backupPath), 'Should keep a backup of the legacy config before pruning');",
+          "it('prunes partially retained broad guessed ranges during legacy cleanup', () => {",
+          "it('writes a one-time backup before pruning legacy Gemini aliases during migration', () => {"
+        ]
       }
     ],
     "explicitShimFiles": [
@@ -498,10 +491,10 @@
   "maintainability": {
     "typedErrors": {
       "totalThrows": 490,
-      "typedThrows": 153,
-      "plainThrows": 276,
+      "typedThrows": 154,
+      "plainThrows": 275,
       "otherThrows": 61,
-      "adoptionRatio": 0.3122,
+      "adoptionRatio": 0.3143,
       "topSubdomainsByThrows": [
         {
           "subdomain": "web-server",
@@ -554,8 +547,8 @@
         {
           "subdomain": "cursor",
           "count": 23,
-          "typed": 4,
-          "plain": 17
+          "typed": 5,
+          "plain": 16
         },
         {
           "subdomain": "cliproxy/auth",
@@ -579,8 +572,8 @@
     },
     "loggerCoverage": {
       "filesWithCreateLogger": 68,
-      "totalSourceFiles": 790,
-      "coverageRatio": 0.0861,
+      "totalSourceFiles": 846,
+      "coverageRatio": 0.0804,
       "subdomainsWithZeroCreateLogger": [
         "api",
         "bin",
@@ -590,6 +583,7 @@
         "cliproxy/binary",
         "cliproxy/config",
         "cliproxy/management",
+        "cliproxy/model-catalog-data",
         "cliproxy/sync",
         "cliproxy/types",
         "config",
@@ -599,14 +593,14 @@
       ],
       "topSubdomainsByFiles": [
         {
-          "subdomain": "commands",
-          "count": 110,
-          "withLogger": 2
+          "subdomain": "web-server",
+          "count": 130,
+          "withLogger": 10
         },
         {
-          "subdomain": "web-server",
-          "count": 110,
-          "withLogger": 10
+          "subdomain": "commands",
+          "count": 114,
+          "withLogger": 2
         },
         {
           "subdomain": "utils",
@@ -614,19 +608,19 @@
           "withLogger": 2
         },
         {
-          "subdomain": "management",
-          "count": 35,
-          "withLogger": 1
-        },
-        {
           "subdomain": "cliproxy/auth",
-          "count": 33,
+          "count": 43,
           "withLogger": 1
         },
         {
           "subdomain": "cliproxy/quota",
-          "count": 32,
+          "count": 35,
           "withLogger": 5
+        },
+        {
+          "subdomain": "management",
+          "count": 35,
+          "withLogger": 1
         },
         {
           "subdomain": "config",
@@ -634,18 +628,18 @@
           "withLogger": 0
         },
         {
+          "subdomain": "cursor",
+          "count": 28,
+          "withLogger": 3
+        },
+        {
           "subdomain": "codex-auth",
           "count": 24,
           "withLogger": 9
         },
         {
-          "subdomain": "cursor",
-          "count": 24,
-          "withLogger": 3
-        },
-        {
-          "subdomain": "cliproxy/accounts",
-          "count": 21,
+          "subdomain": "cliproxy/config",
+          "count": 22,
           "withLogger": 0
         }
       ]
@@ -654,7 +648,7 @@
       "totalOccurrences": 594,
       "exemptOccurrences": 326,
       "hotpathOccurrences": 268,
-      "filesAffected": 82,
+      "filesAffected": 83,
       "topFiles": [
         {
           "file": "src/errors/error-handler.ts",
@@ -719,61 +713,9 @@
       ]
     },
     "largeFiles": {
-      "countOver400": 95,
-      "countOver600": 46,
+      "countOver400": 87,
+      "countOver600": 33,
       "topOver400": [
-        {
-          "file": "src/web-server/usage/native-quota-collector.ts",
-          "loc": 1718
-        },
-        {
-          "file": "src/web-server/routes/cliproxy-auth-routes.ts",
-          "loc": 1621
-        },
-        {
-          "file": "src/cliproxy/auth/oauth-handler.ts",
-          "loc": 1510
-        },
-        {
-          "file": "src/web-server/model-pricing.ts",
-          "loc": 1298
-        },
-        {
-          "file": "src/cliproxy/config/generator.ts",
-          "loc": 1292
-        },
-        {
-          "file": "src/cursor/cursor-executor.ts",
-          "loc": 1234
-        },
-        {
-          "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
-          "loc": 1180
-        },
-        {
-          "file": "src/cliproxy/config/env-builder.ts",
-          "loc": 1053
-        },
-        {
-          "file": "src/web-server/routes/settings-routes.ts",
-          "loc": 1052
-        },
-        {
-          "file": "src/cliproxy/auth/oauth-process.ts",
-          "loc": 1048
-        },
-        {
-          "file": "src/cliproxy/model-catalog.ts",
-          "loc": 1020
-        },
-        {
-          "file": "src/cliproxy/quota/quota-manager.ts",
-          "loc": 1010
-        },
-        {
-          "file": "src/commands/cliproxy/variant-subcommand.ts",
-          "loc": 1003
-        },
         {
           "file": "src/web-server/services/codex-dashboard-service.ts",
           "loc": 940
@@ -781,6 +723,58 @@
         {
           "file": "src/glmt/glmt-proxy.ts",
           "loc": 925
+        },
+        {
+          "file": "src/cliproxy/accounts/registry.ts",
+          "loc": 898
+        },
+        {
+          "file": "src/channels/official-channels-runtime.ts",
+          "loc": 867
+        },
+        {
+          "file": "src/cliproxy/ai-providers/codex-reasoning-proxy.ts",
+          "loc": 865
+        },
+        {
+          "file": "src/web-server/usage/handlers.ts",
+          "loc": 860
+        },
+        {
+          "file": "src/cliproxy/accounts/drain-order.ts",
+          "loc": 855
+        },
+        {
+          "file": "src/cliproxy/quota/quota-fetcher-codex.ts",
+          "loc": 840
+        },
+        {
+          "file": "src/web-server/usage/aggregator.ts",
+          "loc": 816
+        },
+        {
+          "file": "src/proxy/transformers/request-transformer.ts",
+          "loc": 801
+        },
+        {
+          "file": "src/web-server/routes/config-routes.ts",
+          "loc": 781
+        },
+        {
+          "file": "src/web-server/routes/account-routes.ts",
+          "loc": 770
+        },
+        {
+          "file": "src/auth/profile-detector.ts",
+          "loc": 767
+        },
+        {
+          "file": "src/delegation/headless-executor.ts",
+          "loc": 767
+        },
+        {
+          "file": "src/proxy/proxy-daemon.ts",
+          "loc": 761
         }
       ]
     }
