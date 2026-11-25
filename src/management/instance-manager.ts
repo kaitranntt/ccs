@@ -13,6 +13,8 @@ import ProfileContextSyncLock from './profile-context-sync-lock';
 import { DEFAULT_ACCOUNT_CONTEXT_MODE } from '../auth/account-context';
 import type { AccountContextPolicy } from '../auth/account-context';
 import { getCcsHome } from '../utils/config-manager';
+import { withClaudeUserConfigLock } from '../utils/claude-user-config-lock';
+import { writeAtomicJsonFile } from '../utils/atomic-json-file';
 import { createLogger } from '../services/logging';
 import { getCcsDir } from '../config/config-loader-facade';
 import { ProfileError } from '../errors/error-types';
@@ -227,40 +229,35 @@ class InstanceManager {
 
       const mcpServers = rawMcpServers as Record<string, unknown>;
       const instanceClaudeJson = path.join(instancePath, '.claude.json');
-      let instanceContent: Record<string, unknown> = {};
-
-      if (fs.existsSync(instanceClaudeJson)) {
+      return withClaudeUserConfigLock(instanceClaudeJson, () => {
+        let instanceContent: Record<string, unknown> = {};
         try {
-          instanceContent = JSON.parse(fs.readFileSync(instanceClaudeJson, 'utf8'));
-        } catch {
-          // Corrupted file, start fresh
-          instanceContent = {};
+          const parsed: unknown = JSON.parse(fs.readFileSync(instanceClaudeJson, 'utf8'));
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new TypeError('Instance Claude config must contain a JSON object');
+          }
+          instanceContent = parsed as Record<string, unknown>;
+        } catch (error) {
+          // Only a genuinely missing file is new; malformed/unreadable state is preserved.
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
         }
-      }
 
-      // Merge: global MCP servers as base, instance-specific overrides on top,
-      // except for CCS-managed entries which must stay aligned with the global runtime.
-      const rawExistingMcp = instanceContent.mcpServers;
-      const existingMcp =
-        rawExistingMcp && typeof rawExistingMcp === 'object' && !Array.isArray(rawExistingMcp)
-          ? (rawExistingMcp as Record<string, unknown>)
-          : {};
-      const mergedMcpServers = { ...mcpServers, ...existingMcp };
-      for (const managedName of MANAGED_MCP_SERVER_NAMES) {
-        if (managedName in mcpServers) {
-          mergedMcpServers[managedName] = mcpServers[managedName];
+        // Instance overrides win, except CCS-managed servers track the global runtime.
+        const rawExistingMcp = instanceContent.mcpServers;
+        const existingMcp =
+          rawExistingMcp && typeof rawExistingMcp === 'object' && !Array.isArray(rawExistingMcp)
+            ? (rawExistingMcp as Record<string, unknown>)
+            : {};
+        const mergedMcpServers = { ...mcpServers, ...existingMcp };
+        for (const managedName of MANAGED_MCP_SERVER_NAMES) {
+          if (managedName in mcpServers) {
+            mergedMcpServers[managedName] = mcpServers[managedName];
+          }
         }
-      }
-      instanceContent.mcpServers = mergedMcpServers;
-
-      const fileMode = fs.existsSync(instanceClaudeJson)
-        ? fs.statSync(instanceClaudeJson).mode & 0o777
-        : 0o600;
-      fs.writeFileSync(instanceClaudeJson, JSON.stringify(instanceContent, null, 2), {
-        encoding: 'utf8',
-        mode: fileMode,
+        instanceContent.mcpServers = mergedMcpServers;
+        writeAtomicJsonFile(instanceClaudeJson, instanceContent);
+        return true;
       });
-      return true;
     } catch (error) {
       // Best-effort: don't fail instance creation if MCP sync fails
       console.warn(`[!] MCP sync skipped: ${(error as Error).message}`);
