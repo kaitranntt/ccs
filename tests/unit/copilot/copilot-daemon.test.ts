@@ -12,6 +12,16 @@ const activeServers: http.Server[] = [];
 let originalCcsHome: string | undefined;
 let tempDir: string;
 
+async function waitForProcessCommandLine(pid: number): Promise<void> {
+  const procPath = `/proc/${pid}/cmdline`;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (fs.existsSync(procPath) && fs.readFileSync(procPath, 'utf8').trim().length > 0) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
 beforeEach(() => {
   originalCcsHome = process.env.CCS_HOME;
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-copilot-daemon-test-'));
@@ -150,6 +160,7 @@ describe('copilot daemon stop safety', () => {
     const pidFile = path.join(getCcsDir(), 'copilot', 'daemon.pid');
     fs.mkdirSync(path.dirname(pidFile), { recursive: true });
     fs.writeFileSync(pidFile, String(unrelatedPid));
+    await waitForProcessCommandLine(unrelatedPid);
 
     try {
       const result = await stopDaemon();
@@ -185,6 +196,7 @@ describe('copilot daemon stop safety', () => {
     const pidFile = path.join(getCcsDir(), 'copilot', 'daemon.pid');
     fs.mkdirSync(path.dirname(pidFile), { recursive: true });
     fs.writeFileSync(pidFile, String(unrelatedPid));
+    await waitForProcessCommandLine(unrelatedPid);
 
     try {
       const result = await stopDaemon();
