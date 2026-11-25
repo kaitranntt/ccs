@@ -1,11 +1,14 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, lazy, Suspense, useState } from 'react';
 import { toast } from 'sonner';
 import { Copy, FileCode2, Loader2, RefreshCw, Save } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CodeEditor } from '@/components/shared/code-editor';
 import i18n from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+
+const CodeEditor = lazy(() =>
+  import('@/components/shared/code-editor').then((m) => ({ default: m.CodeEditor }))
+);
 
 interface RawConfigEditorPanelProps {
   title: string;
@@ -125,15 +128,24 @@ export function RawConfigEditorPanel({
             )}
             <div className="min-h-0 flex-1 p-4 pt-3">
               <div className="h-full rounded-md border overflow-hidden bg-background">
-                <CodeEditor
-                  value={value}
-                  onChange={onChange}
-                  language={language}
-                  readonly={readOnly}
-                  exactText={exactText}
-                  minHeight="100%"
-                  heightMode="fill-parent"
-                />
+                <Suspense
+                  fallback={
+                    <div className="flex h-full items-center justify-center text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                      {loadingLabel}
+                    </div>
+                  }
+                >
+                  <CodeEditor
+                    value={value}
+                    onChange={onChange}
+                    language={language}
+                    readonly={readOnly}
+                    exactText={exactText}
+                    minHeight="100%"
+                    heightMode="fill-parent"
+                  />
+                </Suspense>
               </div>
             </div>
           </div>

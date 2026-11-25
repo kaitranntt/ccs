@@ -22,7 +22,7 @@ import { requestLoggingMiddleware } from './middleware/request-logging-middlewar
 import { startAutoSyncWatcher, stopAutoSyncWatcher } from '../cliproxy/sync';
 import { shutdownUsageAggregator } from './usage/aggregator';
 import { createLogger } from '../services/logging';
-import { DEFAULT_DASHBOARD_HOST, isLoopbackHost } from '../commands/config-dashboard-host';
+import { DEFAULT_DASHBOARD_HOST, isLoopbackHost } from '../shared/dashboard-host';
 import { startClaudePoolPolicyController } from '../cliproxy/accounts/claude-pool-policy';
 
 export interface ServerOptions {

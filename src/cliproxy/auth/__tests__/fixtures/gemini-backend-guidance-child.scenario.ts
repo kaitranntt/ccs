@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import * as childProcess from 'child_process';
-import { ConfigError } from '../../../errors/error-types';
-import type { ProxyTarget } from '../../proxy/proxy-target-resolver';
+import { ConfigError } from '../../../../errors/error-types';
+import type { ProxyTarget } from '../../../proxy/proxy-target-resolver';
 
 const scenario = process.env['GEMINI_GUIDANCE_SCENARIO'];
 if (!scenario) {
@@ -59,41 +59,41 @@ async function registerScenarioMocks(): Promise<void> {
     realPoolOptInPrompt,
     realOAuthPortDiagnostics,
   ] = await Promise.all([
-    import('../../config/config-generator'),
-    import('../../accounts/account-manager'),
-    import('../token-manager'),
-    import('../environment-detector'),
-    import('../../proxy/proxy-target-resolver'),
-    import('../../accounts/account-safety'),
-    import('../../accounts/account-safety-cross-lane'),
-    import('../../routing/pool-opt-in-prompt'),
-    import('../../../management/oauth-port-diagnostics'),
+    import('../../../config/config-generator'),
+    import('../../../accounts/account-manager'),
+    import('../../token-manager'),
+    import('../../environment-detector'),
+    import('../../../proxy/proxy-target-resolver'),
+    import('../../../accounts/account-safety'),
+    import('../../../accounts/account-safety-cross-lane'),
+    import('../../../routing/pool-opt-in-prompt'),
+    import('../../../../management/oauth-port-diagnostics'),
   ]);
 
-  mock.module('../../binary-manager', () => ({
+  mock.module('../../../binary-manager', () => ({
     ensureCLIProxyBinary: ensureBinaryMock,
     getConfiguredBackend: () => activeBackend,
   }));
 
-  mock.module('../../config/config-generator', () => ({
+  mock.module('../../../config/config-generator', () => ({
     ...realConfigGenerator,
     generateConfig: generateConfigMock,
   }));
 
-  mock.module('../../../management/oauth-port-diagnostics', () => ({
+  mock.module('../../../../management/oauth-port-diagnostics', () => ({
     ...realOAuthPortDiagnostics,
     enhancedPreflightOAuthCheck: preflightCheckMock,
     OAUTH_CALLBACK_PORTS: { gemini: 8085 },
   }));
 
-  mock.module('../environment-detector', () => ({
+  mock.module('../../environment-detector', () => ({
     ...realEnvironmentDetector,
     isHeadlessEnvironment: () => headlessEnvironment,
     killProcessOnPort: () => false,
     showStep: () => {},
   }));
 
-  mock.module('../../proxy/proxy-target-resolver', () => ({
+  mock.module('../../../proxy/proxy-target-resolver', () => ({
     ...realProxyTargetResolver,
     getProxyTarget: () => proxyTarget,
     buildProxyUrl: (target: ProxyTarget, endpointPath: string) =>
@@ -103,7 +103,7 @@ async function registerScenarioMocks(): Promise<void> {
     buildManagementHeaders: () => ({}),
   }));
 
-  mock.module('../../accounts/account-manager', () => ({
+  mock.module('../../../accounts/account-manager', () => ({
     ...realAccountManager,
     getProviderAccounts: () => [],
     getDefaultAccount: () => null,
@@ -114,7 +114,7 @@ async function registerScenarioMocks(): Promise<void> {
     validateNickname: () => null,
   }));
 
-  mock.module('../token-manager', () => ({
+  mock.module('../../token-manager', () => ({
     ...realTokenManager,
     getProviderTokenDir: () => '/tmp/ccs-gemini-auth-tests',
     isAuthenticated: () => false,
@@ -123,7 +123,7 @@ async function registerScenarioMocks(): Promise<void> {
     registerAccountFromToken: () => null,
   }));
 
-  mock.module('../../accounts/account-safety', () => ({
+  mock.module('../../../accounts/account-safety', () => ({
     ...realAccountSafety,
     checkNewAccountConflict: () => null,
     warnNewAccountConflict: () => undefined,
@@ -131,12 +131,12 @@ async function registerScenarioMocks(): Promise<void> {
     warnPossible403Ban: () => undefined,
   }));
 
-  mock.module('../../accounts/account-safety-cross-lane', () => ({
+  mock.module('../../../accounts/account-safety-cross-lane', () => ({
     ...realAccountSafetyCrossLane,
     checkCrossLaneEmailOverlap: () => null,
   }));
 
-  mock.module('../../routing/pool-opt-in-prompt', () => ({
+  mock.module('../../../routing/pool-opt-in-prompt', () => ({
     ...realPoolOptInPrompt,
     maybeOfferPoolRouting: async () => undefined,
   }));
@@ -183,7 +183,9 @@ describe('child Gemini backend guidance scenario', () => {
 
     try {
       await registerScenarioMocks();
-      const { triggerOAuth } = await import(`../oauth-handler?gemini-guidance-child=${Date.now()}`);
+      const { triggerOAuth } = await import(
+        `../../oauth-handler?gemini-guidance-child=${Date.now()}`
+      );
       const account = await triggerOAuth('gemini', {
         headless: scenario === 'original-direct-unsupported' ? false : undefined,
       });

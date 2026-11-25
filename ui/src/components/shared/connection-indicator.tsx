@@ -5,11 +5,11 @@
  */
 
 import { Wifi, WifiOff, RefreshCw } from 'lucide-react';
-import { useWebSocket } from '@/hooks/use-websocket';
+import { useWebSocketContext } from '@/hooks/use-websocket-context';
 import { useTranslation } from 'react-i18next';
 
 export function ConnectionIndicator() {
-  const { status, isReconnecting } = useWebSocket();
+  const { status, isReconnecting } = useWebSocketContext();
   const { t } = useTranslation();
 
   const statusConfig = {

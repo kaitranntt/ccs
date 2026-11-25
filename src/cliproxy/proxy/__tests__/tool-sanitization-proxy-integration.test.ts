@@ -1767,5 +1767,72 @@ describe('ToolSanitizationProxy Integration', () => {
         }
       });
     });
+
+    it('destroys upstream request when client aborts mid-stream', async () => {
+      let upstreamReqClosed = false;
+      let upstreamStarted = false;
+      let releaseUpstreamWait: (() => void) | null = null;
+      const upstreamClosedPromise = new Promise<void>((resolve) => {
+        releaseUpstreamWait = resolve;
+      });
+
+      const slowUpstream = http.createServer((_req, res) => {
+        upstreamStarted = true;
+        res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        res.write('event: message_start\ndata: {"type":"message_start"}\n\n');
+        res.on('close', () => {
+          upstreamReqClosed = true;
+          releaseUpstreamWait?.();
+        });
+      });
+
+      const slowPort = await new Promise<number>((resolve) => {
+        slowUpstream.listen(0, '127.0.0.1', () => {
+          const addr = slowUpstream.address();
+          resolve(typeof addr === 'object' && addr ? addr.port : 0);
+        });
+      });
+
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${slowPort}`,
+      });
+      const proxyPort = await proxy.start();
+
+      try {
+        const controller = new AbortController();
+        const response = await fetch(`http://127.0.0.1:${proxyPort}/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-6',
+            stream: true,
+            messages: [{ role: 'user', content: 'hello' }],
+          }),
+          signal: controller.signal,
+        });
+
+        const reader = response.body!.getReader();
+        await reader.read();
+        expect(upstreamStarted).toBe(true);
+
+        controller.abort();
+        await reader.cancel().catch(() => undefined);
+
+        await Promise.race([
+          upstreamClosedPromise,
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error('Upstream was not aborted on client disconnect')),
+              2000
+            )
+          ),
+        ]);
+        expect(upstreamReqClosed).toBe(true);
+      } finally {
+        proxy.stop();
+        slowUpstream.closeAllConnections();
+        await new Promise<void>((resolve) => slowUpstream.close(() => resolve()));
+      }
+    });
   });
 });

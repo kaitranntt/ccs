@@ -69,3 +69,6 @@ _serve*.log
 
 # Types Claude Code writes beside a mod it loads from a folder
 claude-mods/*/.claude-plugin/types/
+
+# Fallow dead-code analysis cache
+.fallow/

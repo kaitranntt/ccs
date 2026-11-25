@@ -172,4 +172,34 @@ describe('proxy SSE stream transformer', () => {
     ).toBe('string');
     expect((signature as string).length).toBeGreaterThan(0);
   });
+
+  it('cancels upstream reader when downstream ReadableStream is cancelled', async () => {
+    let upstreamCancelled = false;
+    const upstreamStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            'data: {"id":"chatcmpl_cancel","object":"chat.completion.chunk","created":1,"model":"gpt-5","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":null}]}\n\n'
+          )
+        );
+      },
+      cancel() {
+        upstreamCancelled = true;
+      },
+    });
+
+    const transformed = await createAnthropicProxyResponse(
+      new Response(upstreamStream, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    );
+
+    const reader = transformed.body!.getReader();
+    const first = await reader.read();
+    expect(first.done).toBe(false);
+
+    await reader.cancel('client disconnected');
+    expect(upstreamCancelled).toBe(true);
+  });
 });

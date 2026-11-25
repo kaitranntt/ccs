@@ -7,7 +7,9 @@ import { PrivacyToggle } from '@/components/shared/privacy-toggle';
 import { GitHubLink } from '@/components/shared/github-link';
 import { DocsLink } from '@/components/shared/docs-link';
 import { ConnectionIndicator } from '@/components/shared/connection-indicator';
+import { ErrorBoundary } from '@/components/shared/error-boundary';
 import { LocalhostDisclaimer } from '@/components/shared/localhost-disclaimer';
+import { WebSocketProvider } from '@/providers/websocket-provider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ClaudeKitBadge } from '@/components/shared/claudekit-badge';
 import { CcsBarButton } from '@/components/shared/ccs-bar-button';
@@ -29,7 +31,7 @@ function PageLoader() {
   );
 }
 
-export function Layout() {
+function LayoutShell() {
   const location = useLocation();
   const { isOpen, prompt, onSelect, onClose } = useProjectSelection();
   const deviceCode = useDeviceCode();
@@ -59,9 +61,11 @@ export function Layout() {
           </div>
         </header>
         <div className="flex-1 overflow-auto min-h-0">
-          <Suspense fallback={<PageLoader />}>
-            <Outlet />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<PageLoader />}>
+              <Outlet />
+            </Suspense>
+          </ErrorBoundary>
         </div>
         <LocalhostDisclaimer />
       </main>
@@ -93,5 +97,13 @@ export function Layout() {
         />
       )}
     </SidebarProvider>
+  );
+}
+
+export function Layout() {
+  return (
+    <WebSocketProvider>
+      <LayoutShell />
+    </WebSocketProvider>
   );
 }

@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, lazy, Suspense, useMemo, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -6,7 +6,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CodeEditor } from '@/components/shared/code-editor';
 import { useAccounts } from '@/hooks/use-accounts';
 import {
   type SharedSummary,
@@ -31,6 +30,10 @@ import {
 } from 'lucide-react';
 
 type TabType = 'commands' | 'skills' | 'agents' | 'plugins' | 'settings';
+
+const CodeEditor = lazy(() =>
+  import('@/components/shared/code-editor').then((m) => ({ default: m.CodeEditor }))
+);
 
 export function SharedPage() {
   const { t } = useTranslation();
@@ -444,13 +447,21 @@ export function SharedPage() {
                               </AlertDescription>
                             </Alert>
                           ) : (
-                            <CodeEditor
-                              value={selectedItemContent?.content ?? ''}
-                              onChange={() => {}}
-                              language="json"
-                              readonly
-                              minHeight="320px"
-                            />
+                            <Suspense
+                              fallback={
+                                <div className="flex h-[320px] items-center justify-center text-muted-foreground">
+                                  <RefreshCw className="w-5 h-5 animate-spin" />
+                                </div>
+                              }
+                            >
+                              <CodeEditor
+                                value={selectedItemContent?.content ?? ''}
+                                onChange={() => {}}
+                                language="json"
+                                readonly
+                                minHeight="320px"
+                              />
+                            </Suspense>
                           )}
                         </ScrollArea>
                       </CardContent>

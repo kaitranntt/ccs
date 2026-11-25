@@ -20,6 +20,10 @@ jobs:
           - { name: typecheck, cmd: 'bun run typecheck' }
           - { name: lint, cmd: 'bun run lint' }
           - { name: format, cmd: 'bun run format:check' }
+          - { name: ui-typecheck, cmd: 'cd ui && bun run typecheck' }
+          - { name: ui-lint, cmd: 'cd ui && bun run lint' }
+          - { name: ui-format, cmd: 'cd ui && bun run format:check' }
+          - { name: ui-test, cmd: 'cd ui && bun run test:run' }
     name: ${{ matrix.check.name }}
 
     steps:

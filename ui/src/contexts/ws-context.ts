@@ -8,6 +8,7 @@ type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
 export interface WSContextValue {
   status: ConnectionStatus;
+  isReconnecting: boolean;
   connect: () => void;
   disconnect: () => void;
 }

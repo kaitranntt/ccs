@@ -19,6 +19,9 @@ export function useOverview() {
     queryKey: ['overview'],
     queryFn: async () => {
       const res = await fetch('/api/overview');
+      if (!res.ok) {
+        throw new Error(`Failed to fetch overview (${res.status})`);
+      }
       return res.json();
     },
   });

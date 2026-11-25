@@ -594,6 +594,41 @@ export class ToolSanitizationProxy {
     return options;
   }
 
+  private attachClientCloseAbort(
+    originalReq: http.IncomingMessage,
+    clientRes: http.ServerResponse,
+    onAbort: () => void
+  ): () => void {
+    let detached = false;
+
+    const handleDisconnect = () => {
+      if (detached || clientRes.writableEnded) {
+        return;
+      }
+      detached = true;
+      onAbort();
+    };
+
+    const onReqClose = () => {
+      // Node/Bun may emit 'close' on IncomingMessage when the request body finishes reading;
+      // only treat it as a client abort if the request was not completely received.
+      if (!originalReq.complete) {
+        handleDisconnect();
+      }
+    };
+
+    originalReq.once('aborted', handleDisconnect);
+    originalReq.once('close', onReqClose);
+    clientRes.once('close', handleDisconnect);
+
+    return () => {
+      detached = true;
+      originalReq.removeListener('aborted', handleDisconnect);
+      originalReq.removeListener('close', onReqClose);
+      clientRes.removeListener('close', handleDisconnect);
+    };
+  }
+
   private forwardRaw(
     originalReq: http.IncomingMessage,
     clientRes: http.ServerResponse,
@@ -601,7 +636,30 @@ export class ToolSanitizationProxy {
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const requestFn = this.getRequestFn(upstreamUrl);
+      let settled = false;
       let clearResponseTimeout: () => void = () => undefined;
+      let clearUpstreamResponseTimeout: () => void = () => undefined;
+      let activeUpstreamRes: http.IncomingMessage | null = null;
+      let cleanupClientClose: () => void = () => undefined;
+
+      const settleResolve = () => {
+        if (settled) return;
+        settled = true;
+        clearResponseTimeout();
+        clearUpstreamResponseTimeout();
+        cleanupClientClose();
+        resolve();
+      };
+
+      const settleReject = (err: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearResponseTimeout();
+        clearUpstreamResponseTimeout();
+        cleanupClientClose();
+        reject(err);
+      };
+
       const upstreamReq = requestFn(
         this.buildRequestOptions(
           upstreamUrl,
@@ -610,6 +668,7 @@ export class ToolSanitizationProxy {
         ),
         (upstreamRes) => {
           clearResponseTimeout();
+          activeUpstreamRes = upstreamRes;
           const statusCode = upstreamRes.statusCode || 200;
           let responseStarted = false;
           const writeResponseHead = () => {
@@ -617,14 +676,15 @@ export class ToolSanitizationProxy {
             responseStarted = true;
             writeForwardResponseHead(clientRes, statusCode, upstreamRes.headers);
           };
-          const clearUpstreamResponseTimeout = attachUpstreamResponseTimeout({
+          clearUpstreamResponseTimeout = attachUpstreamResponseTimeout({
             upstreamReq,
             upstreamRes,
             clientRes,
             timeoutMs: this.config.timeoutMs,
-            onTimeout: () => resolve(),
+            onTimeout: () => settleResolve(),
           });
           upstreamRes.on('data', (chunk: Buffer) => {
+            if (settled) return;
             writeResponseHead();
             const canContinue = clientRes.write(chunk);
             if (!canContinue) {
@@ -633,23 +693,30 @@ export class ToolSanitizationProxy {
             }
           });
           upstreamRes.on('end', () => {
-            clearUpstreamResponseTimeout();
             writeResponseHead();
             clientRes.end();
-            resolve();
+            settleResolve();
           });
           upstreamRes.on('error', (error) => {
-            clearUpstreamResponseTimeout();
-            reject(error);
+            settleReject(error);
           });
         }
       );
 
+      cleanupClientClose = this.attachClientCloseAbort(originalReq, clientRes, () => {
+        if (activeUpstreamRes && !activeUpstreamRes.destroyed) {
+          activeUpstreamRes.destroy();
+        }
+        if (!upstreamReq.destroyed) {
+          upstreamReq.destroy();
+        }
+        settleResolve();
+      });
+
       clearResponseTimeout = this.startResponseTimeout(upstreamReq);
       upstreamReq.on('timeout', () => upstreamReq.destroy(new Error('Upstream request timeout')));
       upstreamReq.on('error', (err) => {
-        clearResponseTimeout();
-        reject(err);
+        settleReject(err);
       });
       originalReq.pipe(upstreamReq);
     });
@@ -668,7 +735,30 @@ export class ToolSanitizationProxy {
     return new Promise((resolve, reject) => {
       const bodyString = JSON.stringify(body);
       const requestFn = this.getRequestFn(upstreamUrl);
+      let settled = false;
       let clearResponseTimeout: () => void = () => undefined;
+      let clearUpstreamResponseTimeout: () => void = () => undefined;
+      let activeUpstreamRes: http.IncomingMessage | null = null;
+      let cleanupClientClose: () => void = () => undefined;
+
+      const settleResolve = () => {
+        if (settled) return;
+        settled = true;
+        clearResponseTimeout();
+        clearUpstreamResponseTimeout();
+        cleanupClientClose();
+        resolve();
+      };
+
+      const settleReject = (err: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearResponseTimeout();
+        clearUpstreamResponseTimeout();
+        cleanupClientClose();
+        reject(err);
+      };
+
       const upstreamReq = requestFn(
         this.buildRequestOptions(
           upstreamUrl,
@@ -677,18 +767,19 @@ export class ToolSanitizationProxy {
         ),
         (upstreamRes) => {
           clearResponseTimeout();
-          const clearUpstreamResponseTimeout = attachUpstreamResponseTimeout({
+          activeUpstreamRes = upstreamRes;
+          clearUpstreamResponseTimeout = attachUpstreamResponseTimeout({
             upstreamReq,
             upstreamRes,
             clientRes,
             timeoutMs: this.config.timeoutMs,
-            onTimeout: () => resolve(),
+            onTimeout: () => settleResolve(),
           });
           const chunks: Buffer[] = [];
 
           upstreamRes.on('data', (chunk: Buffer) => chunks.push(chunk));
           upstreamRes.on('end', () => {
-            clearUpstreamResponseTimeout();
+            if (settled) return;
             try {
               const rawBody = Buffer.concat(chunks);
               if (hasEncodedBody(upstreamRes.headers)) {
@@ -698,7 +789,7 @@ export class ToolSanitizationProxy {
                 headers['content-length'] = String(rawBody.length);
                 clientRes.writeHead(upstreamRes.statusCode || 200, headers);
                 clientRes.end(rawBody);
-                resolve();
+                settleResolve();
                 return;
               }
 
@@ -720,7 +811,7 @@ export class ToolSanitizationProxy {
 
                     clientRes.writeHead(upstreamRes.statusCode || 200, headers);
                     clientRes.end(modifiedResponse);
-                    resolve();
+                    settleResolve();
                     return;
                   }
                 } catch {
@@ -734,23 +825,31 @@ export class ToolSanitizationProxy {
               headers['content-length'] = String(Buffer.byteLength(responseBody));
               clientRes.writeHead(upstreamRes.statusCode || 200, headers);
               clientRes.end(responseBody);
-              resolve();
+              settleResolve();
             } catch (err) {
-              reject(err);
+              settleReject(err);
             }
           });
           upstreamRes.on('error', (error) => {
-            clearUpstreamResponseTimeout();
-            reject(error);
+            settleReject(error);
           });
         }
       );
 
+      cleanupClientClose = this.attachClientCloseAbort(originalReq, clientRes, () => {
+        if (activeUpstreamRes && !activeUpstreamRes.destroyed) {
+          activeUpstreamRes.destroy();
+        }
+        if (!upstreamReq.destroyed) {
+          upstreamReq.destroy();
+        }
+        settleResolve();
+      });
+
       clearResponseTimeout = this.startResponseTimeout(upstreamReq);
       upstreamReq.on('timeout', () => upstreamReq.destroy(new Error('Upstream request timeout')));
       upstreamReq.on('error', (err) => {
-        clearResponseTimeout();
-        reject(err);
+        settleReject(err);
       });
       upstreamReq.write(bodyString);
       upstreamReq.end();
@@ -771,7 +870,30 @@ export class ToolSanitizationProxy {
     return new Promise((resolve, reject) => {
       const bodyString = JSON.stringify(body);
       const requestFn = this.getRequestFn(upstreamUrl);
+      let settled = false;
       let clearResponseTimeout: () => void = () => undefined;
+      let clearUpstreamResponseTimeout: () => void = () => undefined;
+      let activeUpstreamRes: http.IncomingMessage | null = null;
+      let cleanupClientClose: () => void = () => undefined;
+
+      const settleResolve = () => {
+        if (settled) return;
+        settled = true;
+        clearResponseTimeout();
+        clearUpstreamResponseTimeout();
+        cleanupClientClose();
+        resolve();
+      };
+
+      const settleReject = (err: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearResponseTimeout();
+        clearUpstreamResponseTimeout();
+        cleanupClientClose();
+        reject(err);
+      };
+
       const upstreamReq = requestFn(
         this.buildRequestOptions(
           upstreamUrl,
@@ -780,12 +902,13 @@ export class ToolSanitizationProxy {
         ),
         (upstreamRes) => {
           clearResponseTimeout();
-          const clearUpstreamResponseTimeout = attachUpstreamResponseTimeout({
+          activeUpstreamRes = upstreamRes;
+          clearUpstreamResponseTimeout = attachUpstreamResponseTimeout({
             upstreamReq,
             upstreamRes,
             clientRes,
             timeoutMs: this.config.timeoutMs,
-            onTimeout: () => resolve(),
+            onTimeout: () => settleResolve(),
           });
           writeForwardResponseHead(clientRes, upstreamRes.statusCode || 200, upstreamRes.headers);
 
@@ -794,6 +917,7 @@ export class ToolSanitizationProxy {
           if (hasEncodedBody(upstreamRes.headers)) {
             this.warnEncodedPassthrough(upstreamRes.headers);
             upstreamRes.on('data', (chunk: Buffer) => {
+              if (settled) return;
               const canContinue = clientRes.write(chunk);
               if (!canContinue) {
                 upstreamRes.pause();
@@ -801,13 +925,11 @@ export class ToolSanitizationProxy {
               }
             });
             upstreamRes.on('end', () => {
-              clearUpstreamResponseTimeout();
               clientRes.end();
-              resolve();
+              settleResolve();
             });
             upstreamRes.on('error', (error) => {
-              clearUpstreamResponseTimeout();
-              reject(error);
+              settleReject(error);
             });
             return;
           }
@@ -837,6 +959,7 @@ export class ToolSanitizationProxy {
           // synthetic block as additional content in the same conversation turn.
           if (!mapper.hasChanges()) {
             upstreamRes.on('data', (chunk: Buffer) => {
+              if (settled) return;
               lifecycle.hasData = true;
               lifecycle.update(chunk.toString('utf8'));
               // Respect backpressure: pause upstream if client can't keep up
@@ -847,7 +970,7 @@ export class ToolSanitizationProxy {
               }
             });
             upstreamRes.on('end', () => {
-              clearUpstreamResponseTimeout();
+              if (settled) return;
               try {
                 if (!lifecycle.hasContent && isSuccessResponse && lifecycle.hasData) {
                   this.logger.warn(
@@ -866,11 +989,10 @@ export class ToolSanitizationProxy {
               } catch {
                 // Client may have disconnected — safe to ignore
               }
-              resolve();
+              settleResolve();
             });
             upstreamRes.on('error', (error) => {
-              clearUpstreamResponseTimeout();
-              reject(error);
+              settleReject(error);
             });
             return;
           }
@@ -879,6 +1001,7 @@ export class ToolSanitizationProxy {
           let buffer = '';
 
           upstreamRes.on('data', (chunk: Buffer) => {
+            if (settled) return;
             lifecycle.hasData = true;
             buffer += chunk.toString('utf8');
 
@@ -897,7 +1020,7 @@ export class ToolSanitizationProxy {
           });
 
           upstreamRes.on('end', () => {
-            clearUpstreamResponseTimeout();
+            if (settled) return;
             try {
               // Process any remaining buffer
               if (buffer.trim()) {
@@ -925,21 +1048,29 @@ export class ToolSanitizationProxy {
             } catch {
               // Client may have disconnected — safe to ignore
             }
-            resolve();
+            settleResolve();
           });
 
           upstreamRes.on('error', (error) => {
-            clearUpstreamResponseTimeout();
-            reject(error);
+            settleReject(error);
           });
         }
       );
 
+      cleanupClientClose = this.attachClientCloseAbort(originalReq, clientRes, () => {
+        if (activeUpstreamRes && !activeUpstreamRes.destroyed) {
+          activeUpstreamRes.destroy();
+        }
+        if (!upstreamReq.destroyed) {
+          upstreamReq.destroy();
+        }
+        settleResolve();
+      });
+
       clearResponseTimeout = this.startResponseTimeout(upstreamReq);
       upstreamReq.on('timeout', () => upstreamReq.destroy(new Error('Upstream request timeout')));
       upstreamReq.on('error', (err) => {
-        clearResponseTimeout();
-        reject(err);
+        settleReject(err);
       });
       upstreamReq.write(bodyString);
       upstreamReq.end();

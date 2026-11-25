@@ -6,18 +6,13 @@
  * Handles direct execution of native Codex passthrough commands (--help, resume, etc.)
  * before the main profile dispatch loop runs.
  *
- * dispatchProfile() collapses the 6-branch switch in main() to a single call.
+ * dispatchProfile() collapses the 6-branch switch in main() to a single call and
+ * lazy-loads only the selected flow module.
  */
 
 import { fail, info } from '../utils/ui';
-import { getTarget } from '../targets';
+import { CodexAdapter, getTarget, hasTarget, registerTarget } from '../targets';
 import { getNativeCodexPassthroughArgs } from './cli-argument-parser';
-import { runCliproxyFlow } from './flows/cliproxy-flow';
-import { runCopilotFlow } from './flows/copilot-flow';
-import { runCursorFlow } from './flows/cursor-flow';
-import { runSettingsFlow } from './flows/settings-flow';
-import { runAccountFlow } from './flows/account-flow';
-import { runDefaultFlow } from './flows/default-flow';
 import type { TargetCredentials } from '../targets';
 import type { ProfileDispatchContext } from './dispatcher-context';
 
@@ -32,6 +27,10 @@ export interface ProfileError extends Error {
 // ========== Native Codex Command Executor ==========
 
 export function execNativeCodexCommand(args: string[]): void {
+  if (!hasTarget('codex')) {
+    registerTarget(new CodexAdapter());
+  }
+
   const adapter = getTarget('codex');
   if (!adapter) {
     console.error(fail('Target adapter not found for "codex"'));
@@ -78,17 +77,29 @@ export async function dispatchProfile(ctx: ProfileDispatchContext): Promise<void
   const { profileInfo } = ctx;
 
   switch (profileInfo.type) {
-    case 'cliproxy':
+    case 'cliproxy': {
+      const { runCliproxyFlow } = await import('./flows/cliproxy-flow');
       return runCliproxyFlow(ctx);
-    case 'copilot':
+    }
+    case 'copilot': {
+      const { runCopilotFlow } = await import('./flows/copilot-flow');
       return runCopilotFlow(ctx);
-    case 'cursor':
+    }
+    case 'cursor': {
+      const { runCursorFlow } = await import('./flows/cursor-flow');
       return runCursorFlow(ctx);
-    case 'settings':
+    }
+    case 'settings': {
+      const { runSettingsFlow } = await import('./flows/settings-flow');
       return runSettingsFlow(ctx);
-    case 'account':
+    }
+    case 'account': {
+      const { runAccountFlow } = await import('./flows/account-flow');
       return runAccountFlow(ctx);
-    default:
+    }
+    default: {
+      const { runDefaultFlow } = await import('./flows/default-flow');
       return runDefaultFlow(ctx);
+    }
   }
 }

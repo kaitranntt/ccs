@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import * as http from 'http';
 import type { Dispatcher } from 'undici';
 import type { OpenAICompatProfileConfig } from '../profile-router';
@@ -380,7 +381,15 @@ export function validateIncomingProxyAuth(
   headers: http.IncomingHttpHeaders,
   expectedToken: string
 ): boolean {
-  return extractIncomingProxyToken(headers) === expectedToken;
+  const provided = extractIncomingProxyToken(headers);
+  if (provided === null || expectedToken.length === 0) {
+    return false;
+  }
+
+  // Hash both values so timingSafeEqual compares fixed-length digests without leaking token length.
+  const providedDigest = crypto.createHash('sha256').update(provided, 'utf8').digest();
+  const expectedDigest = crypto.createHash('sha256').update(expectedToken, 'utf8').digest();
+  return crypto.timingSafeEqual(providedDigest, expectedDigest);
 }
 
 function buildFetchInit(

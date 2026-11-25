@@ -2,11 +2,13 @@
  * Route Helpers - Shared utility functions for route handlers
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Response } from 'express';
 import { getConfigPath } from '../../utils/config-manager';
 import { expandPath } from '../../utils/helpers';
+import { withSyncLockRetry } from '../../utils/sync-lock-retry';
 import { getClaudeSettingsPath } from '../../utils/claude-config-path';
 import { resolveDroidProvider } from '../../targets/droid-provider';
 import { mapExternalProviderName } from '../../cliproxy/provider-capabilities';
@@ -113,13 +115,50 @@ export function readConfigSafe(): Config {
 }
 
 /**
- * Write config atomically
+ * Write text content to a file atomically using a unique temporary file + rename.
+ */
+export function writeTextFileAtomically(filePath: string, content: string): void {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  const tempPath = `${filePath}.tmp.${process.pid}.${crypto.randomUUID()}`;
+  try {
+    fs.writeFileSync(tempPath, content, { encoding: 'utf8', flag: 'wx' });
+    fs.renameSync(tempPath, filePath);
+  } catch (error) {
+    if (fs.existsSync(tempPath)) {
+      try {
+        fs.unlinkSync(tempPath);
+      } catch {
+        // Best-effort cleanup
+      }
+    }
+    throw error;
+  }
+}
+
+/**
+ * Execute callback while holding a file lock on targetPath (or its parent directory if absent).
+ */
+export function withPathLock<T>(targetPath: string, description: string, callback: () => T): T {
+  const parentDir = path.dirname(targetPath);
+  if (!fs.existsSync(parentDir)) {
+    fs.mkdirSync(parentDir, { recursive: true });
+  }
+  const lockTarget = fs.existsSync(targetPath) ? targetPath : parentDir;
+  return withSyncLockRetry(lockTarget, callback, { description });
+}
+
+/**
+ * Write config atomically under file lock
  */
 export function writeConfig(config: Config): void {
   const configPath = getConfigPath();
-  const tempPath = configPath + '.tmp';
-  fs.writeFileSync(tempPath, JSON.stringify(config, null, 2) + '\n');
-  fs.renameSync(tempPath, configPath);
+  withPathLock(configPath, 'config.json write lock', () => {
+    writeTextFileAtomically(configPath, JSON.stringify(config, null, 2) + '\n');
+  });
 }
 
 /**
@@ -208,8 +247,9 @@ export function createSettingsFile(
     },
   };
 
-  fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+  withPathLock(settingsPath, 'settings file lock', () => {
+    writeTextFileAtomically(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+  });
   return `~/.ccs/${name}.settings.json`;
 }
 
@@ -235,139 +275,145 @@ export function updateSettingsFile(
     throw new ConfigError('Settings file not found', settingsPath);
   }
 
-  const settings = loadSettings(settingsPath);
-  const currentBaseUrl = settings.env?.ANTHROPIC_BASE_URL?.trim() || '';
-  const currentApiKey =
-    settings.env?.ANTHROPIC_API_KEY?.trim() || settings.env?.ANTHROPIC_AUTH_TOKEN?.trim() || '';
-  const nextBaseUrl = updates.baseUrl !== undefined ? updates.baseUrl.trim() : currentBaseUrl;
-  const nextApiKey = updates.apiKey !== undefined ? updates.apiKey.trim() : currentApiKey;
-  const isNative = isAnthropicDirectProfile(nextBaseUrl, nextApiKey);
-
-  if (!nextApiKey) {
-    throw new ValidationError('apiKey cannot be empty', 'apiKey');
-  }
-
-  if (!isNative && nextBaseUrl.length === 0) {
-    throw new ValidationError('baseUrl cannot be empty', 'baseUrl');
-  }
-
-  const providerForValidation =
-    resolveProviderForModelCanonicalization(nextBaseUrl, updates.provider) ??
-    resolveProviderForModelCanonicalization(
-      settings.env?.ANTHROPIC_BASE_URL,
-      updates.provider ?? settings.env?.CCS_DROID_PROVIDER
-    );
-  const canonicalModel =
-    updates.model !== undefined
-      ? canonicalizeModelForProvider(providerForValidation, updates.model)
-      : undefined;
-  const canonicalOpusModel =
-    updates.opusModel !== undefined
-      ? canonicalizeModelForProvider(providerForValidation, updates.opusModel)
-      : undefined;
-  const canonicalSonnetModel =
-    updates.sonnetModel !== undefined
-      ? canonicalizeModelForProvider(providerForValidation, updates.sonnetModel)
-      : undefined;
-  const canonicalHaikuModel =
-    updates.haikuModel !== undefined
-      ? canonicalizeModelForProvider(providerForValidation, updates.haikuModel)
-      : undefined;
-  const deniedReason = getDeniedModelReasonForProvider(providerForValidation, [
-    canonicalModel !== undefined ? canonicalModel : settings.env?.ANTHROPIC_MODEL,
-    canonicalOpusModel !== undefined
-      ? canonicalOpusModel
-      : settings.env?.ANTHROPIC_DEFAULT_OPUS_MODEL,
-    canonicalSonnetModel !== undefined
-      ? canonicalSonnetModel
-      : settings.env?.ANTHROPIC_DEFAULT_SONNET_MODEL,
-    canonicalHaikuModel !== undefined
-      ? canonicalHaikuModel
-      : settings.env?.ANTHROPIC_DEFAULT_HAIKU_MODEL,
-  ]);
-  if (deniedReason) {
-    throw new ValidationError(deniedReason, 'model');
-  }
-
-  settings.env = settings.env || {};
-  if (isNative) {
-    delete settings.env.ANTHROPIC_BASE_URL;
-    delete settings.env.ANTHROPIC_AUTH_TOKEN;
-    settings.env.ANTHROPIC_API_KEY = nextApiKey;
-  } else {
-    settings.env.ANTHROPIC_BASE_URL = nextBaseUrl;
-    settings.env.ANTHROPIC_AUTH_TOKEN = nextApiKey;
-    if (isOpenRouterUrl(nextBaseUrl)) {
-      settings.env.ANTHROPIC_API_KEY = '';
-    } else {
-      delete settings.env.ANTHROPIC_API_KEY;
+  withPathLock(settingsPath, 'settings file lock', () => {
+    if (!fs.existsSync(settingsPath)) {
+      throw new ConfigError('Settings file not found', settingsPath);
     }
-  }
 
-  if (updates.model !== undefined) {
-    settings.env = settings.env || {};
-    if (canonicalModel) {
-      settings.env.ANTHROPIC_MODEL = canonicalModel;
-    } else {
-      delete settings.env.ANTHROPIC_MODEL;
+    const settings = loadSettings(settingsPath);
+    const currentBaseUrl = settings.env?.ANTHROPIC_BASE_URL?.trim() || '';
+    const currentApiKey =
+      settings.env?.ANTHROPIC_API_KEY?.trim() || settings.env?.ANTHROPIC_AUTH_TOKEN?.trim() || '';
+    const nextBaseUrl = updates.baseUrl !== undefined ? updates.baseUrl.trim() : currentBaseUrl;
+    const nextApiKey = updates.apiKey !== undefined ? updates.apiKey.trim() : currentApiKey;
+    const isNative = isAnthropicDirectProfile(nextBaseUrl, nextApiKey);
+
+    if (!nextApiKey) {
+      throw new ValidationError('apiKey cannot be empty', 'apiKey');
     }
-  }
 
-  // Handle model mapping fields
-  if (updates.opusModel !== undefined) {
-    settings.env = settings.env || {};
-    if (canonicalOpusModel) {
-      settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL = canonicalOpusModel;
-    } else {
-      delete settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
+    if (!isNative && nextBaseUrl.length === 0) {
+      throw new ValidationError('baseUrl cannot be empty', 'baseUrl');
     }
-  }
 
-  if (updates.sonnetModel !== undefined) {
-    settings.env = settings.env || {};
-    if (canonicalSonnetModel) {
-      settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL = canonicalSonnetModel;
-    } else {
-      delete settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL;
+    const providerForValidation =
+      resolveProviderForModelCanonicalization(nextBaseUrl, updates.provider) ??
+      resolveProviderForModelCanonicalization(
+        settings.env?.ANTHROPIC_BASE_URL,
+        updates.provider ?? settings.env?.CCS_DROID_PROVIDER
+      );
+    const canonicalModel =
+      updates.model !== undefined
+        ? canonicalizeModelForProvider(providerForValidation, updates.model)
+        : undefined;
+    const canonicalOpusModel =
+      updates.opusModel !== undefined
+        ? canonicalizeModelForProvider(providerForValidation, updates.opusModel)
+        : undefined;
+    const canonicalSonnetModel =
+      updates.sonnetModel !== undefined
+        ? canonicalizeModelForProvider(providerForValidation, updates.sonnetModel)
+        : undefined;
+    const canonicalHaikuModel =
+      updates.haikuModel !== undefined
+        ? canonicalizeModelForProvider(providerForValidation, updates.haikuModel)
+        : undefined;
+    const deniedReason = getDeniedModelReasonForProvider(providerForValidation, [
+      canonicalModel !== undefined ? canonicalModel : settings.env?.ANTHROPIC_MODEL,
+      canonicalOpusModel !== undefined
+        ? canonicalOpusModel
+        : settings.env?.ANTHROPIC_DEFAULT_OPUS_MODEL,
+      canonicalSonnetModel !== undefined
+        ? canonicalSonnetModel
+        : settings.env?.ANTHROPIC_DEFAULT_SONNET_MODEL,
+      canonicalHaikuModel !== undefined
+        ? canonicalHaikuModel
+        : settings.env?.ANTHROPIC_DEFAULT_HAIKU_MODEL,
+    ]);
+    if (deniedReason) {
+      throw new ValidationError(deniedReason, 'model');
     }
-  }
 
-  if (updates.haikuModel !== undefined) {
     settings.env = settings.env || {};
-    if (canonicalHaikuModel) {
-      settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = canonicalHaikuModel;
+    if (isNative) {
+      delete settings.env.ANTHROPIC_BASE_URL;
+      delete settings.env.ANTHROPIC_AUTH_TOKEN;
+      settings.env.ANTHROPIC_API_KEY = nextApiKey;
     } else {
-      delete settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
+      settings.env.ANTHROPIC_BASE_URL = nextBaseUrl;
+      settings.env.ANTHROPIC_AUTH_TOKEN = nextApiKey;
+      if (isOpenRouterUrl(nextBaseUrl)) {
+        settings.env.ANTHROPIC_API_KEY = '';
+      } else {
+        delete settings.env.ANTHROPIC_API_KEY;
+      }
     }
-  }
 
-  // Handle extra models (comma-separated string)
-  if (updates.extraModels !== undefined) {
-    settings.env = settings.env || {};
-    const normalized = typeof updates.extraModels === 'string' ? updates.extraModels.trim() : '';
-    if (normalized.length > 0) {
-      settings.env.ANTHROPIC_EXTRA_MODELS = normalized;
-    } else {
-      delete settings.env.ANTHROPIC_EXTRA_MODELS;
+    if (updates.model !== undefined) {
+      settings.env = settings.env || {};
+      if (canonicalModel) {
+        settings.env.ANTHROPIC_MODEL = canonicalModel;
+      } else {
+        delete settings.env.ANTHROPIC_MODEL;
+      }
     }
-  }
 
-  if (
-    updates.provider !== undefined ||
-    updates.baseUrl !== undefined ||
-    updates.model !== undefined ||
-    settings.env?.CCS_DROID_PROVIDER
-  ) {
-    settings.env = settings.env || {};
-    const resolvedProvider = resolveDroidProvider({
-      provider: updates.provider ?? settings.env.CCS_DROID_PROVIDER,
-      baseUrl: nextBaseUrl,
-      model: canonicalModel ?? settings.env.ANTHROPIC_MODEL,
-    });
-    settings.env.CCS_DROID_PROVIDER = resolvedProvider;
-  }
+    // Handle model mapping fields
+    if (updates.opusModel !== undefined) {
+      settings.env = settings.env || {};
+      if (canonicalOpusModel) {
+        settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL = canonicalOpusModel;
+      } else {
+        delete settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
+      }
+    }
 
-  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+    if (updates.sonnetModel !== undefined) {
+      settings.env = settings.env || {};
+      if (canonicalSonnetModel) {
+        settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL = canonicalSonnetModel;
+      } else {
+        delete settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL;
+      }
+    }
+
+    if (updates.haikuModel !== undefined) {
+      settings.env = settings.env || {};
+      if (canonicalHaikuModel) {
+        settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = canonicalHaikuModel;
+      } else {
+        delete settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
+      }
+    }
+
+    // Handle extra models (comma-separated string)
+    if (updates.extraModels !== undefined) {
+      settings.env = settings.env || {};
+      const normalized = typeof updates.extraModels === 'string' ? updates.extraModels.trim() : '';
+      if (normalized.length > 0) {
+        settings.env.ANTHROPIC_EXTRA_MODELS = normalized;
+      } else {
+        delete settings.env.ANTHROPIC_EXTRA_MODELS;
+      }
+    }
+
+    if (
+      updates.provider !== undefined ||
+      updates.baseUrl !== undefined ||
+      updates.model !== undefined ||
+      settings.env?.CCS_DROID_PROVIDER
+    ) {
+      settings.env = settings.env || {};
+      const resolvedProvider = resolveDroidProvider({
+        provider: updates.provider ?? settings.env.CCS_DROID_PROVIDER,
+        baseUrl: nextBaseUrl,
+        model: canonicalModel ?? settings.env.ANTHROPIC_MODEL,
+      });
+      settings.env.CCS_DROID_PROVIDER = resolvedProvider;
+    }
+
+    writeTextFileAtomically(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+  });
 }
 
 /**

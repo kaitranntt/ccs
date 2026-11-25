@@ -19,6 +19,7 @@ type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
 export function useWebSocket() {
   const { t } = useTranslation();
+  const tRef = useRef(t);
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [isReconnecting, setIsReconnecting] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -27,6 +28,10 @@ export function useWebSocket() {
   const maxReconnectAttempts = 5;
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const connectRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
 
   const handleMessage = useCallback(
     (message: WSMessage) => {
@@ -38,17 +43,17 @@ export function useWebSocket() {
         case 'config-changed':
           queryClient.invalidateQueries({ queryKey: ['profiles'] });
           queryClient.invalidateQueries({ queryKey: ['cliproxy'] });
-          toast.info(t('toasts.configUpdatedExternally'));
+          toast.info(tRef.current('toasts.configUpdatedExternally'));
           break;
 
         case 'settings-changed':
           queryClient.invalidateQueries({ queryKey: ['profiles'] });
-          toast.info(t('toasts.settingsFileUpdated'));
+          toast.info(tRef.current('toasts.settingsFileUpdated'));
           break;
 
         case 'profiles-changed':
           queryClient.invalidateQueries({ queryKey: ['accounts'] });
-          toast.info(t('toasts.accountsUpdated'));
+          toast.info(tRef.current('toasts.accountsUpdated'));
           break;
 
         case 'proxy-status-changed':
@@ -63,7 +68,7 @@ export function useWebSocket() {
           console.log(`[WS] Unknown message: ${message.type}`);
       }
     },
-    [queryClient, t]
+    [queryClient]
   );
 
   const connect = useCallback(() => {
@@ -119,8 +124,9 @@ export function useWebSocket() {
     };
   }, [handleMessage]);
 
-  // Keep ref in sync
-  connectRef.current = connect;
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   const disconnect = useCallback(() => {
     reconnectAttempts.current = maxReconnectAttempts; // Prevent reconnect
@@ -132,12 +138,11 @@ export function useWebSocket() {
     wsRef.current?.close();
   }, []);
 
-  // Initial connection - use ref to satisfy linter
+  // Initial connection
   useEffect(() => {
     connectRef.current();
     return () => disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [disconnect]);
 
   // Heartbeat to keep connection alive
   useEffect(() => {

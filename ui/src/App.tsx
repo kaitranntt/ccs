@@ -9,10 +9,11 @@ import { PrivacyProvider } from '@/contexts/privacy-context';
 import { AuthProvider } from '@/contexts/auth-context';
 import { RequireAuth } from '@/components/auth/require-auth';
 import { Layout } from '@/components/layout/layout';
+import { ErrorBoundary } from '@/components/shared/error-boundary';
 import { Loader2 } from 'lucide-react';
 
 // Eager load: HomePage (initial route) + LoginPage (auth flow)
-import { HomePage } from '@/pages';
+import { HomePage } from '@/pages/home';
 import { LoginPage } from '@/pages/login';
 
 // Lazy load: heavy pages with charts or complex dependencies
@@ -65,166 +66,168 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
-        <PrivacyProvider>
-          <AuthProvider>
-            <BrowserRouter>
-              <Routes>
-                {/* Public route: Login page */}
-                <Route path="/login" element={<LoginPage />} />
+        <ErrorBoundary>
+          <PrivacyProvider>
+            <AuthProvider>
+              <BrowserRouter>
+                <Routes>
+                  {/* Public route: Login page */}
+                  <Route path="/login" element={<LoginPage />} />
 
-                {/* Protected routes: wrapped with RequireAuth */}
-                <Route element={<RequireAuth />}>
-                  <Route element={<Layout />}>
-                    <Route path="/" element={<HomePage />} />
-                    <Route
-                      path="/analytics"
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <AnalyticsPage />
-                        </Suspense>
-                      }
-                    />
-                    <Route
-                      path="/updates"
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <UpdatesPage />
-                        </Suspense>
-                      }
-                    />
-                    <Route
-                      path="/providers"
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <ApiPage />
-                        </Suspense>
-                      }
-                    />
-                    <Route
-                      path="/cliproxy"
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <CliproxyPage />
-                        </Suspense>
-                      }
-                    />
-                    <Route
-                      path="/cliproxy/ai-providers"
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <CliproxyAiProvidersPage />
-                        </Suspense>
-                      }
-                    />
-                    <Route
-                      path="/cliproxy/control-panel"
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <CliproxyControlPanelPage />
-                        </Suspense>
-                      }
-                    />
-                    <Route
-                      path="/copilot"
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <CopilotPage />
-                        </Suspense>
-                      }
-                    />
-                    <Route
-                      path="/cursor"
-                      element={<Navigate to="/cliproxy?provider=cursor" replace />}
-                    />
-                    <Route
-                      path="/legacy/cursor"
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <CursorPage />
-                        </Suspense>
-                      }
-                    />
-                    <Route
-                      path="/claude-extension"
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <ClaudeExtensionPage />
-                        </Suspense>
-                      }
-                    />
-                    <Route
-                      path="/codex"
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <CodexPage />
-                        </Suspense>
-                      }
-                    />
-                    <Route
-                      path="/droid"
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <DroidPage />
-                        </Suspense>
-                      }
-                    />
-                    <Route
-                      path="/accounts"
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <AccountsPage />
-                        </Suspense>
-                      }
-                    />
-                    <Route
-                      path="/settings"
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <SettingsPage />
-                        </Suspense>
-                      }
-                    />
-                    <Route
-                      path="/health"
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <HealthPage />
-                        </Suspense>
-                      }
-                    />
-                    <Route
-                      path="/logs"
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <LogsPage />
-                        </Suspense>
-                      }
-                    />
-                    <Route
-                      path="/shared"
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <SharedPage />
-                        </Suspense>
-                      }
-                    />
-                    {StyleguidePage && (
+                  {/* Protected routes: wrapped with RequireAuth */}
+                  <Route element={<RequireAuth />}>
+                    <Route element={<Layout />}>
+                      <Route path="/" element={<HomePage />} />
                       <Route
-                        path="/_styleguide"
+                        path="/analytics"
                         element={
                           <Suspense fallback={<PageLoader />}>
-                            <StyleguidePage />
+                            <AnalyticsPage />
                           </Suspense>
                         }
                       />
-                    )}
+                      <Route
+                        path="/updates"
+                        element={
+                          <Suspense fallback={<PageLoader />}>
+                            <UpdatesPage />
+                          </Suspense>
+                        }
+                      />
+                      <Route
+                        path="/providers"
+                        element={
+                          <Suspense fallback={<PageLoader />}>
+                            <ApiPage />
+                          </Suspense>
+                        }
+                      />
+                      <Route
+                        path="/cliproxy"
+                        element={
+                          <Suspense fallback={<PageLoader />}>
+                            <CliproxyPage />
+                          </Suspense>
+                        }
+                      />
+                      <Route
+                        path="/cliproxy/ai-providers"
+                        element={
+                          <Suspense fallback={<PageLoader />}>
+                            <CliproxyAiProvidersPage />
+                          </Suspense>
+                        }
+                      />
+                      <Route
+                        path="/cliproxy/control-panel"
+                        element={
+                          <Suspense fallback={<PageLoader />}>
+                            <CliproxyControlPanelPage />
+                          </Suspense>
+                        }
+                      />
+                      <Route
+                        path="/copilot"
+                        element={
+                          <Suspense fallback={<PageLoader />}>
+                            <CopilotPage />
+                          </Suspense>
+                        }
+                      />
+                      <Route
+                        path="/cursor"
+                        element={<Navigate to="/cliproxy?provider=cursor" replace />}
+                      />
+                      <Route
+                        path="/legacy/cursor"
+                        element={
+                          <Suspense fallback={<PageLoader />}>
+                            <CursorPage />
+                          </Suspense>
+                        }
+                      />
+                      <Route
+                        path="/claude-extension"
+                        element={
+                          <Suspense fallback={<PageLoader />}>
+                            <ClaudeExtensionPage />
+                          </Suspense>
+                        }
+                      />
+                      <Route
+                        path="/codex"
+                        element={
+                          <Suspense fallback={<PageLoader />}>
+                            <CodexPage />
+                          </Suspense>
+                        }
+                      />
+                      <Route
+                        path="/droid"
+                        element={
+                          <Suspense fallback={<PageLoader />}>
+                            <DroidPage />
+                          </Suspense>
+                        }
+                      />
+                      <Route
+                        path="/accounts"
+                        element={
+                          <Suspense fallback={<PageLoader />}>
+                            <AccountsPage />
+                          </Suspense>
+                        }
+                      />
+                      <Route
+                        path="/settings"
+                        element={
+                          <Suspense fallback={<PageLoader />}>
+                            <SettingsPage />
+                          </Suspense>
+                        }
+                      />
+                      <Route
+                        path="/health"
+                        element={
+                          <Suspense fallback={<PageLoader />}>
+                            <HealthPage />
+                          </Suspense>
+                        }
+                      />
+                      <Route
+                        path="/logs"
+                        element={
+                          <Suspense fallback={<PageLoader />}>
+                            <LogsPage />
+                          </Suspense>
+                        }
+                      />
+                      <Route
+                        path="/shared"
+                        element={
+                          <Suspense fallback={<PageLoader />}>
+                            <SharedPage />
+                          </Suspense>
+                        }
+                      />
+                      {StyleguidePage && (
+                        <Route
+                          path="/_styleguide"
+                          element={
+                            <Suspense fallback={<PageLoader />}>
+                              <StyleguidePage />
+                            </Suspense>
+                          }
+                        />
+                      )}
+                    </Route>
                   </Route>
-                </Route>
-              </Routes>
-              <Toaster position="top-right" />
-            </BrowserRouter>
-          </AuthProvider>
-        </PrivacyProvider>
+                </Routes>
+                <Toaster position="top-right" />
+              </BrowserRouter>
+            </AuthProvider>
+          </PrivacyProvider>
+        </ErrorBoundary>
       </ThemeProvider>
     </QueryClientProvider>
   );

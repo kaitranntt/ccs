@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { validateFilePath } from '../../../src/web-server/routes/route-helpers';
+import {
+  createSettingsFile,
+  updateSettingsFile,
+  validateFilePath,
+  writeConfig,
+} from '../../../src/web-server/routes/route-helpers';
 
 describe('validateFilePath', () => {
   let tempDir: string;
@@ -190,5 +195,43 @@ describe('validateFilePath', () => {
     const result = validateFilePath(settingsPath);
     expect(result.valid).toBe(false);
     expect(result.readonly).toBe(false);
+  });
+});
+
+describe('route-helpers locked atomic writes', () => {
+  let tempDir: string;
+  let originalCcsHome: string | undefined;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'route-helpers-atomic-'));
+    originalCcsHome = process.env.CCS_HOME;
+    process.env.CCS_HOME = tempDir;
+  });
+
+  afterEach(() => {
+    if (originalCcsHome === undefined) {
+      delete process.env.CCS_HOME;
+    } else {
+      process.env.CCS_HOME = originalCcsHome;
+    }
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  test('writeConfig, createSettingsFile, and updateSettingsFile write atomically without temp leftovers', () => {
+    const ccsDir = path.join(tempDir, '.ccs');
+    writeConfig({ profiles: { alpha: '~/.ccs/alpha.settings.json' } });
+    expect(JSON.parse(fs.readFileSync(path.join(ccsDir, 'config.json'), 'utf8'))).toEqual({
+      profiles: { alpha: '~/.ccs/alpha.settings.json' },
+    });
+
+    createSettingsFile('alpha', 'https://api.example.com/v1', 'key-1', { model: 'model-a' });
+    updateSettingsFile('alpha', { apiKey: 'key-2', model: 'model-b' });
+
+    const persisted = JSON.parse(
+      fs.readFileSync(path.join(ccsDir, 'alpha.settings.json'), 'utf8')
+    ) as { env: Record<string, string> };
+    expect(persisted.env.ANTHROPIC_AUTH_TOKEN).toBe('key-2');
+    expect(persisted.env.ANTHROPIC_MODEL).toBe('model-b');
+    expect(fs.readdirSync(ccsDir).filter((n) => n.includes('.tmp.'))).toEqual([]);
   });
 });

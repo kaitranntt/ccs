@@ -16,7 +16,6 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, FileCode, Copy, Check, GripVertical, AlertCircle } from 'lucide-react';
-import { CodeEditor } from '@/components/shared/code-editor';
 import { SettingsProvider } from './context';
 import { useSettingsTab, useRawConfig } from './hooks';
 import { TabNavigation } from './components/tab-navigation';
@@ -24,6 +23,10 @@ import { SectionSkeleton } from './components/section-skeleton';
 import type { SettingsTab } from './types';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/lib/i18n';
+
+const CodeEditor = lazy(() =>
+  import('@/components/shared/code-editor').then((m) => ({ default: m.CodeEditor }))
+);
 
 /**
  * Retry wrapper for dynamic imports with exponential backoff
@@ -246,14 +249,23 @@ function SettingsPageInner() {
             {/* Config Content - scrollable */}
             <div className="flex-1 overflow-auto">
               {rawConfig ? (
-                <CodeEditor
-                  value={rawConfig}
-                  onChange={() => {}}
-                  language="yaml"
-                  readonly
-                  minHeight="auto"
-                  className="min-h-full"
-                />
+                <Suspense
+                  fallback={
+                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                      <RefreshCw className="w-5 h-5 animate-spin mr-2" />
+                      {t('settings.loading')}
+                    </div>
+                  }
+                >
+                  <CodeEditor
+                    value={rawConfig}
+                    onChange={() => {}}
+                    language="yaml"
+                    readonly
+                    minHeight="auto"
+                    className="min-h-full"
+                  />
+                </Suspense>
               ) : rawConfigLoading ? (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
                   <RefreshCw className="w-5 h-5 animate-spin mr-2" />

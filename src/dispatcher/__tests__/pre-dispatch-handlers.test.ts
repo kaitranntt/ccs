@@ -135,6 +135,60 @@ describe('runPreDispatchHandlers', () => {
     expect(exitSpy).toHaveBeenCalled();
   });
 
+  // ---------- fast-path skips autoMigrate and RecoveryManager ----------
+
+  it('skips autoMigrate and RecoveryManager.recoverAll for --version, -v, --help, -h, and provider --help', async () => {
+    const autoMigrateMock = mock(async () => {});
+    const recoverAllMock = mock(() => false);
+    const showRecoveryHintsMock = mock(() => {});
+    const handleVersionMock = mock(async () => {});
+    const handleHelpRouteMock = mock(async () => {});
+    const showProviderShortcutHelpMock = mock(async () => {});
+
+    mock.module('../../config/migration-manager', () => ({
+      autoMigrate: autoMigrateMock,
+    }));
+    mock.module('../../management/recovery-manager', () => ({
+      default: class MockRecoveryManager {
+        recoverAll = recoverAllMock;
+        showRecoveryHints = showRecoveryHintsMock;
+      },
+    }));
+    mock.module('../../commands/version-command', () => ({
+      handleVersionCommand: handleVersionMock,
+    }));
+    mock.module('../../commands/help-command', () => ({
+      handleHelpRoute: handleHelpRouteMock,
+      showProviderShortcutHelp: showProviderShortcutHelpMock,
+    }));
+
+    try {
+      const { runPreDispatchHandlers: runWithMocks } = await import(
+        `../pre-dispatch?fast-path-test=${Date.now()}-${Math.random()}`
+      );
+
+      expect(await runWithMocks({ args: ['--version'], cliLogger: makeStubLogger() })).toBe(true);
+      expect(await runWithMocks({ args: ['-v'], cliLogger: makeStubLogger() })).toBe(true);
+      expect(await runWithMocks({ args: ['--help'], cliLogger: makeStubLogger() })).toBe(true);
+      expect(await runWithMocks({ args: ['-h'], cliLogger: makeStubLogger() })).toBe(true);
+      expect(await runWithMocks({ args: ['gemini', '--help'], cliLogger: makeStubLogger() })).toBe(
+        true
+      );
+
+      expect(handleVersionMock).toHaveBeenCalledTimes(2);
+      expect(handleHelpRouteMock).toHaveBeenCalledTimes(2);
+      expect(showProviderShortcutHelpMock).toHaveBeenCalledTimes(1);
+      expect(autoMigrateMock).not.toHaveBeenCalled();
+      expect(recoverAllMock).not.toHaveBeenCalled();
+
+      expect(await runWithMocks({ args: ['glm'], cliLogger: makeStubLogger() })).toBe(false);
+      expect(autoMigrateMock).toHaveBeenCalledTimes(1);
+      expect(recoverAllMock).toHaveBeenCalledTimes(1);
+    } finally {
+      mock.restore();
+    }
+  });
+
   // ---------- recovery error (non-fatal) ----------
 
   it('does not throw when recovery manager throws (best-effort)', async () => {

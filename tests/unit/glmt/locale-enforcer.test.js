@@ -181,17 +181,3 @@ describe('LocaleEnforcer', () => {
     });
   });
 });
-
-// Run tests if executed directly
-if (require.main === module) {
-  const Mocha = require('mocha');
-  const mocha = new Mocha({ reporter: 'spec' });
-  mocha.suite.emit('pre-require', global, null, mocha);
-
-  // Load this test file
-  require(module.filename);
-
-  mocha.run(failures => {
-    process.exitCode = failures ? 1 : 0;
-  });
-}

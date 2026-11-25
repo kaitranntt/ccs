@@ -4,10 +4,18 @@
  * Tests for proxy environment variable detection and NO_PROXY bypass logic.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { __testExports } from '../downloader';
+import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
+import { EventEmitter } from 'events';
+import httpsDefault from 'https';
+import type * as https from 'https';
+import type * as http from 'http';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { __testExports, downloadFile, fetchText, fetchJson } from '../downloader';
 
-const { getProxyUrl, shouldBypassProxy, getHostname, getProxyAgent } = __testExports;
+const { getProxyUrl, shouldBypassProxy, getHostname, getProxyAgent, resolveHttpsRedirectUrl } =
+  __testExports;
 
 describe('Binary Downloader Proxy Support', () => {
   // Store original env vars to restore after tests
@@ -272,6 +280,112 @@ describe('Binary Downloader Proxy Support', () => {
         process.env.https_proxy = 'http://proxy:8080';
         expect(getProxyAgent('not-a-url')).toBe(false);
       });
+    });
+  });
+
+  describe('redirect validation and response draining', () => {
+    it('resolves relative and absolute HTTPS redirects and rejects insecure protocols', () => {
+      expect(
+        resolveHttpsRedirectUrl('/releases/v2/bin.tar.gz', 'https://github.com/org/repo', 5)
+      ).toBe('https://github.com/releases/v2/bin.tar.gz');
+      expect(
+        resolveHttpsRedirectUrl(
+          'https://objects.githubusercontent.com/file.tar.gz',
+          'https://github.com/',
+          5
+        )
+      ).toBe('https://objects.githubusercontent.com/file.tar.gz');
+
+      expect(() =>
+        resolveHttpsRedirectUrl('http://insecure.example.com/file.tar.gz', 'https://github.com/', 5)
+      ).toThrow('Refusing non-HTTPS redirect target');
+      expect(() => resolveHttpsRedirectUrl(undefined, 'https://github.com/', 5)).toThrow(
+        'Redirect without location header'
+      );
+      expect(() =>
+        resolveHttpsRedirectUrl('https://github.com/next', 'https://github.com/', 0)
+      ).toThrow('Too many redirects');
+    });
+
+    it('follows 307/308 redirects, drains redirect responses, and enforces https', async () => {
+      let resumedCount = 0;
+      const visitedUrls: string[] = [];
+      let queuedResponses: Array<{ statusCode: number; location?: string; body?: string }> = [];
+
+      const getSpy = spyOn(httpsDefault, 'get').mockImplementation(((
+        url: string,
+        _options: unknown,
+        cb: (res: http.IncomingMessage) => void
+      ) => {
+        visitedUrls.push(url);
+        const next = queuedResponses.shift()!;
+        const req = Object.assign(new EventEmitter(), {
+          setTimeout: () => req,
+          destroy: () => req,
+        }) as unknown as http.ClientRequest;
+
+        queueMicrotask(() => {
+          const res = Object.assign(new EventEmitter(), {
+            statusCode: next.statusCode,
+            statusMessage: 'OK',
+            headers: next.location ? { location: next.location } : {},
+            resume: () => {
+              resumedCount += 1;
+            },
+            pipe: (dest: NodeJS.WritableStream) => {
+              if (next.body) dest.write(next.body);
+              dest.end();
+            },
+          }) as unknown as http.IncomingMessage;
+          cb(res);
+          if (next.statusCode === 200 && next.body !== undefined) {
+            res.emit('data', Buffer.from(next.body));
+            res.emit('end');
+          }
+        });
+        return req;
+      }) as unknown as typeof https.get);
+
+      try {
+        queuedResponses = [
+          { statusCode: 307, location: 'https://cdn.example.com/step2' },
+          { statusCode: 308, location: '/step3' },
+          { statusCode: 200, body: 'hello-checksums' },
+        ];
+
+        const text = await fetchText('https://github.com/step1', false, 1);
+        expect(text).toBe('hello-checksums');
+        expect(resumedCount).toBe(2);
+        expect(visitedUrls).toEqual([
+          'https://github.com/step1',
+          'https://cdn.example.com/step2',
+          'https://cdn.example.com/step3',
+        ]);
+
+        // Non-200 calls res.resume() and rejects
+        resumedCount = 0;
+        queuedResponses = [{ statusCode: 404 }];
+        await expect(fetchJson('https://api.github.com/missing', false, 1)).rejects.toThrow(
+          'GitHub API error: HTTP 404'
+        );
+        expect(resumedCount).toBe(1);
+
+        // Non-HTTPS redirect target is rejected
+        resumedCount = 0;
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-dl-redirect-'));
+        const destPath = path.join(tempDir, 'bin.tgz');
+        try {
+          queuedResponses = [{ statusCode: 307, location: 'http://evil.example.com/bin.tgz' }];
+          await expect(downloadFile('https://github.com/bin.tgz', destPath)).rejects.toThrow(
+            'Refusing non-HTTPS redirect target'
+          );
+          expect(resumedCount).toBe(1);
+        } finally {
+          fs.rmSync(tempDir, { recursive: true, force: true });
+        }
+      } finally {
+        getSpy.mockRestore();
+      }
     });
   });
 });

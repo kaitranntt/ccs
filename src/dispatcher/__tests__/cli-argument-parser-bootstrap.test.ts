@@ -180,6 +180,37 @@ describe('bootstrapAndParseEarlyCli', () => {
     const result = await bootstrapAndParseEarlyCli(['gemini']);
     expect(result.browserLaunchOverride).toBeUndefined();
   });
+
+  it('skips eager initUI for --version, --help, and __complete in TTY mode', async () => {
+    const initUiMock = mock(async () => {});
+    const realUi = await import('../../utils/ui');
+    mock.module('../../utils/ui', () => ({
+      ...realUi,
+      initUI: initUiMock,
+    }));
+
+    Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });
+    delete process.env['CI'];
+
+    try {
+      const { bootstrapAndParseEarlyCli: bootstrapWithMock } = await import(
+        `../cli-argument-parser?initui-test=${Date.now()}-${Math.random()}`
+      );
+
+      await bootstrapWithMock(['--version']);
+      await bootstrapWithMock(['-v']);
+      await bootstrapWithMock(['--help']);
+      await bootstrapWithMock(['-h']);
+      await bootstrapWithMock(['__complete', '--shell', 'bash', '--']);
+
+      expect(initUiMock).not.toHaveBeenCalled();
+
+      await bootstrapWithMock(['glm']);
+      expect(initUiMock).toHaveBeenCalledTimes(1);
+    } finally {
+      mock.restore();
+    }
+  });
 });
 
 describe('native Codex passthrough parsing', () => {
