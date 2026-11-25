@@ -1,9 +1,9 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2682,
-    "filesAffected": 284,
-    "hotpathOccurrences": 1224,
+    "totalOccurrences": 2688,
+    "filesAffected": 285,
+    "hotpathOccurrences": 1228,
     "hotpathFilesAffected": 165,
     "topHotpathFiles": [
       {
@@ -500,17 +500,17 @@
   },
   "maintainability": {
     "typedErrors": {
-      "totalThrows": 485,
-      "typedThrows": 120,
-      "plainThrows": 304,
+      "totalThrows": 489,
+      "typedThrows": 135,
+      "plainThrows": 293,
       "otherThrows": 61,
-      "adoptionRatio": 0.2474,
+      "adoptionRatio": 0.2761,
       "topSubdomainsByThrows": [
         {
           "subdomain": "web-server",
-          "count": 105,
-          "typed": 18,
-          "plain": 45
+          "count": 90,
+          "typed": 19,
+          "plain": 39
         },
         {
           "subdomain": "cliproxy/accounts",
@@ -538,9 +538,15 @@
         },
         {
           "subdomain": "utils",
-          "count": 33,
+          "count": 32,
           "typed": 0,
-          "plain": 33
+          "plain": 32
+        },
+        {
+          "subdomain": "shared",
+          "count": 28,
+          "typed": 6,
+          "plain": 12
         },
         {
           "subdomain": "targets",
@@ -559,12 +565,6 @@
           "count": 16,
           "typed": 16,
           "plain": 0
-        },
-        {
-          "subdomain": "auth",
-          "count": 12,
-          "typed": 12,
-          "plain": 0
         }
       ]
     },
@@ -582,8 +582,8 @@
     },
     "loggerCoverage": {
       "filesWithCreateLogger": 68,
-      "totalSourceFiles": 782,
-      "coverageRatio": 0.087,
+      "totalSourceFiles": 781,
+      "coverageRatio": 0.0871,
       "subdomainsWithZeroCreateLogger": [
         "api",
         "bin",
@@ -602,18 +602,18 @@
       ],
       "topSubdomainsByFiles": [
         {
-          "subdomain": "web-server",
-          "count": 112,
-          "withLogger": 10
-        },
-        {
           "subdomain": "commands",
           "count": 110,
           "withLogger": 2
         },
         {
+          "subdomain": "web-server",
+          "count": 110,
+          "withLogger": 10
+        },
+        {
           "subdomain": "utils",
-          "count": 94,
+          "count": 93,
           "withLogger": 2
         },
         {
@@ -722,8 +722,8 @@
       ]
     },
     "largeFiles": {
-      "countOver400": 97,
-      "countOver600": 44,
+      "countOver400": 98,
+      "countOver600": 45,
       "topOver400": [
         {
           "file": "src/web-server/usage/native-quota-collector.ts",
@@ -750,20 +750,20 @@
           "loc": 1234
         },
         {
+          "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
+          "loc": 1180
+        },
+        {
           "file": "src/cliproxy/config/env-builder.ts",
           "loc": 1053
         },
         {
-          "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
+          "file": "src/web-server/routes/settings-routes.ts",
           "loc": 1052
         },
         {
           "file": "src/cliproxy/auth/oauth-process.ts",
           "loc": 1048
-        },
-        {
-          "file": "src/web-server/routes/settings-routes.ts",
-          "loc": 1042
         },
         {
           "file": "src/cliproxy/model-catalog.ts",

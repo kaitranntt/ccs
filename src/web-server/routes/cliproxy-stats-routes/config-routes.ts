@@ -22,6 +22,8 @@ import {
   canonicalizeModelIdForProvider,
   getDeniedModelIdReasonForProvider,
 } from '../../../cliproxy/ai-providers/model-id-normalizer';
+import { withSyncLockRetry } from '../../../utils/sync-lock-retry';
+import { writeTextFileAtomically } from '../route-helpers';
 import { logger } from './shared';
 
 /**
@@ -66,9 +68,13 @@ export function registerConfigRoutes(router: Router): void {
         fs.mkdirSync(configDir, { recursive: true });
       }
 
-      const tempPath = configPath + '.tmp';
-      fs.writeFileSync(tempPath, content);
-      fs.renameSync(tempPath, configPath);
+      withSyncLockRetry(
+        configDir,
+        () => {
+          writeTextFileAtomically(configPath, content);
+        },
+        { description: 'CLIProxy config.yaml lock' }
+      );
 
       res.json({ success: true, path: configPath });
     } catch (error) {
@@ -127,7 +133,14 @@ export function registerConfigRoutes(router: Router): void {
         return;
       }
 
-      if (name.includes('..') || name.includes('/') || name.includes('\\')) {
+      if (
+        name === '.' ||
+        name === '..' ||
+        name.includes('..') ||
+        name.includes('/') ||
+        name.includes('\\') ||
+        /["\r\n;\0]/.test(name)
+      ) {
         res.status(400).json({ error: 'Invalid filename' });
         return;
       }
@@ -140,8 +153,22 @@ export function registerConfigRoutes(router: Router): void {
         return;
       }
 
-      const content = fs.readFileSync(filePath);
-      res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+      const realAuthDir = fs.realpathSync(authDir);
+      const realFilePath = fs.realpathSync(filePath);
+      const relative = path.relative(realAuthDir, realFilePath);
+      if (
+        relative === '' ||
+        relative.startsWith('..') ||
+        path.isAbsolute(relative) ||
+        !fs.statSync(realFilePath).isFile()
+      ) {
+        res.status(400).json({ error: 'Invalid filename' });
+        return;
+      }
+
+      const safeFilename = name.replace(/["\\;\r\n\0]/g, '_');
+      const content = fs.readFileSync(realFilePath);
+      res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
       res.type('application/octet-stream').send(content);
     } catch (error) {
       logger.error('stats.route.error', 'CLIProxy stats route failed to handle request', {
@@ -191,41 +218,59 @@ export function registerConfigRoutes(router: Router): void {
         return;
       }
 
-      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as {
-        env?: Record<string, unknown>;
-        [key: string]: unknown;
-      };
       const canonicalModel = canonicalizeModelIdForProvider(model, provider);
-      const env =
-        settings.env && typeof settings.env === 'object' && !Array.isArray(settings.env)
-          ? settings.env
-          : {};
 
-      const previousDefault =
-        typeof env.ANTHROPIC_MODEL === 'string' ? env.ANTHROPIC_MODEL : canonicalModel;
-      const previousCanonicalDefault = canonicalizeModelIdForProvider(previousDefault, provider);
+      const found = withSyncLockRetry(
+        settingsPath,
+        () => {
+          if (!fs.existsSync(settingsPath)) {
+            return false;
+          }
 
-      for (const key of MODEL_ENV_VAR_KEYS) {
-        if (key === 'ANTHROPIC_MODEL') {
-          env[key] = canonicalModel;
-          continue;
-        }
+          const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as {
+            env?: Record<string, unknown>;
+            [key: string]: unknown;
+          };
+          const env =
+            settings.env && typeof settings.env === 'object' && !Array.isArray(settings.env)
+              ? settings.env
+              : {};
 
-        const current = env[key];
-        if (typeof current !== 'string') {
-          env[key] = canonicalModel;
-          continue;
-        }
+          const previousDefault =
+            typeof env.ANTHROPIC_MODEL === 'string' ? env.ANTHROPIC_MODEL : canonicalModel;
+          const previousCanonicalDefault = canonicalizeModelIdForProvider(
+            previousDefault,
+            provider
+          );
 
-        const canonicalCurrent = canonicalizeModelIdForProvider(current, provider);
-        env[key] =
-          canonicalCurrent === previousCanonicalDefault ? canonicalModel : canonicalCurrent;
+          for (const key of MODEL_ENV_VAR_KEYS) {
+            if (key === 'ANTHROPIC_MODEL') {
+              env[key] = canonicalModel;
+              continue;
+            }
+
+            const current = env[key];
+            if (typeof current !== 'string') {
+              env[key] = canonicalModel;
+              continue;
+            }
+
+            const canonicalCurrent = canonicalizeModelIdForProvider(current, provider);
+            env[key] =
+              canonicalCurrent === previousCanonicalDefault ? canonicalModel : canonicalCurrent;
+          }
+          settings.env = env;
+
+          writeTextFileAtomically(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+          return true;
+        },
+        { description: 'provider settings file lock' }
+      );
+
+      if (!found) {
+        res.status(404).json({ error: `Settings file not found for provider: ${provider}` });
+        return;
       }
-      settings.env = env;
-
-      const tempPath = settingsPath + '.tmp';
-      fs.writeFileSync(tempPath, JSON.stringify(settings, null, 2) + '\n');
-      fs.renameSync(tempPath, settingsPath);
 
       res.json({ success: true, provider, model: canonicalModel });
     } catch (error) {

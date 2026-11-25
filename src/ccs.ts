@@ -1,32 +1,33 @@
-import { ErrorManager } from './utils/error-manager';
 import { fail } from './utils/ui';
 // Import centralized error handling
 import { handleError, runCleanup } from './errors';
 
 import { createLogger, runWithRequestId } from './services/logging';
 import { redactArgv } from './services/logging/log-redaction';
-import { applyGlobalFetchProxy } from './utils/fetch-proxy-setup';
-// Import target adapter system
-import { registerTarget, ClaudeAdapter, DroidAdapter, CodexAdapter } from './targets';
 
-// Import extracted dispatcher modules
+// Import early bootstrap parser; defer proxy, target adapters, pre-dispatch, and flows
 import { bootstrapAndParseEarlyCli } from './dispatcher/cli-argument-parser';
-import { type ProfileError, dispatchProfile } from './dispatcher/target-executor';
-import { runPreDispatchHandlers } from './dispatcher/pre-dispatch';
-import { resolveProfileAndTarget } from './dispatcher/profile-resolver';
+import type { ProfileError } from './dispatcher/target-executor';
+
+const PROXY_ENV_KEYS = [
+  'https_proxy',
+  'HTTPS_PROXY',
+  'http_proxy',
+  'HTTP_PROXY',
+  'all_proxy',
+  'ALL_PROXY',
+] as const;
+
+function hasConfiguredProxyEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  return PROXY_ENV_KEYS.some((key) => {
+    const value = env[key];
+    return typeof value === 'string' && value.trim().length > 0;
+  });
+}
 
 // ========== Main Execution ==========
 
 async function main(): Promise<void> {
-  const fetchProxySetup = applyGlobalFetchProxy();
-  if (fetchProxySetup.error) {
-    console.error(`[!] Skipping global fetch proxy setup: ${fetchProxySetup.error}`);
-  }
-
-  // Register target adapters (singleton wiring — stays in main)
-  registerTarget(new ClaudeAdapter());
-  registerTarget(new DroidAdapter());
-  registerTarget(new CodexAdapter());
   const cliLogger = createLogger('cli');
 
   // Phase A: bootstrap + early arg pre-parse
@@ -44,16 +45,41 @@ async function main(): Promise<void> {
     flags: args.filter((arg) => arg.startsWith('-')).slice(0, 20),
   });
 
+  // Fast-path root metadata commands (--version/-v, --help/-h, version, help, __complete)
+  // before proxy setup, target adapter registration, auto-migration, or recovery.
+  if (bootstrap.isFastMetadata && process.env.CCS_NO_PRE_DISPATCH !== '1') {
+    const { tryHandleRootCommand } = await import('./commands/root-command-router');
+    if (await tryHandleRootCommand(args)) {
+      return;
+    }
+  }
+
+  if (hasConfiguredProxyEnv()) {
+    const { applyGlobalFetchProxy } = await import('./utils/fetch-proxy-setup');
+    const fetchProxySetup = applyGlobalFetchProxy();
+    if (fetchProxySetup.error) {
+      console.error(`[!] Skipping global fetch proxy setup: ${fetchProxySetup.error}`);
+    }
+  }
+
   // Phase B: pre-dispatch side-effects (update check, migrate, recovery, root commands, routing)
+  const { runPreDispatchHandlers } = await import('./dispatcher/pre-dispatch');
   const preDispatchConsumed = await runPreDispatchHandlers({ args, cliLogger });
   if (preDispatchConsumed) {
     return;
   }
 
+  // Register target adapters (singleton wiring — lazy-loaded past root-command fast paths)
+  const { registerTarget, ClaudeAdapter, DroidAdapter, CodexAdapter } = await import('./targets');
+  registerTarget(new ClaudeAdapter());
+  registerTarget(new DroidAdapter());
+  registerTarget(new CodexAdapter());
+
   try {
     // Phase C: profile + target detection — inside try so ProfileNotFoundError
     // reaches the rich showProfileNotFound() handler below instead of falling
     // through to the bare unhandledRejection handler.
+    const { resolveProfileAndTarget } = await import('./dispatcher/profile-resolver');
     const resolvedProfile = await resolveProfileAndTarget({
       args,
       browserLaunchOverride,
@@ -95,11 +121,13 @@ async function main(): Promise<void> {
     }
 
     // Phase E: dispatch to per-profile-type flow (all 6 branches now live in flows/)
+    const { dispatchProfile } = await import('./dispatcher/target-executor');
     await dispatchProfile(dispatchCtx);
   } catch (error) {
     const err = error as ProfileError;
     // Check if this is a profile not found error with suggestions
     if (err.profileName && err.availableProfiles !== undefined) {
+      const { ErrorManager } = await import('./utils/error-manager');
       const allProfiles = err.availableProfiles.split('\n');
       await ErrorManager.showProfileNotFound(err.profileName, allProfiles, err.suggestions);
     } else {

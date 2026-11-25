@@ -71,7 +71,16 @@ export default defineConfig({
           // Charts - large library, separate chunk
           'charts': ['recharts'],
           // Code editor / syntax highlighting
+          'codemirror': [
+            '@uiw/react-codemirror',
+            '@uiw/codemirror-themes',
+            '@codemirror/lang-json',
+            '@codemirror/lang-yaml',
+            '@codemirror/legacy-modes/mode/toml',
+          ],
           'code-highlight': ['prism-react-renderer'],
+          // Animation
+          'framer-motion': ['framer-motion'],
           // Notifications
           'notifications': ['sonner'],
           // Utilities

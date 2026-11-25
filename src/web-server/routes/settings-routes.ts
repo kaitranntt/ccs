@@ -3,9 +3,10 @@
  */
 
 import { Router, Request, Response } from 'express';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as lockfile from 'proper-lockfile';
+import { withSyncLockRetry } from '../../utils/sync-lock-retry';
 
 import { isSensitiveKey, maskSensitiveValue } from '../../utils/sensitive-keys';
 import { listVariants } from '../../cliproxy/services/variant-service';
@@ -419,12 +420,27 @@ async function resolvePreviewImageAnalysisStatus(profileOrVariant: string, setti
   return resolveImageAnalysisStatusForProfile(profileOrVariant, normalizedSettings, settingsPath);
 }
 
-function writeSettingsAtomically(settingsPath: string, settings: Settings): void {
+function writeSettingsTextAtomically(settingsPath: string, content: string): void {
   requireWritableSettingsPathWithinCcs(settingsPath);
-  const tempPath = `${settingsPath}.tmp.${process.pid}`;
+  const tempPath = `${settingsPath}.tmp.${process.pid}.${crypto.randomUUID()}`;
   requireWritableSettingsPathWithinCcs(tempPath);
-  fs.writeFileSync(tempPath, JSON.stringify(settings, null, 2) + '\n', { flag: 'wx' });
-  fs.renameSync(tempPath, settingsPath);
+  try {
+    fs.writeFileSync(tempPath, content, { flag: 'wx' });
+    fs.renameSync(tempPath, settingsPath);
+  } catch (error) {
+    if (fs.existsSync(tempPath)) {
+      try {
+        fs.unlinkSync(tempPath);
+      } catch {
+        // Best-effort cleanup
+      }
+    }
+    throw error;
+  }
+}
+
+function writeSettingsAtomically(settingsPath: string, settings: Settings): void {
+  writeSettingsTextAtomically(settingsPath, JSON.stringify(settings, null, 2) + '\n');
 }
 
 function withSettingsFileLock<T>(settingsPath: string, callback: () => T): T {
@@ -435,20 +451,11 @@ function withSettingsFileLock<T>(settingsPath: string, callback: () => T): T {
   if (!lockTarget) {
     throw new ConfigError('Invalid settings path', settingsPath);
   }
-  let release: (() => void) | undefined;
 
-  try {
-    release = lockfile.lockSync(lockTarget, { stale: 10000 }) as () => void;
-    return callback();
-  } finally {
-    if (release) {
-      try {
-        release();
-      } catch {
-        // Best-effort release
-      }
-    }
-  }
+  return withSyncLockRetry(lockTarget, callback, {
+    description: 'settings file lock',
+    staleMs: 10000,
+  });
 }
 
 function loadCanonicalProfileSettings(
@@ -508,8 +515,10 @@ router.get('/:profile', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const settings = loadCanonicalProfileSettings(profile, settingsPath, true);
-    const stat = fs.statSync(settingsPath);
+    const { settings, stat } = withSettingsFileLock(settingsPath, () => {
+      const loaded = loadCanonicalProfileSettings(profile, settingsPath, true);
+      return { settings: loaded, stat: fs.statSync(settingsPath) };
+    });
     const masked = maskApiKeys(settings);
 
     const imageAnalysisStatus = canResolveSensitiveRuntimeStatus(req)
@@ -544,8 +553,10 @@ router.get('/:profile/raw', async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    const settings = loadCanonicalProfileSettings(profile, settingsPath, true);
-    const stat = fs.statSync(settingsPath);
+    const { settings, stat } = withSettingsFileLock(settingsPath, () => {
+      const loaded = loadCanonicalProfileSettings(profile, settingsPath, true);
+      return { settings: loaded, stat: fs.statSync(settingsPath) };
+    });
 
     res.json({
       profile,
@@ -674,10 +685,7 @@ router.put('/:profile', (req: Request, res: Response): void => {
         fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
       }
 
-      const tempPath = `${settingsPath}.tmp.${process.pid}`;
-      requireWritableSettingsPathWithinCcs(tempPath);
-      fs.writeFileSync(tempPath, newContent, { flag: 'wx' });
-      fs.renameSync(tempPath, settingsPath);
+      writeSettingsTextAtomically(settingsPath, newContent);
       newMtime = fs.statSync(settingsPath).mtime.getTime();
     });
 
@@ -716,7 +724,9 @@ router.get('/:profile/presets', (req: Request, res: Response): void => {
       return;
     }
 
-    const settings = loadCanonicalProfileSettings(profile, settingsPath, true);
+    const settings = withSettingsFileLock(settingsPath, () =>
+      loadCanonicalProfileSettings(profile, settingsPath, true)
+    );
     res.json({ presets: settings.presets || [] });
   } catch (error) {
     respondInternalError(res, error, 'Internal server error.');

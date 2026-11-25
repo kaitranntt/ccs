@@ -182,14 +182,18 @@ function createAnthropicStreamingResponse(response: Response): Response {
   const accumulator = new DeltaAccumulator({});
   const encoder = new TextEncoder();
 
+  let activeReader: ReturnType<typeof body.getReader> | null = null;
+  let cancelled = false;
+
   const readable = new ReadableStream<Uint8Array>({
     async start(controller) {
       const reader = body.getReader();
+      activeReader = reader;
 
       try {
-        while (true) {
+        while (!cancelled) {
           const { done, value } = await reader.read();
-          if (done) {
+          if (done || cancelled) {
             break;
           }
           if (!value) {
@@ -207,7 +211,7 @@ function createAnthropicStreamingResponse(response: Response): Response {
           }
         }
 
-        if (!accumulator.isFinalized() && accumulator.isMessageStarted()) {
+        if (!cancelled && !accumulator.isFinalized() && accumulator.isMessageStarted()) {
           for (const anthropicEvent of transformer.finalizeDelta(accumulator)) {
             controller.enqueue(
               encoder.encode(formatSseEvent(anthropicEvent.event, anthropicEvent.data))
@@ -215,22 +219,48 @@ function createAnthropicStreamingResponse(response: Response): Response {
           }
         }
       } catch (error) {
-        logTranslationError(
-          'sse_transformer.sse_translation_failed',
-          'OpenAI-compatible SSE translation failed',
-          error
-        );
-        controller.enqueue(
-          encoder.encode(
-            formatSseEvent(
-              'error',
-              createAnthropicErrorPayload('api_error', STREAM_TRANSLATION_ERROR_MESSAGE)
-            )
-          )
-        );
+        if (!cancelled) {
+          logTranslationError(
+            'sse_transformer.sse_translation_failed',
+            'OpenAI-compatible SSE translation failed',
+            error
+          );
+          try {
+            controller.enqueue(
+              encoder.encode(
+                formatSseEvent(
+                  'error',
+                  createAnthropicErrorPayload('api_error', STREAM_TRANSLATION_ERROR_MESSAGE)
+                )
+              )
+            );
+          } catch {
+            // Stream may already be closed/cancelled
+          }
+        }
       } finally {
-        reader.releaseLock();
-        controller.close();
+        try {
+          reader.releaseLock();
+        } catch {
+          // Lock may already be released after cancel
+        }
+        if (!cancelled) {
+          try {
+            controller.close();
+          } catch {
+            // Stream may already be closed
+          }
+        }
+      }
+    },
+    async cancel(reason) {
+      cancelled = true;
+      if (activeReader) {
+        try {
+          await activeReader.cancel(reason);
+        } catch {
+          // Best-effort upstream stream cancellation
+        }
       }
     },
   });

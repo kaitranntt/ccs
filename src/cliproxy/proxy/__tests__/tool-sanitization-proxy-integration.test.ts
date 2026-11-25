@@ -5,9 +5,11 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'bun:test';
+import { EventEmitter } from 'events';
 import * as http from 'http';
+import * as net from 'net';
 import * as zlib from 'zlib';
-import { ToolSanitizationProxy } from '../tool-sanitization-proxy';
+import { ToolSanitizationProxy, attachClientCloseAbort } from '../tool-sanitization-proxy';
 import { CodexReasoningProxy } from '../../ai-providers/codex-reasoning-proxy';
 
 // Mock upstream server that echoes requests
@@ -1767,5 +1769,259 @@ describe('ToolSanitizationProxy Integration', () => {
         }
       });
     });
+  });
+
+  describe('Client Abort Propagation', () => {
+    function createMockReqRes(options: { complete?: boolean; writableEnded?: boolean } = {}) {
+      const req = new EventEmitter() as EventEmitter & { complete: boolean };
+      req.complete = options.complete ?? false;
+      const res = new EventEmitter() as EventEmitter & { writableEnded: boolean };
+      res.writableEnded = options.writableEnded ?? false;
+      return { req, res };
+    }
+
+    it('attachClientCloseAbort triggers onAbort once when req emits aborted', () => {
+      const { req, res } = createMockReqRes({ complete: true, writableEnded: false });
+      let abortCount = 0;
+
+      attachClientCloseAbort(
+        req as unknown as http.IncomingMessage,
+        res as unknown as http.ServerResponse,
+        () => {
+          abortCount += 1;
+        }
+      );
+
+      req.emit('aborted');
+      req.emit('aborted');
+      res.emit('close');
+
+      expect(abortCount).toBe(1);
+    });
+
+    it('attachClientCloseAbort triggers onAbort when req emits close with complete=false', () => {
+      const { req, res } = createMockReqRes({ complete: false, writableEnded: false });
+      let abortCount = 0;
+
+      attachClientCloseAbort(
+        req as unknown as http.IncomingMessage,
+        res as unknown as http.ServerResponse,
+        () => {
+          abortCount += 1;
+        }
+      );
+
+      req.emit('close');
+
+      expect(abortCount).toBe(1);
+    });
+
+    it('attachClientCloseAbort does not trigger onAbort when req emits close with complete=true', () => {
+      const { req, res } = createMockReqRes({ complete: true, writableEnded: false });
+      let abortCount = 0;
+
+      attachClientCloseAbort(
+        req as unknown as http.IncomingMessage,
+        res as unknown as http.ServerResponse,
+        () => {
+          abortCount += 1;
+        }
+      );
+
+      req.emit('close');
+      expect(abortCount).toBe(0);
+
+      // A subsequent res 'close' before writableEnded still aborts.
+      res.emit('close');
+      expect(abortCount).toBe(1);
+    });
+
+    it('attachClientCloseAbort triggers onAbort when res emits close with writableEnded=false', () => {
+      const { req, res } = createMockReqRes({ complete: true, writableEnded: false });
+      let abortCount = 0;
+
+      attachClientCloseAbort(
+        req as unknown as http.IncomingMessage,
+        res as unknown as http.ServerResponse,
+        () => {
+          abortCount += 1;
+        }
+      );
+
+      res.emit('close');
+
+      expect(abortCount).toBe(1);
+    });
+
+    it('attachClientCloseAbort does not trigger onAbort when res emits close with writableEnded=true', () => {
+      const { req, res } = createMockReqRes({ complete: true, writableEnded: true });
+      let abortCount = 0;
+
+      attachClientCloseAbort(
+        req as unknown as http.IncomingMessage,
+        res as unknown as http.ServerResponse,
+        () => {
+          abortCount += 1;
+        }
+      );
+
+      res.emit('close');
+
+      expect(abortCount).toBe(0);
+    });
+
+    it('attachClientCloseAbort cleanup detaches all listeners and prevents late triggers', () => {
+      const { req, res } = createMockReqRes({ complete: false, writableEnded: false });
+      let abortCount = 0;
+
+      const cleanup = attachClientCloseAbort(
+        req as unknown as http.IncomingMessage,
+        res as unknown as http.ServerResponse,
+        () => {
+          abortCount += 1;
+        }
+      );
+
+      expect(req.listenerCount('aborted')).toBe(1);
+      expect(req.listenerCount('close')).toBe(1);
+      expect(res.listenerCount('close')).toBe(1);
+
+      cleanup();
+
+      expect(req.listenerCount('aborted')).toBe(0);
+      expect(req.listenerCount('close')).toBe(0);
+      expect(res.listenerCount('close')).toBe(0);
+
+      req.emit('aborted');
+      req.emit('close');
+      res.emit('close');
+
+      expect(abortCount).toBe(0);
+    });
+
+    it.skipIf(typeof Bun !== 'undefined')(
+      'destroys upstream request when client aborts mid-stream',
+      async () => {
+        let upstreamReqClosed = false;
+        let upstreamStarted = false;
+        let releaseUpstreamWait: (() => void) | null = null;
+        const upstreamClosedPromise = new Promise<void>((resolve) => {
+          releaseUpstreamWait = resolve;
+        });
+        const upstreamSockets = new Set<net.Socket>();
+
+        const slowUpstream = http.createServer((_req, res) => {
+          upstreamStarted = true;
+          res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            Connection: 'close',
+          });
+          res.write('event: message_start\ndata: {"type":"message_start"}\n\n');
+          res.on('close', () => {
+            upstreamReqClosed = true;
+            if (!res.writableEnded) {
+              res.end();
+            }
+            releaseUpstreamWait?.();
+          });
+        });
+        slowUpstream.on('connection', (socket) => {
+          upstreamSockets.add(socket);
+          socket.once('close', () => upstreamSockets.delete(socket));
+        });
+
+        const slowPort = await new Promise<number>((resolve) => {
+          slowUpstream.listen(0, '127.0.0.1', () => {
+            const addr = slowUpstream.address();
+            resolve(typeof addr === 'object' && addr ? addr.port : 0);
+          });
+        });
+
+        const proxy = new ToolSanitizationProxy({
+          upstreamBaseUrl: `http://127.0.0.1:${slowPort}`,
+        });
+        const proxyPort = await proxy.start();
+        let clientSocket: net.Socket | null = null;
+
+        try {
+          const payload = JSON.stringify({
+            model: 'claude-sonnet-4-6',
+            stream: true,
+            messages: [{ role: 'user', content: 'hello' }],
+          });
+
+          await new Promise<void>((resolve, reject) => {
+            let received = '';
+            let aborted = false;
+            const socket = net.connect(proxyPort, '127.0.0.1');
+            clientSocket = socket;
+
+            socket.on('error', (err) => {
+              if (!aborted) {
+                reject(err);
+              }
+            });
+
+            socket.on('connect', () => {
+              socket.write(
+                [
+                  'POST /v1/messages HTTP/1.1',
+                  `Host: 127.0.0.1:${proxyPort}`,
+                  'Content-Type: application/json',
+                  `Content-Length: ${Buffer.byteLength(payload)}`,
+                  'Connection: close',
+                  '',
+                  payload,
+                ].join('\r\n')
+              );
+            });
+
+            socket.on('data', (chunk: Buffer) => {
+              received += chunk.toString('utf8');
+              if (!aborted && received.includes('event: message_start')) {
+                aborted = true;
+                socket.destroy();
+                resolve();
+              }
+            });
+
+            socket.on('close', () => {
+              if (!aborted) {
+                reject(new Error('Client socket closed before receiving initial SSE event'));
+              }
+            });
+          });
+
+          expect(upstreamStarted).toBe(true);
+
+          let timeoutId: ReturnType<typeof setTimeout> | undefined;
+          try {
+            await Promise.race([
+              upstreamClosedPromise,
+              new Promise<never>((_, reject) => {
+                timeoutId = setTimeout(
+                  () => reject(new Error('Upstream was not aborted on client disconnect')),
+                  2000
+                );
+              }),
+            ]);
+          } finally {
+            if (timeoutId !== undefined) {
+              clearTimeout(timeoutId);
+            }
+          }
+          expect(upstreamReqClosed).toBe(true);
+        } finally {
+          if (clientSocket && !(clientSocket as net.Socket).destroyed) {
+            (clientSocket as net.Socket).destroy();
+          }
+          proxy.stop();
+          for (const socket of upstreamSockets) {
+            socket.destroy();
+          }
+          await new Promise<void>((resolve) => slowUpstream.close(() => resolve()));
+        }
+      }
+    );
   });
 });

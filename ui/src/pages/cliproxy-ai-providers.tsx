@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type {
   AiProviderEntryView,
@@ -8,7 +8,6 @@ import type {
 } from '../../../src/cliproxy/ai-providers';
 import { ProviderLogo } from '@/components/cliproxy/provider-logo';
 import { ProxyStatusWidget } from '@/components/monitoring/proxy-status-widget';
-import { CodeEditor } from '@/components/shared/code-editor';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { GlobalEnvIndicator } from '@/components/shared/global-env-indicator';
 import { Badge } from '@/components/ui/badge';
@@ -53,6 +52,10 @@ import {
   Zap,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+
+const CodeEditor = lazy(() =>
+  import('@/components/shared/code-editor').then((m) => ({ default: m.CodeEditor }))
+);
 
 function SummaryCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -1234,13 +1237,21 @@ function EntryInspector({
               ) : null}
               <div className="min-h-0 flex-1 px-6 pb-4 pt-4">
                 <div className="h-full overflow-hidden rounded-md border bg-background">
-                  <CodeEditor
-                    value={rawJsonContent}
-                    onChange={handleRawJsonChange}
-                    language="json"
-                    minHeight="100%"
-                    heightMode="fill-parent"
-                  />
+                  <Suspense
+                    fallback={
+                      <div className="flex h-full items-center justify-center text-muted-foreground">
+                        <RefreshCw className="h-5 w-5 animate-spin" />
+                      </div>
+                    }
+                  >
+                    <CodeEditor
+                      value={rawJsonContent}
+                      onChange={handleRawJsonChange}
+                      language="json"
+                      minHeight="100%"
+                      heightMode="fill-parent"
+                    />
+                  </Suspense>
                 </div>
               </div>
             </div>
@@ -1257,14 +1268,22 @@ function EntryInspector({
               </div>
               <div className="min-h-0 flex-1 px-6 pb-4 pt-4">
                 <div className="h-full overflow-hidden rounded-md border bg-background">
-                  <CodeEditor
-                    value={settingsPreviewContent}
-                    onChange={() => {}}
-                    language="json"
-                    readonly
-                    minHeight="100%"
-                    heightMode="fill-parent"
-                  />
+                  <Suspense
+                    fallback={
+                      <div className="flex h-full items-center justify-center text-muted-foreground">
+                        <RefreshCw className="h-5 w-5 animate-spin" />
+                      </div>
+                    }
+                  >
+                    <CodeEditor
+                      value={settingsPreviewContent}
+                      onChange={() => {}}
+                      language="json"
+                      readonly
+                      minHeight="100%"
+                      heightMode="fill-parent"
+                    />
+                  </Suspense>
                 </div>
               </div>
               <div className="mx-6 mb-4 overflow-hidden rounded-md border">

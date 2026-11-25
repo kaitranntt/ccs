@@ -4,7 +4,7 @@ import { describe, expect, it } from 'bun:test';
 
 const childTestPath = path.resolve(
   import.meta.dir,
-  '../test-fixtures/gemini-backend-guidance-child.scenario.ts'
+  './fixtures/gemini-backend-guidance-child.scenario.ts'
 );
 
 function runScenario(scenario: string): void {

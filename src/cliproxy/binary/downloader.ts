@@ -6,12 +6,13 @@
  */
 
 import * as fs from 'fs';
-import * as https from 'https';
-import * as http from 'http';
+import https from 'https';
+import http from 'http';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { HttpProxyAgent } from 'http-proxy-agent';
 import { DownloadResult, ProgressCallback } from '../types';
 import { getProxyUrl, shouldBypassProxy } from '../../utils/proxy-env';
+import { NetworkError } from '../../errors/error-types';
 
 /**
  * Extract hostname from URL.
@@ -130,6 +131,40 @@ export function isRetryableError(error: Error): boolean {
   return false;
 }
 
+const REDIRECT_STATUS_CODES = new Set([301, 302, 307, 308]);
+
+/**
+ * Validate and resolve redirect Location headers, enforcing HTTPS-only targets.
+ */
+function resolveHttpsRedirectUrl(
+  location: string | undefined,
+  baseUrl: string,
+  maxRedirects: number
+): string {
+  if (!location) {
+    throw new NetworkError('Redirect without location header', baseUrl);
+  }
+  if (maxRedirects <= 0) {
+    throw new NetworkError('Too many redirects', baseUrl);
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(location, baseUrl);
+  } catch {
+    throw new NetworkError('Invalid redirect location header', baseUrl);
+  }
+
+  if (parsed.protocol !== 'https:') {
+    throw new NetworkError(
+      `Refusing non-HTTPS redirect target (${parsed.protocol})`,
+      parsed.toString()
+    );
+  }
+
+  return parsed.toString();
+}
+
 /**
  * Download file from URL with progress tracking
  * @param timeout Timeout in ms (default 120000 for large files)
@@ -154,20 +189,20 @@ export function downloadFile(
     };
 
     const handleResponse = (res: http.IncomingMessage) => {
-      // Handle redirects (GitHub releases use 302)
-      if (res.statusCode === 301 || res.statusCode === 302) {
-        const redirectUrl = res.headers.location;
-        if (!redirectUrl) {
-          cleanup(new Error('Redirect without location header'));
-          return;
-        }
-        if (maxRedirects <= 0) {
-          cleanup(new Error('Too many redirects'));
+      // Handle redirects (GitHub releases use 302, S3/CDNs may use 307/308)
+      if (res.statusCode !== undefined && REDIRECT_STATUS_CODES.has(res.statusCode)) {
+        res.resume();
+        let redirectUrl: string;
+        try {
+          redirectUrl = resolveHttpsRedirectUrl(res.headers.location, url, maxRedirects);
+        } catch (err) {
+          cleanup(err as Error);
           return;
         }
         if (verbose) {
           console.error(`[cliproxy] Following redirect: ${redirectUrl}`);
         }
+        resolved = true;
         downloadFile(redirectUrl, destPath, onProgress, verbose, timeout, maxRedirects - 1)
           .then(resolve)
           .catch(reject);
@@ -175,6 +210,7 @@ export function downloadFile(
       }
 
       if (res.statusCode !== 200) {
+        res.resume();
         cleanup(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
         return;
       }
@@ -313,16 +349,19 @@ function fetchTextOnce(
 
     const handleResponse = (res: http.IncomingMessage) => {
       // Handle redirects
-      if (res.statusCode === 301 || res.statusCode === 302) {
-        const redirectUrl = res.headers.location;
-        if (!redirectUrl) {
-          reject(new Error('Redirect without location header'));
+      if (res.statusCode !== undefined && REDIRECT_STATUS_CODES.has(res.statusCode)) {
+        res.resume();
+        let redirectUrl: string;
+        try {
+          redirectUrl = resolveHttpsRedirectUrl(res.headers.location, url, maxRedirects);
+        } catch (err) {
+          if (!resolved) {
+            resolved = true;
+            reject(err as Error);
+          }
           return;
         }
-        if (maxRedirects <= 0) {
-          reject(new Error('Too many redirects'));
-          return;
-        }
+        resolved = true;
         fetchTextOnce(redirectUrl, verbose, timeout, maxRedirects - 1)
           .then(resolve)
           .catch(reject);
@@ -330,7 +369,11 @@ function fetchTextOnce(
       }
 
       if (res.statusCode !== 200) {
-        reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
+        res.resume();
+        if (!resolved) {
+          resolved = true;
+          reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
+        }
         return;
       }
 
@@ -424,16 +467,19 @@ function fetchJsonOnce(
     };
 
     const handleResponse = (res: http.IncomingMessage) => {
-      if (res.statusCode === 301 || res.statusCode === 302) {
-        const redirectUrl = res.headers.location;
-        if (!redirectUrl) {
-          reject(new Error('Redirect without location header'));
+      if (res.statusCode !== undefined && REDIRECT_STATUS_CODES.has(res.statusCode)) {
+        res.resume();
+        let redirectUrl: string;
+        try {
+          redirectUrl = resolveHttpsRedirectUrl(res.headers.location, url, maxRedirects);
+        } catch (err) {
+          if (!resolved) {
+            resolved = true;
+            reject(err as Error);
+          }
           return;
         }
-        if (maxRedirects <= 0) {
-          reject(new Error('Too many redirects'));
-          return;
-        }
+        resolved = true;
         fetchJsonOnce(redirectUrl, verbose, timeout, maxRedirects - 1)
           .then(resolve)
           .catch(reject);
@@ -441,7 +487,11 @@ function fetchJsonOnce(
       }
 
       if (res.statusCode !== 200) {
-        reject(new Error(`GitHub API error: HTTP ${res.statusCode}`));
+        res.resume();
+        if (!resolved) {
+          resolved = true;
+          reject(new Error(`GitHub API error: HTTP ${res.statusCode}`));
+        }
         return;
       }
 
@@ -526,4 +576,5 @@ export const __testExports = {
   shouldBypassProxy,
   getHostname,
   getProxyAgent,
+  resolveHttpsRedirectUrl,
 };

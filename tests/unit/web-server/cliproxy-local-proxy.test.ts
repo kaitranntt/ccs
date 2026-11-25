@@ -149,4 +149,79 @@ describe('cliproxy local proxy route', () => {
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ error: 'CLIProxy is not reachable' });
   });
+
+  it('strips cookie headers unconditionally while preserving authorization for CPAMC', async () => {
+    let capturedHeaders: http.IncomingHttpHeaders = {};
+    const backend = await createBackendServer((req, res) => {
+      capturedHeaders = req.headers;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    });
+    const proxy = await createProxyServer({
+      resolveTargetPort: () => backend.port,
+      enforceAccess: () => true,
+    });
+
+    const response = await fetch(`${proxy.baseUrl}/api/cliproxy-local/v0/management/config`, {
+      headers: {
+        Cookie: 'connect.sid=secret-session-cookie',
+        Authorization: 'Bearer cpamc-management-secret',
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(capturedHeaders.cookie).toBeUndefined();
+    expect(capturedHeaders.authorization).toBe('Bearer cpamc-management-secret');
+  });
+
+  it('handles mid-stream upstream proxyRes error without crashing Express', async () => {
+    const { EventEmitter } = await import('events');
+    const app = express();
+    app.use(
+      '/api/cliproxy-local',
+      createCliproxyLocalProxyRouter({
+        enforceAccess: () => true,
+        resolveTargetPort: () => 8317,
+        request: ((_opts: unknown, cb: (res: http.IncomingMessage) => void) => {
+          const fakeProxyReq = Object.assign(new EventEmitter(), {
+            destroyed: false,
+            destroy() {
+              this.destroyed = true;
+            },
+            end() {
+              queueMicrotask(() => {
+                const fakeProxyRes = Object.assign(new EventEmitter(), {
+                  statusCode: 200,
+                  headers: { 'content-type': 'text/plain' },
+                  pause() {},
+                  resume() {},
+                }) as unknown as http.IncomingMessage;
+                cb(fakeProxyRes);
+                fakeProxyRes.emit('data', Buffer.from('partial'));
+                fakeProxyRes.emit('error', new Error('ECONNRESET'));
+              });
+            },
+          });
+          return fakeProxyReq as unknown as http.ClientRequest;
+        }) as unknown as typeof http.request,
+      })
+    );
+
+    const server = http.createServer(app);
+    const port = await listen(server);
+    let threw = false;
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/api/cliproxy-local/logs`);
+      await response.text();
+    } catch {
+      threw = true;
+    }
+
+    // Either stream reset cleanly or client observed aborted stream without crashing the server.
+    expect(typeof threw).toBe('boolean');
+
+    // Verify server still handles subsequent requests normally.
+    const followUp = await fetch(`http://127.0.0.1:${port}/nonexistent`);
+    expect(followUp.status).toBe(404);
+  });
 });

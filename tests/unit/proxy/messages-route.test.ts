@@ -10,6 +10,7 @@ import {
   attachDisconnectAbortHandlers,
   buildUpstreamAgentTimeouts,
   handleProxyMessagesRequest as handleProxyMessagesRequestImpl,
+  validateIncomingProxyAuth,
 } from '../../../src/proxy/server/messages-route';
 import {
   closeUpstreamDispatcher,
@@ -657,5 +658,37 @@ describe('handleProxyMessagesRequest', () => {
       if (originalMaxBody === undefined) delete process.env.CCS_PROXY_MAX_BODY_MB;
       else process.env.CCS_PROXY_MAX_BODY_MB = originalMaxBody;
     }
+  });
+});
+
+describe('validateIncomingProxyAuth', () => {
+  it('validates matching tokens across supported auth headers', () => {
+    expect(validateIncomingProxyAuth({ 'x-api-key': 'secret-token-123' }, 'secret-token-123')).toBe(
+      true
+    );
+    expect(
+      validateIncomingProxyAuth({ 'anthropic-api-key': 'secret-token-123' }, 'secret-token-123')
+    ).toBe(true);
+    expect(
+      validateIncomingProxyAuth(
+        { authorization: 'Bearer secret-token-123' },
+        'secret-token-123'
+      )
+    ).toBe(true);
+  });
+
+  it('rejects mismatched, missing, and unequal-length tokens without throwing RangeError', () => {
+    expect(validateIncomingProxyAuth({}, 'secret-token-123')).toBe(false);
+    expect(validateIncomingProxyAuth({ 'x-api-key': 'short' }, 'secret-token-123')).toBe(false);
+    expect(
+      validateIncomingProxyAuth(
+        { 'x-api-key': 'secret-token-123-extra-bytes' },
+        'secret-token-123'
+      )
+    ).toBe(false);
+    expect(validateIncomingProxyAuth({ 'x-api-key': 'secret-token-124' }, 'secret-token-123')).toBe(
+      false
+    );
+    expect(validateIncomingProxyAuth({ 'x-api-key': 'secret-token-123' }, '')).toBe(false);
   });
 });

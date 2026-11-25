@@ -7,6 +7,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { initUI, header, subheader, color, warn } from '../utils/ui';
+import { useColors } from '../utils/ui/init';
 import { getActiveConfigPath } from '../utils/config-manager';
 import { getVersion } from '../utils/version';
 import { getProfileLookupCandidates } from '../utils/profile-compat';
@@ -16,7 +17,9 @@ import { getCcsDir } from '../config/config-loader-facade';
  * Handle version command
  */
 export async function handleVersionCommand(): Promise<void> {
-  await initUI();
+  if (useColors()) {
+    await initUI();
+  }
   console.log(header(`CCS (Claude Codex Switch) v${getVersion()}`));
   console.log('');
 

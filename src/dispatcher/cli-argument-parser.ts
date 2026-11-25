@@ -19,6 +19,7 @@ import type { ProfileDetectionResult } from '../auth/profile-detector';
 import { setGlobalConfigDir, detectCloudSyncPath } from '../utils/config-manager';
 import { resolveBrowserLaunchFlagResolution } from '../utils/browser';
 import type { BrowserLaunchOverride } from '../utils/browser';
+import { ValidationError } from '../errors/error-types';
 
 // ========== Bootstrap Result ==========
 
@@ -30,34 +31,42 @@ export interface DispatcherBootstrap {
   /** Normalized/mutated args after pre-parse (--config-dir stripped, browser flags stripped, legacy cursor normalized) */
   args: string[];
   isCompletionCommand: boolean;
+  isFastMetadata?: boolean;
   browserLaunchOverride: BrowserLaunchOverride | undefined;
   /** true when the caller should return immediately (completion handled, codex passthrough triggered, process.exit called) */
   exitNow: boolean;
+}
+
+export const FAST_METADATA_COMMANDS = new Set([
+  'version',
+  '--version',
+  '-v',
+  'help',
+  '--help',
+  '-h',
+  '__complete',
+]);
+
+export function isFastMetadataCommand(args: string[]): boolean {
+  return args.length > 0 && FAST_METADATA_COMMANDS.has(args[0]);
 }
 
 /**
  * Phase A bootstrap: runs everything that must happen before config loading and profile detection.
  *
  * Side-effects preserved from original main():
- * - Dynamic import of initUI
  * - setGlobalConfigDir (--config-dir flag)
  * - Cloud-sync warnings
  * - Completion short-circuit via tryHandleRootCommand
  * - Codex native passthrough via execNativeCodexCommand
+ * - Deferred initUI for non-metadata TTY commands
  *
  * Adapter registration (registerTarget calls) stays in main() because it is
  * singleton wiring with no dependency on the parsed args.
  */
 export async function bootstrapAndParseEarlyCli(rawArgs: string[]): Promise<DispatcherBootstrap> {
   let args = rawArgs;
-  const isCompletionCommand = args[0] === '__complete';
-
-  // Initialize UI colors early to ensure consistent colored output
-  // Must happen before any status messages (ok, info, fail, etc.)
-  if (!isCompletionCommand && process.stdout.isTTY && !process.env['CI']) {
-    const { initUI } = await import('../utils/ui');
-    await initUI();
-  }
+  const isEarlyCompletion = args[0] === '__complete';
 
   // Parse --config-dir flag (must happen before any config loading)
   const configDirIdx = args.findIndex((a) => a === '--config-dir' || a.startsWith('--config-dir='));
@@ -94,22 +103,22 @@ export async function bootstrapAndParseEarlyCli(rawArgs: string[]): Promise<Disp
 
     setGlobalConfigDir(configDirValue);
 
-    // Security warning: cloud sync paths expose OAuth tokens
-    const cloudService = detectCloudSyncPath(configDirValue);
-    if (!isCompletionCommand && cloudService) {
-      process.stderr.write(String(warn(`CCS directory is under ${cloudService}.`)) + '\n');
-      process.stderr.write('    OAuth tokens in cliproxy/auth/ will be synced to cloud.\n');
-      process.stderr.write('    Consider: CCS_DIR=/path/outside/cloud ccs ...\n');
-    }
-
     // Remove consumed args so they don't leak to Claude CLI
     // Clone the array before splicing so the original rawArgs is unaffected
     args = [...args];
     args.splice(configDirIdx, spliceCount);
+
+    // Security warning: cloud sync paths expose OAuth tokens
+    const cloudService = detectCloudSyncPath(configDirValue);
+    if (!isEarlyCompletion && args[0] !== '__complete' && cloudService) {
+      process.stderr.write(String(warn(`CCS directory is under ${cloudService}.`)) + '\n');
+      process.stderr.write('    OAuth tokens in cliproxy/auth/ will be synced to cloud.\n');
+      process.stderr.write('    Consider: CCS_DIR=/path/outside/cloud ccs ...\n');
+    }
   } else if (process.env.CCS_DIR) {
     // Also warn for CCS_DIR env var pointing to cloud sync
     const cloudService = detectCloudSyncPath(process.env.CCS_DIR);
-    if (!isCompletionCommand && cloudService) {
+    if (!isEarlyCompletion && cloudService) {
       process.stderr.write(String(warn(`CCS directory is under ${cloudService}.`)) + '\n');
       process.stderr.write('    OAuth tokens in cliproxy/auth/ will be synced to cloud.\n');
       process.stderr.write('    Consider: CCS_DIR=/path/outside/cloud ccs ...\n');
@@ -117,13 +126,14 @@ export async function bootstrapAndParseEarlyCli(rawArgs: string[]): Promise<Disp
   } else if (process.env.CCS_HOME) {
     // Also warn for CCS_HOME env var pointing to cloud sync
     const cloudService = detectCloudSyncPath(process.env.CCS_HOME);
-    if (!isCompletionCommand && cloudService) {
+    if (!isEarlyCompletion && cloudService) {
       process.stderr.write(String(warn(`CCS directory is under ${cloudService}.`)) + '\n');
       process.stderr.write('    OAuth tokens in cliproxy/auth/ will be synced to cloud.\n');
       process.stderr.write('    Consider: CCS_DIR=/path/outside/cloud ccs ...\n');
     }
   }
 
+  const isCompletionCommand = args[0] === '__complete';
   if (isCompletionCommand) {
     const { tryHandleRootCommand } = await import('../commands/root-command-router');
     await tryHandleRootCommand(args);
@@ -149,7 +159,21 @@ export async function bootstrapAndParseEarlyCli(rawArgs: string[]): Promise<Disp
     return { args, isCompletionCommand, browserLaunchOverride: undefined, exitNow: true };
   }
 
-  return { args, isCompletionCommand, browserLaunchOverride, exitNow: false };
+  const isFastMetadata = isFastMetadataCommand(args);
+
+  // Defer UI module imports for fast metadata commands; version/help load UI lazily if needed.
+  if (!isFastMetadata && process.stdout.isTTY && !process.env['CI']) {
+    const { initUI } = await import('../utils/ui');
+    await initUI();
+  }
+
+  return {
+    args,
+    isCompletionCommand,
+    isFastMetadata,
+    browserLaunchOverride,
+    exitNow: false,
+  };
 }
 
 // ========== Interfaces ==========
@@ -307,11 +331,14 @@ export function normalizeNativeClaudeEffortArgs(args: string[]): string[] {
     if (arg === '--effort') {
       const rawValue = args[i + 1];
       if (!rawValue || rawValue.startsWith('-') || !rawValue.trim()) {
-        throw new Error(`--effort requires a value: ${allowedValues}`);
+        throw new ValidationError(`--effort requires a value: ${allowedValues}`, '--effort');
       }
       const value = rawValue.toLowerCase();
       if (!NATIVE_CLAUDE_EFFORT_LEVEL_SET.has(value)) {
-        throw new Error(`Invalid --effort value: ${rawValue}. Expected one of: ${allowedValues}.`);
+        throw new ValidationError(
+          `Invalid --effort value: ${rawValue}. Expected one of: ${allowedValues}.`,
+          '--effort'
+        );
       }
       normalizedArgs.push(arg, value);
       i++;
@@ -321,11 +348,14 @@ export function normalizeNativeClaudeEffortArgs(args: string[]): string[] {
     if (arg.startsWith('--effort=')) {
       const rawValue = arg.slice('--effort='.length);
       if (!rawValue.trim()) {
-        throw new Error(`--effort requires a value: ${allowedValues}`);
+        throw new ValidationError(`--effort requires a value: ${allowedValues}`, '--effort');
       }
       const value = rawValue.toLowerCase();
       if (!NATIVE_CLAUDE_EFFORT_LEVEL_SET.has(value)) {
-        throw new Error(`Invalid --effort value: ${rawValue}. Expected one of: ${allowedValues}.`);
+        throw new ValidationError(
+          `Invalid --effort value: ${rawValue}. Expected one of: ${allowedValues}.`,
+          '--effort'
+        );
       }
       normalizedArgs.push(`--effort=${value}`);
       continue;

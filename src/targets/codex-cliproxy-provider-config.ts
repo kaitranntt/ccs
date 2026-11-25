@@ -5,7 +5,7 @@ import {
   probeTomlObjectFile,
   stringifyTomlObject,
   writeTomlFileAtomic,
-} from '../web-server/services/compatible-cli-toml-file-service';
+} from '../shared/compatible-cli-toml-file-service';
 import { getModelMaxLevel } from '../cliproxy/model-catalog';
 import { parseCodexModelTuningAlias } from '../cliproxy/ai-providers/model-id-normalizer';
 import {

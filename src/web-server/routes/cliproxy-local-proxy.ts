@@ -46,15 +46,23 @@ function buildProxyHeaders(
   port: number,
   bodyBuffer?: Buffer
 ): http.IncomingHttpHeaders {
-  const proxyHeaders: http.IncomingHttpHeaders = {
-    ...headers,
-    host: `127.0.0.1:${port}`,
-  };
+  const proxyHeaders: http.IncomingHttpHeaders = {};
 
-  delete proxyHeaders.connection;
+  for (const [key, value] of Object.entries(headers)) {
+    const lower = key.toLowerCase();
+    // Strip dashboard session cookies unconditionally; keep Authorization for CPAMC management auth.
+    if (lower === 'cookie' || lower === 'connection') {
+      continue;
+    }
+    if (bodyBuffer && (lower === 'transfer-encoding' || lower === 'content-length')) {
+      continue;
+    }
+    proxyHeaders[key] = value;
+  }
+
+  proxyHeaders.host = `127.0.0.1:${port}`;
 
   if (bodyBuffer) {
-    delete proxyHeaders['transfer-encoding'];
     proxyHeaders['content-length'] = String(bodyBuffer.length);
   }
 
@@ -106,6 +114,7 @@ export function createCliproxyLocalProxyRouter(deps: CliproxyLocalProxyDeps = {}
           hasEmptyBody;
 
         if (isSyntheticUnreachableResponse) {
+          proxyRes.resume();
           const payload = JSON.stringify({ error: 'CLIProxy is not reachable' });
           res.writeHead(502, {
             'Content-Type': 'application/json; charset=utf-8',
@@ -131,6 +140,19 @@ export function createCliproxyLocalProxyRouter(deps: CliproxyLocalProxyDeps = {}
         proxyRes.on('end', () => {
           res.off('drain', onDrain);
           res.end();
+        });
+
+        proxyRes.on('error', () => {
+          res.off('drain', onDrain);
+          if (!res.headersSent) {
+            const payload = JSON.stringify({ error: 'CLIProxy stream error' });
+            res.statusCode = 502;
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.setHeader('Content-Length', Buffer.byteLength(payload));
+            res.end(payload);
+          } else if (!res.writableEnded && !res.destroyed) {
+            res.destroy();
+          }
         });
       }
     );

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, RefreshCw, FileDown, Check, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useTranslation } from 'react-i18next';
+import { useTranslation, Trans } from 'react-i18next';
 import { SyncDialog } from './sync-dialog';
 import { useSyncStatus, useExecuteSync } from '@/hooks/use-cliproxy-sync';
 
@@ -76,12 +76,9 @@ export function SyncStatusCard() {
           )}
 
           {!isConfigured && (
-            <p
-              className="text-xs text-muted-foreground"
-              dangerouslySetInnerHTML={{
-                __html: t('syncStatusCard.runDoctorHint'),
-              }}
-            />
+            <p className="text-xs text-muted-foreground">
+              <Trans t={t} i18nKey="syncStatusCard.runDoctorHint" components={{ code: <code /> }} />
+            </p>
           )}
 
           {status?.error && <p className="text-xs text-red-500">{status.error}</p>}

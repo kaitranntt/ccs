@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { expandPath } from '../../utils/helpers';
+import { withConfigWriteLock } from '../../config/loader/io-locks';
 
 import type { ThinkingConfig } from '../../config/unified-config-types';
 import {
@@ -16,7 +17,7 @@ import {
   VALID_THINKING_TIERS,
   THINKING_OFF_VALUES,
 } from '../../cliproxy';
-import { validateFilePath } from './route-helpers';
+import { validateFilePath, withPathLock, writeTextFileAtomically } from './route-helpers';
 import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
 import {
   getCcsDir,
@@ -130,20 +131,19 @@ router.put('/file', (req: Request, res: Response): void => {
 
   const expandedPath = expandPath(filePath);
   const ccsDir = getCcsDir();
+  const isUnifiedConfigYaml = path.resolve(expandedPath) === path.resolve(getConfigYamlPath());
 
-  // Conflict detection (if file exists and expectedMtime provided)
-  if (fs.existsSync(expandedPath) && expectedMtime !== undefined) {
-    const stat = fs.statSync(expandedPath);
-    if (stat.mtime.getTime() !== expectedMtime) {
-      res.status(409).json({
-        error: 'File modified externally',
-        currentMtime: stat.mtime.getTime(),
-      });
-      return;
+  const runWrite = ():
+    | { conflict: true; currentMtime: number }
+    | { conflict: false; mtime: number; backupPath?: string } => {
+    // Conflict detection (if file exists and expectedMtime provided)
+    if (fs.existsSync(expandedPath) && expectedMtime !== undefined) {
+      const stat = fs.statSync(expandedPath);
+      if (stat.mtime.getTime() !== expectedMtime) {
+        return { conflict: true, currentMtime: stat.mtime.getTime() };
+      }
     }
-  }
 
-  try {
     // Create backup if file exists
     let backupPath: string | undefined;
     if (fs.existsSync(expandedPath)) {
@@ -157,22 +157,34 @@ router.put('/file', (req: Request, res: Response): void => {
       fs.copyFileSync(expandedPath, backupPath);
     }
 
-    // Ensure parent directory exists
-    const parentDir = path.dirname(expandedPath);
-    if (!fs.existsSync(parentDir)) {
-      fs.mkdirSync(parentDir, { recursive: true });
-    }
-
-    // Write atomically
-    const tempPath = expandedPath + '.tmp';
-    fs.writeFileSync(tempPath, content);
-    fs.renameSync(tempPath, expandedPath);
+    // Write atomically with unique temp suffix
+    writeTextFileAtomically(expandedPath, content);
 
     const newStat = fs.statSync(expandedPath);
-    res.json({
-      success: true,
+    return {
+      conflict: false,
       mtime: newStat.mtime.getTime(),
       backupPath,
+    };
+  };
+
+  try {
+    const result = isUnifiedConfigYaml
+      ? withConfigWriteLock(runWrite)
+      : withPathLock(expandedPath, 'file write lock', runWrite);
+
+    if (result.conflict) {
+      res.status(409).json({
+        error: 'File modified externally',
+        currentMtime: result.currentMtime,
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      mtime: result.mtime,
+      backupPath: result.backupPath,
     });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });

@@ -8,11 +8,13 @@
  * Default TTL: 5 minutes (configurable)
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { DailyUsage, HourlyUsage, MonthlyUsage, SessionUsage } from './types';
 import { ok, info, warn } from '../../utils/ui';
 import { getCcsDir } from '../../config/config-loader-facade';
+import { withSyncLockRetry } from '../../utils/sync-lock-retry';
 
 // Cache configuration
 function getCacheDir() {
@@ -120,11 +122,29 @@ export function writeDiskCache(
       session,
     };
 
-    // Write atomically using temp file + rename
+    // Write atomically using lock + unique temp file + rename
+    const cacheDir = getCacheDir();
     const cacheFile = getCacheFile();
-    const tempFile = cacheFile + '.tmp';
-    fs.writeFileSync(tempFile, JSON.stringify(cache), 'utf-8');
-    fs.renameSync(tempFile, cacheFile);
+    withSyncLockRetry(
+      cacheDir,
+      () => {
+        const tempFile = `${cacheFile}.tmp.${process.pid}.${crypto.randomUUID()}`;
+        try {
+          fs.writeFileSync(tempFile, JSON.stringify(cache), { encoding: 'utf-8', flag: 'wx' });
+          fs.renameSync(tempFile, cacheFile);
+        } catch (err) {
+          if (fs.existsSync(tempFile)) {
+            try {
+              fs.unlinkSync(tempFile);
+            } catch {
+              // Best-effort cleanup
+            }
+          }
+          throw err;
+        }
+      },
+      { description: 'usage disk cache lock' }
+    );
 
     console.log(ok('Disk cache updated'));
   } catch (err) {
@@ -154,11 +174,21 @@ export function getCacheAge(cache: UsageDiskCache | null): string {
  */
 export function clearDiskCache(): void {
   try {
-    const cacheFile = getCacheFile();
-    if (fs.existsSync(cacheFile)) {
-      fs.unlinkSync(cacheFile);
-      console.log(ok('Disk cache cleared'));
+    const cacheDir = getCacheDir();
+    if (!fs.existsSync(cacheDir)) {
+      return;
     }
+    const cacheFile = getCacheFile();
+    withSyncLockRetry(
+      cacheDir,
+      () => {
+        if (fs.existsSync(cacheFile)) {
+          fs.unlinkSync(cacheFile);
+          console.log(ok('Disk cache cleared'));
+        }
+      },
+      { description: 'usage disk cache lock' }
+    );
   } catch (err) {
     console.log(warn('Failed to clear disk cache:') + ` ${(err as Error).message}`);
   }

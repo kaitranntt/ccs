@@ -168,7 +168,7 @@ describe('CodexPage', () => {
 
     render(<CodexPage />);
 
-    const editor = screen.getByLabelText('codex raw editor');
+    const editor = await screen.findByLabelText('codex raw editor');
     await userEvent.clear(editor);
     await userEvent.type(editor, 'model = "gpt-5.4-mini"');
     expect(editor).toHaveValue('model = "gpt-5.4-mini"');
@@ -192,7 +192,7 @@ describe('CodexPage', () => {
 
     render(<CodexPage />);
 
-    const editor = screen.getByLabelText('codex raw editor');
+    const editor = await screen.findByLabelText('codex raw editor');
     await userEvent.clear(editor);
     await userEvent.type(editor, 'model = "gpt-5.4-mini"');
 
@@ -209,7 +209,7 @@ describe('CodexPage', () => {
 
     render(<CodexPage />);
 
-    const editor = screen.getByLabelText('codex raw editor');
+    const editor = await screen.findByLabelText('codex raw editor');
     await userEvent.clear(editor);
     await userEvent.type(editor, 'model = "gpt-5.4-mini"');
 
@@ -221,7 +221,7 @@ describe('CodexPage', () => {
     expect(screen.getByLabelText('codex raw editor')).toHaveValue('model = "gpt-5.4"\n');
   });
 
-  it('shows read errors and makes the raw editor read-only when the file cannot be edited safely', () => {
+  it('shows read errors and makes the raw editor read-only when the file cannot be edited safely', async () => {
     mocks.useCodex.mockReturnValue(
       buildUseCodexResult({
         rawConfig: {
@@ -240,7 +240,7 @@ describe('CodexPage', () => {
     render(<CodexPage />);
 
     expect(screen.getByText(/Read-only: Refusing symlink file for safety\./)).toBeInTheDocument();
-    expect(screen.getByLabelText('codex raw editor')).toHaveAttribute('readonly');
+    expect(await screen.findByLabelText('codex raw editor')).toHaveAttribute('readonly');
     expect(
       screen.queryByRole('button', { name: 'Preview one-newline repair' })
     ).not.toBeInTheDocument();

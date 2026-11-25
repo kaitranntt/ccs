@@ -15,7 +15,10 @@ import { isCursorSubcommandToken, LEGACY_CURSOR_PROFILE_NAME } from '../cursor/c
 import { isCacheStale } from '../utils/update-checker';
 import { tryHandleRootCommand } from '../commands/root-command-router';
 import { refreshUpdateCache, showCachedUpdateNotification } from './environment-builder';
-import { printCursorLegacySubcommandDeprecation } from './cli-argument-parser';
+import {
+  isFastMetadataCommand,
+  printCursorLegacySubcommandDeprecation,
+} from './cli-argument-parser';
 import type { Logger } from '../services/logging/logger';
 
 // ========== Pre-Dispatch Context ==========
@@ -67,6 +70,21 @@ export async function runPreDispatchHandlers(ctx: PreDispatchContext): Promise<b
     return false;
   }
 
+  // Fast-path root metadata commands (--version/-v, --help/-h, version, help, __complete)
+  // and provider help shortcuts BEFORE autoMigrate() and RecoveryManager.recoverAll().
+  const isFastMetadata = isFastMetadataCommand(args);
+  if (isFastMetadata && (await tryHandleRootCommand(args))) {
+    return true;
+  }
+
+  const shortcutProvider =
+    typeof firstArg === 'string' ? resolveCLIProxyProviderShortcut(firstArg) : null;
+  if (shortcutProvider && args.length > 1 && (args.includes('--help') || args.includes('-h'))) {
+    const { showProviderShortcutHelp } = await import('../commands/help-command');
+    await showProviderShortcutHelp(shortcutProvider);
+    return true;
+  }
+
   // Auto-migrate to unified config format (silent if already migrated)
   // Skip if user is explicitly running migrate command.
   // Wrapped in try-catch so a corrupt config.yaml does not crash pre-dispatch
@@ -105,17 +123,8 @@ export async function runPreDispatchHandlers(ctx: PreDispatchContext): Promise<b
     console.warn('[!] Recovery failed:', (err as Error).message.split('\n')[0].trim());
   }
 
-  // Root command router (handles --help, --version, config, doctor, etc.)
-  if (await tryHandleRootCommand(args)) {
-    return true;
-  }
-
-  // Provider help shortcut: `ccs gemini --help` → provider-specific help page
-  const shortcutProvider =
-    typeof firstArg === 'string' ? resolveCLIProxyProviderShortcut(firstArg) : null;
-  if (shortcutProvider && args.length > 1 && (args.includes('--help') || args.includes('-h'))) {
-    const { showProviderShortcutHelp } = await import('../commands/help-command');
-    await showProviderShortcutHelp(shortcutProvider);
+  // Root command router (handles config, doctor, api, etc.)
+  if (!isFastMetadata && (await tryHandleRootCommand(args))) {
     return true;
   }
 
