@@ -1,10 +1,10 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2669,
-    "filesAffected": 283,
-    "hotpathOccurrences": 1216,
-    "hotpathFilesAffected": 164,
+    "totalOccurrences": 2679,
+    "filesAffected": 284,
+    "hotpathOccurrences": 1224,
+    "hotpathFilesAffected": 165,
     "topHotpathFiles": [
       {
         "file": "src/utils/browser/mcp-installer.ts",
@@ -500,11 +500,11 @@
   },
   "maintainability": {
     "typedErrors": {
-      "totalThrows": 484,
+      "totalThrows": 485,
       "typedThrows": 120,
       "plainThrows": 304,
-      "otherThrows": 60,
-      "adoptionRatio": 0.2479,
+      "otherThrows": 61,
+      "adoptionRatio": 0.2474,
       "topSubdomainsByThrows": [
         {
           "subdomain": "web-server",
@@ -582,8 +582,8 @@
     },
     "loggerCoverage": {
       "filesWithCreateLogger": 68,
-      "totalSourceFiles": 781,
-      "coverageRatio": 0.0871,
+      "totalSourceFiles": 782,
+      "coverageRatio": 0.087,
       "subdomainsWithZeroCreateLogger": [
         "api",
         "bin",
@@ -613,7 +613,7 @@
         },
         {
           "subdomain": "utils",
-          "count": 93,
+          "count": 94,
           "withLogger": 2
         },
         {
@@ -754,6 +754,10 @@
           "loc": 1053
         },
         {
+          "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
+          "loc": 1052
+        },
+        {
           "file": "src/cliproxy/auth/oauth-process.ts",
           "loc": 1048
         },
@@ -768,10 +772,6 @@
         {
           "file": "src/cliproxy/model-catalog.ts",
           "loc": 1001
-        },
-        {
-          "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
-          "loc": 988
         },
         {
           "file": "src/cliproxy/quota/quota-manager.ts",
