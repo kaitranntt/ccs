@@ -6,7 +6,15 @@ import { getLstatSync } from './fs-helpers';
 
 export type DivergedFileAdoption = 'not-claimed' | 'claimed';
 
+const SIDECAR_RETENTION_LIMIT = 5;
+const MAX_SIDECAR_EEXIST_RETRIES = 32;
+const EPHEMERAL_CACHE_FILENAMES = new Set(['.last_inuse_sweep']);
+
 let adoptionClaimSequence = 0;
+
+function isEphemeralCacheFile(filePath: string): boolean {
+  return EPHEMERAL_CACHE_FILENAMES.has(path.basename(filePath));
+}
 
 function resolveLexicalSymlinkChain(targetPath: string): string {
   let currentPath = path.resolve(targetPath);
@@ -236,22 +244,118 @@ function createFileNoReplace(targetPath: string, content: Buffer, mode: number):
   }
 }
 
+function parseSidecarIndex(entryName: string, baseName: string): number | null {
+  if (entryName === baseName) {
+    return 0;
+  }
+
+  const prefix = `${baseName}-`;
+  if (!entryName.startsWith(prefix)) {
+    return null;
+  }
+
+  const suffix = entryName.slice(prefix.length);
+  if (!/^\d+$/.test(suffix)) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(suffix, 10);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function scanSidecarEntries(basePath: string): Array<{ name: string; index: number }> {
+  const directory = path.dirname(basePath);
+  const baseName = path.basename(basePath);
+
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(directory);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return [];
+    }
+    throw err;
+  }
+
+  const indexed: Array<{ name: string; index: number }> = [];
+  for (const entry of entries) {
+    const index = parseSidecarIndex(entry, baseName);
+    if (index !== null) {
+      indexed.push({ name: entry, index });
+    }
+  }
+
+  indexed.sort((left, right) => left.index - right.index);
+  return indexed;
+}
+
+function pruneOldSidecars(basePath: string, createdPath: string, maxRetained: number): void {
+  if (maxRetained <= 0) {
+    return;
+  }
+
+  const directory = path.dirname(basePath);
+  const createdName = path.basename(createdPath);
+  const entries = scanSidecarEntries(basePath);
+  if (entries.length <= maxRetained) {
+    return;
+  }
+
+  const toDeleteCount = entries.length - maxRetained;
+  let deleted = 0;
+  for (const entry of entries) {
+    if (deleted >= toDeleteCount) {
+      break;
+    }
+    if (entry.name === createdName) {
+      continue;
+    }
+    try {
+      fs.unlinkSync(path.join(directory, entry.name));
+      deleted++;
+    } catch {
+      // Best-effort retention pruning after the new sidecar is already durable.
+    }
+  }
+}
+
 /**
  * Publish a sidecar next to a managed file, never replacing an existing one.
- * Numbered suffixes keep every concurrent writer's artifact recoverable.
+ * Scans the directory once to pick `maxIndex + 1` in O(1) durable writes,
+ * keeping a bounded retry loop for concurrent writers.
  */
-function publishSidecarNoReplace(basePath: string, content: Buffer, mode: number): string {
-  let sequence = 0;
-  while (true) {
+function publishSidecarNoReplace(
+  basePath: string,
+  content: Buffer,
+  mode: number,
+  options?: { maxRetained?: number }
+): string {
+  const existing = scanSidecarEntries(basePath);
+  let sequence = existing.length > 0 ? existing[existing.length - 1].index + 1 : 0;
+
+  for (let attempt = 0; attempt < MAX_SIDECAR_EEXIST_RETRIES; attempt++) {
     const sidecarPath = sequence === 0 ? basePath : `${basePath}-${sequence}`;
     try {
       createFileNoReplace(sidecarPath, content, mode);
+      if (options?.maxRetained !== undefined) {
+        pruneOldSidecars(basePath, sidecarPath, options.maxRetained);
+      }
       return sidecarPath;
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+      if (
+        (err as NodeJS.ErrnoException).code !== 'EEXIST' ||
+        attempt === MAX_SIDECAR_EEXIST_RETRIES - 1
+      ) {
+        throw err;
+      }
       sequence++;
     }
   }
+
+  /* c8 ignore next -- loop always returns or throws */
+  throw Object.assign(new TypeError(`Exceeded sidecar retry budget at ${basePath}`), {
+    code: 'EEXIST',
+  });
 }
 
 /**
@@ -390,6 +494,8 @@ export function adoptDivergedFileContent(
       return 'claimed';
     }
 
+    const skipSidecars = isEphemeralCacheFile(canonicalPath) || isEphemeralCacheFile(divergedPath);
+
     const canonical = getCanonicalFile(canonicalPath);
     if (canonical.content) {
       if (diverged.equals(canonical.content)) {
@@ -402,6 +508,10 @@ export function adoptDivergedFileContent(
         !isEmptySettingsPlaceholder(canonicalPath, canonical.content) &&
         claimedStats.mtimeMs <= (canonical.mtimeMs ?? 0)
       ) {
+        if (skipSidecars) {
+          fs.unlinkSync(claimPath);
+          return 'claimed';
+        }
         preserveClaim(
           claimPath,
           divergedPath,
@@ -409,15 +519,26 @@ export function adoptDivergedFileContent(
         );
         return 'claimed';
       }
-      // Publish the pre-image before the canonical file is replaced, so an
-      // interruption mid-publication still leaves the old content recoverable.
-      publishSidecarNoReplace(`${canonicalPath}.bak-ccs-adopt`, canonical.content, canonical.mode);
+      if (!skipSidecars) {
+        // Publish the pre-image before the canonical file is replaced, so an
+        // interruption mid-publication still leaves the old content recoverable.
+        publishSidecarNoReplace(
+          `${canonicalPath}.bak-ccs-adopt`,
+          canonical.content,
+          canonical.mode,
+          {
+            maxRetained: SIDECAR_RETENTION_LIMIT,
+          }
+        );
+      }
     }
-    publishSidecarNoReplace(
-      `${divergedPath}.ccs-adopted-recovery`,
-      diverged,
-      claimedStats.mode & 0o777
-    );
+    if (!skipSidecars) {
+      publishSidecarNoReplace(
+        `${divergedPath}.ccs-adopted-recovery`,
+        diverged,
+        claimedStats.mode & 0o777
+      );
+    }
 
     publishCanonicalContent(canonical.writePath, diverged, canonical.mode, canonical.identity);
     if (!fs.readFileSync(canonicalPath).equals(diverged)) {

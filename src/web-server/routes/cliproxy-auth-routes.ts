@@ -37,6 +37,11 @@ import { fetchRemoteAuthStatus } from '../../cliproxy/services/remote-auth-fetch
 import { ensureManagedModelPrefixes } from '../../cliproxy/ai-providers/managed-model-prefixes';
 import { invalidateQuotaCache } from '../../cliproxy/quota/quota-response-cache';
 
+import {
+  extractAccountVariantFromAccountId,
+  extractCanonicalEmailFromAccountId,
+  extractEmailAccountVariantKey,
+} from '../../cliproxy/accounts/email-account-identity';
 import { tryKiroImport } from '../../cliproxy/auth/kiro-import';
 import {
   type ProviderTokenSnapshot,
@@ -90,6 +95,7 @@ const pendingManualAuthState = new Map<
   {
     nickname?: string;
     expectedAccountId?: string;
+    expectedTokenFile?: string;
     createdAt: number;
     upstreamCompletedAt?: number;
     knownTokenFiles: ProviderTokenSnapshot[];
@@ -131,6 +137,7 @@ function rememberManualAuthState(
   pending: {
     nickname?: string;
     expectedAccountId?: string;
+    expectedTokenFile?: string;
     knownTokenFiles: ProviderTokenSnapshot[];
   }
 ): void {
@@ -144,6 +151,7 @@ function rememberManualAuthState(
 function getManualAuthState(state: string | undefined): {
   nickname?: string;
   expectedAccountId?: string;
+  expectedTokenFile?: string;
   createdAt: number;
   upstreamCompletedAt?: number;
   knownTokenFiles: ProviderTokenSnapshot[];
@@ -161,6 +169,7 @@ function getManualAuthState(state: string | undefined): {
   return {
     nickname: pending.nickname,
     expectedAccountId: pending.expectedAccountId,
+    expectedTokenFile: pending.expectedTokenFile,
     createdAt: pending.createdAt,
     upstreamCompletedAt: pending.upstreamCompletedAt,
     knownTokenFiles: pending.knownTokenFiles,
@@ -185,12 +194,24 @@ function markManualAuthUpstreamCompleted(state: string, now = Date.now()): numbe
 
 function findNewTokenSnapshotForPendingAuth(
   provider: CLIProxyProvider,
-  pending: { expectedAccountId?: string; knownTokenFiles: ProviderTokenSnapshot[] }
+  pending: {
+    expectedAccountId?: string;
+    expectedTokenFile?: string;
+    knownTokenFiles: ProviderTokenSnapshot[];
+  }
 ): ProviderTokenSnapshot | null {
+  const expectedTokenFile =
+    pending.expectedTokenFile ||
+    (pending.expectedAccountId
+      ? getProviderAccounts(provider).find((account) => account.id === pending.expectedAccountId)
+          ?.tokenFile
+      : undefined);
+
   return findNewTokenSnapshot(
     listProviderTokenSnapshots(provider),
     pending.knownTokenFiles,
-    pending.expectedAccountId
+    pending.expectedAccountId,
+    expectedTokenFile
   );
 }
 
@@ -361,22 +382,59 @@ export function getStartAuthNicknameError(
   return null;
 }
 
-export function getReauthAccountTarget(
+export function getReauthAccountTarget<
+  TAccount extends { id: string; nickname?: string; email?: string; tokenFile?: string },
+>(
   accountId: string | undefined,
-  existingAccounts: Array<{ id: string; nickname?: string }>
-): { account?: { id: string; nickname?: string }; error?: string } {
+  existingAccounts: TAccount[]
+): { account?: TAccount; error?: string } {
   if (!accountId) {
     return {};
   }
 
   const account = existingAccounts.find((candidate) => candidate.id === accountId);
-  if (!account) {
-    return {
-      error: `Account '${accountId}' not found for this provider`,
-    };
+  if (account) {
+    return { account };
   }
 
-  return { account };
+  const canonicalEmail = extractCanonicalEmailFromAccountId(accountId);
+  if (canonicalEmail) {
+    const normalizedEmail = canonicalEmail.toLowerCase();
+    const expectedVariant = extractAccountVariantFromAccountId(accountId)?.toLowerCase() ?? null;
+    const emailMatches = existingAccounts.filter((candidate) => {
+      const candidateEmail =
+        candidate.email?.trim() || extractCanonicalEmailFromAccountId(candidate.id) || '';
+      return candidateEmail.toLowerCase() === normalizedEmail;
+    });
+
+    if (emailMatches.length === 1) {
+      const candidate = emailMatches[0];
+      const candidateVariant = extractAccountVariantFromAccountId(candidate.id)?.toLowerCase();
+      let variantMatches =
+        !expectedVariant || !candidateVariant || candidateVariant === expectedVariant;
+      if (variantMatches && expectedVariant && candidate.tokenFile) {
+        for (const provider of ['claude', 'codex'] as const) {
+          if (candidate.tokenFile.toLowerCase().startsWith(`${provider}-`)) {
+            const fileVariant = extractEmailAccountVariantKey(
+              provider,
+              candidate.tokenFile,
+              canonicalEmail
+            );
+            if (fileVariant && fileVariant.toLowerCase() !== expectedVariant) {
+              variantMatches = false;
+            }
+          }
+        }
+      }
+      if (variantMatches) {
+        return { account: candidate };
+      }
+    }
+  }
+
+  return {
+    error: `Account '${accountId}' not found for this provider`,
+  };
 }
 
 /**
@@ -787,7 +845,8 @@ router.post('/:provider/start', async (req: Request, res: Response): Promise<voi
       const tokenSnapshot = findNewTokenSnapshot(
         listProviderTokenSnapshots(localProvider),
         knownTokenFiles,
-        targetAccountId
+        targetAccountId,
+        reauthTarget.account?.tokenFile
       );
       if (!tokenSnapshot) {
         res.status(409).json({
@@ -1203,6 +1262,7 @@ router.post('/:provider/start-url', async (req: Request, res: Response): Promise
       rememberManualAuthState(oauthState, {
         nickname: effectiveNickname || undefined,
         expectedAccountId: targetAccountId,
+        expectedTokenFile: reauthTarget.account?.tokenFile,
         knownTokenFiles: listProviderTokenSnapshots(localProvider),
       });
     }

@@ -11,9 +11,19 @@ import { createHash } from 'crypto';
 import { CLIProxyProvider } from '../types';
 import { CLIPROXY_PROFILES } from '../../auth/profile-detector';
 import { getProviderAuthDir } from '../config/config-generator';
-import { getProviderAccounts, getDefaultAccount } from '../accounts/account-manager';
+import {
+  getProviderAccounts,
+  getDefaultAccount,
+  loadAccountsRegistry,
+} from '../accounts/account-manager';
 import { deleteTokenFile, extractAccountIdFromTokenFile } from '../accounts/token-file-ops';
-import { buildEmailBackedAccountId } from '../accounts/email-account-identity';
+import {
+  buildEmailBackedAccountId,
+  extractAccountVariantFromAccountId,
+  extractCanonicalEmailFromAccountId,
+  extractEmailAccountVariantKey,
+  supportsDuplicateEmailAccounts,
+} from '../accounts/email-account-identity';
 import { getTokenRefreshOwnership } from '../provider-capabilities';
 import {
   AuthStatus,
@@ -49,6 +59,9 @@ export type ProviderTokenSnapshot = {
   file: string;
   mtimeMs: number;
   accountId?: string;
+  email?: string;
+  variantAccountId?: string;
+  lastRefresh?: string;
   fingerprint?: string;
 };
 
@@ -58,12 +71,16 @@ type TokenCandidate = {
   email?: string;
   projectId?: string;
   accountId: string;
+  variantAccountId?: string;
+  lastRefresh?: string;
   mtimeMs: number;
   alreadyRegistered: boolean;
   fingerprint: string;
 };
 
-type RawTokenCandidate = Omit<TokenCandidate, 'accountId' | 'fingerprint'> & { content: string };
+type RawTokenCandidate = Omit<TokenCandidate, 'accountId' | 'variantAccountId' | 'fingerprint'> & {
+  content: string;
+};
 
 function buildTokenFingerprint(content: string): string {
   return createHash('sha256').update(content).digest('hex');
@@ -84,9 +101,17 @@ function listTokenCandidates(provider: CLIProxyProvider, tokenDir: string): Toke
     }
 
     const content = fs.readFileSync(filePath, 'utf-8');
-    const data = JSON.parse(content) as { email?: string; project_id?: string };
+    const data = JSON.parse(content) as {
+      email?: string;
+      project_id?: string;
+      last_refresh?: string;
+    };
     const email = data.email || undefined;
     const projectId = data.project_id || undefined;
+    const lastRefresh =
+      typeof data.last_refresh === 'string' && data.last_refresh.trim()
+        ? data.last_refresh.trim()
+        : undefined;
     const stats = fs.statSync(filePath);
 
     return [
@@ -96,6 +121,7 @@ function listTokenCandidates(provider: CLIProxyProvider, tokenDir: string): Toke
         content,
         email,
         projectId,
+        lastRefresh,
         mtimeMs: stats.mtimeMs,
         alreadyRegistered: existingAccounts.some((account) => account.tokenFile === file),
       },
@@ -135,10 +161,16 @@ function listTokenCandidates(provider: CLIProxyProvider, tokenDir: string): Toke
             duplicateEmailCount
           )
         : extractAccountIdFromTokenFile(rawCandidate.file, rawCandidate.email);
+      const variantAccountId =
+        rawCandidate.email && supportsDuplicateEmailAccounts(provider)
+          ? buildEmailBackedAccountId(provider, rawCandidate.file, rawCandidate.email, 2)
+          : undefined;
 
       return {
         ...rawCandidate,
         accountId,
+        variantAccountId:
+          variantAccountId && variantAccountId !== accountId ? variantAccountId : undefined,
         fingerprint: buildTokenFingerprint(rawCandidate.content),
       };
     })
@@ -153,40 +185,200 @@ export function listProviderTokenSnapshots(
     file: candidate.file,
     mtimeMs: candidate.mtimeMs,
     accountId: candidate.accountId,
+    ...(candidate.email ? { email: candidate.email } : {}),
+    ...(candidate.variantAccountId ? { variantAccountId: candidate.variantAccountId } : {}),
+    ...(candidate.lastRefresh ? { lastRefresh: candidate.lastRefresh } : {}),
     fingerprint: candidate.fingerprint,
   }));
+}
+
+function getSnapshotCanonicalEmail(snapshot: {
+  email?: string;
+  accountId?: string;
+}): string | null {
+  const directEmail = snapshot.email?.trim();
+  if (directEmail && directEmail.includes('@')) {
+    return directEmail;
+  }
+  return snapshot.accountId ? extractCanonicalEmailFromAccountId(snapshot.accountId) : null;
+}
+
+function isVariantCompatible(
+  snapshot: { file: string; accountId?: string; variantAccountId?: string },
+  expectedVariant: string | null,
+  canonicalEmail: string
+): boolean {
+  if (!expectedVariant) {
+    return true;
+  }
+
+  const normalizedExpected = expectedVariant.toLowerCase();
+  if (snapshot.variantAccountId) {
+    const snapshotVariant = extractAccountVariantFromAccountId(snapshot.variantAccountId);
+    return !snapshotVariant || snapshotVariant.toLowerCase() === normalizedExpected;
+  }
+
+  if (snapshot.accountId) {
+    const accountVariant = extractAccountVariantFromAccountId(snapshot.accountId);
+    if (accountVariant) {
+      return accountVariant.toLowerCase() === normalizedExpected;
+    }
+  }
+
+  for (const provider of ['claude', 'codex'] as const) {
+    if (snapshot.file.toLowerCase().startsWith(`${provider}-`)) {
+      const fileVariant = extractEmailAccountVariantKey(provider, snapshot.file, canonicalEmail);
+      if (fileVariant) {
+        return fileVariant.toLowerCase() === normalizedExpected;
+      }
+    }
+  }
+
+  return true;
+}
+
+function matchesExpectedSnapshot<
+  T extends {
+    file: string;
+    accountId?: string;
+    email?: string;
+    variantAccountId?: string;
+  },
+>(
+  snapshot: T,
+  allSnapshots: readonly T[],
+  expectedAccountId?: string,
+  expectedTokenFile?: string
+): boolean {
+  if (expectedTokenFile && snapshot.file === expectedTokenFile) {
+    return true;
+  }
+
+  if (!expectedAccountId) {
+    return false;
+  }
+
+  if (
+    snapshot.file === expectedAccountId ||
+    snapshot.accountId === expectedAccountId ||
+    snapshot.variantAccountId === expectedAccountId
+  ) {
+    return true;
+  }
+
+  const expectedEmail = extractCanonicalEmailFromAccountId(expectedAccountId);
+  if (!expectedEmail) {
+    return false;
+  }
+
+  const normalizedExpectedEmail = expectedEmail.toLowerCase();
+  const snapshotEmail = getSnapshotCanonicalEmail(snapshot);
+  if (!snapshotEmail || snapshotEmail.toLowerCase() !== normalizedExpectedEmail) {
+    return false;
+  }
+
+  const sameEmailSnapshots = allSnapshots.filter(
+    (candidate) => getSnapshotCanonicalEmail(candidate)?.toLowerCase() === normalizedExpectedEmail
+  );
+  if (sameEmailSnapshots.length !== 1) {
+    return false;
+  }
+
+  return isVariantCompatible(
+    snapshot,
+    extractAccountVariantFromAccountId(expectedAccountId),
+    expectedEmail
+  );
+}
+
+function hasSnapshotChanged(current: ProviderTokenSnapshot, known: ProviderTokenSnapshot): boolean {
+  if (current.fingerprint !== known.fingerprint || current.mtimeMs !== known.mtimeMs) {
+    return true;
+  }
+  return current.lastRefresh !== undefined && current.lastRefresh !== known.lastRefresh;
+}
+
+function resolveExpectedTokenFile(
+  provider: CLIProxyProvider,
+  expectedAccountId: string
+): string | undefined {
+  const existingAccounts = getProviderAccounts(provider);
+  const directMatch = existingAccounts.find((account) => account.id === expectedAccountId);
+  if (directMatch) {
+    return directMatch.tokenFile;
+  }
+
+  const persistedAccount = loadAccountsRegistry().providers[provider]?.accounts[expectedAccountId];
+  if (persistedAccount) {
+    return persistedAccount.tokenFile;
+  }
+
+  const expectedEmail = extractCanonicalEmailFromAccountId(expectedAccountId);
+  if (!expectedEmail) {
+    return undefined;
+  }
+
+  const normalizedExpectedEmail = expectedEmail.toLowerCase();
+  const emailMatches = existingAccounts.filter((account) => {
+    const accountEmail =
+      account.email?.trim() || extractCanonicalEmailFromAccountId(account.id) || '';
+    return accountEmail.toLowerCase() === normalizedExpectedEmail;
+  });
+  if (emailMatches.length !== 1) {
+    return undefined;
+  }
+
+  const candidate = emailMatches[0];
+  const expectedVariant = extractAccountVariantFromAccountId(expectedAccountId);
+  return isVariantCompatible(
+    { file: candidate.tokenFile, accountId: candidate.id },
+    expectedVariant,
+    expectedEmail
+  )
+    ? candidate.tokenFile
+    : undefined;
 }
 
 export function findNewTokenSnapshot(
   currentTokenFiles: ProviderTokenSnapshot[],
   knownTokenFiles: ProviderTokenSnapshot[],
-  expectedAccountId?: string
+  expectedAccountId?: string,
+  expectedTokenFile?: string
 ): ProviderTokenSnapshot | null {
   const knownSnapshotsByFile = new Map(
     knownTokenFiles.map((snapshot) => [snapshot.file, snapshot])
   );
 
+  if (!expectedAccountId && !expectedTokenFile) {
+    const brandNewSnapshot = currentTokenFiles.find(
+      (snapshot) => !knownSnapshotsByFile.has(snapshot.file)
+    );
+    if (brandNewSnapshot) {
+      return brandNewSnapshot;
+    }
+
+    return (
+      currentTokenFiles.find((snapshot) => {
+        const knownSnapshot = knownSnapshotsByFile.get(snapshot.file);
+        return Boolean(knownSnapshot && hasSnapshotChanged(snapshot, knownSnapshot));
+      }) || null
+    );
+  }
+
   return (
     currentTokenFiles.find((snapshot) => {
-      const knownSnapshot = knownSnapshotsByFile.get(snapshot.file);
-      if (!expectedAccountId) {
-        return !knownSnapshot;
-      }
-
-      const matchesExpectedAccount =
-        snapshot.file === expectedAccountId || snapshot.accountId === expectedAccountId;
-      if (!matchesExpectedAccount) {
+      if (
+        !matchesExpectedSnapshot(snapshot, currentTokenFiles, expectedAccountId, expectedTokenFile)
+      ) {
         return false;
       }
 
+      const knownSnapshot = knownSnapshotsByFile.get(snapshot.file);
       if (!knownSnapshot) {
         return true;
       }
 
-      return (
-        snapshot.fingerprint !== knownSnapshot.fingerprint ||
-        snapshot.mtimeMs !== knownSnapshot.mtimeMs
-      );
+      return hasSnapshotChanged(snapshot, knownSnapshot);
     }) || null
   );
 }
@@ -195,12 +387,18 @@ export function findNewTokenSnapshotForAuthAttempt(
   provider: CLIProxyProvider,
   tokenDir: string,
   knownTokenFiles: ProviderTokenSnapshot[],
-  expectedAccountId?: string
+  expectedAccountId?: string,
+  expectedTokenFile?: string
 ): ProviderTokenSnapshot | null {
+  const resolvedTokenFile =
+    expectedTokenFile ||
+    (expectedAccountId ? resolveExpectedTokenFile(provider, expectedAccountId) : undefined);
+
   return findNewTokenSnapshot(
     listProviderTokenSnapshots(provider, tokenDir),
     knownTokenFiles,
-    expectedAccountId
+    expectedAccountId,
+    resolvedTokenFile
   );
 }
 
@@ -372,18 +570,15 @@ export function registerAccountFromToken(
   let selectedCandidate: Omit<TokenCandidate, 'mtimeMs'> | null = null;
   try {
     const candidates = listTokenCandidates(provider, tokenDir);
-    const existingAccounts = getProviderAccounts(provider);
 
     if (expectedAccountId) {
+      const expectedTokenFile = resolveExpectedTokenFile(provider, expectedAccountId);
       selectedCandidate =
         candidates.find((candidate) => candidate.accountId === expectedAccountId) ||
         candidates.find((candidate) => candidate.file === expectedAccountId) ||
-        candidates.find((candidate) => {
-          const existingAccount = existingAccounts.find(
-            (account) => account.id === expectedAccountId
-          );
-          return !!existingAccount && existingAccount.tokenFile === candidate.file;
-        }) ||
+        candidates.find((candidate) =>
+          matchesExpectedSnapshot(candidate, candidates, expectedAccountId, expectedTokenFile)
+        ) ||
         null;
     } else {
       selectedCandidate = candidates[0] || null;

@@ -43,7 +43,6 @@ import {
   isDeprecatedGlmtProfileName,
   normalizeDeprecatedGlmtEnv,
 } from '../../utils/glmt-deprecation';
-import { createOpenAICompatLaunchSettings } from '../../utils/openai-compat-launch-settings';
 import {
   isClaudeSubcommandInvocation,
   stripClaudeSubcommandSessionArgs,
@@ -54,11 +53,8 @@ import {
   type TargetCredentials,
 } from '../../targets';
 import { resolveCliproxyBridgeMetadata } from '../../api/services/cliproxy-profile-bridge';
-import {
-  buildOpenAICompatProxyEnv,
-  resolveOpenAICompatProfileConfig,
-  startOpenAICompatProxy,
-} from '../../proxy';
+import { ConfigError } from '../../errors/error-types';
+import { prepareOpenAICompatLaunch } from './openai-compat-launch';
 import { resolveSettingsImageAnalysisEnv } from './settings-image-analysis-prep';
 import type { ProfileDispatchContext } from '../dispatcher-context';
 
@@ -132,7 +128,7 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
     inheritedClaudeConfigDir &&
     !syncBrowserMcpToConfigDir(inheritedClaudeConfigDir)
   ) {
-    throw new Error(
+    throw new ConfigError(
       'Browser MCP is enabled, but CCS could not sync the browser MCP config into the inherited Claude instance.'
     );
   }
@@ -352,64 +348,31 @@ export async function runSettingsFlow(ctx: ProfileDispatchContext): Promise<void
   const browserArgs = browserRuntimeEnv
     ? appendBrowserToolArgs(imageAnalysisArgs)
     : imageAnalysisArgs;
-  const openAICompatProfile = resolveOpenAICompatProfileConfig(
-    profileInfo.name,
-    expandedSettingsPath,
-    settingsEnv
-  );
-  if (openAICompatProfile) {
-    const proxyStart = await startOpenAICompatProxy(openAICompatProfile, {
-      insecure: openAICompatProfile.insecure,
-    });
-    if (!proxyStart.success) {
-      process.stderr.write(
-        String(fail(proxyStart.error || 'Failed to start local OpenAI-compatible proxy')) + '\n'
-      );
-      process.exit(1);
-    }
-
-    process.stderr.write(
-      String(
-        info(
-          `Using local OpenAI-compatible proxy for "${profileInfo.name}" on port ${proxyStart.port}`
-        )
-      ) + '\n'
-    );
-
-    const proxyEnv = {
-      ...envVars,
-      ...buildOpenAICompatProxyEnv(
-        openAICompatProfile,
-        proxyStart.port,
-        proxyStart.authToken || '',
-        inheritedClaudeConfigDir
-      ),
-    };
-    delete proxyEnv.ANTHROPIC_API_KEY;
-
-    // Claude subcommands reject `--settings` (it flips `agents` to list mode).
-    // Routing env vars still flow via proxyEnv. Issue #1218.
-    const isSubcommand = isClaudeSubcommandInvocation(browserArgs);
-    const subcommandArgs = isSubcommand
-      ? stripClaudeSubcommandSessionArgs(browserArgs)
-      : browserArgs;
-
-    const launchSettings = isSubcommand
-      ? { settingsPath: expandedSettingsPath, cleanup: () => {} }
-      : createOpenAICompatLaunchSettings(expandedSettingsPath, settings, { durable: true });
-
-    const launchArgs = isSubcommand
-      ? withWebSearchArgs(subcommandArgs)
-      : ['--settings', launchSettings.settingsPath, ...withWebSearchArgs(browserArgs)];
+  const openAICompatLaunch = await prepareOpenAICompatLaunch({
+    profileName: profileInfo.name,
+    settingsPath: expandedSettingsPath,
+    settings,
+    settingsEnv,
+    baseEnv: envVars,
+    claudeConfigDir: inheritedClaudeConfigDir,
+    args: browserArgs,
+    transformArgs: withWebSearchArgs,
+  });
+  if (openAICompatLaunch) {
     const traceEnv = createWebSearchTraceContext({
       launcher: 'ccs.settings-profile.proxy',
-      args: launchArgs,
+      args: openAICompatLaunch.launchArgs,
       profile: profileInfo.name,
       profileType: profileInfo.type,
       settingsPath: expandedSettingsPath,
     });
 
-    execClaude(claudeCli, launchArgs, { ...proxyEnv, ...traceEnv }, launchSettings.cleanup);
+    execClaude(
+      claudeCli,
+      openAICompatLaunch.launchArgs,
+      { ...openAICompatLaunch.envVars, ...traceEnv },
+      openAICompatLaunch.cleanup
+    );
     return;
   }
 
