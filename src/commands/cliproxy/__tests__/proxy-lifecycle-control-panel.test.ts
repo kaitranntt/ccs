@@ -74,7 +74,7 @@ describe('printControlPanelAccess', () => {
   it('masks a custom management_secret when configured', () => {
     mutateConfig((config) => {
       if (!config.cliproxy) {
-        config.cliproxy = {};
+        config.cliproxy = {} as never;
       }
       if (!config.cliproxy.auth) {
         config.cliproxy.auth = {};

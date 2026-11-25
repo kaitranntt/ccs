@@ -209,7 +209,10 @@ describe('resolvePoolState - drain order', () => {
         now: 1_000_000,
       });
       expect(pool.drainOrder.order).toEqual(['a@x.com']);
-      expect(pool.states.map((s) => s.accountId).sort()).toEqual(['a@x.com', 'b@x.com']);
+      expect(pool.states.map((s: { accountId: string }) => s.accountId).sort()).toEqual([
+        'a@x.com',
+        'b@x.com',
+      ]);
     });
   });
 
@@ -378,7 +381,7 @@ describe('resolvePoolStateWithProxyCooldowns - fetch + degradation', () => {
       globalThis.fetch = (async () => {
         fetched = true;
         return new Response('{}', { status: 200 });
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
       try {
         const pool = await resolvePoolStateWithProxyCooldowns({
           provider: 'claude',
@@ -403,7 +406,7 @@ describe('resolvePoolStateWithProxyCooldowns - fetch + degradation', () => {
       globalThis.fetch = (async () => {
         fetched = true;
         return new Response('{}', { status: 200 });
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
       try {
         const pool = await resolvePoolStateWithProxyCooldowns({
           provider: 'claude',

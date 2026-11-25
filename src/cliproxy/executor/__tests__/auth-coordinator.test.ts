@@ -11,7 +11,7 @@
  *   jest.mock() from the coordinator's perspective (relative to executor/)
  */
 
-import { afterEach, beforeEach, describe, expect, it, jest } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import type { ExecutorConfig } from '../../types';
 import type { UnifiedConfig } from '../../../config/schemas/unified-config';
 import type { AuthCoordinationContext } from '../auth-coordinator';
@@ -19,51 +19,51 @@ import type { ParsedExecutorFlags } from '../arg-parser';
 
 // ── Module mocks (must be top-level, before any import of subject) ────────────
 
-const mockIsAuthenticated = jest.fn(() => false);
-const mockClearAuth = jest.fn(() => true);
-const mockTriggerOAuth = jest.fn(async () => true);
+const mockIsAuthenticated = mock((..._args: unknown[]) => false);
+const mockClearAuth = mock((..._args: unknown[]) => true);
+const mockTriggerOAuth = mock(async (..._args: unknown[]) => true);
 
-jest.mock('../../auth/auth-handler', () => ({
+mock.module('../../auth/auth-handler', () => ({
   isAuthenticated: (...args: unknown[]) => mockIsAuthenticated(...args),
   clearAuth: (...args: unknown[]) => mockClearAuth(...args),
   triggerOAuth: (...args: unknown[]) => mockTriggerOAuth(...args),
 }));
 
-const mockEnsureAntigravity = jest.fn(async () => true);
+const mockEnsureAntigravity = mock(async (..._args: unknown[]) => true);
 const MOCK_ANTIGRAVITY_FLAGS = ['--accept-agr-risk', '--accept-antigravity-risk'];
 
-jest.mock('../../auth/antigravity-responsibility', () => ({
+mock.module('../../auth/antigravity-responsibility', () => ({
   ensureCliAntigravityResponsibility: (...args: unknown[]) => mockEnsureAntigravity(...args),
   ANTIGRAVITY_ACCEPT_RISK_FLAGS: MOCK_ANTIGRAVITY_FLAGS,
 }));
 
-const mockHandleTokenExpiration = jest.fn(async () => {});
-const mockHandleQuotaCheck = jest.fn(async () => {});
+const mockHandleTokenExpiration = mock(async (..._args: unknown[]) => {});
+const mockHandleQuotaCheck = mock(async (..._args: unknown[]) => {});
 
-jest.mock('../retry-handler', () => ({
+mock.module('../retry-handler', () => ({
   handleTokenExpiration: (...args: unknown[]) => mockHandleTokenExpiration(...args),
   handleQuotaCheck: (...args: unknown[]) => mockHandleQuotaCheck(...args),
 }));
 
-const mockApplyAccountSafetyGuards = jest.fn(() => {});
-const mockTouchDefaultAccount = jest.fn(() => {});
+const mockApplyAccountSafetyGuards = mock((..._args: unknown[]) => {});
+const mockTouchDefaultAccount = mock((..._args: unknown[]) => {});
 
-jest.mock('../account-resolution', () => ({
+mock.module('../account-resolution', () => ({
   applyAccountSafetyGuards: (...args: unknown[]) => mockApplyAccountSafetyGuards(...args),
   touchDefaultAccount: (...args: unknown[]) => mockTouchDefaultAccount(...args),
 }));
 
-const mockConfigureProviderModel = jest.fn(async () => {});
-const mockGetCurrentModel = jest.fn(() => 'claude-opus');
+const mockConfigureProviderModel = mock(async (..._args: unknown[]) => {});
+const mockGetCurrentModel = mock((..._args: unknown[]) => 'claude-opus');
 
-jest.mock('../../config/model-config', () => ({
+mock.module('../../config/model-config', () => ({
   configureProviderModel: (...args: unknown[]) => mockConfigureProviderModel(...args),
   getCurrentModel: (...args: unknown[]) => mockGetCurrentModel(...args),
 }));
 
-const mockReconcileCodexModel = jest.fn(async () => {});
+const mockReconcileCodexModel = mock(async (..._args: unknown[]) => {});
 
-jest.mock('../../ai-providers/codex-plan-compatibility', () => ({
+mock.module('../../ai-providers/codex-plan-compatibility', () => ({
   reconcileCodexModelForActivePlan: (...args: unknown[]) => mockReconcileCodexModel(...args),
 }));
 
@@ -85,6 +85,20 @@ const {
 } = await import('../auth-coordinator');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function clearAllMocks(): void {
+  mockIsAuthenticated.mockClear();
+  mockClearAuth.mockClear();
+  mockTriggerOAuth.mockClear();
+  mockEnsureAntigravity.mockClear();
+  mockHandleTokenExpiration.mockClear();
+  mockHandleQuotaCheck.mockClear();
+  mockApplyAccountSafetyGuards.mockClear();
+  mockTouchDefaultAccount.mockClear();
+  mockConfigureProviderModel.mockClear();
+  mockGetCurrentModel.mockClear();
+  mockReconcileCodexModel.mockClear();
+}
 
 function makeFlags(overrides: Partial<Record<string, unknown>> = {}): ParsedExecutorFlags {
   return {
@@ -156,13 +170,11 @@ describe('resolveSkipLocalAuth', () => {
 // ── handleLogout ──────────────────────────────────────────────────────────────
 
 describe('handleLogout', () => {
-  let exitSpy: ReturnType<typeof jest.spyOn>;
+  let exitSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    exitSpy = jest
-      .spyOn(process, 'exit')
-      .mockImplementation((() => undefined) as typeof process.exit);
+    clearAllMocks();
+    exitSpy = spyOn(process, 'exit').mockImplementation((() => undefined) as typeof process.exit);
   });
 
   afterEach(() => {
@@ -191,14 +203,12 @@ describe('handleLogout', () => {
 // ── handleImport ──────────────────────────────────────────────────────────────
 
 describe('handleImport', () => {
-  let exitSpy: ReturnType<typeof jest.spyOn>;
+  let exitSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    clearAllMocks();
     mockTriggerOAuth.mockResolvedValue(true);
-    exitSpy = jest
-      .spyOn(process, 'exit')
-      .mockImplementation((() => undefined) as typeof process.exit);
+    exitSpy = spyOn(process, 'exit').mockImplementation((() => undefined) as typeof process.exit);
   });
 
   afterEach(() => {
@@ -255,15 +265,13 @@ describe('handleImport', () => {
 // ── runAntigravityGate ────────────────────────────────────────────────────────
 
 describe('runAntigravityGate', () => {
-  let exitSpy: ReturnType<typeof jest.spyOn>;
+  let exitSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    clearAllMocks();
     mockEnsureAntigravity.mockResolvedValue(true);
     mockIsAuthenticated.mockReturnValue(false);
-    exitSpy = jest
-      .spyOn(process, 'exit')
-      .mockImplementation((() => undefined) as typeof process.exit);
+    exitSpy = spyOn(process, 'exit').mockImplementation((() => undefined) as typeof process.exit);
   });
 
   afterEach(() => {
@@ -314,17 +322,15 @@ describe('runAntigravityGate', () => {
 // ── ensureProviderAuthentication ──────────────────────────────────────────────
 
 describe('ensureProviderAuthentication', () => {
-  let exitSpy: ReturnType<typeof jest.spyOn>;
+  let exitSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    clearAllMocks();
     mockIsAuthenticated.mockReturnValue(false);
     mockTriggerOAuth.mockResolvedValue(true);
     mockHandleTokenExpiration.mockResolvedValue(undefined);
     mockTouchDefaultAccount.mockImplementation(() => {});
-    exitSpy = jest
-      .spyOn(process, 'exit')
-      .mockImplementation((() => undefined) as typeof process.exit);
+    exitSpy = spyOn(process, 'exit').mockImplementation((() => undefined) as typeof process.exit);
   });
 
   afterEach(() => {
@@ -421,7 +427,7 @@ describe('ensureProviderAuthentication', () => {
 // ── runPreflightQuotaCheck ────────────────────────────────────────────────────
 
 describe('runPreflightQuotaCheck', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => clearAllMocks());
 
   it('single provider → handleQuotaCheck called once with that provider', async () => {
     await runPreflightQuotaCheck('gemini', []);
@@ -441,7 +447,7 @@ describe('runPreflightQuotaCheck', () => {
 // ── runAccountSafetyGuards ────────────────────────────────────────────────────
 
 describe('runAccountSafetyGuards', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => clearAllMocks());
 
   it('delegates to applyAccountSafetyGuards with correct args', () => {
     runAccountSafetyGuards('gemini', ['codex']);
@@ -452,7 +458,7 @@ describe('runAccountSafetyGuards', () => {
 // ── ensureModelConfiguration ──────────────────────────────────────────────────
 
 describe('ensureModelConfiguration', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => clearAllMocks());
 
   it('non-composite provider with model support → configureProviderModel called', async () => {
     const cfg = { isComposite: false, customSettingsPath: undefined } as ExecutorConfig;

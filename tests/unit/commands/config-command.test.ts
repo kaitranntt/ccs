@@ -19,9 +19,9 @@ type ConfigCommandDeps = NonNullable<Parameters<typeof handleConfigCommand>[1]>;
 
 function createTestDeps(): ConfigCommandDeps {
   return {
-    getPort: async () => 3000,
-    openBrowser: async () => undefined,
-    startServer: async (options) => {
+    getPort: (async () => 3000) as unknown as ConfigCommandDeps['getPort'],
+    openBrowser: (async () => undefined) as unknown as ConfigCommandDeps['openBrowser'],
+    startServer: (async (options: Parameters<NonNullable<ConfigCommandDeps['startServer']>>[0]) => {
       startServerCalls.push({ ...options });
       if (startServerError) {
         throw startServerError;
@@ -33,7 +33,7 @@ function createTestDeps(): ConfigCommandDeps {
         wss: {} as never,
         cleanup: () => {},
       };
-    },
+    }) as unknown as ConfigCommandDeps['startServer'],
     setupGracefulShutdown: () => {},
     ensureCliproxyService: async () => ({
       started: true,

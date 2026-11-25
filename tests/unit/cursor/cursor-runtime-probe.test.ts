@@ -91,7 +91,7 @@ describe('probeCursorRuntime', () => {
 
     await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', () => resolve()));
 
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input);
 
       if (url.startsWith('https://api2.cursor.sh')) {

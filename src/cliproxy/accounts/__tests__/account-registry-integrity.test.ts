@@ -429,7 +429,7 @@ describe('account registry integrity', () => {
       const { getProviderAccounts } = await loadAccountManager();
       expect(
         getProviderAccounts('claude')
-          .map((account) => [account.id, account.isDefault])
+          .map((account: any) => [account.id, account.isDefault])
           .sort()
       ).toEqual([
         ['dev@example.com#a1b2c3d4', false],
@@ -483,7 +483,12 @@ describe('account registry integrity', () => {
       const { getProviderAccounts } = await loadAccountManager();
       const describeAccounts = () =>
         getProviderAccounts('claude')
-          .map((account) => [account.id, account.tokenFile, account.nickname, !!account.paused])
+          .map((account: any) => [
+            account.id,
+            account.tokenFile,
+            account.nickname,
+            !!account.paused,
+          ])
           .sort();
       discoverExistingAccounts();
 

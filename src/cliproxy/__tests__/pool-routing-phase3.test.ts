@@ -22,7 +22,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
 
 // Static imports for modules that need spyOn to work across the same module instance.
 // Dynamic cache-bust imports create new module instances, making spyOn ineffective
@@ -86,7 +86,7 @@ describe('Phase 3: Pool Routing — schema keys and generator snapshots', () => 
     });
 
     it('pool_routing.max_retry_credentials can be set and read back', async () => {
-      const { loadOrCreateUnifiedConfig, mutateConfig, invalidateConfigCache } = await import(
+      const { mutateConfig, invalidateConfigCache, loadOrCreateUnifiedConfig } = await import(
         `../../config/config-loader-facade?p3retry=${Date.now()}`
       );
       mutateConfig((cfg: { cliproxy?: { pool_routing?: Record<string, unknown> } }) => {
@@ -352,7 +352,7 @@ describe('Phase 3: enablePoolRouting and disablePoolRouting', () => {
   });
 
   it('hasExplicitRoutingStrategy returns true for fill-first (user-set)', async () => {
-    const { loadOrCreateUnifiedConfig, mutateConfig, invalidateConfigCache } = await import(
+    const { mutateConfig, invalidateConfigCache } = await import(
       `../../config/config-loader-facade?p3explicit2=${Date.now()}`
     );
     mutateConfig((cfg: { cliproxy?: { routing?: Record<string, unknown> } }) => {

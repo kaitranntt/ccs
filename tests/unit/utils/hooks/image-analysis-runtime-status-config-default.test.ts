@@ -83,7 +83,7 @@ describe('resolveImageAnalysisRuntimeStatus config default', () => {
       undefined,
       {
         checkRemoteProxy: async () => ({ reachable: true }),
-        fetchRemoteAuthStatus: async () => [{ provider: 'claude', authenticated: true }],
+        fetchRemoteAuthStatus: (async () => [{ provider: 'claude', authenticated: true }]) as never,
         getProxyTarget: () => ({
           host: '100.64.0.1',
           port: 8317,

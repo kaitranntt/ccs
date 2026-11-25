@@ -45,7 +45,7 @@ describe('remote-auth-fetcher', () => {
           }
         )
       );
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const result = await fetchRemoteAuthStatus(remoteTarget);
 

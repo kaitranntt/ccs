@@ -100,11 +100,11 @@ describe('computeManualDrainOrder', () => {
       { accountId: 'c@x.com', tokenFile: 'c.json' },
     ];
     const entries = computeManualDrainOrder(['a@x.com', 'b@x.com', 'c@x.com'], accounts);
-    const byId = new Map(
+    const byId = new Map<string, number>(
       entries.map((e: { accountId: string; priority: number }) => [e.accountId, e.priority])
     );
-    expect(byId.get('a@x.com')).toBeGreaterThan(byId.get('b@x.com'));
-    expect(byId.get('b@x.com')).toBeGreaterThan(byId.get('c@x.com'));
+    expect(byId.get('a@x.com')).toBeGreaterThan(byId.get('b@x.com') as number);
+    expect(byId.get('b@x.com')).toBeGreaterThan(byId.get('c@x.com') as number);
     expect(byId.get('c@x.com')).toBeGreaterThanOrEqual(1);
   });
 
@@ -185,11 +185,11 @@ describe('computeTierDrainOrder', () => {
       { accountId: 'pro@x.com', tokenFile: 'pro.json', tier: 'pro' as const },
     ];
     const entries = computeTierDrainOrder(accounts);
-    const byId = new Map(
+    const byId = new Map<string, number>(
       entries.map((e: { accountId: string; priority: number }) => [e.accountId, e.priority])
     );
-    expect(byId.get('ultra@x.com')).toBeGreaterThan(byId.get('pro@x.com'));
-    expect(byId.get('pro@x.com')).toBeGreaterThan(byId.get('free@x.com'));
+    expect(byId.get('ultra@x.com')).toBeGreaterThan(byId.get('pro@x.com') as number);
+    expect(byId.get('pro@x.com')).toBeGreaterThan(byId.get('free@x.com') as number);
     expect(byId.get('free@x.com')).toBeGreaterThanOrEqual(1);
   });
 
@@ -799,12 +799,12 @@ describe('clearDrainOrderPriorities - management API path (proxy running)', () =
 
       const calls: Array<{ url: string; body: unknown }> = [];
       const originalFetch = globalThis.fetch;
-      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
         const url =
           typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
         calls.push({ url, body: JSON.parse(String(init?.body ?? '{}')) });
         return new Response('{}', { status: 200 });
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       try {
         const { clearDrainOrderPriorities } = await loadDrainOrder();
@@ -832,7 +832,8 @@ describe('clearDrainOrderPriorities - management API path (proxy running)', () =
       writeAuthFile(authDir, 'a.json', { email: 'a@x.com', priority: 3 });
 
       const originalFetch = globalThis.fetch;
-      globalThis.fetch = (async () => new Response('nope', { status: 500 })) as typeof fetch;
+      globalThis.fetch = (async () =>
+        new Response('nope', { status: 500 })) as unknown as typeof fetch;
 
       try {
         const { clearDrainOrderPriorities } = await loadDrainOrder();
@@ -866,7 +867,7 @@ describe('fetchProxyAuthCooldowns', () => {
             ],
           }),
           { status: 200 }
-        )) as typeof fetch;
+        )) as unknown as typeof fetch;
 
       try {
         const { fetchProxyAuthCooldowns } = await loadDrainOrder();
@@ -894,7 +895,8 @@ describe('fetchProxyAuthCooldowns', () => {
   it('degrades silently to [] on a non-ok response', async () => {
     await withIsolatedHome(async () => {
       const originalFetch = globalThis.fetch;
-      globalThis.fetch = (async () => new Response('err', { status: 404 })) as typeof fetch;
+      globalThis.fetch = (async () =>
+        new Response('err', { status: 404 })) as unknown as typeof fetch;
       try {
         const { fetchProxyAuthCooldowns } = await loadDrainOrder();
         expect(await fetchProxyAuthCooldowns()).toEqual([]);
@@ -909,7 +911,7 @@ describe('fetchProxyAuthCooldowns', () => {
       const originalFetch = globalThis.fetch;
       globalThis.fetch = (async () => {
         throw new TypeError('network down');
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
       try {
         const { fetchProxyAuthCooldowns } = await loadDrainOrder();
         expect(await fetchProxyAuthCooldowns()).toEqual([]);
@@ -923,7 +925,9 @@ describe('fetchProxyAuthCooldowns', () => {
     await withIsolatedHome(async () => {
       const originalFetch = globalThis.fetch;
       globalThis.fetch = (async () =>
-        new Response(JSON.stringify({ unexpected: 'shape' }), { status: 200 })) as typeof fetch;
+        new Response(JSON.stringify({ unexpected: 'shape' }), {
+          status: 200,
+        })) as unknown as typeof fetch;
       try {
         const { fetchProxyAuthCooldowns } = await loadDrainOrder();
         expect(await fetchProxyAuthCooldowns()).toEqual([]);

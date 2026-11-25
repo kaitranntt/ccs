@@ -341,7 +341,7 @@ describe('cleanupStaleAutoPauses', () => {
 
     cleanupStaleAutoPauses();
 
-    const data = readAutoPaused();
+    const data = readAutoPaused() as { sessions: Array<{ initiator?: string; pid?: number }> };
     expect(data.sessions.length).toBe(0);
   });
 
@@ -430,7 +430,7 @@ describe('enforceProviderIsolation', () => {
     expect(result).toBe(1);
 
     // Verify auto-paused.json was written
-    const data = readAutoPaused();
+    const data = readAutoPaused() as { sessions: Array<{ initiator: string; pid: number }> };
     expect(data.sessions.length).toBe(1);
     expect(data.sessions[0].initiator).toBe('gemini');
     expect(data.sessions[0].pid).toBe(process.pid);

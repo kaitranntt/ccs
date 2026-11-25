@@ -90,10 +90,12 @@ describe('image-analysis routes', () => {
 
     mutateUnifiedConfig((config) => {
       config.profiles.glm = {
+        type: 'api',
         settings: glmSettingsPath,
         target: 'claude',
       };
       config.profiles.codexProfile = {
+        type: 'api',
         settings: codexSettingsPath,
         target: 'droid',
       };
@@ -143,7 +145,7 @@ describe('image-analysis routes', () => {
   it('returns global settings, backend readiness, and profile coverage', async () => {
     const response = await fetch(`${baseUrl}/api/image-analysis`);
     expect(response.status).toBe(200);
-    const payload = await response.json();
+    const payload = (await response.json()) as Record<string, any>;
 
     expect(payload.config).toMatchObject({
       enabled: true,
@@ -259,7 +261,7 @@ describe('image-analysis routes', () => {
     });
 
     expect(response.status).toBe(200);
-    const payload = await response.json();
+    const payload = (await response.json()) as Record<string, any>;
     expect(payload.config).toMatchObject({
       timeout: 120,
       fallbackBackend: 'ghcp',
@@ -361,7 +363,7 @@ describe('image-analysis routes', () => {
 
     const getResponse = await fetch(`${baseUrl}/api/image-analysis`);
     expect(getResponse.status).toBe(200);
-    const payload = await getResponse.json();
+    const payload = (await getResponse.json()) as Record<string, any>;
     expect(payload.config.providerModels).toMatchObject({
       gemini: 'gemini-3-flash-preview',
       ghcp: 'claude-haiku-4.5',

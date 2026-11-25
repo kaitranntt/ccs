@@ -5,54 +5,58 @@
  * logic extracted from executor/index.ts.
  */
 
-import { afterEach, beforeEach, describe, expect, it, jest } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { ResolveExecutorProxyContext } from '../proxy-resolver';
 import type { ExecutorConfig } from '../../types';
 import type { UnifiedConfig } from '../../../config/schemas/unified-config';
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
-const mockEnsureCLIProxyBinary = jest.fn().mockResolvedValue('/usr/local/bin/cliproxy');
-const mockGetConfiguredBackend = jest.fn().mockReturnValue('original');
-const mockGetPlusBackendUnavailableMessage = jest.fn().mockReturnValue('Plus backend unavailable');
-const mockInstallCliproxyVersion = jest.fn().mockResolvedValue(undefined);
-const mockFetchLatestCliproxyVersion = jest.fn().mockResolvedValue('test-version');
-const mockCheckCliproxyUpdate = jest.fn().mockResolvedValue({ available: false });
+const mockEnsureCLIProxyBinary = mock(async () => '/usr/local/bin/cliproxy');
+const mockGetConfiguredBackend = mock(() => 'original');
+const mockGetPlusBackendUnavailableMessage = mock(() => 'Plus backend unavailable');
+const mockInstallCliproxyVersion = mock(async () => undefined);
+const mockFetchLatestCliproxyVersion = mock(async () => 'test-version');
+const mockCheckCliproxyUpdate = mock(async () => ({ available: false }));
 
-jest.mock('../../binary-manager', () => ({
+mock.module('../../binary-manager', () => ({
   ensureCLIProxyBinary: mockEnsureCLIProxyBinary,
   getConfiguredBackend: mockGetConfiguredBackend,
   getPlusBackendUnavailableMessage: mockGetPlusBackendUnavailableMessage,
   getStoredConfiguredBackend: mockGetConfiguredBackend,
-  getCLIProxyPath: jest.fn().mockReturnValue('/usr/local/bin/cliproxy'),
-  getInstalledCliproxyVersion: jest.fn().mockReturnValue('test-version'),
-  isCLIProxyInstalled: jest.fn().mockReturnValue(true),
+  getCLIProxyPath: mock(() => '/usr/local/bin/cliproxy'),
+  getInstalledCliproxyVersion: mock(() => 'test-version'),
+  isCLIProxyInstalled: mock(() => true),
   resolveLocalBackend: mockGetConfiguredBackend,
-  syncPlusFallbackStateIfNeeded: jest.fn(),
+  syncPlusFallbackStateIfNeeded: mock(() => {}),
   installCliproxyVersion: mockInstallCliproxyVersion,
   fetchLatestCliproxyVersion: mockFetchLatestCliproxyVersion,
   checkCliproxyUpdate: mockCheckCliproxyUpdate,
-  getPinnedVersion: jest.fn().mockReturnValue(null),
-  savePinnedVersion: jest.fn(),
-  clearPinnedVersion: jest.fn(),
-  isVersionPinned: jest.fn().mockReturnValue(false),
-  getVersionPinPath: jest.fn().mockReturnValue('/tmp/cliproxy-version-pin'),
+  getPinnedVersion: mock(() => null),
+  savePinnedVersion: mock(() => {}),
+  clearPinnedVersion: mock(() => {}),
+  isVersionPinned: mock(() => false),
+  getVersionPinPath: mock(() => '/tmp/cliproxy-version-pin'),
   BinaryManager: class {},
 }));
 
-const mockCheckRemoteProxy = jest.fn();
-jest.mock('../../services/remote-proxy-client', () => ({
+const mockCheckRemoteProxy = mock(
+  async (): Promise<{ reachable: boolean; latencyMs?: number; error?: string }> => ({
+    reachable: true,
+  })
+);
+mock.module('../../services/remote-proxy-client', () => ({
   checkRemoteProxy: mockCheckRemoteProxy,
 }));
 
-jest.mock('../retry-handler', () => ({
-  isNetworkError: jest.fn().mockReturnValue(false),
-  handleNetworkError: jest.fn(),
-  handleTokenExpiration: jest.fn(),
-  handleQuotaCheck: jest.fn(),
+mock.module('../retry-handler', () => ({
+  isNetworkError: mock(() => false),
+  handleNetworkError: mock(() => {}),
+  handleTokenExpiration: mock(() => {}),
+  handleQuotaCheck: mock(() => {}),
   PROVIDER_ERROR_PATTERNS: [],
-  detectFailedTier: jest.fn().mockReturnValue(null),
-  isProviderError: jest.fn().mockReturnValue(false),
+  detectFailedTier: mock(() => null),
+  isProviderError: mock(() => false),
 }));
 
 // ── Import after mocks ────────────────────────────────────────────────────────
@@ -96,7 +100,7 @@ function makeContext(
     allProviders: ['gemini'],
     verbose: false,
     cfg: makeBaseCfg(),
-    log: jest.fn(),
+    log: mock(() => {}),
     ...overrides,
   };
 }
@@ -109,7 +113,13 @@ async function resolveProxyForTest(args: string[], context = makeContext()) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  mockEnsureCLIProxyBinary.mockClear();
+  mockGetConfiguredBackend.mockClear();
+  mockGetPlusBackendUnavailableMessage.mockClear();
+  mockInstallCliproxyVersion.mockClear();
+  mockFetchLatestCliproxyVersion.mockClear();
+  mockCheckCliproxyUpdate.mockClear();
+  mockCheckRemoteProxy.mockClear();
   proxyEnvSnapshot = Object.fromEntries(PROXY_ENV_KEYS.map((key) => [key, process.env[key]]));
   for (const key of PROXY_ENV_KEYS) {
     delete process.env[key];

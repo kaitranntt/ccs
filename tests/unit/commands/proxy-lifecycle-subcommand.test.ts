@@ -10,7 +10,7 @@ describe('resolveLifecyclePort', () => {
             port: 9456,
           },
         },
-      })
+      } as never)
     ).toBe(9456);
   });
 
@@ -22,7 +22,7 @@ describe('resolveLifecyclePort', () => {
             port: 70000,
           },
         },
-      })
+      } as never)
     ).toBe(CLIPROXY_DEFAULT_PORT);
   });
 

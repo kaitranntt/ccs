@@ -24,6 +24,7 @@ describe('push ci workflow', () => {
     expect(workflow).not.toContain('restore-keys:');
     expect(workflow).toContain("name: ${{ matrix.check.name }}");
     expect(workflow).toContain("cmd: 'bun run typecheck'");
+    expect(workflow).toContain("cmd: 'bun run typecheck:tests'");
     expect(workflow).toContain("cmd: 'bun run lint'");
     expect(workflow).toContain("cmd: 'bun run format:check'");
     expect(workflow).toContain('run: bun run build:all');

@@ -48,7 +48,7 @@ function reserveClosedPort(): number {
   });
   const { port } = server;
   server.stop(true);
-  return port;
+  return port as number;
 }
 
 async function waitForDevtoolsVersionEndpoint(port: string, timeoutMs = 5000): Promise<void> {

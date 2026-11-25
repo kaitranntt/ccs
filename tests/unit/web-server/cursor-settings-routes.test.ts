@@ -56,7 +56,7 @@ describe('Cursor Settings Routes Logic', () => {
     });
 
     it('validates valid object', () => {
-      const updates = { port: 4000 };
+      const updates: Partial<CursorConfig> = { port: 4000 };
       const isValid = !!(updates && typeof updates === 'object' && !Array.isArray(updates));
       expect(isValid).toBe(true);
     });
@@ -119,7 +119,7 @@ describe('Cursor Settings Routes Logic', () => {
   describe('PUT /settings whitelist merge pattern', () => {
     it('merges known fields only (ignores unknown)', () => {
       const config = loadOrCreateUnifiedConfig();
-      const updates = {
+      const updates: Partial<CursorConfig> & Record<string, unknown> = {
         port: 5000,
         malicious_key: 'should be ignored',
         another_unknown: true,
@@ -156,7 +156,7 @@ describe('Cursor Settings Routes Logic', () => {
       };
       saveUnifiedConfig(config);
 
-      const updates = { port: 4000 };
+      const updates: Partial<CursorConfig> = { port: 4000 };
       const cursorConfig: CursorConfig = {
         enabled: updates.enabled ?? config.cursor?.enabled ?? false,
         port: updates.port ?? config.cursor?.port ?? 3000,
@@ -187,7 +187,7 @@ describe('Cursor Settings Routes Logic', () => {
       };
       saveUnifiedConfig(config);
 
-      const updates = { auto_start: true };
+      const updates: Partial<CursorConfig> = { auto_start: true };
       const cursorConfig: CursorConfig = {
         enabled: updates.enabled ?? config.cursor?.enabled ?? false,
         port: updates.port ?? config.cursor?.port ?? 3000,
@@ -218,7 +218,7 @@ describe('Cursor Settings Routes Logic', () => {
       };
       saveUnifiedConfig(config);
 
-      const updates = { ghost_mode: true };
+      const updates: Partial<CursorConfig> = { ghost_mode: true };
       const cursorConfig: CursorConfig = {
         enabled: updates.enabled ?? config.cursor?.enabled ?? false,
         port: updates.port ?? config.cursor?.port ?? 3000,

@@ -28,7 +28,7 @@ describe('resolveProfileContinuityInheritance', () => {
           glm: 'pro',
         },
       },
-    } as ReturnType<typeof configLoader.loadOrCreateUnifiedConfig>);
+    } as unknown as ReturnType<typeof configLoader.loadOrCreateUnifiedConfig>);
 
     const ensureInstanceSpy = spyOn(InstanceManager.prototype, 'ensureInstance').mockResolvedValue(
       '/tmp/.ccs/instances/pro'
@@ -73,7 +73,7 @@ describe('resolveProfileContinuityInheritance', () => {
     spyOn(fs, 'existsSync').mockImplementation((filePath) => {
       return filePath === '/tmp/ccs-test-config.json';
     });
-    spyOn(fs, 'readFileSync').mockImplementation((filePath) => {
+    spyOn(fs, 'readFileSync').mockImplementation(((filePath: fs.PathOrFileDescriptor) => {
       if (filePath === '/tmp/ccs-test-config.json') {
         return JSON.stringify({
           continuity_inherit_from_account: {
@@ -82,7 +82,7 @@ describe('resolveProfileContinuityInheritance', () => {
         });
       }
       return '';
-    });
+    }) as unknown as typeof fs.readFileSync);
 
     spyOn(ProfileRegistry.prototype, 'getAllProfilesMerged').mockReturnValue({
       work: {
@@ -113,7 +113,7 @@ describe('resolveProfileContinuityInheritance', () => {
           glm: 'missing',
         },
       },
-    } as ReturnType<typeof configLoader.loadOrCreateUnifiedConfig>);
+    } as unknown as ReturnType<typeof configLoader.loadOrCreateUnifiedConfig>);
 
     spyOn(ProfileRegistry.prototype, 'getAllProfilesMerged').mockReturnValue({});
     const ensureInstanceSpy = spyOn(InstanceManager.prototype, 'ensureInstance');
@@ -137,7 +137,9 @@ describe('resolveProfileContinuityInheritance', () => {
     const existsSpy = spyOn(fs, 'existsSync').mockImplementation((filePath) => {
       return filePath === '/tmp/ccs-test-config.json';
     });
-    const readSpy = spyOn(fs, 'readFileSync').mockImplementation((filePath) => {
+    const readSpy = spyOn(fs, 'readFileSync').mockImplementation(((
+      filePath: fs.PathOrFileDescriptor
+    ) => {
       if (filePath === '/tmp/ccs-test-config.json') {
         return JSON.stringify({
           continuity_inherit_from_account: {
@@ -146,7 +148,7 @@ describe('resolveProfileContinuityInheritance', () => {
         });
       }
       return '';
-    });
+    }) as unknown as typeof fs.readFileSync);
 
     spyOn(ProfileRegistry.prototype, 'getAllProfilesMerged').mockReturnValue({});
     const ensureInstanceSpy = spyOn(InstanceManager.prototype, 'ensureInstance');
@@ -171,7 +173,7 @@ describe('resolveProfileContinuityInheritance', () => {
           default: 'pro',
         },
       },
-    } as ReturnType<typeof configLoader.loadOrCreateUnifiedConfig>);
+    } as unknown as ReturnType<typeof configLoader.loadOrCreateUnifiedConfig>);
     spyOn(ProfileRegistry.prototype, 'getAllProfilesMerged').mockReturnValue({
       pro: {
         type: 'account',
@@ -201,7 +203,7 @@ describe('resolveProfileContinuityInheritance', () => {
           glm: 'settings-profile',
         },
       },
-    } as ReturnType<typeof configLoader.loadOrCreateUnifiedConfig>);
+    } as unknown as ReturnType<typeof configLoader.loadOrCreateUnifiedConfig>);
 
     spyOn(ProfileRegistry.prototype, 'getAllProfilesMerged').mockReturnValue({
       'settings-profile': {
@@ -230,7 +232,7 @@ describe('resolveProfileContinuityInheritance', () => {
           kimi: 'pro',
         },
       },
-    } as ReturnType<typeof configLoader.loadOrCreateUnifiedConfig>);
+    } as unknown as ReturnType<typeof configLoader.loadOrCreateUnifiedConfig>);
 
     spyOn(ProfileRegistry.prototype, 'getAllProfilesMerged').mockReturnValue({
       pro: {
@@ -266,7 +268,7 @@ describe('resolveProfileContinuityInheritance', () => {
           glm: 'pro',
         },
       },
-    } as ReturnType<typeof configLoader.loadOrCreateUnifiedConfig>);
+    } as unknown as ReturnType<typeof configLoader.loadOrCreateUnifiedConfig>);
 
     const ensureInstanceSpy = spyOn(InstanceManager.prototype, 'ensureInstance').mockResolvedValue(
       '/tmp/.ccs/instances/pro'
@@ -305,7 +307,7 @@ describe('resolveProfileContinuityInheritance', () => {
           km: 'pro',
         },
       },
-    } as ReturnType<typeof configLoader.loadOrCreateUnifiedConfig>);
+    } as unknown as ReturnType<typeof configLoader.loadOrCreateUnifiedConfig>);
 
     const ensureInstanceSpy = spyOn(InstanceManager.prototype, 'ensureInstance');
 
@@ -328,7 +330,7 @@ describe('resolveProfileContinuityInheritance', () => {
     spyOn(fs, 'existsSync').mockImplementation((filePath) => {
       return filePath === '/tmp/ccs-test-config.json';
     });
-    spyOn(fs, 'readFileSync').mockImplementation((filePath) => {
+    spyOn(fs, 'readFileSync').mockImplementation(((filePath: fs.PathOrFileDescriptor) => {
       if (filePath === '/tmp/ccs-test-config.json') {
         return JSON.stringify({
           continuity_inherit_from_account: {
@@ -337,7 +339,7 @@ describe('resolveProfileContinuityInheritance', () => {
         });
       }
       return '';
-    });
+    }) as unknown as typeof fs.readFileSync);
 
     const ensureInstanceSpy = spyOn(InstanceManager.prototype, 'ensureInstance');
 
@@ -359,7 +361,7 @@ describe('resolveProfileContinuityInheritance', () => {
           glm: 'pro',
         },
       },
-    } as ReturnType<typeof configLoader.loadOrCreateUnifiedConfig>);
+    } as unknown as ReturnType<typeof configLoader.loadOrCreateUnifiedConfig>);
 
     spyOn(ProfileRegistry.prototype, 'getAllProfilesMerged').mockReturnValue({
       pro: {

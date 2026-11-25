@@ -209,7 +209,7 @@ describe('cliproxy routing routes', () => {
   it('returns and updates retry settings through the dedicated route', async () => {
     const readResponse = await fetch(`${baseUrl}/api/cliproxy/retry`);
     expect(readResponse.status).toBe(200);
-    expect((await readResponse.json()).request_retry).toBe(2);
+    expect(((await readResponse.json()) as { request_retry: number }).request_retry).toBe(2);
 
     const updateResponse = await fetch(`${baseUrl}/api/cliproxy/retry`, {
       method: 'PUT',

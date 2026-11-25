@@ -28,7 +28,7 @@ describe('CLIProxy user routing schema', () => {
     const merged = mergeWithDefaults({
       version: 14,
       cliproxy: configuredRouting,
-    } as Partial<UnifiedConfig>);
+    } as unknown as Partial<UnifiedConfig>);
     const serialized = yaml.load(generateYamlWithComments(merged)) as UnifiedConfig;
 
     expect(serialized.cliproxy.oauth_model_alias).toEqual(configuredRouting.oauth_model_alias);

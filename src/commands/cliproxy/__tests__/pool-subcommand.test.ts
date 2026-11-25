@@ -62,8 +62,8 @@ describe('handlePoolSubcommand', () => {
   it('refuses --enable on a remote target, sets exitCode 1, and does not flip the local flag', async () => {
     mutateConfig((cfg) => {
       cfg.cliproxy_server = {
-        remote: { enabled: true, host: '192.168.1.50', protocol: 'http' },
-      };
+        remote: { enabled: true, host: '192.168.1.50', protocol: 'http' } as any,
+      } as never;
     });
     invalidateSharedConfigCache();
 
@@ -92,8 +92,8 @@ describe('handlePoolSubcommand', () => {
   it('refuses --disable on a remote target without the enable-only manual snippet', async () => {
     mutateConfig((cfg) => {
       cfg.cliproxy_server = {
-        remote: { enabled: true, host: '192.168.1.50', protocol: 'http' },
-      };
+        remote: { enabled: true, host: '192.168.1.50', protocol: 'http' } as any,
+      } as never;
     });
     invalidateSharedConfigCache();
 
@@ -110,7 +110,7 @@ describe('handlePoolSubcommand', () => {
     // Configure a custom local lifecycle port. resolveLifecyclePort() must pick
     // it up so the regenerated file matches what the running proxy reads.
     mutateConfig((cfg) => {
-      cfg.cliproxy_server = { local: { port: 9000 } };
+      cfg.cliproxy_server = { local: { port: 9000 } } as never;
     });
     invalidateSharedConfigCache();
 

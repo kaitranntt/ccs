@@ -150,7 +150,8 @@ cliproxy:
     expect(settings.hooks.PreToolUse.length).toBe(1);
 
     const config = loadOrCreateUnifiedConfig();
-    expect(config.cliproxy?.variants?.demo?.provider).toBe('codex');
+    const demoVariant = config.cliproxy?.variants?.demo as { provider?: string } | undefined;
+    expect(demoVariant?.provider).toBe('codex');
   });
 
   it('preserves codex sonnet alias on model-only updates', () => {

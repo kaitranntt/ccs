@@ -87,13 +87,16 @@ describe('cleanup command', () => {
     fs.mkdirSync(archiveDir, { recursive: true });
 
     const originalReaddirSync = fs.readdirSync;
-    const readdirSpy = spyOn(fs, 'readdirSync').mockImplementation((dirPath, options) => {
+    const readdirSpy = spyOn(fs, 'readdirSync').mockImplementation(((
+      dirPath: fs.PathLike,
+      options?: unknown
+    ) => {
       if (String(dirPath) === archiveDir) {
         throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
       }
 
       return originalReaddirSync(dirPath, options as never);
-    });
+    }) as unknown as typeof fs.readdirSync);
     const logSpy = spyOn(console, 'log').mockImplementation(() => {});
 
     try {
@@ -117,13 +120,16 @@ describe('cleanup command', () => {
     fs.mkdirSync(cliproxyLogsDir, { recursive: true });
 
     const originalReaddirSync = fs.readdirSync;
-    const readdirSpy = spyOn(fs, 'readdirSync').mockImplementation((dirPath, options) => {
+    const readdirSpy = spyOn(fs, 'readdirSync').mockImplementation(((
+      dirPath: fs.PathLike,
+      options?: unknown
+    ) => {
       if (String(dirPath) === cliproxyLogsDir) {
         throw Object.assign(new Error('disk I/O failed'), { code: 'EIO' });
       }
 
       return originalReaddirSync(dirPath, options as never);
-    });
+    }) as unknown as typeof fs.readdirSync);
     const logSpy = spyOn(console, 'log').mockImplementation(() => {});
 
     try {
@@ -147,13 +153,16 @@ describe('cleanup command', () => {
     fs.mkdirSync(cliproxyLogsDir, { recursive: true });
 
     const originalLstatSync = fs.lstatSync;
-    const lstatSpy = spyOn(fs, 'lstatSync').mockImplementation((targetPath, options) => {
+    const lstatSpy = spyOn(fs, 'lstatSync').mockImplementation(((
+      targetPath: fs.PathLike,
+      options?: unknown
+    ) => {
       if (String(targetPath) === cliproxyLogsDir) {
         throw Object.assign(new Error('stat failed'), { code: 'EIO' });
       }
 
       return originalLstatSync(targetPath, options as never);
-    });
+    }) as unknown as typeof fs.lstatSync);
     const logSpy = spyOn(console, 'log').mockImplementation(() => {});
 
     try {

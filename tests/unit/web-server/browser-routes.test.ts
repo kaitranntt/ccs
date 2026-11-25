@@ -145,7 +145,7 @@ describe('browser routes', () => {
   it('returns the default browser config and status payload', async () => {
     const response = await fetch(`${baseUrl}/api/browser`);
     expect(response.status).toBe(200);
-    const payload = await response.json();
+    const payload = (await response.json()) as Record<string, any>;
 
     expect(payload.config).toMatchObject({
       claude: {
@@ -232,7 +232,7 @@ describe('browser routes', () => {
     });
 
     expect(response.status).toBe(200);
-    const payload = await response.json();
+    const payload = (await response.json()) as Record<string, any>;
     expect(payload.browser.config).toMatchObject({
       claude: {
         enabled: true,
@@ -301,7 +301,7 @@ describe('browser routes', () => {
     });
 
     expect(secondResponse.status).toBe(200);
-    const payload = await secondResponse.json();
+    const payload = (await secondResponse.json()) as Record<string, any>;
     expect(payload.browser.config.codex).toMatchObject({
       enabled: true,
       policy: 'auto',
@@ -344,7 +344,7 @@ describe('browser routes', () => {
     });
 
     expect(resetResponse.status).toBe(200);
-    const payload = await resetResponse.json();
+    const payload = (await resetResponse.json()) as Record<string, any>;
     expect(payload.browser.config.claude).toMatchObject({
       enabled: true,
       policy: 'manual',

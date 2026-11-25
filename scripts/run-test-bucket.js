@@ -61,6 +61,24 @@ const isolatedTests = new Set([
   'tests/unit/web-server/usage/account-attribution.test.ts',
 ]);
 
+// Patterns whose module/process mutations leak across files in a shared Bun process.
+const alwaysIsolatePatterns = [
+  /\bmock\.module\s*\(/,
+  /\bjest\.mock\s*\(/,
+  /\bspyOn\s*\(\s*process\s*,\s*['"`]exit['"`]/,
+];
+
+// Additional global/prototype/process-exit mutation patterns checked for src/ suites
+// that were previously blanket-isolated.
+const srcIsolatePatterns = [
+  /\bprocess\.exit\s*=/,
+  /\b(?:globalThis|global)\.[A-Za-z0-9_$]+\s*=/,
+  /\bspyOn\s*\(\s*(?:globalThis|global)\b/,
+  /\bObject\.defineProperty\s*\(\s*(?:globalThis|global|process)\b/,
+  /\.prototype\.[A-Za-z0-9_$]+\s*=/,
+  /\bspyOn\s*\([^)]*\.prototype\b/,
+];
+
 const filePattern = /(\.test\.(c|m)?[jt]s|\.spec\.(c|m)?[jt]s|-test\.(c|m)?[jt]s)$/;
 
 function collectFiles(dir, files = []) {
@@ -141,8 +159,20 @@ function getBunArgs(name, selected = selectBucket(name)) {
   return name === 'slow' ? ['test', '--max-concurrency=1', ...testPaths] : ['test', ...testPaths];
 }
 
+function hasPollutingMockUsage(relativePath) {
+  const source = fs.readFileSync(path.join(rootDir, relativePath), 'utf8');
+  if (alwaysIsolatePatterns.some((pattern) => pattern.test(source))) {
+    return true;
+  }
+
+  return (
+    relativePath.startsWith('src/') &&
+    srcIsolatePatterns.some((pattern) => pattern.test(source))
+  );
+}
+
 function shouldRunIsolated(file) {
-  return file.startsWith('src/') || isolatedTests.has(file) || !usesBunTestRunner(file);
+  return isolatedTests.has(file) || !usesBunTestRunner(file) || hasPollutingMockUsage(file);
 }
 
 function getBunRuns(name, selected = selectBucket(name)) {
@@ -352,6 +382,7 @@ module.exports = {
   toBunTestPath,
   getBunArgs,
   usesBunTestRunner,
+  hasPollutingMockUsage,
   shouldRunIsolated,
   getBunRuns,
   parseBunFileCount,

@@ -28,7 +28,7 @@ describe('Logger.stage()', () => {
       enabled: true,
       level: 'debug',
       redact: false,
-    };
+    } as typeof config.logging;
     saveUnifiedConfig(config);
     invalidateLoggingConfigCache();
   });

@@ -9,7 +9,7 @@
  * - Profile-based aggregation unaffected (backward compat)
  */
 
-import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import type {
   CliproxyUsageApiResponse,
   CliproxyManagementAuthFile,
@@ -103,7 +103,7 @@ const twoAccountResponse = makeResponse([
 
 // Fix #7/#13/#15: buildAuthIndexToAccountMap stores String(auth_index) keys only.
 // The map must use string keys so accountMap.get(String(detail.auth_index)) resolves correctly.
-const authFileMap: Map<number | string, string> = new Map([
+const authFileMap: Map<string, string> = new Map([
   ['0', 'alice@example.com'],
   ['1', 'bob@example.com'],
 ]);
@@ -136,7 +136,7 @@ describe('extractCliproxyUsageHistoryDetails with accountMap', () => {
     );
 
     // Use string key matching buildAuthIndexToAccountMap's String(auth_index) output
-    const partialMap: Map<number | string, string> = new Map([['0', 'alice@example.com']]);
+    const partialMap: Map<string, string> = new Map([['0', 'alice@example.com']]);
     const details = extractCliproxyUsageHistoryDetails(twoAccountResponse, partialMap);
 
     // auth_index 1 (bob) is not in the partial map — must be undefined, not 'old-source-b'
@@ -170,8 +170,8 @@ describe('extractCliproxyUsageHistoryDetails with accountMap', () => {
     const details = extractCliproxyUsageHistoryDetails(twoAccountResponse, authFileMap);
 
     for (const detail of details) {
-      expect((detail as Record<string, unknown>).source).toBeUndefined();
-      expect((detail as Record<string, unknown>).auth_index).toBeUndefined();
+      expect((detail as unknown as Record<string, unknown>).source).toBeUndefined();
+      expect((detail as unknown as Record<string, unknown>).auth_index).toBeUndefined();
     }
   });
 });
@@ -232,8 +232,6 @@ describe('getTodayCostByAccount', () => {
     const { getTodayCostByAccount } = await import(
       '../../../../src/web-server/usage/data-aggregator'
     );
-
-    const details = [];
 
     // Simulate alice's two requests today
     const { extractCliproxyUsageHistoryDetails } = await import(

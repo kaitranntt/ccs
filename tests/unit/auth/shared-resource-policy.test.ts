@@ -36,7 +36,7 @@ describe('shared resource policy', () => {
   it('normalizes explicit profile-local mode to legacy-compatible bare metadata', () => {
     const normalized = normalizeSharedResourceMetadata({
       shared_resource_mode: 'profile-local',
-    });
+    }) as { shared_resource_mode: string; bare?: boolean };
 
     expect(normalized.shared_resource_mode).toBe('profile-local');
     expect(normalized.bare).toBe(true);

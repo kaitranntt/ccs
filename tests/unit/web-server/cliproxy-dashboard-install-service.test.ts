@@ -43,9 +43,9 @@ function createDeps(
         }
       );
     },
-    withInstallLifecycleLock: async (
+    withInstallLifecycleLock: async <T>(
       _backend: CLIProxyBackend,
-      operation: () => Promise<unknown>
+      operation: () => Promise<T>
     ) => operation(),
   };
 

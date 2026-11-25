@@ -134,7 +134,7 @@ describe('Runtime Quota Monitor', () => {
       } as unknown as ReturnType<typeof setTimeout>;
       const observedDelays: Array<number | undefined> = [];
 
-      globalThis.setTimeout = ((handler: TimerHandler, timeout?: number) => {
+      globalThis.setTimeout = ((handler: (...args: unknown[]) => void, timeout?: number) => {
         observedDelays.push(timeout);
         void handler;
         return fakeTimer;

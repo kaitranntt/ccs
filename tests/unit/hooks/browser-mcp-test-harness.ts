@@ -1,6 +1,7 @@
 // Shared harness extracted from the Browser MCP hook suite.
 // Keep helpers here and split domain assertions into smaller *.test.ts files.
 
+import { expect } from 'bun:test';
 import { spawn } from 'child_process';
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import * as http from 'node:http';
@@ -106,7 +107,7 @@ type MockPageEventPlan = {
   downloads?: MockDownloadState[];
 };
 
-type MockFileInputState = {
+export type MockFileInputState = {
   kind: 'file' | 'nonfile';
   multiple?: boolean;
   assignedFiles?: string[];

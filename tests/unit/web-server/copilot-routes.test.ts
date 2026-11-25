@@ -93,7 +93,7 @@ beforeAll(async () => {
 
   const unifiedConfig = await import('../../../src/config/unified-config-loader');
   loadOrCreateUnifiedConfig = unifiedConfig.loadOrCreateUnifiedConfig;
-  saveUnifiedConfig = unifiedConfig.saveUnifiedConfig;
+  saveUnifiedConfig = unifiedConfig.saveUnifiedConfig as unknown as typeof saveUnifiedConfig;
 
   const copilotRoutesModule = await import('../../../src/web-server/routes/copilot-routes');
 
@@ -196,7 +196,9 @@ describe('Copilot Routes', () => {
     const persisted = loadOrCreateUnifiedConfig().copilot;
     expect(persisted?.model).toBe('claude-sonnet-4.5');
     expect(
-      normalizeCopilotConfig(persisted ?? { ...DEFAULT_COPILOT_CONFIG }).haiku_model
+      normalizeCopilotConfig((persisted ?? { ...DEFAULT_COPILOT_CONFIG }) as Parameters<
+        typeof normalizeCopilotConfig
+      >[0]).haiku_model
     ).toBeUndefined();
     expect(persisted?.haiku_model).not.toBe('raptor-mini');
   });
@@ -272,7 +274,9 @@ describe('Copilot Routes', () => {
     const persistedConfig = loadOrCreateUnifiedConfig().copilot;
     expect(persistedConfig?.model).toBe('claude-sonnet-4.5');
     expect(
-      normalizeCopilotConfig(persistedConfig ?? { ...DEFAULT_COPILOT_CONFIG }).haiku_model
+      normalizeCopilotConfig((persistedConfig ?? { ...DEFAULT_COPILOT_CONFIG }) as Parameters<
+        typeof normalizeCopilotConfig
+      >[0]).haiku_model
     ).toBeUndefined();
     expect(persistedConfig?.haiku_model).not.toBe('raptor-mini');
   });

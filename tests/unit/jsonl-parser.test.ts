@@ -14,7 +14,6 @@ import {
   findProjectDirectories,
   countJsonlFiles,
   getDefaultProjectsDir,
-  type RawUsageEntry,
 } from '../../src/web-server/jsonl-parser';
 import { getDefaultClaudeConfigDir } from '../../src/utils/claude-config-path';
 

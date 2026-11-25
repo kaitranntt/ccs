@@ -110,7 +110,7 @@ beforeAll(async () => {
 
   const unifiedConfig = await import('../../../src/config/unified-config-loader');
   loadOrCreateUnifiedConfig = unifiedConfig.loadOrCreateUnifiedConfig;
-  saveUnifiedConfig = unifiedConfig.saveUnifiedConfig;
+  saveUnifiedConfig = unifiedConfig.saveUnifiedConfig as unknown as typeof saveUnifiedConfig;
 
   const cursorAuth = await import('../../../src/cursor/cursor-auth');
   saveCredentials = cursorAuth.saveCredentials;

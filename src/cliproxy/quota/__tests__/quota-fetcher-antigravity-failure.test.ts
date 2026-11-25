@@ -61,7 +61,7 @@ describe('Antigravity quota failure metadata', () => {
         new Response(JSON.stringify({ error: { message: 'forbidden' } }), {
           status: 403,
           headers: { 'Content-Type': 'application/json' },
-        })) as typeof fetch;
+        })) as unknown as typeof fetch;
 
       try {
         const result = await fetchAccountQuota('agy', 'user@example.com');
@@ -114,7 +114,7 @@ describe('Antigravity quota failure metadata', () => {
         new Response('', {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
-        })) as typeof fetch;
+        })) as unknown as typeof fetch;
 
       try {
         const result = await fetchAccountQuota('agy', 'user@example.com');
@@ -184,7 +184,7 @@ describe('Antigravity quota failure metadata', () => {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       try {
         const result = await fetchAccountQuota('agy', 'user@example.com');
@@ -237,7 +237,7 @@ describe('Antigravity quota failure metadata', () => {
 
       const originalFetch = globalThis.fetch;
       const urls: string[] = [];
-      globalThis.fetch = (async (input, init) => {
+      globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
         const url = String(input);
         urls.push(url);
 
@@ -291,7 +291,7 @@ describe('Antigravity quota failure metadata', () => {
         }
 
         return new Response('unexpected url', { status: 500 });
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       try {
         const result = await fetchAccountQuota('agy', 'user@example.com');

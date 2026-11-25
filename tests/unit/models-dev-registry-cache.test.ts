@@ -36,7 +36,7 @@ describe('models.dev registry cache', () => {
   });
 
   it('normalizes and stores provider-keyed models.dev payloads', async () => {
-    const fetchImpl: typeof fetch = async () =>
+    const fetchImpl = (async () =>
       new Response(
         JSON.stringify({
           openai: {
@@ -49,7 +49,7 @@ describe('models.dev registry cache', () => {
           ignored: { id: 'ignored' },
         }),
         { status: 200 }
-      );
+      )) as unknown as typeof fetch;
 
     const registry = await refreshModelsDevRegistry({
       force: true,
@@ -74,9 +74,9 @@ describe('models.dev registry cache', () => {
       1
     );
 
-    const fetchImpl: typeof fetch = async () => {
+    const fetchImpl = (async () => {
       throw new Error('offline');
-    };
+    }) as unknown as typeof fetch;
 
     const registry = await refreshModelsDevRegistry({
       force: true,
@@ -88,7 +88,7 @@ describe('models.dev registry cache', () => {
   });
 
   it('filters malformed model entries before caching remote payloads', async () => {
-    const fetchImpl: typeof fetch = async () =>
+    const fetchImpl = (async () =>
       new Response(
         JSON.stringify({
           openai: {
@@ -101,7 +101,7 @@ describe('models.dev registry cache', () => {
           },
         }),
         { status: 200 }
-      );
+      )) as unknown as typeof fetch;
 
     const registry = await refreshModelsDevRegistry({
       force: true,
@@ -213,10 +213,10 @@ describe('models.dev registry cache', () => {
     const responsePromise = new Promise<Response>((resolve) => {
       resolveResponse = resolve;
     });
-    const fetchImpl: typeof fetch = async () => {
+    const fetchImpl = (async () => {
       fetchCalls += 1;
       return responsePromise;
-    };
+    }) as unknown as typeof fetch;
 
     const first = startModelsDevRegistryRefresh({
       force: true,

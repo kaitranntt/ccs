@@ -259,10 +259,10 @@ describe('handleProxyMessagesRequest', () => {
     const activeProfile = buildProfile('hf');
     let capturedDispatcher: unknown;
 
-    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
       capturedDispatcher = (init as RequestInit & { dispatcher?: unknown })?.dispatcher;
       throw new Error('upstream exploded');
-    }) as typeof globalThis.fetch;
+    }) as unknown as typeof globalThis.fetch;
 
     const req = new FakeRequest({
       'x-api-key': 'local-token',
@@ -290,7 +290,7 @@ describe('handleProxyMessagesRequest', () => {
 
   it('auto-passes through Kimi requests and preserves the coding-agent User-Agent', async () => {
     const activeProfile = buildProfile('kimic');
-    let capturedInput: RequestInfo | URL | undefined;
+    let capturedInput: string | URL | Request | undefined;
     let capturedInit: RequestInit | undefined;
     const rawBody = JSON.stringify({
       model: 'kimi-k2p7-coding',
@@ -298,7 +298,7 @@ describe('handleProxyMessagesRequest', () => {
       messages: [{ role: 'user', content: 'Say hi in 2 words' }],
     });
 
-    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
       capturedInput = input;
       capturedInit = init;
       return new Response(
@@ -338,7 +338,7 @@ describe('handleProxyMessagesRequest', () => {
 
   it('uses routed-profile passthrough for explicit profile:model selectors', async () => {
     const activeProfile = buildProfile('hf');
-    let capturedInput: RequestInfo | URL | undefined;
+    let capturedInput: string | URL | Request | undefined;
     let capturedInit: RequestInit | undefined;
     const rawBody = JSON.stringify({
       model: 'kimic:kimi-k2p7-coding',
@@ -346,7 +346,7 @@ describe('handleProxyMessagesRequest', () => {
       messages: [{ role: 'user', content: 'Say hi' }],
     });
 
-    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
       capturedInput = input;
       capturedInit = init;
       return new Response(
@@ -386,10 +386,10 @@ describe('handleProxyMessagesRequest', () => {
 
   it('keeps default OpenAI-compatible requests on chat completions with CCS User-Agent', async () => {
     const activeProfile = buildProfile('hf');
-    let capturedInput: RequestInfo | URL | undefined;
+    let capturedInput: string | URL | Request | undefined;
     let capturedInit: RequestInit | undefined;
 
-    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
       capturedInput = input;
       capturedInit = init;
       return new Response(
@@ -445,10 +445,10 @@ describe('handleProxyMessagesRequest', () => {
       return Promise.resolve();
     };
 
-    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
       capturedDispatcher = (init as RequestInit & { dispatcher?: unknown })?.dispatcher;
       throw new Error('upstream exploded');
-    }) as typeof globalThis.fetch;
+    }) as unknown as typeof globalThis.fetch;
 
     const req = new FakeRequest({
       'x-api-key': 'local-token',
@@ -491,10 +491,10 @@ describe('handleProxyMessagesRequest', () => {
       return Promise.resolve();
     };
 
-    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
       capturedDispatcher = (init as RequestInit & { dispatcher?: unknown })?.dispatcher;
       throw new Error('upstream exploded');
-    }) as typeof globalThis.fetch;
+    }) as unknown as typeof globalThis.fetch;
 
     const req = new FakeRequest({
       'x-api-key': 'local-token',
@@ -525,7 +525,7 @@ describe('handleProxyMessagesRequest', () => {
     const activeProfile = buildProfile('mm');
     let capturedBody: unknown;
 
-    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
       capturedBody = JSON.parse(String(init?.body));
       return new Response(
         JSON.stringify({
@@ -574,7 +574,7 @@ describe('handleProxyMessagesRequest', () => {
     const activeProfile = buildProfile('mm');
     let capturedBody: unknown;
 
-    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
       capturedBody = JSON.parse(String(init?.body));
       return new Response(
         JSON.stringify({
@@ -626,7 +626,7 @@ describe('handleProxyMessagesRequest', () => {
     globalThis.fetch = (async () => {
       fetchCalled = true;
       throw new Error('upstream should not be called');
-    }) as typeof globalThis.fetch;
+    }) as unknown as typeof globalThis.fetch;
 
     try {
       const req = new FakeRequest({ 'x-api-key': 'local-token' });

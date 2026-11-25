@@ -26,11 +26,11 @@ describe('routing-strategy-http', () => {
   it('rejects malformed self-signed HTTPS URLs before arming the request timeout', async () => {
     const { fetchCliproxyRoutingResponse } = await loadRoutingHttpModule();
     const originalSetTimeout = globalThis.setTimeout;
-    globalThis.setTimeout = mock(((handler: TimerHandler, timeout?: number) => {
+    globalThis.setTimeout = mock((handler: (...args: unknown[]) => void, timeout?: number) => {
       void handler;
       void timeout;
       return 1 as unknown as ReturnType<typeof setTimeout>;
-    }) as typeof setTimeout);
+    }) as unknown as typeof setTimeout;
 
     const target: ProxyTarget = {
       host: 'bad host',
@@ -54,16 +54,16 @@ describe('routing-strategy-http', () => {
     const originalClearTimeout = globalThis.clearTimeout;
     const activeTimers = new Set<number>();
 
-    globalThis.setTimeout = mock(((handler: TimerHandler, timeout?: number) => {
+    globalThis.setTimeout = mock((handler: (...args: unknown[]) => void, timeout?: number) => {
       void handler;
       void timeout;
       const timerId = activeTimers.size + 1;
       activeTimers.add(timerId);
       return timerId as unknown as ReturnType<typeof setTimeout>;
-    }) as typeof setTimeout);
-    globalThis.clearTimeout = mock(((timerId?: ReturnType<typeof setTimeout>) => {
+    }) as unknown as typeof setTimeout;
+    globalThis.clearTimeout = mock((timerId?: ReturnType<typeof setTimeout>) => {
       activeTimers.delete(timerId as unknown as number);
-    }) as typeof clearTimeout);
+    }) as unknown as typeof clearTimeout;
     const requestSpy = spyOn(https, 'request').mockImplementation(() => {
       throw new Error('sync request failure');
     });
@@ -125,7 +125,7 @@ describe('routing-strategy-http', () => {
   it('sends retry updates as an integer value payload', async () => {
     const originalFetch = globalThis.fetch;
     const fetchMock = mock(async () => new Response('{}'));
-    globalThis.fetch = fetchMock as typeof fetch;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
     const target: ProxyTarget = {
       host: '127.0.0.1',
       port: 8317,

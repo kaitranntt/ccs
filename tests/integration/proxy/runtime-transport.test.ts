@@ -92,7 +92,8 @@ describe('runtime-aware upstream transport', () => {
       await closeOpenAICompatProxyServer(proxyServer, 50);
     }
     if (corporateProxy) {
-      const closed = new Promise<void>((resolve) => corporateProxy.close(() => resolve()));
+      const proxyToClose = corporateProxy;
+      const closed = new Promise<void>((resolve) => proxyToClose.close(() => resolve()));
       await closed;
     }
     for (const key of [
@@ -154,10 +155,11 @@ describe('runtime-aware upstream transport', () => {
       fixtureSockets.add(socket);
       socket.once('close', () => fixtureSockets.delete(socket));
     });
+    const activeProxyServer = proxyServer;
     const proxyPort = await new Promise<number>((resolve, reject) => {
-      proxyServer.once('error', reject);
-      proxyServer.once('listening', () => {
-        const address = proxyServer.address();
+      activeProxyServer.once('error', reject);
+      activeProxyServer.once('listening', () => {
+        const address = activeProxyServer.address();
         if (!address || typeof address === 'string') reject(new Error('Missing proxy port'));
         else resolve(address.port);
       });

@@ -77,7 +77,7 @@ function collectResponses(
       }
     }
 
-    child.stdout.on('data', (chunk: Buffer) => {
+    child.stdout?.on('data', (chunk: Buffer) => {
       buffer = Buffer.concat([buffer, chunk]);
       try {
         tryParse();
@@ -92,7 +92,7 @@ function collectResponses(
       reject(error);
     });
 
-    child.stderr.on('data', () => {
+    child.stderr?.on('data', () => {
       // Ignore debug noise in tests.
     });
   });

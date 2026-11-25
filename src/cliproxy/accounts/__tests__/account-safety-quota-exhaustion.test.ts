@@ -340,7 +340,7 @@ describe('Quota Exhaustion Handlers', () => {
         }
 
         return Promise.resolve(new Response('', { status: 500 }));
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const result = await handleQuotaExhaustion('claude', 'exhausted@example.com', 10);
       const { getAccount, getDefaultAccount } = await import('../account-manager');
@@ -423,7 +423,7 @@ describe('Quota Exhaustion Handlers', () => {
             },
           })
         );
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const result = await handleQuotaExhaustion('codex', 'exhausted@example.com', 10);
       const { getAccount, getDefaultAccount } = await import('../account-manager');
@@ -483,7 +483,7 @@ describe('Quota Exhaustion Handlers', () => {
             },
           })
         )
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const { preflightCheck } = await import('../../quota/quota-manager');
       const result = await preflightCheck('codex');
@@ -560,7 +560,7 @@ describe('Quota Exhaustion Handlers', () => {
             },
           })
         );
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const { preflightCheck } = await import('../../quota/quota-manager');
       const result = await preflightCheck('codex');
@@ -644,7 +644,7 @@ describe('Quota Exhaustion Handlers', () => {
             },
           })
         );
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const { preflightCheck } = await import('../../quota/quota-manager');
       const result = await preflightCheck('codex');
@@ -729,7 +729,7 @@ describe('Quota Exhaustion Handlers', () => {
             },
           })
         );
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const result = await preflightCheck('codex');
       const { getAccount } = await import('../account-manager');
@@ -810,7 +810,7 @@ describe('Quota Exhaustion Handlers', () => {
             },
           })
         );
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const { preflightCheck } = await import('../../quota/quota-manager');
       const result = await preflightCheck('codex');
@@ -890,7 +890,7 @@ describe('Quota Exhaustion Handlers', () => {
             },
           })
         );
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const { preflightCheck } = await import('../../quota/quota-manager');
       const result = await preflightCheck('codex');
@@ -972,7 +972,7 @@ describe('Quota Exhaustion Handlers', () => {
             ],
           })
         );
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const result = await handleQuotaExhaustion('gemini', 'gemini-exhausted@example.com', 10);
       const { getAccount, getDefaultAccount } = await import('../account-manager');
@@ -1038,7 +1038,7 @@ describe('Quota Exhaustion Handlers', () => {
             },
           })
         );
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const result = await handleQuotaExhaustion('ghcp', 'ghcp-exhausted', 10);
       const { getAccount, getDefaultAccount } = await import('../account-manager');
@@ -1100,7 +1100,7 @@ describe('Quota Exhaustion Handlers', () => {
             },
           })
         );
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const result = await handleQuotaExhaustion('ghcp', 'ghcp-partial-exhausted', 10);
       const { getAccount, getDefaultAccount } = await import('../account-manager');

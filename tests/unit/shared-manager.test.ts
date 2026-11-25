@@ -1402,7 +1402,11 @@ describe('SharedManager', () => {
 
       // No clone directories under plugins/marketplaces exist
       reconcileLocalMarketplaceRegistry(
-        { claudeDir: claudeDir(), instancesDir: ccsDir() },
+        {
+          claudeDir: claudeDir(),
+          sharedDir: path.join(ccsDir(), 'shared'),
+          instancesDir: ccsDir(),
+        },
         instancePath
       );
 
@@ -1428,7 +1432,11 @@ describe('SharedManager', () => {
       });
 
       reconcileLocalMarketplaceRegistry(
-        { claudeDir: claudeDir(), instancesDir: ccsDir() },
+        {
+          claudeDir: claudeDir(),
+          sharedDir: path.join(ccsDir(), 'shared'),
+          instancesDir: ccsDir(),
+        },
         instancePath
       );
 

@@ -5,23 +5,25 @@
  * silent for healthy ones, covering both simple and composite providers.
  */
 
-import { afterEach, beforeEach, describe, expect, it, jest, mock } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 
 // ── Stubs ─────────────────────────────────────────────────────────────────────
 
 // getCurrentModel: return whatever the test configures
-const mockGetCurrentModel = jest.fn<string | undefined, [string, string | undefined]>();
+const mockGetCurrentModel = mock(
+  (_provider: string, _model?: string): string | undefined => undefined
+);
 // isModelBroken: return false by default
-const mockIsModelBroken = jest.fn<boolean, [string, string]>().mockReturnValue(false);
-const mockGetModelIssueUrl = jest
-  .fn<string | undefined, [string, string]>()
-  .mockReturnValue(undefined);
-const mockFindModel = jest
-  .fn<{ name: string } | undefined, [string, string]>()
-  .mockReturnValue(undefined);
-const mockGetSuggestedReplacementModel = jest
-  .fn<string | undefined, [string, string]>()
-  .mockReturnValue(undefined);
+const mockIsModelBroken = mock((_provider: string, _model: string): boolean => false);
+const mockGetModelIssueUrl = mock(
+  (_provider: string, _model: string): string | undefined => undefined
+);
+const mockFindModel = mock(
+  (_provider: string, _model: string): { name: string } | undefined => undefined
+);
+const mockGetSuggestedReplacementModel = mock(
+  (_provider: string, _model: string): string | undefined => undefined
+);
 
 mock.module('../../config/model-config', () => ({
   getCurrentModel: mockGetCurrentModel,
@@ -54,10 +56,10 @@ function makeSimpleCfg(overrides: Partial<ExecutorConfig> = {}): ExecutorConfig 
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
 describe('warnBrokenModels', () => {
-  let errorSpy: ReturnType<typeof jest.spyOn>;
+  let errorSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
-    errorSpy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    errorSpy = spyOn(process.stderr, 'write').mockImplementation(() => true);
     mockGetCurrentModel.mockReset();
     mockIsModelBroken.mockReturnValue(false);
     mockGetModelIssueUrl.mockReturnValue(undefined);
@@ -108,9 +110,9 @@ describe('warnBrokenModels', () => {
       skipLocalAuth: false,
     });
 
-    const calls = errorSpy.mock.calls.map((c) => String(c[0]));
-    expect(calls.some((m) => m.includes('has known issues with Claude Code'))).toBe(true);
-    expect(calls.some((m) => m.includes('Tool calls will fail'))).toBe(true);
+    const calls = errorSpy.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(calls.some((m: string) => m.includes('has known issues with Claude Code'))).toBe(true);
+    expect(calls.some((m: string) => m.includes('Tool calls will fail'))).toBe(true);
   });
 
   it('includes replacement model suggestion when available', () => {
@@ -125,8 +127,8 @@ describe('warnBrokenModels', () => {
       skipLocalAuth: false,
     });
 
-    const calls = errorSpy.mock.calls.map((c) => String(c[0]));
-    expect(calls.some((m) => m.includes('gemini-2.5-pro'))).toBe(true);
+    const calls = errorSpy.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(calls.some((m: string) => m.includes('gemini-2.5-pro'))).toBe(true);
   });
 
   it('includes tracking URL when issue url is available', () => {
@@ -141,8 +143,8 @@ describe('warnBrokenModels', () => {
       skipLocalAuth: false,
     });
 
-    const calls = errorSpy.mock.calls.map((c) => String(c[0]));
-    expect(calls.some((m) => m.includes('https://github.com/issues/123'))).toBe(true);
+    const calls = errorSpy.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(calls.some((m: string) => m.includes('https://github.com/issues/123'))).toBe(true);
   });
 
   it('includes remote proxy note when skipLocalAuth=true', () => {
@@ -156,8 +158,8 @@ describe('warnBrokenModels', () => {
       skipLocalAuth: true,
     });
 
-    const calls = errorSpy.mock.calls.map((c) => String(c[0]));
-    expect(calls.some((m) => m.includes('remote proxy'))).toBe(true);
+    const calls = errorSpy.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(calls.some((m: string) => m.includes('remote proxy'))).toBe(true);
   });
 
   it('includes --config suggestion when skipLocalAuth=false', () => {
@@ -171,8 +173,8 @@ describe('warnBrokenModels', () => {
       skipLocalAuth: false,
     });
 
-    const calls = errorSpy.mock.calls.map((c) => String(c[0]));
-    expect(calls.some((m) => m.includes('--config'))).toBe(true);
+    const calls = errorSpy.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(calls.some((m: string) => m.includes('--config'))).toBe(true);
   });
 
   describe('composite variants', () => {
@@ -202,8 +204,8 @@ describe('warnBrokenModels', () => {
         skipLocalAuth: false,
       });
 
-      const calls = errorSpy.mock.calls.map((c) => String(c[0]));
-      expect(calls.some((m) => m.includes('opus tier'))).toBe(true);
+      const calls = errorSpy.mock.calls.map((c: unknown[]) => String(c[0]));
+      expect(calls.some((m: string) => m.includes('opus tier'))).toBe(true);
     });
 
     it('does not warn for healthy composite tiers', () => {

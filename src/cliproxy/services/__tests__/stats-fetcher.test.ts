@@ -19,7 +19,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function requestUrl(input: RequestInfo | URL): string {
+function requestUrl(input: string | URL | Request): string {
   return input instanceof Request ? input.url : String(input);
 }
 
@@ -70,7 +70,7 @@ describe('fetchCliproxyUsageRaw', () => {
   it('returns null for a provider-named client key without consuming the queue', async () => {
     let queueReads = 0;
     let metadataReads = 0;
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
       if (url.endsWith('/v0/management/usage')) {
         return jsonResponse({
@@ -99,7 +99,7 @@ describe('fetchCliproxyUsageRaw', () => {
       }
       if (url.includes('/usage-queue')) queueReads++;
       throw new Error('Unexpected management request');
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19224));
 
@@ -114,7 +114,7 @@ describe('fetchCliproxyUsageRaw', () => {
       '2026-05-05T18:45:00.000Z INFO request_id=req-snapshot POST "/api/provider/codex/v1/messages?beta=true" status=200',
     ]);
     let queueReads = 0;
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
       if (url.endsWith('/v0/management/usage'))
         return jsonResponse({
@@ -140,7 +140,7 @@ describe('fetchCliproxyUsageRaw', () => {
         return jsonResponse({ 'api-keys': ['synthetic-key'] });
       if (url.includes('/usage-queue')) queueReads++;
       throw new Error('Unexpected management request');
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
     const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19223));
     expect(raw?.usage?.total_requests).toBe(1);
     expect(raw?.usage?.total_tokens).toBe(23);
@@ -151,7 +151,7 @@ describe('fetchCliproxyUsageRaw', () => {
     let metadataAvailable = true;
     let queueReads = 0;
     const record = createCodexQueueRecord();
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
       if (url.endsWith('/v0/management/usage')) {
         return jsonResponse({
@@ -175,7 +175,7 @@ describe('fetchCliproxyUsageRaw', () => {
       }
       if (url.includes('/usage-queue')) queueReads++;
       throw new Error('Unexpected management request');
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
     const first = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19222));
     const second = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19222));
     expect(second).toEqual(first);
@@ -194,7 +194,7 @@ describe('fetchCliproxyUsageRaw', () => {
   });
   it('falls back to CLIProxy usage-queue when the legacy aggregate endpoint is unavailable', async () => {
     const requestedUrls: string[] = [];
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
       requestedUrls.push(url);
 
@@ -205,7 +205,7 @@ describe('fetchCliproxyUsageRaw', () => {
         return jsonResponse([createCodexQueueRecord()]);
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19201));
 
@@ -223,7 +223,7 @@ describe('fetchCliproxyUsageRaw', () => {
 
   it('uses queue details to enrich successful legacy aggregate usage without details', async () => {
     const requestedUrls: string[] = [];
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
       requestedUrls.push(url);
 
@@ -249,7 +249,7 @@ describe('fetchCliproxyUsageRaw', () => {
         return jsonResponse([createCodexQueueRecord()]);
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19215));
 
@@ -277,7 +277,7 @@ describe('fetchCliproxyUsageRaw', () => {
         auth_index: 'codex-auth-final',
       },
     ];
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -288,7 +288,7 @@ describe('fetchCliproxyUsageRaw', () => {
         return jsonResponse(queueCalls === 1 ? firstBatch : finalBatch);
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19212));
 
@@ -307,7 +307,7 @@ describe('fetchCliproxyUsageRaw', () => {
       source: `oauth|codex-user-${index}@example.com-pro.json`,
       auth_index: `codex-auth-${index}`,
     }));
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -329,7 +329,7 @@ describe('fetchCliproxyUsageRaw', () => {
         });
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19213));
 
@@ -348,7 +348,7 @@ describe('fetchCliproxyUsageRaw', () => {
       source: `oauth|codex-user-${index}@example.com-pro.json`,
       auth_index: `codex-auth-${index}`,
     }));
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -373,7 +373,7 @@ describe('fetchCliproxyUsageRaw', () => {
         });
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19214));
 
@@ -395,7 +395,7 @@ describe('fetchCliproxyUsageRaw', () => {
       source: `user-${index}@example.com`,
       auth_index: `codex-auth-${index}`,
     }));
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -417,7 +417,7 @@ describe('fetchCliproxyUsageRaw', () => {
         });
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19217));
 
@@ -429,7 +429,7 @@ describe('fetchCliproxyUsageRaw', () => {
 
   it('keeps queue stats available after the same CLIProxy usage queue has been drained', async () => {
     let queueCalls = 0;
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -443,7 +443,7 @@ describe('fetchCliproxyUsageRaw', () => {
         return jsonResponse({ error: 'not found' }, 404);
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const firstRaw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19204));
     const secondRaw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19204));
@@ -456,7 +456,7 @@ describe('fetchCliproxyUsageRaw', () => {
   it('uses fresh API-key totals before cached queue details after the queue drains', async () => {
     let queueCalls = 0;
     let apiKeyUsageCalls = 0;
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -478,7 +478,7 @@ describe('fetchCliproxyUsageRaw', () => {
         });
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const firstRaw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19216));
     const secondRaw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19216));
@@ -490,7 +490,7 @@ describe('fetchCliproxyUsageRaw', () => {
   });
 
   it('does not reuse drained usage-queue stats for a different CLIProxy management URL', async () => {
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -503,7 +503,7 @@ describe('fetchCliproxyUsageRaw', () => {
         return jsonResponse({ error: 'not found' }, 404);
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const firstRaw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19205));
     const secondRaw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19206));
@@ -514,7 +514,7 @@ describe('fetchCliproxyUsageRaw', () => {
   });
 
   it('uses API-key usage totals when neither aggregate nor queue usage is available', async () => {
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -534,7 +534,7 @@ describe('fetchCliproxyUsageRaw', () => {
         });
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19202));
 
@@ -550,7 +550,7 @@ describe('fetchCliproxyUsageRaw', () => {
       '2026-05-05T18:45:00.000Z INFO request_id=req-1 Use OAuth provider=codex auth_file=codex-user@example.com-pro.json for model gpt-5.5',
       '2026-05-05T18:45:01.000Z INFO request_id=req-1 POST "/api/provider/codex/v1/messages?beta=true" status=200',
     ]);
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -573,7 +573,7 @@ describe('fetchCliproxyUsageRaw', () => {
         return jsonResponse({ files: [] });
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const stats = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyStats(19207));
 
@@ -594,7 +594,7 @@ describe('fetchCliproxyUsageRaw', () => {
       '2026-05-05T18:45:00.000Z INFO request_id=req-1 Use OAuth provider=codex auth_file=codex-user@example.com-pro.json for model gpt-5.5',
       '2026-05-05T18:45:01.000Z INFO request_id=req-1 POST "/api/provider/codex/v1/messages?beta=true" status=200',
     ]);
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -617,7 +617,7 @@ describe('fetchCliproxyUsageRaw', () => {
         return jsonResponse({ files: [] });
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const stats = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyStats(19209));
 
@@ -638,7 +638,7 @@ describe('fetchCliproxyUsageRaw', () => {
       '2026-05-05T18:45:00.000Z INFO request_id=req-1 Use OAuth provider=codex auth_file=codex-user@example.com-pro.json for model gpt-5.5',
       '2026-05-05T18:45:01.000Z INFO request_id=req-1 POST "/api/provider/codex/v1/messages?beta=true" status=200',
     ]);
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -683,7 +683,7 @@ describe('fetchCliproxyUsageRaw', () => {
         return jsonResponse({ files: [] });
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const stats = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyStats(19210));
 
@@ -704,7 +704,7 @@ describe('fetchCliproxyUsageRaw', () => {
       '2026-05-05T18:45:00.000Z INFO request_id=req-1 Use OAuth provider=codex auth_file=codex-user@example.com-pro.json for model gpt-5.5',
       '2026-05-05T18:45:01.000Z INFO request_id=req-1 POST "/api/provider/codex/v1/messages?beta=true" status=200',
     ]);
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -720,7 +720,7 @@ describe('fetchCliproxyUsageRaw', () => {
         ]);
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19208));
 
@@ -738,7 +738,7 @@ describe('fetchCliproxyUsageRaw', () => {
       'x'.repeat(1024 * 1024 + 64),
       '2026-05-05T18:45:01.000Z INFO request_id=req-1 POST "/api/provider/codex/v1/messages?beta=true" status=200',
     ]);
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -751,7 +751,7 @@ describe('fetchCliproxyUsageRaw', () => {
         return jsonResponse({ error: 'not found' }, 404);
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19211));
 
@@ -769,7 +769,7 @@ describe('fetchCliproxyUsageRaw', () => {
       '2026-05-05T18:45:01.000Z INFO request_id=req-1 POST "/api/provider/codex/v1/messages?beta=true" status=200',
     ]);
     let apiKeyUsageCalls = 0;
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -790,7 +790,7 @@ describe('fetchCliproxyUsageRaw', () => {
         });
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19221));
 
@@ -808,7 +808,7 @@ describe('fetchCliproxyUsageRaw', () => {
       '[2026-05-05 18:45:01] [req-b] [info ] POST "/api/provider/codex/v1/messages?beta=true" status=200',
       '[2026-05-05 18:45:02] [req-a] [info ] POST "/api/provider/codex/v1/messages?beta=true" status=200',
     ]);
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -821,7 +821,7 @@ describe('fetchCliproxyUsageRaw', () => {
         return jsonResponse({ error: 'not found' }, 404);
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19218));
     const details = raw?.usage?.apis?.codex.models?.['gpt-5.5'].details;
@@ -843,7 +843,7 @@ describe('fetchCliproxyUsageRaw', () => {
       '2026-05-05T18:45:01.000Z INFO POST "/api/provider/codex/v1/messages?beta=true" status=200',
       '2026-05-05T18:45:02.000Z INFO request_id=req-1 POST "/api/provider/codex/v1/messages?beta=true" status=200',
     ]);
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -856,7 +856,7 @@ describe('fetchCliproxyUsageRaw', () => {
         return jsonResponse({ error: 'not found' }, 404);
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19219));
     const details = raw?.usage?.apis?.codex.models?.['gpt-5.5'].details;
@@ -872,7 +872,7 @@ describe('fetchCliproxyUsageRaw', () => {
       '2026-05-05T18:45:02.000Z INFO request_id=req-1 POST "/api/provider/codex/v1/messages?beta=true" status=200',
       '2026-05-05T18:45:03.000Z INFO POST "/api/provider/codex/v1/messages?beta=true" status=200',
     ]);
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -885,7 +885,7 @@ describe('fetchCliproxyUsageRaw', () => {
         return jsonResponse({ error: 'not found' }, 404);
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const raw = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyUsageRaw(19220));
     const details = raw?.usage?.apis?.codex.models?.['gpt-5.5'].details;
@@ -1569,7 +1569,7 @@ describe('fetchCliproxyUsageRaw', () => {
 
 describe('fetchCliproxyStats', () => {
   it('builds account stats from queue records and normalizes OAuth auth filenames', async () => {
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = requestUrl(input);
 
       if (url.endsWith('/v0/management/usage')) {
@@ -1582,7 +1582,7 @@ describe('fetchCliproxyStats', () => {
         return jsonResponse({ files: [] });
       }
       throw new Error(`unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const stats = await runWithScopedConfigDir(ccsDir, () => fetchCliproxyStats(19203));
 

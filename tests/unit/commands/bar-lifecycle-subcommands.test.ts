@@ -118,7 +118,7 @@ beforeEach(() => {
 
   tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-bar-lifecycle-test-'));
   originalCcsHome = process.env.CCS_HOME;
-  originalExitCode = process.exitCode;
+  originalExitCode = typeof process.exitCode === 'number' ? process.exitCode : undefined;
   process.exitCode = 0;
   process.env.CCS_HOME = tempHome;
 });
@@ -907,7 +907,7 @@ describe('install: writeLaunchDescriptor called after successful install', () =>
   const FAKE_DOWNLOAD_URL =
     'https://github.com/kaitranntt/ccs/releases/download/ccs-bar-latest/CCS-Bar.app.zip';
 
-  function fakeExtract(appsDir: string) {
+  function fakeExtract(_appsDir: string) {
     return async (_url: string, dest: string) => {
       fs.mkdirSync(path.join(dest, 'CCS Bar.app'), { recursive: true });
     };

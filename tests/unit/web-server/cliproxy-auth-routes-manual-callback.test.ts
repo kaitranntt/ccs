@@ -840,28 +840,28 @@ describe('cliproxy-auth-routes manual callback nickname persistence', () => {
   it('caps pendingManualAuthState at 200 entries by evicting the oldest entries', async () => {
     let counter = 0;
     const originalFetch = globalThis.fetch;
-    const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(
-      async (input: RequestInfo | URL): Promise<Response> => {
-        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-        if (url.includes('/v0/management/codex-auth-url')) {
-          counter += 1;
-          return new Response(
-            JSON.stringify({
-              auth_url: `https://auth.example.com/authorize?state=cap-state-${counter}`,
-              state: `cap-state-${counter}`,
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } }
-          );
-        }
-        if (url.includes('/v0/management/get-auth-status')) {
-          return new Response(JSON.stringify({ status: 'ok' }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-        return originalFetch(input);
+    const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async (
+      input: string | URL | Request
+    ): Promise<Response> => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes('/v0/management/codex-auth-url')) {
+        counter += 1;
+        return new Response(
+          JSON.stringify({
+            auth_url: `https://auth.example.com/authorize?state=cap-state-${counter}`,
+            state: `cap-state-${counter}`,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
       }
-    );
+      if (url.includes('/v0/management/get-auth-status')) {
+        return new Response(JSON.stringify({ status: 'ok' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return originalFetch(input);
+    }) as unknown as typeof globalThis.fetch);
 
     try {
       for (let i = 1; i <= 205; i++) {

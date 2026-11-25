@@ -143,14 +143,14 @@ describe('GET /api/codex/profiles', () => {
     const registryPath = path.join(ccsDir, 'codex-profiles.yaml');
     const rawMessage = `EACCES: permission denied, stat '${registryPath}'`;
     const realStatSync = fs.statSync;
-    spyOn(fs, 'statSync').mockImplementation((target) => {
+    spyOn(fs, 'statSync').mockImplementation(((target: fs.PathLike) => {
       if (target === registryPath) {
         const err = new Error(rawMessage) as NodeJS.ErrnoException;
         err.code = 'EACCES';
         throw err;
       }
       return realStatSync(target);
-    });
+    }) as unknown as typeof fs.statSync);
 
     const { status, body } = await get('/api/codex/profiles');
     const error = (body as { error?: string }).error ?? '';
@@ -212,7 +212,6 @@ describe('GET /api/codex/profiles', () => {
 
     if (!isDashboardAuthEnabled()) {
       let guardResult: boolean | undefined;
-      let responseStatus: number | undefined;
 
       const testApp = express();
       testApp.get('/test', (req, res) => {
@@ -224,10 +223,7 @@ describe('GET /api/codex/profiles', () => {
         });
         guardResult = requireLocalAccessWhenAuthDisabled(req, res, 'localhost only');
         if (guardResult) {
-          responseStatus = 200;
           res.json({ ok: true });
-        } else {
-          responseStatus = 403;
         }
       });
 

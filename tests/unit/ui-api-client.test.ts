@@ -5,7 +5,7 @@ import {
   ApiConflictError,
   isApiConflictError,
   withApiBase,
-} from '../../ui/src/lib/api-client';
+} from '../../ui/src/lib/api/core';
 
 describe('ui api-client helpers', () => {
   it('normalizes relative paths with API base prefix', () => {

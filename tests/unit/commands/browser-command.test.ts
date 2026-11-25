@@ -48,6 +48,7 @@ describe('browser command', () => {
       claude: {
         enabled: true,
         policy: 'manual',
+        evalMode: 'disabled',
         source: 'config',
         overrideActive: false,
         state: 'ready',
@@ -75,6 +76,7 @@ describe('browser command', () => {
       codex: {
         enabled: true,
         policy: 'manual',
+        evalMode: 'disabled',
         state: 'enabled',
         title: 'Codex Browser Tools are enabled.',
         detail: 'CCS can inject the managed Playwright MCP overrides.',
@@ -120,6 +122,7 @@ describe('browser command', () => {
       claude: {
         enabled: true,
         policy: 'manual',
+        evalMode: 'disabled',
         source: 'CCS_BROWSER_PROFILE_DIR',
         overrideActive: true,
         state: 'browser_not_running',
@@ -136,6 +139,7 @@ describe('browser command', () => {
       codex: {
         enabled: true,
         policy: 'manual',
+        evalMode: 'disabled',
         state: 'unsupported_build',
         title: 'Codex Browser Tools need a Codex build with --config override support.',
         detail: 'Detected Codex at /usr/local/bin/codex, but it does not advertise --config overrides.',
@@ -172,6 +176,7 @@ describe('browser command', () => {
       claude: {
         enabled: false,
         policy: 'auto',
+        evalMode: 'disabled',
         source: 'config',
         overrideActive: false,
         state: 'disabled',
@@ -195,6 +200,7 @@ describe('browser command', () => {
       codex: {
         enabled: true,
         policy: 'auto',
+        evalMode: 'disabled',
         state: 'unsupported_build',
         title: 'Codex Browser Tools need a Codex build with --config override support.',
         detail: 'No Codex binary was detected, so CCS cannot confirm managed browser override support.',
@@ -228,6 +234,7 @@ describe('browser command', () => {
         claude: {
           enabled: true,
           policy: 'auto',
+        evalMode: 'disabled',
           source: 'config',
           overrideActive: false,
           state: 'ready',
@@ -255,6 +262,7 @@ describe('browser command', () => {
         codex: {
           enabled: true,
           policy: 'auto',
+        evalMode: 'disabled',
           state: 'enabled',
           title: 'Codex Browser Tools are enabled.',
           detail: 'CCS can inject the managed Playwright MCP overrides.',

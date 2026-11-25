@@ -93,7 +93,9 @@ describe('respondInternalError HTTP 500 sanitization', () => {
       body: JSON.stringify({ name: 'bad', unknownField: true }),
     });
     expect(badCreate.status).toBe(400);
-    expect((await badCreate.json()).error).toContain('Unknown profile field(s)');
+    expect(((await badCreate.json()) as { error: string }).error).toContain(
+      'Unknown profile field(s)'
+    );
 
     const ccsDir = path.join(tempHome, '.ccs');
     fs.mkdirSync(ccsDir, { recursive: true });

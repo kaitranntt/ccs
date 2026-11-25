@@ -28,6 +28,7 @@ jobs:
       matrix:
         check:
           - { name: typecheck, cmd: 'bun run typecheck' }
+          - { name: typecheck-tests, cmd: 'bun run typecheck:tests' }
           - { name: lint, cmd: 'bun run lint' }
           - { name: format, cmd: 'bun run format:check' }
           - { name: ui-typecheck, cmd: 'cd ui && bun run typecheck' }

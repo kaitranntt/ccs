@@ -157,7 +157,7 @@ describe('ccs backlog sync helpers', () => {
       closedLookbackDays: 14,
     });
 
-    expect(issues.map((issue) => issue.number)).toEqual([10, 11]);
+    expect(issues.map((issue: { number: number }) => issue.number)).toEqual([10, 11]);
   });
 
   it('continues syncing remaining issues after an individual failure', async () => {

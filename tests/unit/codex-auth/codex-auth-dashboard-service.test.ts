@@ -48,29 +48,6 @@ function writeRawAuthJson(profileDir: string, idToken: string): void {
   );
 }
 
-function writeRegistry(registryPath: string, data: unknown): void {
-  const dir = path.dirname(registryPath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const yaml = (d: unknown): string => {
-    // Minimal YAML serialiser for the test fixture
-    if (typeof d === 'object' && d !== null) {
-      return Object.entries(d as Record<string, unknown>)
-        .map(([k, v]) => {
-          if (typeof v === 'object' && v !== null) {
-            const nested = Object.entries(v as Record<string, unknown>)
-              .map(([nk, nv]) => `  ${nk}: ${nv === null ? 'null' : String(nv)}`)
-              .join('\n');
-            return `${k}:\n${nested}`;
-          }
-          return `${k}: ${v === null ? 'null' : String(v)}`;
-        })
-        .join('\n');
-    }
-    return '';
-  };
-  fs.writeFileSync(registryPath, yaml(data), { mode: 0o600 });
-}
-
 function bumpRegistryMtime(registryPath: string): void {
   const future = new Date(Date.now() + 10_000);
   fs.utimesSync(registryPath, future, future);
@@ -147,14 +124,14 @@ describe('getCodexAuthProfilesSummary', () => {
     const registryPath = path.join(ccsDir, 'codex-profiles.yaml');
     const rawMessage = `EACCES: permission denied, stat '${registryPath}'`;
     const realStatSync = fs.statSync;
-    spyOn(fs, 'statSync').mockImplementation((target) => {
+    spyOn(fs, 'statSync').mockImplementation(((target: fs.PathLike) => {
       if (target === registryPath) {
         const err = new Error(rawMessage) as NodeJS.ErrnoException;
         err.code = 'EACCES';
         throw err;
       }
       return realStatSync(target);
-    });
+    }) as unknown as typeof fs.statSync);
 
     let message = '';
     try {

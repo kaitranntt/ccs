@@ -17,7 +17,6 @@ import {
   filterCcsFlags,
   parseExecutorFlags,
   validateFlagCombinations,
-  type ParsedExecutorFlags,
 } from '../arg-parser';
 import type { UnifiedConfig } from '../../../config/unified-config-types';
 

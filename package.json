@@ -74,6 +74,7 @@
     "prebuild:all": "rm -rf dist tsconfig.tsbuildinfo",
     "postbuild:all": "node scripts/verify-bundle.js",
     "typecheck": "tsc --noEmit",
+    "typecheck:tests": "tsc -p tests/tsconfig.json --noEmit",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write src/",

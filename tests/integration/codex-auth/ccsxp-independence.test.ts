@@ -96,7 +96,7 @@ describe('ccsxp independence — H5 stderr notice', () => {
     const stderrLines: string[] = [];
     const origWrite = process.stderr.write.bind(process.stderr);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    process.stderr.write = (chunk: any, ...args: any[]): boolean => {
+    process.stderr.write = (chunk: any, ..._args: any[]): boolean => {
       stderrLines.push(String(chunk));
       return true;
     };

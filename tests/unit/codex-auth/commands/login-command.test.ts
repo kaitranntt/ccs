@@ -34,7 +34,7 @@ async function makeCtx() {
 
 function spawnReturnsCode(code: number, writeAuth = false) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  spyOn(childProcess, 'spawn').mockImplementation((_cmd: string, _args: string[], opts: any) => {
+  spyOn(childProcess, 'spawn').mockImplementation(((_cmd: string, _args: string[], opts: any) => {
     if (writeAuth && opts?.env?.CODEX_HOME) {
       const dir = opts.env.CODEX_HOME as string;
       fs.mkdirSync(dir, { recursive: true });
@@ -49,8 +49,8 @@ function spawnReturnsCode(code: number, writeAuth = false) {
         return ee;
       },
     };
-    return ee as ReturnType<typeof childProcess.spawn>;
-  });
+    return ee;
+  }) as unknown as typeof childProcess.spawn);
 }
 
 function buildToken(payload: Record<string, unknown>): string {
@@ -253,7 +253,7 @@ describe('handleLoginCodex — clean exit updates registry', () => {
 
     spyOn(childProcess, 'spawn').mockImplementation(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (_cmd: string, _args: string[], opts: any) => {
+      ((_cmd: string, _args: string[], opts: any) => {
         const dir = (opts?.env?.CODEX_HOME as string) ?? '';
         if (dir) {
           fs.mkdirSync(dir, { recursive: true });
@@ -276,8 +276,8 @@ describe('handleLoginCodex — clean exit updates registry', () => {
             return ee;
           },
         };
-        return ee as ReturnType<typeof childProcess.spawn>;
-      }
+        return ee;
+      }) as unknown as typeof childProcess.spawn
     );
 
     const { handleLoginCodex } = await import('../../../../src/codex-auth/commands/login-command');

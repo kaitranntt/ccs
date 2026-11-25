@@ -60,7 +60,7 @@ describe('ensureProfileHooks', () => {
 
     const ensured = ensureProfileHooks('glm');
     const hookPath = getHookPath();
-    const settingsPath = path.join(tempHome, '.ccs', 'glm.settings.json');
+    const settingsPath = path.join(tempHome!, '.ccs', 'glm.settings.json');
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
 
     expect(ensured).toBe(true);
@@ -208,7 +208,7 @@ describe('ensureProfileHooks', () => {
   it('returns false when hook installation fails and no hook exists on disk', () => {
     setupTempHome();
 
-    const claudeSettingsPath = path.join(tempHome, '.claude', 'settings.json');
+    const claudeSettingsPath = path.join(tempHome!, '.claude', 'settings.json');
     fs.mkdirSync(path.dirname(claudeSettingsPath), { recursive: true });
     const globalSettings = {
       hooks: {

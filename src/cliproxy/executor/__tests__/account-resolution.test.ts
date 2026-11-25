@@ -135,7 +135,7 @@ describe('resolveAccounts — --accounts early exit', () => {
       addAccount: false,
     });
 
-    const allOutput = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    const allOutput = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(allOutput).toContain('test@example.com');
     expect(allOutput).toContain('(default)');
   });
@@ -198,7 +198,7 @@ describe('resolveAccounts — --use switching', () => {
 
     expect(setDefaultMock).toHaveBeenCalledWith('gemini', 'acc1');
     expect(touchMock).toHaveBeenCalledWith('gemini', 'acc1');
-    const allOutput = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    const allOutput = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(allOutput).toContain('Switched to account');
   });
 
@@ -240,7 +240,7 @@ describe('resolveAccounts — --use switching', () => {
     expect(exitSpy).toHaveBeenCalledWith(1);
     expect(touchMock).not.toHaveBeenCalled();
     expect(renameMock).not.toHaveBeenCalled();
-    const allOutput = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    const allOutput = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(allOutput).not.toContain('Switched to account');
   });
 

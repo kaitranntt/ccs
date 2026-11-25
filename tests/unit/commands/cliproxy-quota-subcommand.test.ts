@@ -319,6 +319,8 @@ describe('cliproxy quota remaining percent labels and ASCII compliance', () => {
     };
 
     const mockQuotaResult: AllAccountsQuotaResult = {
+      provider: 'agy',
+      lastUpdated: 1,
       accounts: [
         {
           account: mockAccount,

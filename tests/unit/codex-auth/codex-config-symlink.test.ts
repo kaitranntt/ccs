@@ -3,7 +3,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-let ensureSharedConfigSymlink: (profileDir: string, sharedConfigPath?: string) => void;
+let ensureSharedConfigSymlink: (
+  profileDir: string,
+  sharedConfigPath?: string,
+  options?: { overwriteRegularFile?: boolean }
+) => void;
 
 let tempDir: string;
 let profileDir: string;

@@ -49,7 +49,7 @@ describe('profile-routes local runtime readiness', () => {
     process.env.CCS_DASHBOARD_AUTH_ENABLED = 'false';
     forcedRemoteAddress = '127.0.0.1';
 
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input);
 
       if (url.startsWith(baseUrl)) {
@@ -81,7 +81,7 @@ describe('profile-routes local runtime readiness', () => {
       }
 
       throw new Error(`Unexpected URL: ${url}`);
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
   });
 
   afterEach(() => {
@@ -125,7 +125,7 @@ describe('profile-routes local runtime readiness', () => {
   it('blocks remote readiness probes when dashboard auth is disabled', async () => {
     let probeCount = 0;
     forcedRemoteAddress = '10.10.0.24';
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input);
       if (url.startsWith(baseUrl)) {
         return originalFetch(input);
@@ -135,7 +135,7 @@ describe('profile-routes local runtime readiness', () => {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const response = await fetch(`${baseUrl}/api/profiles/local-runtime-readiness`);
 
@@ -147,13 +147,13 @@ describe('profile-routes local runtime readiness', () => {
   });
 
   it('reports setup guidance when local endpoints are unavailable', async () => {
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input);
       if (url.startsWith(baseUrl)) {
         return originalFetch(input);
       }
       throw new Error('connect ECONNREFUSED');
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const response = await fetch(`${baseUrl}/api/profiles/local-runtime-readiness`);
 

@@ -69,7 +69,7 @@ describe('handleOrderSubcommand', () => {
       '../../../config/config-loader-facade'
     );
     mutateConfig((cfg) => {
-      if (!cfg.cliproxy) cfg.cliproxy = {};
+      if (!cfg.cliproxy) cfg.cliproxy = {} as never;
       cfg.cliproxy.backend = backend;
     });
     invalidateConfigCache();

@@ -18,7 +18,7 @@ export function useDockerSubcommandConsoleCapture(): {
     state.errorLines = [];
     originalConsoleLog = console.log;
     originalConsoleError = console.error;
-    originalExitCode = process.exitCode;
+    originalExitCode = typeof process.exitCode === 'number' ? process.exitCode : undefined;
     process.exitCode = 0;
 
     console.log = (...args: unknown[]) => {
