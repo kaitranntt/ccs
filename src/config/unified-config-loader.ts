@@ -24,6 +24,8 @@ import {
 } from './unified-config-types';
 import type { UnifiedConfig } from './unified-config-types';
 import { isUnifiedConfigEnabled } from './feature-flags';
+import { registerConfigReadBridge } from './loader/config-read-bridge';
+import { ConfigError } from '../errors/error-types';
 
 // loadUnifiedConfig() runs several times per invocation (startup migration check,
 // first-time-install check, command handler, doctor checks). A corrupt config.yaml
@@ -152,7 +154,7 @@ export function loadUnifiedConfig(): UnifiedConfig | null {
     const parsed = yaml.load(content);
 
     if (!isUnifiedConfig(parsed)) {
-      throw new Error(`Invalid config format in ${yamlPath}`);
+      throw new ConfigError(`Invalid config format in ${yamlPath}`, yamlPath);
     }
 
     // Auto-upgrade if version is outdated (regenerates YAML with new comments and fields)
@@ -282,3 +284,20 @@ export function getDefaultProfile(): string | undefined {
 export function setDefaultProfile(name: string): void {
   updateUnifiedConfig({ default: name });
 }
+
+const moduleNamespace =
+  typeof exports === 'object' && exports !== null
+    ? (exports as {
+        loadUnifiedConfig?: typeof loadUnifiedConfig;
+        loadOrCreateUnifiedConfig?: typeof loadOrCreateUnifiedConfig;
+      })
+    : undefined;
+
+registerConfigReadBridge({
+  loadUnifiedConfig: () =>
+    moduleNamespace?.loadUnifiedConfig ? moduleNamespace.loadUnifiedConfig() : loadUnifiedConfig(),
+  loadOrCreateUnifiedConfig: () =>
+    moduleNamespace?.loadOrCreateUnifiedConfig
+      ? moduleNamespace.loadOrCreateUnifiedConfig()
+      : loadOrCreateUnifiedConfig(),
+});

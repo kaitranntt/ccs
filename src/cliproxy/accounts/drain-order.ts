@@ -19,7 +19,7 @@ import {
   buildProxyUrl,
   buildManagementHeaders,
 } from '../proxy/proxy-target-resolver';
-import { loadDrainOrderConfig } from './registry';
+import { loadDrainOrderConfig } from './registry-config';
 import {
   claudePoolClassPriority,
   effectiveClaudePoolClass,

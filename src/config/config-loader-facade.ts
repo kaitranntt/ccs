@@ -50,8 +50,9 @@ export {
 // Re-export types from unified-config-loader
 export type { GeminiWebSearchInfo } from './unified-config-loader';
 
-// Re-export selected functions from config-manager
-export { loadSettings, loadConfigSafe, readConfig, getCcsDir } from '../utils/config-manager';
+// Re-export selected functions from config-manager and shared paths
+export { loadSettings, loadConfigSafe, readConfig } from '../utils/config-manager';
+export { getCcsDir } from '../shared/ccs-paths';
 
 // Internal imports for memoization wrappers
 import { statSync } from 'fs';

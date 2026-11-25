@@ -32,35 +32,20 @@ import type {
   ThinkingConfig,
 } from '../unified-config-types';
 import { canonicalizeBrowserConfig } from './normalizers';
-import { canonicalizeImageAnalysisConfig } from '../../utils/hooks/image-analysis-backend-resolver';
+import { canonicalizeImageAnalysisConfig } from '../../shared/image-analysis-config';
 import { normalizeOfficialChannelIds } from '../../channels/official-channels-ids';
 import {
   normalizeNativeWebSearchProfiles,
   normalizeSearxngBaseUrl,
 } from '../../utils/websearch/types';
-
-// ---------------------------------------------------------------------------
-// Circular-import safety: loadOrCreateUnifiedConfig lives in
-// unified-config-loader.ts which imports this file. We break the cycle by
-// using a lazy require() inside getConfig() so the module is resolved at
-// call time (after both modules have finished loading) rather than at import
-// time. This also preserves spy/mock compatibility: test spies replace the
-// function on the module namespace object, and require() returns that live
-// namespace, so the spy is always picked up.
-// ---------------------------------------------------------------------------
+import { getConfigReadBridge } from './config-read-bridge';
 
 function getConfig(): import('../unified-config-types').UnifiedConfig {
-  const loader = require('../unified-config-loader') as {
-    loadOrCreateUnifiedConfig: () => import('../unified-config-types').UnifiedConfig;
-  };
-  return loader.loadOrCreateUnifiedConfig();
+  return getConfigReadBridge().loadOrCreateUnifiedConfig();
 }
 
 function getPersistedConfig(): import('../unified-config-types').UnifiedConfig | null {
-  const loader = require('../unified-config-loader') as {
-    loadUnifiedConfig: () => import('../unified-config-types').UnifiedConfig | null;
-  };
-  return loader.loadUnifiedConfig();
+  return getConfigReadBridge().loadUnifiedConfig();
 }
 
 // ---------------------------------------------------------------------------

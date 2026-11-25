@@ -9,8 +9,9 @@ import { AuthError } from '../../errors/error-types';
 import { CLIProxyProvider } from '../types';
 import { PROVIDER_CAPABILITIES } from '../provider-capabilities';
 import { PROVIDER_TYPE_VALUES } from '../auth/auth-types';
-import { getAuthDir, getCliproxyDir } from '../config/config-generator';
-import { withSyncLockRetry } from '../../utils/sync-lock-retry';
+import { getAuthDir } from '../config/config-generator';
+import { loadDrainOrderConfig, withAccountsRegistryLock } from './registry-config';
+export { loadDrainOrderConfig } from './registry-config';
 import { AccountsRegistry, AccountInfo, PROVIDERS_WITHOUT_EMAIL, DrainOrderConfig } from './types';
 import {
   getAccountsRegistryPath,
@@ -345,28 +346,6 @@ function recoverAccountsRegistryFromCorruption(registryPath: string): AccountsRe
   return recovered;
 }
 
-function withAccountsRegistryLock<T>(callback: () => T): T {
-  const lockTarget = getCliproxyDir();
-
-  if (!fs.existsSync(lockTarget)) {
-    fs.mkdirSync(lockTarget, { recursive: true, mode: 0o700 });
-  }
-
-  // proper-lockfile rejects built-in retries in synchronous mode.
-  // Keep this API sync while waiting for short-lived concurrent launches.
-  // Preserve the existing stale-lock window.
-  // Retry only contention failures.
-  // Wait in short intervals so released locks are picked up promptly.
-  // Bound the wait so a genuinely stuck process still produces an error.
-  // The helper adds recovery guidance when that timeout is reached.
-  return withSyncLockRetry(lockTarget, callback, {
-    description: 'CLIProxy account registry lock',
-    staleMs: 10000,
-    retryDelayMs: 200,
-    retryTimeoutMs: 10000,
-  });
-}
-
 function readAccountsRegistryFromDisk(): AccountsRegistry {
   const registryPath = getAccountsRegistryPath();
 
@@ -547,7 +526,7 @@ export function registerAccount(
 
     const providerAccounts = registry.providers[provider];
     if (!providerAccounts) {
-      throw new Error('Failed to initialize provider accounts');
+      throw new AuthError('Failed to initialize provider accounts', provider);
     }
 
     let accountId: string;
@@ -901,17 +880,6 @@ export function saveDrainOrderConfig(
     }
     providerAccounts.drainOrder = config;
     return true;
-  });
-}
-
-/**
- * Load persisted drain order configuration for a provider.
- * Returns undefined if none stored (implies file order).
- */
-export function loadDrainOrderConfig(provider: CLIProxyProvider): DrainOrderConfig | undefined {
-  return withAccountsRegistryLock(() => {
-    const registry = readAccountsRegistryFromDisk();
-    return registry.providers[provider]?.drainOrder;
   });
 }
 

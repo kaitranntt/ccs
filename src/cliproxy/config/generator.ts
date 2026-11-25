@@ -32,11 +32,8 @@ import {
 } from './payload-rule-config';
 import { serializeFallbackChainSection } from './fallback-chain-serializer';
 
-/** Internal API key for CCS-managed requests */
-export const CCS_INTERNAL_API_KEY = 'ccs-internal-managed';
-
-/** Simple secret key for Control Panel login (user-facing) */
-export const CCS_CONTROL_PANEL_SECRET = 'ccs';
+import { CCS_INTERNAL_API_KEY } from '../auth/auth-constants';
+export { CCS_INTERNAL_API_KEY, CCS_CONTROL_PANEL_SECRET } from '../auth/auth-constants';
 
 /**
  * Config version - bump when config format changes to trigger regeneration

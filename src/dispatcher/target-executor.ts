@@ -12,7 +12,7 @@
 
 import { fail, info } from '../utils/ui';
 import { CodexAdapter, getTarget, hasTarget, registerTarget } from '../targets';
-import { getNativeCodexPassthroughArgs } from './cli-argument-parser';
+import { getNativeCodexPassthroughArgs } from './codex-passthrough';
 import type { TargetCredentials } from '../targets';
 import type { ProfileDispatchContext } from './dispatcher-context';
 

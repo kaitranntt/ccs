@@ -3,7 +3,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as http from 'http';
 import * as lockfile from 'proper-lockfile';
-import { verifyProcessOwnership } from '../cursor/daemon-process-ownership';
+import { verifyProcessOwnership } from '../shared/daemon-lifecycle';
 import type { OpenAICompatProfileConfig } from './profile-router';
 import {
   OPENAI_COMPAT_PROXY_ADAPTIVE_PORT_END,

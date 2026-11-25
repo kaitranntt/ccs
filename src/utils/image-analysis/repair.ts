@@ -2,7 +2,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import InstanceManager from '../../management/instance-manager';
 import { getCcsDir } from '../config-manager';
-import { prepareImageAnalysisFallbackHook } from '../hooks';
+import {
+  hasImageAnalyzerHook,
+  installImageAnalyzerHook,
+} from '../hooks/image-analyzer-hook-installer';
 import { removeCcsImageAnalyzerHooks } from '../hooks/image-analyzer-hook-utils';
 import { ensureImageAnalysisMcpOrThrow } from './mcp-installer';
 
@@ -83,7 +86,7 @@ export function syncManagedImageAnalysisInstances(
 
 export function repairImageAnalysisRuntimeState(): ImageAnalysisRepairStats {
   const managedToolReady = ensureImageAnalysisMcpOrThrow();
-  const sharedHookReady = prepareImageAnalysisFallbackHook();
+  const sharedHookReady = hasImageAnalyzerHook() || installImageAnalyzerHook();
   const cleanedSettingsFiles = cleanupManagedImageAnalysisHooks();
   const syncedInstances = managedToolReady ? syncManagedImageAnalysisInstances() : 0;
 

@@ -8,9 +8,9 @@
 import { DEFAULT_IMAGE_ANALYSIS_CONFIG } from '../../config/unified-config-types';
 import {
   countManagedImageAnalysisHookFiles,
-  hasImageAnalysisMcpReady,
   repairImageAnalysisRuntimeState,
-} from '../../utils/image-analysis';
+} from '../../utils/image-analysis/repair';
+import { hasImageAnalysisMcpReady } from '../../utils/image-analysis/mcp-installer';
 import { ok, warn, dim } from '../../utils/ui';
 import { isCliproxyRunning } from '../../cliproxy/services/stats-fetcher';
 import { CLIPROXY_DEFAULT_PORT } from '../../cliproxy/config/config-generator';

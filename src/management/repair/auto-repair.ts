@@ -6,12 +6,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ok, warn, fail, info, header, color } from '../../utils/ui';
 
+import { CLIPROXY_DEFAULT_PORT } from '../../cliproxy/config/port-manager';
 import {
-  CLIPROXY_DEFAULT_PORT,
   configNeedsRegeneration,
   regenerateConfig,
   CLIPROXY_CONFIG_VERSION,
-} from '../../cliproxy';
+} from '../../cliproxy/config/config-generator';
 import { getPortProcess, isCLIProxyProcess } from '../../utils/port-utils';
 import { killProcessOnPort, getPlatformName } from '../../utils/platform-commands';
 import { createSpinner } from '../checks/types';

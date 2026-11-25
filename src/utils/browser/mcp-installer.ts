@@ -5,27 +5,20 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { InstanceManager } from '../../management/instance-manager';
-import { getClaudeUserConfigPath } from '../claude-config-path';
-import { getCcsDir } from '../config-manager';
 import {
-  isClaudeUserConfigLockUnavailableError as isLockUnavailableError,
-  withClaudeUserConfigLock,
-} from '../claude-user-config-lock';
+  ensureManagedMcpServerConfig,
+  getCcsMcpDir,
+  removeManagedMcpServerFromConfigPaths,
+  resolveBundledMcpArtifactSourcePath,
+  stageMcpArtifact,
+  uninstallMcpArtifactFiles,
+  type ManagedMcpServerConfig,
+} from '../../shared/mcp-claude-installer';
+import { getClaudeUserConfigPath } from '../claude-config-path';
+import { ConfigError } from '../../errors/error-types';
 
 const BROWSER_MCP_SERVER = 'ccs-browser-server.cjs';
 const BROWSER_MCP_SERVER_NAME = 'ccs-browser';
-
-interface ClaudeUserConfig {
-  mcpServers?: Record<string, unknown>;
-  [key: string]: unknown;
-}
-
-interface ManagedBrowserMcpConfig {
-  type: 'stdio';
-  command: 'node';
-  args: [string];
-  env: Record<string, string>;
-}
 
 function resolvePackageRoot(fromPath: string): string | null {
   let currentDir = path.dirname(fromPath);
@@ -42,7 +35,7 @@ function resolvePackageRoot(fromPath: string): string | null {
 }
 
 function getBrowserMcpServerEnv(): Record<string, string> {
-  const sourcePath = resolveBundledServerSourcePath();
+  const sourcePath = resolveBundledMcpArtifactSourcePath(BROWSER_MCP_SERVER);
   if (!sourcePath) {
     return {};
   }
@@ -56,10 +49,6 @@ function getBrowserMcpServerEnv(): Record<string, string> {
   return fs.existsSync(nodeModulesPath) ? { NODE_PATH: nodeModulesPath } : {};
 }
 
-function getCcsMcpDir(): string {
-  return path.join(getCcsDir(), 'mcp');
-}
-
 export function getBrowserMcpServerName(): string {
   return BROWSER_MCP_SERVER_NAME;
 }
@@ -68,122 +57,8 @@ export function getBrowserMcpServerPath(): string {
   return path.join(getCcsMcpDir(), BROWSER_MCP_SERVER);
 }
 
-function hasMatchingContents(sourcePath: string, destinationPath: string): boolean {
-  if (!fs.existsSync(destinationPath)) {
-    return false;
-  }
-
-  const source = fs.readFileSync(sourcePath);
-  try {
-    const destination = fs.readFileSync(destinationPath);
-    return source.equals(destination);
-  } catch {
-    return false;
-  }
-}
-
-function getTempPath(targetPath: string): string {
-  const suffix = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  return `${targetPath}.${suffix}.tmp`;
-}
-
-function resolveBundledServerSourcePath(): string | null {
-  const possiblePaths = [
-    path.join(__dirname, '..', '..', '..', 'lib', 'mcp', BROWSER_MCP_SERVER),
-    path.join(__dirname, '..', '..', 'lib', 'mcp', BROWSER_MCP_SERVER),
-    path.join(__dirname, '..', 'lib', 'mcp', BROWSER_MCP_SERVER),
-  ];
-
-  for (const candidate of possiblePaths) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  return null;
-}
-
-function readClaudeUserConfig(configPath: string): ClaudeUserConfig | null {
-  if (!fs.existsSync(configPath)) {
-    return {};
-  }
-
-  try {
-    const raw = fs.readFileSync(configPath, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      return null;
-    }
-    return parsed as ClaudeUserConfig;
-  } catch {
-    return null;
-  }
-}
-
-function writeClaudeUserConfig(configPath: string, config: ClaudeUserConfig): boolean {
-  const tempPath = getTempPath(configPath);
-  const fileMode = fs.existsSync(configPath) ? fs.statSync(configPath).mode & 0o777 : 0o600;
-
-  try {
-    fs.writeFileSync(tempPath, JSON.stringify(config, null, 2) + '\n', 'utf8');
-    fs.chmodSync(tempPath, fileMode);
-    fs.renameSync(tempPath, configPath);
-    return true;
-  } finally {
-    if (fs.existsSync(tempPath)) {
-      fs.unlinkSync(tempPath);
-    }
-  }
-}
-
-function removeManagedServerConfig(configPath: string): boolean {
-  if (!fs.existsSync(configPath)) {
-    return false;
-  }
-
-  try {
-    return withClaudeUserConfigLock(configPath, () => {
-      const config = readClaudeUserConfig(configPath);
-      if (config === null) {
-        return false;
-      }
-
-      const existingServers =
-        config.mcpServers &&
-        typeof config.mcpServers === 'object' &&
-        !Array.isArray(config.mcpServers)
-          ? { ...(config.mcpServers as Record<string, unknown>) }
-          : {};
-
-      if (!(BROWSER_MCP_SERVER_NAME in existingServers)) {
-        return false;
-      }
-
-      delete existingServers[BROWSER_MCP_SERVER_NAME];
-
-      const nextConfig: ClaudeUserConfig = { ...config };
-      if (Object.keys(existingServers).length === 0) {
-        delete nextConfig.mcpServers;
-      } else {
-        nextConfig.mcpServers = existingServers;
-      }
-
-      try {
-        return writeClaudeUserConfig(configPath, nextConfig);
-      } catch {
-        return false;
-      }
-    });
-  } catch (error) {
-    if (isLockUnavailableError(error)) {
-      return false;
-    }
-    throw error;
-  }
-}
-
 export function installBrowserMcpServer(): boolean {
-  const sourcePath = resolveBundledServerSourcePath();
+  const sourcePath = resolveBundledMcpArtifactSourcePath(BROWSER_MCP_SERVER);
   if (!sourcePath) {
     return false;
   }
@@ -193,100 +68,28 @@ export function installBrowserMcpServer(): boolean {
     fs.mkdirSync(mcpDir, { recursive: true, mode: 0o700 });
   }
 
-  const serverPath = getBrowserMcpServerPath();
-  const sourceMode = fs.statSync(sourcePath).mode & 0o777;
-  if (hasMatchingContents(sourcePath, serverPath)) {
-    if ((fs.statSync(serverPath).mode & 0o777) !== sourceMode) {
-      fs.chmodSync(serverPath, sourceMode);
-    }
-    return true;
-  }
-
-  const tempPath = getTempPath(serverPath);
-
   try {
-    fs.copyFileSync(sourcePath, tempPath);
-    fs.chmodSync(tempPath, sourceMode);
-    try {
-      fs.renameSync(tempPath, serverPath);
-    } catch (renameError) {
-      const errorCode = (renameError as NodeJS.ErrnoException).code;
-      if (errorCode !== 'EEXIST' && errorCode !== 'EPERM') {
-        throw renameError;
-      }
-
-      if (!hasMatchingContents(sourcePath, serverPath)) {
-        fs.copyFileSync(tempPath, serverPath);
-        fs.chmodSync(serverPath, sourceMode);
-      }
-    }
+    stageMcpArtifact(sourcePath, getBrowserMcpServerPath(), { preserveSourceMode: true });
     return true;
   } catch {
     return false;
-  } finally {
-    if (fs.existsSync(tempPath)) {
-      fs.unlinkSync(tempPath);
-    }
   }
 }
 
 export function ensureBrowserMcpConfig(): boolean {
-  const claudeUserConfigPath = getClaudeUserConfigPath();
-  const claudeUserConfigDir = path.dirname(claudeUserConfigPath);
-  if (!fs.existsSync(claudeUserConfigDir)) {
-    fs.mkdirSync(claudeUserConfigDir, { recursive: true, mode: 0o700 });
-  }
-
-  const desiredServerConfig: ManagedBrowserMcpConfig = {
+  const desiredServerConfig: ManagedMcpServerConfig = {
     type: 'stdio',
     command: 'node',
     args: [getBrowserMcpServerPath()],
     env: getBrowserMcpServerEnv(),
   };
 
-  try {
-    return withClaudeUserConfigLock(claudeUserConfigPath, () => {
-      const config = readClaudeUserConfig(claudeUserConfigPath);
-      if (config === null) {
-        return false;
-      }
-
-      const existingServers =
-        config.mcpServers &&
-        typeof config.mcpServers === 'object' &&
-        !Array.isArray(config.mcpServers)
-          ? (config.mcpServers as Record<string, unknown>)
-          : {};
-      const currentConfig = existingServers[BROWSER_MCP_SERVER_NAME];
-      if (
-        typeof currentConfig === 'object' &&
-        currentConfig !== null &&
-        JSON.stringify(currentConfig) === JSON.stringify(desiredServerConfig)
-      ) {
-        return true;
-      }
-
-      const nextConfig: ClaudeUserConfig = {
-        ...config,
-        mcpServers: {
-          ...existingServers,
-          [BROWSER_MCP_SERVER_NAME]: desiredServerConfig,
-        },
-      };
-
-      try {
-        writeClaudeUserConfig(claudeUserConfigPath, nextConfig);
-        return true;
-      } catch {
-        return false;
-      }
-    });
-  } catch (error) {
-    if (isLockUnavailableError(error)) {
-      return false;
-    }
-    throw error;
-  }
+  const status = ensureManagedMcpServerConfig({
+    serverName: BROWSER_MCP_SERVER_NAME,
+    desiredConfig: desiredServerConfig,
+    ensureParentDir: true,
+  });
+  return status === 'ready' || status === 'updated';
 }
 
 export function ensureBrowserMcp(): boolean {
@@ -304,30 +107,21 @@ export function syncBrowserMcpToConfigDir(claudeConfigDir: string | undefined): 
 }
 
 export function uninstallBrowserMcpServer(): boolean {
-  const serverPath = getBrowserMcpServerPath();
-  if (!fs.existsSync(serverPath)) {
-    return false;
-  }
-
-  try {
-    fs.unlinkSync(serverPath);
-    return true;
-  } catch {
-    return false;
-  }
+  return uninstallMcpArtifactFiles([getBrowserMcpServerPath()]);
 }
 
 export function removeBrowserMcpConfig(): boolean {
-  let removed = removeManagedServerConfig(getClaudeUserConfigPath());
-
   const instanceManager = new InstanceManager();
-  for (const instanceName of instanceManager.listInstances()) {
-    const instancePath = instanceManager.getInstancePath(instanceName);
-    const instanceClaudeConfigPath = path.join(instancePath, '.claude.json');
-    removed = removeManagedServerConfig(instanceClaudeConfigPath) || removed;
-  }
+  const configPaths = [
+    getClaudeUserConfigPath(),
+    ...instanceManager
+      .listInstances()
+      .map((instanceName) =>
+        path.join(instanceManager.getInstancePath(instanceName), '.claude.json')
+      ),
+  ];
 
-  return removed;
+  return removeManagedMcpServerFromConfigPaths(BROWSER_MCP_SERVER_NAME, configPaths);
 }
 
 export function uninstallBrowserMcp(): boolean {
@@ -339,7 +133,9 @@ export function uninstallBrowserMcp(): boolean {
 export function ensureBrowserMcpOrThrow(): boolean {
   const ready = ensureBrowserMcp();
   if (!ready) {
-    throw new Error('Browser MCP is enabled, but CCS could not prepare the local browser tool.');
+    throw new ConfigError(
+      'Browser MCP is enabled, but CCS could not prepare the local browser tool.'
+    );
   }
 
   return ready;

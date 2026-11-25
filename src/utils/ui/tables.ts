@@ -8,8 +8,22 @@
 import type { TableOptions } from '../../types/utils';
 import { color } from './colors';
 
-// cli-table3 is CommonJS
-const Table = require('cli-table3');
+// cli-table3 is CommonJS; lazy-load on first table() render to keep CLI startup lean.
+let TableConstructor:
+  | (new (config: Record<string, unknown>) => {
+      push: (row: string[]) => void;
+      toString: () => string;
+    })
+  | null = null;
+
+function getTableConstructor() {
+  if (!TableConstructor) {
+    const loaded = require('cli-table3') as NonNullable<typeof TableConstructor>;
+    TableConstructor = loaded;
+    return loaded;
+  }
+  return TableConstructor;
+}
 
 /**
  * Create styled table
@@ -66,6 +80,7 @@ export function table(rows: string[][], options: TableOptions = {}): string {
     tableConfig.colWidths = options.colWidths;
   }
 
+  const Table = getTableConstructor();
   const tableInstance = new Table(tableConfig);
 
   rows.forEach((row) => tableInstance.push(row));

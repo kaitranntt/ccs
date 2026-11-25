@@ -17,7 +17,7 @@ import {
   CLIPROXY_MAX_STABLE_VERSION,
   getExecutableName,
 } from './binary/platform-detector';
-import { stopProxy } from './services/proxy-lifecycle-service';
+import { stopProxy as stopProxySession } from './session-tracker';
 import { waitForPortFree } from '../utils/port-utils';
 
 import {
@@ -317,12 +317,14 @@ export function getInstalledCliproxyVersion(backend?: CLIProxyBackend): string {
   );
 }
 
+const stopDefaultProxy = (port: number = resolveLifecyclePort()) => stopProxySession(port);
+
 interface InstallCliproxyVersionDeps {
   createManager?: (
     config: Partial<BinaryManagerConfig>,
     backend: CLIProxyBackend
   ) => Pick<BinaryManager, 'isBinaryInstalled' | 'deleteBinary' | 'ensureBinary'>;
-  stopProxyFn?: typeof stopProxy;
+  stopProxyFn?: typeof stopDefaultProxy;
   waitForPortFreeFn?: typeof waitForPortFree;
   formatInfo?: typeof info;
   formatWarn?: typeof warn;
@@ -339,7 +341,7 @@ export async function installCliproxyVersion(
 ): Promise<void> {
   const configuredBackend = backend ?? getConfiguredOrDefaultBackend();
   const effectiveBackend = resolveLocalBackend(configuredBackend, { notifyOnPlus: true });
-  const stopProxyFn = deps.stopProxyFn ?? stopProxy;
+  const stopProxyFn = deps.stopProxyFn ?? stopDefaultProxy;
   const waitForPortFreeFn = deps.waitForPortFreeFn ?? waitForPortFree;
   const formatInfo = deps.formatInfo ?? info;
   const formatWarn = deps.formatWarn ?? warn;
