@@ -248,6 +248,41 @@ function stripUnsupportedToolFields(
   };
 }
 
+export function attachClientCloseAbort(
+  originalReq: http.IncomingMessage,
+  clientRes: http.ServerResponse,
+  onAbort: () => void
+): () => void {
+  let detached = false;
+
+  const handleDisconnect = () => {
+    if (detached || clientRes.writableEnded) {
+      return;
+    }
+    detached = true;
+    onAbort();
+  };
+
+  const onReqClose = () => {
+    // Node/Bun may emit 'close' on IncomingMessage when the request body finishes reading;
+    // only treat it as a client abort if the request was not completely received.
+    if (!originalReq.complete) {
+      handleDisconnect();
+    }
+  };
+
+  originalReq.once('aborted', handleDisconnect);
+  originalReq.once('close', onReqClose);
+  clientRes.once('close', handleDisconnect);
+
+  return () => {
+    detached = true;
+    originalReq.removeListener('aborted', handleDisconnect);
+    originalReq.removeListener('close', onReqClose);
+    clientRes.removeListener('close', handleDisconnect);
+  };
+}
+
 export class ToolSanitizationProxy {
   private server: http.Server | null = null;
   private port: number | null = null;
@@ -594,41 +629,6 @@ export class ToolSanitizationProxy {
     return options;
   }
 
-  private attachClientCloseAbort(
-    originalReq: http.IncomingMessage,
-    clientRes: http.ServerResponse,
-    onAbort: () => void
-  ): () => void {
-    let detached = false;
-
-    const handleDisconnect = () => {
-      if (detached || clientRes.writableEnded) {
-        return;
-      }
-      detached = true;
-      onAbort();
-    };
-
-    const onReqClose = () => {
-      // Node/Bun may emit 'close' on IncomingMessage when the request body finishes reading;
-      // only treat it as a client abort if the request was not completely received.
-      if (!originalReq.complete) {
-        handleDisconnect();
-      }
-    };
-
-    originalReq.once('aborted', handleDisconnect);
-    originalReq.once('close', onReqClose);
-    clientRes.once('close', handleDisconnect);
-
-    return () => {
-      detached = true;
-      originalReq.removeListener('aborted', handleDisconnect);
-      originalReq.removeListener('close', onReqClose);
-      clientRes.removeListener('close', handleDisconnect);
-    };
-  }
-
   private forwardRaw(
     originalReq: http.IncomingMessage,
     clientRes: http.ServerResponse,
@@ -703,12 +703,11 @@ export class ToolSanitizationProxy {
         }
       );
 
-      cleanupClientClose = this.attachClientCloseAbort(originalReq, clientRes, () => {
-        if (activeUpstreamRes && !activeUpstreamRes.destroyed) {
-          activeUpstreamRes.destroy();
-        }
+      cleanupClientClose = attachClientCloseAbort(originalReq, clientRes, () => {
         if (!upstreamReq.destroyed) {
           upstreamReq.destroy();
+        } else if (activeUpstreamRes && !activeUpstreamRes.destroyed) {
+          activeUpstreamRes.destroy();
         }
         settleResolve();
       });
@@ -836,12 +835,11 @@ export class ToolSanitizationProxy {
         }
       );
 
-      cleanupClientClose = this.attachClientCloseAbort(originalReq, clientRes, () => {
-        if (activeUpstreamRes && !activeUpstreamRes.destroyed) {
-          activeUpstreamRes.destroy();
-        }
+      cleanupClientClose = attachClientCloseAbort(originalReq, clientRes, () => {
         if (!upstreamReq.destroyed) {
           upstreamReq.destroy();
+        } else if (activeUpstreamRes && !activeUpstreamRes.destroyed) {
+          activeUpstreamRes.destroy();
         }
         settleResolve();
       });
@@ -1057,12 +1055,11 @@ export class ToolSanitizationProxy {
         }
       );
 
-      cleanupClientClose = this.attachClientCloseAbort(originalReq, clientRes, () => {
-        if (activeUpstreamRes && !activeUpstreamRes.destroyed) {
-          activeUpstreamRes.destroy();
-        }
+      cleanupClientClose = attachClientCloseAbort(originalReq, clientRes, () => {
         if (!upstreamReq.destroyed) {
           upstreamReq.destroy();
+        } else if (activeUpstreamRes && !activeUpstreamRes.destroyed) {
+          activeUpstreamRes.destroy();
         }
         settleResolve();
       });

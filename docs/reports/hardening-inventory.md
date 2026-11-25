@@ -96,7 +96,7 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 | `src/web-server/model-pricing.ts` | 1298 |
 | `src/cliproxy/config/generator.ts` | 1295 |
 | `src/cursor/cursor-executor.ts` | 1234 |
-| `src/cliproxy/proxy/tool-sanitization-proxy.ts` | 1183 |
+| `src/cliproxy/proxy/tool-sanitization-proxy.ts` | 1180 |
 | `src/cliproxy/config/env-builder.ts` | 1053 |
 | `src/web-server/routes/settings-routes.ts` | 1052 |
 | `src/cliproxy/auth/oauth-process.ts` | 1048 |

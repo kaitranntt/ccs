@@ -751,7 +751,7 @@
         },
         {
           "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
-          "loc": 1183
+          "loc": 1180
         },
         {
           "file": "src/cliproxy/config/env-builder.ts",
