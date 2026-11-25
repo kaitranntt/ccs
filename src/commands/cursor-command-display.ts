@@ -72,7 +72,7 @@ export function renderCursorStatus(
     cursorConfig.enabled && authStatus.authenticated && !authStatus.expired && daemonStatus.running;
 
   console.log('Cursor IDE Status');
-  console.log('─────────────────');
+  console.log('-----------------');
   console.log('');
 
   const enabledIcon = cursorConfig.enabled ? color('[OK]', 'success') : color('[X]', 'error');
@@ -142,7 +142,7 @@ export function renderCursorStatus(
 
 export function renderCursorModels(models: CursorModel[], defaultModel: string): void {
   console.log('Available Cursor Models');
-  console.log('───────────────────────');
+  console.log('-----------------------');
   console.log('');
 
   for (const model of models) {
@@ -159,7 +159,7 @@ export function renderCursorModels(models: CursorModel[], defaultModel: string):
 export function renderCursorProbe(result: CursorProbeResult): void {
   const statusIcon = result.ok ? color('[OK]', 'success') : color('[X]', 'error');
   console.log('Cursor Live Probe');
-  console.log('─────────────────');
+  console.log('-----------------');
   console.log('');
   console.log(`Result:       ${statusIcon} ${result.ok ? 'Success' : 'Failure'}`);
   console.log(`Stage:        ${result.stage}`);

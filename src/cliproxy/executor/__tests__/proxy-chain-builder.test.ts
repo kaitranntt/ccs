@@ -112,7 +112,7 @@ describe('buildProxyChain — tool sanitization: started when ANTHROPIC_BASE_URL
     const result = await buildProxyChain(baseCtx({ _ToolSanitizationProxy: ctor as never }));
 
     expect(ctor).toHaveBeenCalledTimes(1);
-    expect(result.toolSanitizationProxy).toBe(instance);
+    expect<unknown>(result.toolSanitizationProxy).toBe(instance);
     expect(result.toolSanitizationPort).toBe(13001);
   });
 });
@@ -192,7 +192,7 @@ describe('buildProxyChain — codex reasoning: started for single-provider codex
     );
 
     expect(codexCtorPair.ctor).toHaveBeenCalledTimes(1);
-    expect(result.codexReasoningProxy).toBe(codexCtorPair.instance);
+    expect<unknown>(result.codexReasoningProxy).toBe(codexCtorPair.instance);
     expect(result.codexReasoningPort).toBe(13011);
   });
 });

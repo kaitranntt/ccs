@@ -219,7 +219,7 @@ describe('Bar serve publication ownership', () => {
     const pidPath = path.join(ccsDir, 'bar', 'server.pid');
     const barJsonPath = path.join(ccsDir, 'bar.json');
     const publicationOrder: string[] = [];
-    let oldStopRemovedDiscovery: boolean | null = null;
+    let oldStopRemovedDiscovery = null as boolean | null;
 
     await handleBarServe(['--port', '4555'], {
       getCcsDir: () => ccsDir,

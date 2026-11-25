@@ -1322,7 +1322,7 @@ describe('multi-profile: Claude credential reader', () => {
     const originalCcsHome = process.env.CCS_HOME;
     const tempCcsHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-bar-default-profile-'));
     const clock = { now: 1_000_000 };
-    let fetchedToken: string | null = null;
+    let fetchedToken = null as string | null;
 
     try {
       process.env.CCS_HOME = tempCcsHome;

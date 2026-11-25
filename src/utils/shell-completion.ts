@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { ConfigError, ValidationError } from '../errors/error-types';
 import { getCcsDir } from './config-manager';
 // import { execSync } from 'child_process'; // Currently unused
 
@@ -71,9 +72,10 @@ export class ShellCompletionInstaller {
     if (fs.existsSync(dirPath)) {
       const stat = fs.statSync(dirPath);
       if (!stat.isDirectory()) {
-        throw new Error(
+        throw new ConfigError(
           `Cannot create directory: ${dirPath} exists but is a file.\n` +
-            `Please remove or rename this file and try again.`
+            `Please remove or rename this file and try again.`,
+          dirPath
         );
       }
       // Directory exists, nothing to do
@@ -98,7 +100,7 @@ export class ShellCompletionInstaller {
     const completionPath = path.join(this.completionDir, 'ccs.bash');
 
     if (!fs.existsSync(completionPath)) {
-      throw new Error('Completion file not found. Please reinstall CCS.');
+      throw new ConfigError('Completion file not found. Please reinstall CCS.');
     }
 
     const marker = '# CCS shell completion';
@@ -140,7 +142,7 @@ export class ShellCompletionInstaller {
     const zshCompDir = path.join(this.homeDir, '.zsh', 'completion');
 
     if (!fs.existsSync(completionPath)) {
-      throw new Error('Completion file not found. Please reinstall CCS.');
+      throw new ConfigError('Completion file not found. Please reinstall CCS.');
     }
 
     // Create zsh completion directory (with file conflict checking)
@@ -188,7 +190,7 @@ export class ShellCompletionInstaller {
     const fishCompDir = path.join(this.homeDir, '.config', 'fish', 'completions');
 
     if (!fs.existsSync(completionPath)) {
-      throw new Error('Completion file not found. Please reinstall CCS.');
+      throw new ConfigError('Completion file not found. Please reinstall CCS.');
     }
 
     // Create fish completion directory (with file conflict checking)
@@ -221,7 +223,7 @@ export class ShellCompletionInstaller {
     const completionPath = path.join(this.completionDir, 'ccs.ps1');
 
     if (!fs.existsSync(completionPath)) {
-      throw new Error('Completion file not found. Please reinstall CCS.');
+      throw new ConfigError('Completion file not found. Please reinstall CCS.');
     }
 
     const marker = '# CCS shell completion';
@@ -266,8 +268,9 @@ export class ShellCompletionInstaller {
     const { force = false } = options;
 
     if (!targetShell) {
-      throw new Error(
-        'Could not detect shell. Please specify: --bash, --zsh, --fish, or --powershell'
+      throw new ValidationError(
+        'Could not detect shell. Please specify: --bash, --zsh, --fish, or --powershell',
+        'shell'
       );
     }
 
@@ -285,7 +288,7 @@ export class ShellCompletionInstaller {
       case 'powershell':
         return this.installPowerShell(force);
       default:
-        throw new Error(`Unsupported shell: ${targetShell}`);
+        throw new ValidationError(`Unsupported shell: ${targetShell}`, 'shell');
     }
   }
 }

@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as lockfile from 'proper-lockfile';
+import { ConfigError } from '../../errors/error-types';
 import { getClaudeConfigDir, getClaudeSettingsPath } from '../../utils/claude-config-path';
 import {
   PERSIST_LOCK_RETRIES,
@@ -95,13 +96,13 @@ export async function readFileUtf8NoFollow(filePath: string): Promise<string> {
 
     const stats = await handle.stat();
     if (!stats.isFile()) {
-      throw new Error('Path is not a regular file');
+      throw new ConfigError('Path is not a regular file', filePath);
     }
 
     if (noFollowFlag === 0) {
       const latestStats = await fs.promises.stat(filePath);
       if (latestStats.dev !== stats.dev || latestStats.ino !== stats.ino) {
-        throw new Error('Path changed during secure read');
+        throw new ConfigError('Path changed during secure read', filePath);
       }
     }
 
@@ -117,7 +118,7 @@ export function parseSettingsObject(content: string, sourceLabel: string): Recor
   }
   const parsed: unknown = JSON.parse(content);
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error(`${sourceLabel} must contain a JSON object, not an array or primitive`);
+    throw new ConfigError(`${sourceLabel} must contain a JSON object, not an array or primitive`);
   }
   return parsed as Record<string, unknown>;
 }
@@ -139,8 +140,9 @@ export async function withPersistSettingsLock<T>(operation: () => Promise<T>): P
       realpath: false,
     });
   } catch (error) {
-    throw new Error(
-      `Failed to lock Claude settings directory (${formatDisplayPath(settingsDir)}): ${(error as Error).message}`
+    throw new ConfigError(
+      `Failed to lock Claude settings directory (${formatDisplayPath(settingsDir)}): ${(error as Error).message}`,
+      settingsDir
     );
   }
 
@@ -169,9 +171,15 @@ export async function readClaudeSettings(): Promise<Record<string, unknown>> {
       return {};
     }
     if (nodeError.code === 'ELOOP') {
-      throw new Error('settings.json is a symlink - refusing to read for security');
+      throw new ConfigError(
+        'settings.json is a symlink - refusing to read for security',
+        settingsPath
+      );
     }
-    throw new Error(`Failed to parse settings.json: ${(error as Error).message}`);
+    throw new ConfigError(
+      `Failed to parse settings.json: ${(error as Error).message}`,
+      settingsPath
+    );
   }
 }
 
@@ -179,7 +187,10 @@ export async function readClaudeSettings(): Promise<Record<string, unknown>> {
 export async function writeClaudeSettings(settings: Record<string, unknown>): Promise<void> {
   const settingsPath = getClaudeSettingsPath();
   if (await isSymlinkAsync(settingsPath)) {
-    throw new Error('settings.json is a symlink - refusing to write for security');
+    throw new ConfigError(
+      'settings.json is a symlink - refusing to write for security',
+      settingsPath
+    );
   }
 
   const settingsDir = path.dirname(settingsPath);

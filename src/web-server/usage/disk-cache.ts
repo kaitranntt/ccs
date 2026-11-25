@@ -12,9 +12,11 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { DailyUsage, HourlyUsage, MonthlyUsage, SessionUsage } from './types';
-import { ok, info, warn } from '../../utils/ui';
+import { createLogger } from '../../services/logging';
 import { getCcsDir } from '../../config/config-loader-facade';
 import { withSyncLockRetry } from '../../utils/sync-lock-retry';
+
+const logger = createLogger('web-server:usage:disk-cache');
 
 // Cache configuration
 function getCacheDir() {
@@ -70,7 +72,10 @@ export function readDiskCache(): UsageDiskCache | null {
 
     // Version check - invalidate if schema changed
     if (cache.version !== CACHE_VERSION) {
-      console.log(info('Cache version mismatch, will refresh'));
+      logger.info('usage.disk-cache.version-mismatch', 'Cache version mismatch, will refresh', {
+        version: cache.version,
+        expectedVersion: CACHE_VERSION,
+      });
       return null;
     }
 
@@ -78,7 +83,9 @@ export function readDiskCache(): UsageDiskCache | null {
     return cache;
   } catch (err) {
     // Cache corrupted or unreadable - treat as miss
-    console.log(info('Cache read failed, will refresh:') + ` ${(err as Error).message}`);
+    logger.warn('usage.disk-cache.read-failed', 'Cache read failed, will refresh', {
+      error: (err as Error).message,
+    });
     return null;
   }
 }
@@ -146,10 +153,12 @@ export function writeDiskCache(
       { description: 'usage disk cache lock' }
     );
 
-    console.log(ok('Disk cache updated'));
+    logger.info('usage.disk-cache.updated', 'Disk cache updated');
   } catch (err) {
     // Non-fatal - we can still serve from memory
-    console.log(warn('Failed to write disk cache:') + ` ${(err as Error).message}`);
+    logger.warn('usage.disk-cache.write-failed', 'Failed to write disk cache', {
+      error: (err as Error).message,
+    });
   }
 }
 
@@ -184,12 +193,14 @@ export function clearDiskCache(): void {
       () => {
         if (fs.existsSync(cacheFile)) {
           fs.unlinkSync(cacheFile);
-          console.log(ok('Disk cache cleared'));
+          logger.info('usage.disk-cache.cleared', 'Disk cache cleared');
         }
       },
       { description: 'usage disk cache lock' }
     );
   } catch (err) {
-    console.log(warn('Failed to clear disk cache:') + ` ${(err as Error).message}`);
+    logger.warn('usage.disk-cache.clear-failed', 'Failed to clear disk cache', {
+      error: (err as Error).message,
+    });
   }
 }

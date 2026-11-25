@@ -58,7 +58,9 @@ describe('optional Claude quota windows', () => {
         });
         const bar = await fetcher('claude', 'fixture');
         expect(bar.success).toBe(true);
-        expect(bar.models[0]?.percentage ?? null).toBe(mask & 2 ? 70 : mask & 1 ? 80 : null);
+        expect<number | null>(bar.models[0]?.percentage ?? null).toBe(
+          mask & 2 ? 70 : mask & 1 ? 80 : null
+        );
       });
     }
   }

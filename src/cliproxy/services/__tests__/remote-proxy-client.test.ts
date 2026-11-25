@@ -50,7 +50,7 @@ describe('remote-proxy-client', () => {
 
   describe('RemoteProxyErrorCode', () => {
     it('should define expected error codes', () => {
-      const validCodes = [
+      const validCodes: Array<string | undefined> = [
         'CONNECTION_REFUSED',
         'TIMEOUT',
         'AUTH_FAILED',

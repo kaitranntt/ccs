@@ -22,6 +22,7 @@ import { resolveProxyConfig } from '../proxy/proxy-config-resolver';
 import { CLIPROXY_DEFAULT_PORT, validatePort } from '../config/config-generator';
 import type { ResolvedProxyConfig } from '../types';
 import type { UnifiedConfig } from '../../config/schemas/unified-config';
+import { ProviderError, ProxyError } from '../../errors/error-types';
 import { isNetworkError, handleNetworkError } from './retry-handler';
 
 export interface ResolvedExecutorProxyConfig {
@@ -139,7 +140,10 @@ export async function resolveExecutorProxy(
       console.error(warn(`Remote proxy unreachable: ${status.error}`));
 
       if (proxyConfig.remoteOnly) {
-        throw new Error('Remote proxy unreachable and --remote-only specified');
+        throw new ProxyError(
+          'Remote proxy unreachable and --remote-only specified',
+          proxyConfig.port
+        );
       }
 
       if (proxyConfig.fallbackEnabled) {
@@ -154,13 +158,16 @@ export async function resolveExecutorProxy(
             });
             rl.close();
             if (answer.toLowerCase() === 'n') {
-              throw new Error('Remote proxy unreachable and user declined fallback');
+              throw new ProxyError(
+                'Remote proxy unreachable and user declined fallback',
+                proxyConfig.port
+              );
             }
           }
           console.log(info('Starting local proxy...'));
         }
       } else {
-        throw new Error('Remote proxy unreachable and fallback disabled');
+        throw new ProxyError('Remote proxy unreachable and fallback disabled', proxyConfig.port);
       }
     }
   }
@@ -174,7 +181,7 @@ export async function resolveExecutorProxy(
         console.error('');
         console.error(fail(getPlusBackendUnavailableMessage(p)));
         console.error('');
-        throw new Error(`Provider ${p} requires local CLIProxy Plus backend`);
+        throw new ProviderError(`Provider ${p} requires local CLIProxy Plus backend`, p);
       }
     }
   }

@@ -9,6 +9,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { ConfigError } from '../../errors/error-types';
 import type { CLIProxyProvider, ProviderModelMapping } from '../types';
 
 /** Base settings file structure */
@@ -51,9 +52,10 @@ export function loadBaseConfig(provider: CLIProxyProvider): BaseSettings {
   const configPath = getBaseConfigPath(provider);
 
   if (!fs.existsSync(configPath)) {
-    throw new Error(
+    throw new ConfigError(
       `Base config not found for provider '${provider}': ${configPath}\n` +
-        `Expected file: config/base-${provider}.settings.json`
+        `Expected file: config/base-${provider}.settings.json`,
+      configPath
     );
   }
 
@@ -63,7 +65,7 @@ export function loadBaseConfig(provider: CLIProxyProvider): BaseSettings {
 
     // Validate required fields
     if (!settings.env || typeof settings.env !== 'object') {
-      throw new Error('Missing or invalid "env" object');
+      throw new ConfigError('Missing or invalid "env" object', configPath);
     }
 
     // claude provider is model-neutral: it does not pin model env vars so that
@@ -78,7 +80,7 @@ export function loadBaseConfig(provider: CLIProxyProvider): BaseSettings {
 
       for (const field of required) {
         if (!settings.env[field as keyof BaseSettings['env']]) {
-          throw new Error(`Missing required field: env.${field}`);
+          throw new ConfigError(`Missing required field: env.${field}`, configPath);
         }
       }
     }
@@ -88,7 +90,10 @@ export function loadBaseConfig(provider: CLIProxyProvider): BaseSettings {
     return settings;
   } catch (error) {
     const err = error as Error;
-    throw new Error(`Failed to load base config for '${provider}': ${err.message}`);
+    throw new ConfigError(
+      `Failed to load base config for '${provider}': ${err.message}`,
+      configPath
+    );
   }
 }
 

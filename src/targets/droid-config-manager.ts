@@ -11,6 +11,7 @@ import * as os from 'os';
 import * as lockfile from 'proper-lockfile';
 import { getModelThinkingSupport } from '../cliproxy/model-catalog';
 import { validateThinking } from '../cliproxy/thinking-validator';
+import { ConfigError, ValidationError } from '../errors/error-types';
 import { stripModelConfigurationSuffixes } from '../shared/extended-context-utils';
 
 const CCS_MODEL_PREFIX = 'ccs-';
@@ -31,8 +32,9 @@ function isValidProfileName(profile: string): boolean {
 
 function validateProfileName(profile: string): void {
   if (!isValidProfileName(profile)) {
-    throw new Error(
-      `Invalid profile name "${profile}": must contain only alphanumeric characters, dots, underscores, or hyphens`
+    throw new ValidationError(
+      `Invalid profile name "${profile}": must contain only alphanumeric characters, dots, underscores, or hyphens`,
+      'profile'
     );
   }
 }
@@ -332,7 +334,7 @@ function readFileUtf8NoFollow(filePath: string): string {
   try {
     const stat = fs.fstatSync(fd);
     if (!stat.isFile()) {
-      throw new Error('Refusing to read: settings.json is not a regular file');
+      throw new ConfigError('Refusing to read: settings.json is not a regular file', filePath);
     }
     return fs.readFileSync(fd, 'utf8');
   } finally {
@@ -351,10 +353,10 @@ function readDroidSettings(): DroidSettings {
 
   const fileStat = fs.lstatSync(settingsPath);
   if (fileStat.isSymbolicLink()) {
-    throw new Error('Refusing to read: settings.json is a symlink');
+    throw new ConfigError('Refusing to read: settings.json is a symlink', settingsPath);
   }
   if (!fileStat.isFile()) {
-    throw new Error('Refusing to read: settings.json is not a regular file');
+    throw new ConfigError('Refusing to read: settings.json is not a regular file', settingsPath);
   }
 
   const raw = readFileUtf8NoFollow(settingsPath);
@@ -387,8 +389,9 @@ async function acquireFactoryLock(retries: number): Promise<() => Promise<void>>
       retries: { retries, minTimeout: LOCK_RETRY_MIN_MS, maxTimeout: LOCK_RETRY_MAX_MS },
     });
   } catch (error) {
-    throw new Error(
-      `Failed to lock Droid settings directory (${factoryDir}): ${(error as Error).message}`
+    throw new ConfigError(
+      `Failed to lock Droid settings directory (${factoryDir}): ${(error as Error).message}`,
+      factoryDir
     );
   }
 }
@@ -418,7 +421,7 @@ function writeDroidSettings(settings: DroidSettings): void {
   if (fs.existsSync(settingsPath)) {
     const stat = fs.lstatSync(settingsPath);
     if (stat.isSymbolicLink()) {
-      throw new Error('Refusing to write: settings.json is a symlink');
+      throw new ConfigError('Refusing to write: settings.json is a symlink', settingsPath);
     }
   }
 
@@ -426,7 +429,7 @@ function writeDroidSettings(settings: DroidSettings): void {
   if (fs.existsSync(tmpPath)) {
     const tmpStat = fs.lstatSync(tmpPath);
     if (tmpStat.isSymbolicLink()) {
-      throw new Error('Refusing to write: settings.json.tmp is a symlink');
+      throw new ConfigError('Refusing to write: settings.json.tmp is a symlink', tmpPath);
     }
   }
 
@@ -446,7 +449,7 @@ function writeDroidSettings(settings: DroidSettings): void {
   try {
     const tmpFdStat = fs.fstatSync(fd);
     if (!tmpFdStat.isFile()) {
-      throw new Error('Refusing to write: settings.json.tmp is not a regular file');
+      throw new ConfigError('Refusing to write: settings.json.tmp is not a regular file', tmpPath);
     }
     fs.writeFileSync(fd, payload + '\n', { encoding: 'utf8' });
     fs.fsyncSync(fd);

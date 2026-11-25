@@ -1,3 +1,5 @@
+import { ValidationError } from '../../errors/error-types';
+
 interface AnthropicThinking {
   type?: 'enabled' | 'disabled' | 'adaptive' | string;
   budget_tokens?: number;
@@ -141,7 +143,7 @@ const TOOL_USE_ARGUMENTS_FALLBACK = '{}';
 
 function assertObject(value: unknown, label: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null) {
-    throw new Error(`${label} must be an object`);
+    throw new ValidationError(`${label} must be an object`);
   }
 
   return value as Record<string, unknown>;
@@ -182,14 +184,16 @@ function flattenTextContent(content: unknown, label: string): string {
     return content;
   }
   if (!Array.isArray(content)) {
-    throw new Error(`${label} must be a string or content block array`);
+    throw new ValidationError(`${label} must be a string or content block array`);
   }
 
   return content
     .map((block, index) => {
       const parsed = assertObject(block, `${label}[${index}]`);
       if (parsed.type !== 'text') {
-        throw new Error(`${label}[${index}].type "${String(parsed.type)}" is not supported`);
+        throw new ValidationError(
+          `${label}[${index}].type "${String(parsed.type)}" is not supported`
+        );
       }
       return typeof parsed.text === 'string' ? parsed.text : '';
     })
@@ -242,7 +246,7 @@ function convertToolResultContent(content: unknown, isError: boolean, label: str
       continue;
     }
 
-    throw new Error(`${label}[${index}].type "${String(parsed.type)}" is not supported`);
+    throw new ValidationError(`${label}[${index}].type "${String(parsed.type)}" is not supported`);
   }
 
   const text = parts.join('\n');
@@ -259,7 +263,7 @@ function createFallbackToolId(messageIndex: number, blockIndex: number): string 
 function toImagePart(block: AnthropicImageBlock, label: string): OpenAIImagePart {
   const source = block.source;
   if (!source) {
-    throw new Error(`${label}.source is missing`);
+    throw new ValidationError(`${label}.source is missing`);
   }
 
   if (source.type === 'url' && source.url) {
@@ -278,7 +282,7 @@ function toImagePart(block: AnthropicImageBlock, label: string): OpenAIImagePart
     };
   }
 
-  throw new Error(`${label}.source must be a base64 or url image payload`);
+  throw new ValidationError(`${label}.source must be a base64 or url image payload`);
 }
 
 function isImageBlock(block: AnthropicContentBlock): block is AnthropicImageBlock {
@@ -344,7 +348,7 @@ function transformToolChoice(
   }
 
   if (!hasTools) {
-    throw new Error('tool_choice requires tools');
+    throw new ValidationError('tool_choice requires tools');
   }
 
   const parallelToolCalls =
@@ -360,7 +364,9 @@ function transformToolChoice(
       return { tool_choice: 'required', ...parallelToolCalls };
     case 'tool':
       if (typeof value.name !== 'string' || value.name.trim().length === 0) {
-        throw new Error('tool_choice.name must be a non-empty string when type is "tool"');
+        throw new ValidationError(
+          'tool_choice.name must be a non-empty string when type is "tool"'
+        );
       }
       return {
         tool_choice: {
@@ -370,7 +376,7 @@ function transformToolChoice(
         ...parallelToolCalls,
       };
     default:
-      throw new Error('tool_choice.type must be "auto", "any", "tool", or "none"');
+      throw new ValidationError('tool_choice.type must be "auto", "any", "tool", or "none"');
   }
 }
 
@@ -390,7 +396,7 @@ function mapThinkingToReasoning(
   }
 
   if (thinking.type !== 'enabled') {
-    throw new Error('thinking.type must be "enabled", "adaptive", or "disabled"');
+    throw new ValidationError('thinking.type must be "enabled", "adaptive", or "disabled"');
   }
 
   const effort =
@@ -428,7 +434,7 @@ function toOpenAIEffort(effort: string): string {
 
 function transformMessages(messagesValue: unknown): OpenAIMessage[] {
   if (!Array.isArray(messagesValue)) {
-    throw new Error('messages must be an array');
+    throw new ValidationError('messages must be an array');
   }
 
   const translatedMessages: OpenAIMessage[] = [];
@@ -439,11 +445,13 @@ function transformMessages(messagesValue: unknown): OpenAIMessage[] {
     const parsedMessage = assertObject(message, `messages[${messageIndex}]`) as AnthropicMessage;
     const role = parsedMessage.role;
     if (role !== 'system' && role !== 'user' && role !== 'assistant') {
-      throw new Error(`messages[${messageIndex}].role must be "system", "user", or "assistant"`);
+      throw new ValidationError(
+        `messages[${messageIndex}].role must be "system", "user", or "assistant"`
+      );
     }
 
     if (pendingToolUseIds && pendingToolUseIds.size > 0 && role !== 'user') {
-      throw new Error(
+      throw new ValidationError(
         `messages[${messageIndex}].role must be "user" with tool_result blocks after assistant tool_use`
       );
     }
@@ -459,7 +467,7 @@ function transformMessages(messagesValue: unknown): OpenAIMessage[] {
 
     if (typeof content === 'string') {
       if (pendingToolUseIds && pendingToolUseIds.size > 0) {
-        throw new Error(
+        throw new ValidationError(
           `messages[${messageIndex}].content must start with tool_result blocks for pending tool_use ids`
         );
       }
@@ -468,7 +476,7 @@ function transformMessages(messagesValue: unknown): OpenAIMessage[] {
     }
 
     if (!Array.isArray(content)) {
-      throw new Error(`messages[${messageIndex}].content must be a string or array`);
+      throw new ValidationError(`messages[${messageIndex}].content must be a string or array`);
     }
 
     if (role === 'user') {
@@ -487,13 +495,13 @@ function transformMessages(messagesValue: unknown): OpenAIMessage[] {
         }
 
         if (resolvedToolUseIds.size === 0) {
-          throw new Error(
+          throw new ValidationError(
             `messages[${messageIndex}].content[${blockIndex}] ${kind} is not allowed before tool_result blocks for pending tool_use ids`
           );
         }
 
         if (resolvedToolUseIds.size !== pendingToolUseIds.size) {
-          throw new Error(
+          throw new ValidationError(
             `messages[${messageIndex}].content[${blockIndex}] ${kind} is not allowed between tool_result blocks for pending tool_use ids`
           );
         }
@@ -528,22 +536,22 @@ function transformMessages(messagesValue: unknown): OpenAIMessage[] {
 
         if (isToolResultBlock(parsed)) {
           if (!pendingToolUseIds || pendingToolUseIds.size === 0) {
-            throw new Error(
+            throw new ValidationError(
               `messages[${messageIndex}].content[${blockIndex}] tool_result requires a preceding assistant tool_use`
             );
           }
           if (typeof parsed.tool_use_id !== 'string' || parsed.tool_use_id.trim().length === 0) {
-            throw new Error(
+            throw new ValidationError(
               `messages[${messageIndex}].content[${blockIndex}].tool_use_id must be a non-empty string`
             );
           }
           if (!pendingToolUseIds.has(parsed.tool_use_id)) {
-            throw new Error(
+            throw new ValidationError(
               `messages[${messageIndex}].content[${blockIndex}].tool_use_id "${parsed.tool_use_id}" does not match a pending tool_use`
             );
           }
           if (resolvedToolUseIds.has(parsed.tool_use_id)) {
-            throw new Error(
+            throw new ValidationError(
               `messages[${messageIndex}].content[${blockIndex}].tool_use_id "${parsed.tool_use_id}" is duplicated`
             );
           }
@@ -561,19 +569,19 @@ function transformMessages(messagesValue: unknown): OpenAIMessage[] {
         }
 
         if (isToolUseBlock(parsed)) {
-          throw new Error(
+          throw new ValidationError(
             `messages[${messageIndex}].content[${blockIndex}] tool_use requires assistant role`
           );
         }
 
-        throw new Error(
+        throw new ValidationError(
           `messages[${messageIndex}].content[${blockIndex}].type "${String(parsed.type)}" is not supported`
         );
       });
 
       if (resolvedToolUseIds.size > 0) {
         if (resolvedToolUseIds.size !== pendingToolUseIds?.size) {
-          throw new Error(
+          throw new ValidationError(
             `messages[${messageIndex}].content must provide tool_result blocks for all pending tool_use ids`
           );
         }
@@ -582,7 +590,7 @@ function transformMessages(messagesValue: unknown): OpenAIMessage[] {
       }
 
       if (pendingToolUseIds && pendingToolUseIds.size > 0) {
-        throw new Error(
+        throw new ValidationError(
           `messages[${messageIndex}].content must include tool_result blocks for pending tool_use ids`
         );
       }
@@ -633,18 +641,18 @@ function transformMessages(messagesValue: unknown): OpenAIMessage[] {
       }
 
       if (isImageBlock(parsed)) {
-        throw new Error(
+        throw new ValidationError(
           `messages[${messageIndex}].content[${blockIndex}] image requires user role`
         );
       }
 
       if (isToolResultBlock(parsed)) {
-        throw new Error(
+        throw new ValidationError(
           `messages[${messageIndex}].content[${blockIndex}] tool_result requires user role`
         );
       }
 
-      throw new Error(
+      throw new ValidationError(
         `messages[${messageIndex}].content[${blockIndex}].type "${String(parsed.type)}" is not supported`
       );
     });
@@ -665,7 +673,9 @@ function transformMessages(messagesValue: unknown): OpenAIMessage[] {
   });
 
   if (hasPendingToolUseIds) {
-    throw new Error('messages must provide tool_result blocks for the latest assistant tool_use');
+    throw new ValidationError(
+      'messages must provide tool_result blocks for the latest assistant tool_use'
+    );
   }
 
   return translatedMessages;

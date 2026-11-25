@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
+import { ConfigError } from '../../errors/error-types';
 
 export interface JsonFileDiagnostics {
   label: string;
@@ -168,10 +169,10 @@ export async function writeJsonObjectFileAtomic(
   if (targetStat) {
     const stat = targetStat;
     if (stat.isSymbolicLink()) {
-      throw new Error(`Refusing to write: ${fileLabel} is a symlink.`);
+      throw new ConfigError(`Refusing to write: ${fileLabel} is a symlink.`, targetPath);
     }
     if (!stat.isFile()) {
-      throw new Error(`Refusing to write: ${fileLabel} is not a regular file.`);
+      throw new ConfigError(`Refusing to write: ${fileLabel} is not a regular file.`, targetPath);
     }
 
     if (typeof input.expectedMtime !== 'number' || !Number.isFinite(input.expectedMtime)) {
@@ -188,10 +189,13 @@ export async function writeJsonObjectFileAtomic(
     if (existingTempStat) {
       const tempStat = existingTempStat;
       if (tempStat.isSymbolicLink()) {
-        throw new Error(`Refusing to write: ${fileLabel}.tmp is a symlink.`);
+        throw new ConfigError(`Refusing to write: ${fileLabel}.tmp is a symlink.`, tempPath);
       }
       if (!tempStat.isFile()) {
-        throw new Error(`Refusing to write: ${fileLabel}.tmp is not a regular file.`);
+        throw new ConfigError(
+          `Refusing to write: ${fileLabel}.tmp is not a regular file.`,
+          tempPath
+        );
       }
     }
 
@@ -200,10 +204,10 @@ export async function writeJsonObjectFileAtomic(
 
     const tempStat = await fs.lstat(tempPath);
     if (tempStat.isSymbolicLink()) {
-      throw new Error(`Refusing to write: ${fileLabel}.tmp is a symlink.`);
+      throw new ConfigError(`Refusing to write: ${fileLabel}.tmp is a symlink.`, tempPath);
     }
     if (!tempStat.isFile()) {
-      throw new Error(`Refusing to write: ${fileLabel}.tmp is not a regular file.`);
+      throw new ConfigError(`Refusing to write: ${fileLabel}.tmp is not a regular file.`, tempPath);
     }
 
     await fs.rename(tempPath, targetPath);

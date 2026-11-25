@@ -233,9 +233,9 @@ export async function handleStdout(
       deviceCodeEvents.emit('deviceCode:received', deviceCodePrompt);
 
       console.log('');
-      console.log('  ╔══════════════════════════════════════════════════════╗');
-      console.log(`  ║  Enter this code: ${state.userCode.padEnd(35)}║`);
-      console.log('  ╚══════════════════════════════════════════════════════╝');
+      console.log('  +------------------------------------------------------+');
+      console.log(`  |  Enter this code: ${state.userCode.padEnd(35)}|`);
+      console.log('  +------------------------------------------------------+');
       console.log('');
       console.log(info(`Open: ${verificationUrl}`));
       console.log('');

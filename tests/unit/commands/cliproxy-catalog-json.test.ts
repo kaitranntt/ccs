@@ -51,7 +51,7 @@ describe('cliproxy catalog --json output', () => {
 
     // Tier values must be one of the allowed strings
     for (const model of withTier) {
-      expect(['free', 'pro', 'ultra']).toContain(model.tier);
+      expect<unknown[]>(['free', 'pro', 'ultra']).toContain(model.tier);
     }
 
     const withContextWindow = allModels.filter((m) => m.contextWindow !== undefined);
@@ -99,7 +99,7 @@ describe('cliproxy catalog --json output', () => {
 
     for (const model of withThinking) {
       const thinking = model.thinking as Record<string, unknown>;
-      expect(['budget', 'levels', 'none']).toContain(thinking.type);
+      expect<unknown[]>(['budget', 'levels', 'none']).toContain(thinking.type);
     }
   });
 

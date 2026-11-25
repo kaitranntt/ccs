@@ -6,6 +6,7 @@
  */
 
 import type { Request, Response } from 'express';
+import { ValidationError } from '../../errors/error-types';
 import type { DailyUsage, Anomaly, AnomalySummary, TokenBreakdown } from './types';
 import { getModelPricing } from '../model-pricing';
 import {
@@ -63,16 +64,16 @@ export function validateDate(dateString?: string): string | undefined {
   if (!dateString) return undefined;
 
   if (!DATE_REGEX.test(dateString)) {
-    throw new Error('Invalid date format. Use YYYYMMDD');
+    throw new ValidationError('Invalid date format. Use YYYYMMDD', 'date');
   }
 
   const year = parseInt(dateString.substring(0, 4), 10);
   const month = parseInt(dateString.substring(4, 6), 10);
   const day = parseInt(dateString.substring(6, 8), 10);
 
-  if (year < 2024 || year > 2100) throw new Error('Year out of valid range');
-  if (month < 1 || month > 12) throw new Error('Month out of valid range');
-  if (day < 1 || day > 31) throw new Error('Day out of valid range');
+  if (year < 2024 || year > 2100) throw new ValidationError('Year out of valid range', 'date');
+  if (month < 1 || month > 12) throw new ValidationError('Month out of valid range', 'date');
+  if (day < 1 || day > 31) throw new ValidationError('Day out of valid range', 'date');
 
   return dateString;
 }
@@ -81,7 +82,7 @@ export function validateLimit(limit?: string): number {
   if (!limit) return DEFAULT_LIMIT;
   const num = parseInt(limit, 10);
   if (isNaN(num) || num < 1 || num > MAX_LIMIT) {
-    throw new Error(`Limit must be between 1 and ${MAX_LIMIT}`);
+    throw new ValidationError(`Limit must be between 1 and ${MAX_LIMIT}`, 'limit');
   }
   return num;
 }
@@ -90,7 +91,7 @@ export function validateOffset(offset?: string): number {
   if (!offset) return 0;
   const num = parseInt(offset, 10);
   if (isNaN(num) || num < 0) {
-    throw new Error('Offset must be a non-negative number');
+    throw new ValidationError('Offset must be a non-negative number', 'offset');
   }
   return num;
 }
@@ -98,7 +99,7 @@ export function validateOffset(offset?: string): number {
 export function validateDateRangeOrder(since?: string, until?: string): void {
   if (!since || !until) return;
   if (since > until) {
-    throw new Error('The "since" date must be earlier than or equal to "until"');
+    throw new ValidationError('The "since" date must be earlier than or equal to "until"', 'since');
   }
 }
 

@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
+import { ConfigError } from '../../errors/error-types';
 import {
   buildClaudeExtensionSettingsObject,
   resolveClaudeExtensionSetup,
@@ -183,11 +184,11 @@ function parseJsonDocumentObject(raw: string, filePath: string): Record<string, 
   try {
     parsed = JSON.parse(normalized) as unknown;
   } catch (error) {
-    throw new Error(`Failed to parse ${filePath}: ${(error as Error).message}`);
+    throw new ConfigError(`Failed to parse ${filePath}: ${(error as Error).message}`, filePath);
   }
 
   if (!isRecord(parsed)) {
-    throw new Error(`Expected a JSON object in ${filePath}`);
+    throw new ConfigError(`Expected a JSON object in ${filePath}`, filePath);
   }
 
   return parsed;
@@ -199,7 +200,7 @@ function readJsonDocument(filePath: string): JsonDocument {
   }
 
   if (fs.lstatSync(filePath).isSymbolicLink()) {
-    throw new Error(`Refusing to manage symlinked file: ${filePath}`);
+    throw new ConfigError(`Refusing to manage symlinked file: ${filePath}`, filePath);
   }
 
   const raw = fs.readFileSync(filePath, 'utf8');
@@ -223,7 +224,7 @@ function writeJsonDocument(
   backupSuffix: string
 ): void {
   if (fs.existsSync(filePath) && fs.lstatSync(filePath).isSymbolicLink()) {
-    throw new Error(`Refusing to manage symlinked file: ${filePath}`);
+    throw new ConfigError(`Refusing to manage symlinked file: ${filePath}`, filePath);
   }
 
   fs.mkdirSync(path.dirname(filePath), { recursive: true });

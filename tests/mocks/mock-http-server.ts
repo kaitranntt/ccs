@@ -100,12 +100,12 @@ export function createMockResponse(config: MockResponse): Response {
   const responseHeaders = new Headers(headers);
 
   if (body !== null && body !== undefined) {
-    if (typeof body === 'object' && !(body instanceof Buffer)) {
+    if (typeof body === 'object' && !Buffer.isBuffer(body)) {
       responseBody = JSON.stringify(body);
       if (!responseHeaders.has('Content-Type')) {
         responseHeaders.set('Content-Type', 'application/json');
       }
-    } else if (body instanceof Buffer) {
+    } else if (Buffer.isBuffer(body)) {
       responseBody = body.toString();
     } else {
       responseBody = body;

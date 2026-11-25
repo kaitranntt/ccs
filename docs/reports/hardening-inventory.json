@@ -491,46 +491,46 @@
   "maintainability": {
     "typedErrors": {
       "totalThrows": 490,
-      "typedThrows": 154,
-      "plainThrows": 275,
+      "typedThrows": 325,
+      "plainThrows": 104,
       "otherThrows": 61,
-      "adoptionRatio": 0.3143,
+      "adoptionRatio": 0.6633,
       "topSubdomainsByThrows": [
         {
           "subdomain": "web-server",
           "count": 90,
-          "typed": 19,
-          "plain": 39
+          "typed": 53,
+          "plain": 5
         },
         {
           "subdomain": "cliproxy/accounts",
           "count": 39,
-          "typed": 33,
-          "plain": 6
+          "typed": 39,
+          "plain": 0
         },
         {
           "subdomain": "proxy",
           "count": 39,
-          "typed": 1,
-          "plain": 34
+          "typed": 35,
+          "plain": 0
         },
         {
           "subdomain": "commands",
           "count": 38,
-          "typed": 6,
-          "plain": 30
+          "typed": 25,
+          "plain": 11
         },
         {
           "subdomain": "codex-auth",
           "count": 35,
-          "typed": 4,
-          "plain": 27
+          "typed": 24,
+          "plain": 7
         },
         {
           "subdomain": "utils",
           "count": 32,
-          "typed": 5,
-          "plain": 27
+          "typed": 23,
+          "plain": 9
         },
         {
           "subdomain": "shared",
@@ -541,8 +541,8 @@
         {
           "subdomain": "targets",
           "count": 27,
-          "typed": 9,
-          "plain": 16
+          "typed": 17,
+          "plain": 8
         },
         {
           "subdomain": "cursor",
@@ -571,9 +571,9 @@
       "targetRatio": 0.4
     },
     "loggerCoverage": {
-      "filesWithCreateLogger": 68,
+      "filesWithCreateLogger": 71,
       "totalSourceFiles": 846,
-      "coverageRatio": 0.0804,
+      "coverageRatio": 0.0839,
       "subdomainsWithZeroCreateLogger": [
         "api",
         "bin",
@@ -584,7 +584,6 @@
         "cliproxy/config",
         "cliproxy/management",
         "cliproxy/model-catalog-data",
-        "cliproxy/sync",
         "cliproxy/types",
         "config",
         "dispatcher",
@@ -595,7 +594,7 @@
         {
           "subdomain": "web-server",
           "count": 130,
-          "withLogger": 10
+          "withLogger": 12
         },
         {
           "subdomain": "commands",
@@ -738,27 +737,31 @@
         },
         {
           "file": "src/web-server/usage/handlers.ts",
-          "loc": 860
+          "loc": 861
         },
         {
           "file": "src/cliproxy/accounts/drain-order.ts",
-          "loc": 855
+          "loc": 856
+        },
+        {
+          "file": "src/web-server/usage/aggregator.ts",
+          "loc": 842
         },
         {
           "file": "src/cliproxy/quota/quota-fetcher-codex.ts",
           "loc": 840
         },
         {
-          "file": "src/web-server/usage/aggregator.ts",
-          "loc": 816
-        },
-        {
           "file": "src/proxy/transformers/request-transformer.ts",
-          "loc": 801
+          "loc": 811
         },
         {
           "file": "src/web-server/routes/config-routes.ts",
           "loc": 781
+        },
+        {
+          "file": "src/commands/bar/install-subcommand.ts",
+          "loc": 777
         },
         {
           "file": "src/web-server/routes/account-routes.ts",
@@ -771,10 +774,6 @@
         {
           "file": "src/delegation/headless-executor.ts",
           "loc": 767
-        },
-        {
-          "file": "src/proxy/proxy-daemon.ts",
-          "loc": 761
         }
       ]
     }

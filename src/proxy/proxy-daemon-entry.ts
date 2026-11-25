@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import { AuthError, ConfigError, ProfileError } from '../errors/error-types';
 import { resolveOpenAICompatProfileConfig } from './profile-router';
 import { OPENAI_COMPAT_PROXY_DEFAULT_PORT } from './proxy-daemon-paths';
 import { closeOpenAICompatProxyServer, startOpenAICompatProxyServer } from './server/proxy-server';
@@ -64,7 +65,10 @@ function readAuthToken(options: RuntimeOptions): string {
       fs.unlinkSync(options.authTokenFile);
       return token;
     } catch (error) {
-      throw new Error(`Failed to read local proxy auth token file: ${(error as Error).message}`);
+      throw new ConfigError(
+        `Failed to read local proxy auth token file: ${(error as Error).message}`,
+        options.authTokenFile
+      );
     }
   }
 
@@ -75,7 +79,7 @@ function startRuntime(options: RuntimeOptions): void {
   const authToken = readAuthToken(options);
 
   if (!authToken.trim()) {
-    throw new Error('Missing local proxy auth token');
+    throw new AuthError('Missing local proxy auth token');
   }
 
   const settings = loadSettings(options.settingsPath);
@@ -85,8 +89,9 @@ function startRuntime(options: RuntimeOptions): void {
     settings.env || {}
   );
   if (!profile) {
-    throw new Error(
-      `Profile "${options.profileName}" is not an OpenAI-compatible settings profile`
+    throw new ProfileError(
+      `Profile "${options.profileName}" is not an OpenAI-compatible settings profile`,
+      options.profileName
     );
   }
 

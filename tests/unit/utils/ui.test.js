@@ -142,9 +142,10 @@ describe('UI Module', function () {
       ];
       const result = ui.table(rows);
 
-      // Should contain data and unicode box characters
+      // Should default to ASCII table borders
       assert.ok(result.includes('Test'), 'should include data');
-      assert.ok(result.includes('│') || result.includes('|'), 'should include vertical separators');
+      assert.ok(result.includes('|'), 'should include ASCII vertical separators');
+      assert.ok(result.includes('+'), 'should include ASCII corner separators');
     });
   });
 
@@ -193,6 +194,32 @@ describe('UI Module', function () {
           }
         }
       });
+    });
+
+    it('should give NO_COLOR precedence over FORCE_COLOR', function () {
+      const originalNoColor = process.env.NO_COLOR;
+      const originalForceColor = process.env.FORCE_COLOR;
+      process.env.NO_COLOR = '1';
+      process.env.FORCE_COLOR = '1';
+
+      try {
+        assert.strictEqual(ui.useColors(), false);
+        assert.strictEqual(ui.color('text', 'success'), 'text');
+        assert.strictEqual(ui.bold('text'), 'text');
+        assert.strictEqual(ui.dim('text'), 'text');
+        assert.strictEqual(ui.gradientText('text'), 'text');
+      } finally {
+        if (originalNoColor === undefined) {
+          delete process.env.NO_COLOR;
+        } else {
+          process.env.NO_COLOR = originalNoColor;
+        }
+        if (originalForceColor === undefined) {
+          delete process.env.FORCE_COLOR;
+        } else {
+          process.env.FORCE_COLOR = originalForceColor;
+        }
+      }
     });
   });
 });

@@ -10,6 +10,7 @@ import {
   buildManagementHeaders,
   ProxyTarget,
 } from '../proxy/proxy-target-resolver';
+import { AuthError, ConfigError, NetworkError } from '../../errors/error-types';
 import { getProviderDisplayName, mapExternalProviderName } from '../provider-capabilities';
 import type { CLIProxyProvider } from '../types';
 
@@ -136,7 +137,7 @@ export async function fetchRemoteAuthStatus(target?: ProxyTarget): Promise<Remot
   const proxyTarget = target ?? getProxyTarget();
 
   if (!proxyTarget.isRemote) {
-    throw new Error('fetchRemoteAuthStatus called but remote mode not enabled');
+    throw new ConfigError('fetchRemoteAuthStatus called but remote mode not enabled');
   }
 
   const url = buildProxyUrl(proxyTarget, '/v0/management/auth-files');
@@ -147,25 +148,29 @@ export async function fetchRemoteAuthStatus(target?: ProxyTarget): Promise<Remot
 
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
-        throw new Error('Authentication failed - check auth token in settings');
+        throw new AuthError('Authentication failed - check auth token in settings');
       }
-      throw new Error(`Remote returned ${response.status}: ${response.statusText}`);
+      throw new NetworkError(
+        `Remote returned ${response.status}: ${response.statusText}`,
+        url,
+        response.status
+      );
     }
 
     const data: unknown = await response.json();
 
     // Validate response structure
     if (!data || typeof data !== 'object' || !('files' in data) || !Array.isArray(data.files)) {
-      throw new Error('Invalid response format from remote auth endpoint');
+      throw new NetworkError('Invalid response format from remote auth endpoint', url);
     }
 
     return transformRemoteAuthFiles(data.files as RemoteAuthFile[]);
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Remote proxy connection timed out');
+      throw new NetworkError('Remote proxy connection timed out', url);
     }
     if (error instanceof Error && error.message === 'Request timeout') {
-      throw new Error('Remote proxy connection timed out');
+      throw new NetworkError('Remote proxy connection timed out', url);
     }
     throw error;
   }

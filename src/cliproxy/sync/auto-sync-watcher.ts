@@ -10,6 +10,9 @@ import * as path from 'path';
 
 import { syncToLocalConfig } from './local-config-sync';
 import { getCcsDir, loadOrCreateUnifiedConfig } from '../../config/config-loader-facade';
+import { createLogger } from '../../services/logging';
+
+const logger = createLogger('cliproxy:sync:auto-sync-watcher');
 
 /** Debounce delay in milliseconds */
 const DEBOUNCE_MS = 3000;
@@ -36,7 +39,7 @@ export function isAutoSyncEnabled(): boolean {
  * Log auto-sync message.
  */
 function log(message: string): void {
-  console.log(`[auto-sync] ${message}`);
+  logger.info('cliproxy.auto-sync', message);
 }
 
 /**

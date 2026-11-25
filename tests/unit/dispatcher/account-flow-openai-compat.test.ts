@@ -213,7 +213,7 @@ describe('account-flow OpenAI-compatible shaping proxy (Issue #1469)', () => {
 
     let capturedCli = '';
     let capturedArgs: string[] = [];
-    let capturedEnv: NodeJS.ProcessEnv | undefined | null = null;
+    let capturedEnv = null as NodeJS.ProcessEnv | undefined | null;
     let capturedCleanup: (() => void) | undefined;
 
     const execSpy = spyOn(shellExecutor, 'execClaude').mockImplementation(
@@ -284,7 +284,7 @@ describe('account-flow OpenAI-compatible shaping proxy (Issue #1469)', () => {
     fs.writeFileSync(path.join(instancePath, 'settings.json'), JSON.stringify({}), 'utf8');
 
     let capturedArgs: string[] = [];
-    let capturedEnv: NodeJS.ProcessEnv | undefined | null = null;
+    let capturedEnv = null as NodeJS.ProcessEnv | undefined | null;
     let capturedCleanup: (() => void) | undefined;
 
     const execSpy = spyOn(shellExecutor, 'execClaude').mockImplementation(
@@ -321,7 +321,7 @@ describe('account-flow OpenAI-compatible shaping proxy (Issue #1469)', () => {
     fs.mkdirSync(instancePath, { recursive: true });
 
     let capturedArgs: string[] = [];
-    let capturedEnv: NodeJS.ProcessEnv | undefined | null = null;
+    let capturedEnv = null as NodeJS.ProcessEnv | undefined | null;
 
     const execSpy = spyOn(shellExecutor, 'execClaude').mockImplementation(
       (_cli, args, envVars) => {

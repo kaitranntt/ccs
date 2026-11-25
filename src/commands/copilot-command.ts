@@ -105,7 +105,7 @@ function handleHelp(): number {
     '  ccs copilot --auth | --status | --models | --usage | --start | --stop | --enable | --disable'
   );
   console.log('');
-  console.log('Or use the web UI: ccs config → Copilot tab');
+  console.log('Or use the web UI: ccs config -> Copilot tab');
   console.log('');
   return 0;
 }
@@ -150,7 +150,7 @@ async function handleStatus(): Promise<number> {
   const status = await getCopilotStatus(copilotConfig);
 
   console.log('GitHub Copilot Status');
-  console.log('─────────────────────');
+  console.log('---------------------');
   console.log('');
 
   // Enabled status
@@ -206,7 +206,7 @@ async function handleModels(): Promise<number> {
   printCopilotWarnings(warnings.map((warning) => warning.message));
 
   console.log('Available Copilot Models');
-  console.log('────────────────────────');
+  console.log('------------------------');
   console.log('');
 
   const models = await getAvailableModels(copilotConfig.port);
@@ -313,7 +313,7 @@ async function handleUsage(): Promise<number> {
   }
 
   console.log('GitHub Copilot Usage');
-  console.log('────────────────────');
+  console.log('--------------------');
   console.log('');
   console.log(`Plan:        ${usage.plan || 'unknown'}`);
   console.log(`Quota Reset: ${formatResetDate(usage.quotaResetDate)}`);

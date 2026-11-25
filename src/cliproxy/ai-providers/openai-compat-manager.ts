@@ -7,6 +7,7 @@
 
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
+import { ConfigError } from '../../errors/error-types';
 import { configExists, regenerateConfig } from '../config/generator';
 import { getCliproxyConfigPath } from '../config/path-resolver';
 import { rewriteTopLevelYamlSection } from './config-yaml-sections';
@@ -136,7 +137,7 @@ export function addOpenAICompatProvider(provider: OpenAICompatProvider): void {
   // Check for duplicate
   const existing = config['openai-compatibility'].find((p) => p.name === provider.name);
   if (existing) {
-    throw new Error(`Provider '${provider.name}' already exists`);
+    throw new ConfigError(`Provider '${provider.name}' already exists`);
   }
 
   // Add new provider
@@ -164,12 +165,12 @@ export function updateOpenAICompatProvider(
   const config = loadConfig();
 
   if (!config['openai-compatibility']) {
-    throw new Error(`Provider '${name}' not found`);
+    throw new ConfigError(`Provider '${name}' not found`);
   }
 
   const index = config['openai-compatibility'].findIndex((p) => p.name === name);
   if (index === -1) {
-    throw new Error(`Provider '${name}' not found`);
+    throw new ConfigError(`Provider '${name}' not found`);
   }
 
   const provider = config['openai-compatibility'][index];

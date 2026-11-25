@@ -54,7 +54,7 @@ describe('requestId cross-process forwarding', () => {
     delete process.env[REQUEST_ID_ENV];
     runWithRequestId(() => {
       const envFragment = forwardRequestIdEnv();
-      expect(envFragment[REQUEST_ID_ENV]).toBe(getRequestId());
+      expect<string | undefined>(envFragment[REQUEST_ID_ENV]).toBe(getRequestId());
     });
   });
 

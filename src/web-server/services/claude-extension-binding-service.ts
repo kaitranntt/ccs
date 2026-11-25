@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import ProfileDetector from '../../auth/profile-detector';
+import { ConfigError, ProfileError, ValidationError } from '../../errors/error-types';
 import type { ClaudeExtensionHost } from '../../shared/claude-extension-hosts';
 import { expandPath } from '../../utils/helpers';
 import { getCcsDir } from '../../config/config-loader-facade';
@@ -79,14 +80,16 @@ function normalizeBindingInput(input: ClaudeExtensionBindingInput): ClaudeExtens
   const ideSettingsPath = input.ideSettingsPath?.trim();
   const notes = input.notes?.trim();
 
-  if (!name) throw new Error('Binding name is required');
-  if (!profile) throw new Error('Profile is required');
-  if (!VALID_HOSTS.has(input.host)) throw new Error(`Unsupported IDE host "${input.host}"`);
+  if (!name) throw new ValidationError('Binding name is required', 'name');
+  if (!profile) throw new ValidationError('Profile is required', 'profile');
+  if (!VALID_HOSTS.has(input.host)) {
+    throw new ValidationError(`Unsupported IDE host "${input.host}"`, 'host');
+  }
 
   try {
     new ProfileDetector().detectProfileType(profile);
   } catch {
-    throw new Error(`Unknown profile "${profile}"`);
+    throw new ProfileError(`Unknown profile "${profile}"`, profile);
   }
 
   return {
@@ -141,8 +144,9 @@ function readBindingsStore(): ClaudeExtensionBindingStore {
   try {
     parsed = JSON.parse(raw) as unknown;
   } catch (error) {
-    throw new Error(
-      `Failed to parse Claude extension bindings store at ${filePath}: ${(error as Error).message}`
+    throw new ConfigError(
+      `Failed to parse Claude extension bindings store at ${filePath}: ${(error as Error).message}`,
+      filePath
     );
   }
   const bindings = Array.isArray(parsed)
@@ -182,7 +186,7 @@ export function listClaudeExtensionBindings(): ClaudeExtensionBinding[] {
 export function getClaudeExtensionBinding(id: string): ClaudeExtensionBinding {
   const binding = readBindingsStore().bindings.find((entry) => entry.id === id);
   if (!binding) {
-    throw new Error(`Binding not found: ${id}`);
+    throw new ConfigError(`Binding not found: ${id}`);
   }
   return toPublicBinding(binding);
 }
@@ -192,7 +196,7 @@ export function getClaudeExtensionManagedEnvManifest(
 ): ClaudeExtensionManagedEnvManifest {
   const binding = readBindingsStore().bindings.find((entry) => entry.id === id);
   if (!binding) {
-    throw new Error(`Binding not found: ${id}`);
+    throw new ConfigError(`Binding not found: ${id}`);
   }
   return binding.managedEnvManifest;
 }
@@ -204,7 +208,7 @@ export function updateClaudeExtensionManagedEnvManifest(
   const store = readBindingsStore();
   const index = store.bindings.findIndex((entry) => entry.id === id);
   if (index === -1) {
-    throw new Error(`Binding not found: ${id}`);
+    throw new ConfigError(`Binding not found: ${id}`);
   }
 
   const current = store.bindings[index];
@@ -252,7 +256,7 @@ export function updateClaudeExtensionBinding(
   const store = readBindingsStore();
   const index = store.bindings.findIndex((entry) => entry.id === id);
   if (index === -1) {
-    throw new Error(`Binding not found: ${id}`);
+    throw new ConfigError(`Binding not found: ${id}`);
   }
 
   const updated: ClaudeExtensionStoredBinding = {
@@ -270,7 +274,7 @@ export function deleteClaudeExtensionBinding(id: string): void {
   const store = readBindingsStore();
   const nextBindings = store.bindings.filter((entry) => entry.id !== id);
   if (nextBindings.length === store.bindings.length) {
-    throw new Error(`Binding not found: ${id}`);
+    throw new ConfigError(`Binding not found: ${id}`);
   }
 
   writeBindingsStore({ bindings: nextBindings });

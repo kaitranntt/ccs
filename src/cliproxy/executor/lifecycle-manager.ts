@@ -14,6 +14,7 @@ import { fail } from '../../utils/ui';
 import { getCliproxyWritablePath } from '../config/config-generator';
 import { getPortCheckCommand, getCatCommand } from '../../utils/platform-commands';
 import { CLIProxyBackend } from '../types';
+import { ProxyError } from '../../errors/error-types';
 import { createLogger } from '../../services/logging';
 
 const logger = createLogger('cliproxy:executor:lifecycle-manager');
@@ -56,7 +57,7 @@ export async function waitForProxyReady(
     }
   }
 
-  throw new Error(`CLIProxy not ready after ${timeout}ms on port ${port}`);
+  throw new ProxyError(`CLIProxy not ready after ${timeout}ms on port ${port}`, port);
 }
 
 /**
@@ -126,7 +127,7 @@ export async function waitForProxyReadyWithSpinner(
     process.stderr.write('  - Try: ccs doctor --fix' + '\n');
     process.stderr.write('' + '\n');
 
-    throw new Error(`CLIProxy startup failed: ${err.message}`);
+    throw new ProxyError(`CLIProxy startup failed: ${err.message}`, port);
   }
 }
 
@@ -159,5 +160,5 @@ export async function findAvailablePort(startPort: number, range: number = 10): 
       return port;
     }
   }
-  throw new Error(`No available port found in range ${startPort}-${startPort + range - 1}`);
+  throw new ProxyError(`No available port found in range ${startPort}-${startPort + range - 1}`);
 }

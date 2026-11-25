@@ -16,6 +16,7 @@
 export {
   // Initialization
   initUI,
+  useColors,
   isInteractive,
   isClaudeCodeContext,
 

@@ -23,7 +23,10 @@ import {
   clearDiskCache,
   getCacheAge,
 } from './disk-cache';
-import { ok, info, fail } from '../../utils/ui';
+import { fail } from '../../utils/ui';
+import { createLogger } from '../../services/logging';
+
+const logger = createLogger('web-server:usage:aggregator');
 
 import { getClaudeConfigDir, getDefaultClaudeConfigDir } from '../../utils/claude-config-path';
 import {
@@ -147,7 +150,9 @@ async function loadInstanceData(instancePath: string): Promise<{
   } catch (_err) {
     // Instance may have no usage data - that's OK
     const instanceName = path.basename(instancePath);
-    console.log(info(`No usage data in instance: ${instanceName}`));
+    logger.debug('usage.aggregator.instance-empty', `No usage data in instance: ${instanceName}`, {
+      instanceName,
+    });
     return { daily: [], hourly: [], monthly: [], session: [] };
   }
 }
@@ -497,7 +502,11 @@ async function refreshFromSource(): Promise<{
   }
 
   if (instanceDataResults.length > 0) {
-    console.log(info(`Aggregated usage data from ${instanceDataResults.length} CCS instance(s)`));
+    logger.info(
+      'usage.aggregator.instances-loaded',
+      `Aggregated usage data from ${instanceDataResults.length} CCS instance(s)`,
+      { count: instanceDataResults.length }
+    );
   }
 
   try {
@@ -507,7 +516,11 @@ async function refreshFromSource(): Promise<{
       allHourlySources.push(aggregateHourlyUsage(codexEntries, 'codex-native'));
       allMonthlySources.push(aggregateMonthlyUsage(codexEntries, 'codex-native'));
       allSessionSources.push(aggregateSessionUsage(codexEntries, 'codex-native'));
-      console.log(info(`Included native Codex usage data (${codexEntries.length} event(s))`));
+      logger.info(
+        'usage.aggregator.codex-loaded',
+        `Included native Codex usage data (${codexEntries.length} event(s))`,
+        { count: codexEntries.length }
+      );
     }
   } catch (err) {
     process.stderr.write(String(fail(`Failed to load native Codex usage data: ${err}`)) + '\n');
@@ -520,7 +533,11 @@ async function refreshFromSource(): Promise<{
       allHourlySources.push(aggregateHourlyUsage(droidEntries, 'droid-native'));
       allMonthlySources.push(aggregateMonthlyUsage(droidEntries, 'droid-native'));
       allSessionSources.push(aggregateSessionUsage(droidEntries, 'droid-native'));
-      console.log(info(`Included native Droid usage data (${droidEntries.length} event(s))`));
+      logger.info(
+        'usage.aggregator.droid-loaded',
+        `Included native Droid usage data (${droidEntries.length} event(s))`,
+        { count: droidEntries.length }
+      );
     }
   } catch (err) {
     process.stderr.write(String(fail(`Failed to load native Droid usage data: ${err}`)) + '\n');
@@ -533,7 +550,7 @@ async function refreshFromSource(): Promise<{
       allDailySources.push(cliproxyData.daily);
       allHourlySources.push(cliproxyData.hourly);
       allMonthlySources.push(cliproxyData.monthly);
-      console.log(info('Included CLIProxy usage data'));
+      logger.info('usage.aggregator.cliproxy-loaded', 'Included CLIProxy usage data');
     }
   } catch (err) {
     process.stderr.write(String(fail(`Failed to load CLIProxy usage data: ${err}`)) + '\n');
@@ -729,7 +746,7 @@ export async function prewarmUsageCache(): Promise<{
   source: string;
 }> {
   const start = Date.now();
-  console.log(info('Pre-warming usage cache...'));
+  logger.info('usage.aggregator.prewarm-start', 'Pre-warming usage cache...');
 
   try {
     // Start CLIProxy usage syncer early (runs in background every 5 min)
@@ -747,8 +764,10 @@ export async function prewarmUsageCache(): Promise<{
       lastFetchTimestamp = diskCache.timestamp;
 
       const elapsed = Date.now() - start;
-      console.log(
-        ok(`Usage cache ready from disk (${elapsed}ms, cached ${getCacheAge(diskCache)})`)
+      logger.info(
+        'usage.aggregator.prewarm-disk-fresh',
+        `Usage cache ready from disk (${elapsed}ms, cached ${getCacheAge(diskCache)})`,
+        { elapsedMs: elapsed }
       );
       return { timestamp: now, elapsed, source: 'disk-fresh' };
     }
@@ -763,17 +782,22 @@ export async function prewarmUsageCache(): Promise<{
       lastFetchTimestamp = diskCache.timestamp;
 
       const elapsed = Date.now() - start;
-      console.log(
-        ok(
-          `Usage cache ready from disk (${elapsed}ms, stale ${getCacheAge(diskCache)}, refreshing...)`
-        )
+      logger.info(
+        'usage.aggregator.prewarm-disk-stale',
+        `Usage cache ready from disk (${elapsed}ms, stale ${getCacheAge(diskCache)}, refreshing...)`,
+        { elapsedMs: elapsed }
       );
 
       // Background refresh
       if (!isRefreshing) {
         isRefreshing = true;
         refreshFromSourceCoalesced()
-          .then(() => console.log(ok('Background refresh complete')))
+          .then(() =>
+            logger.info(
+              'usage.aggregator.background-refresh-complete',
+              'Background refresh complete'
+            )
+          )
           .catch((err) =>
             process.stderr.write(String(fail(`Background refresh failed: ${err}`)) + '\n')
           )
@@ -786,11 +810,13 @@ export async function prewarmUsageCache(): Promise<{
     }
 
     // No usable disk cache - refresh from source (blocking for first startup only)
-    console.log(info('No disk cache, loading from source...'));
+    logger.info('usage.aggregator.prewarm-miss', 'No disk cache, loading from source...');
     await refreshFromSourceCoalesced();
 
     const elapsed = Date.now() - start;
-    console.log(ok(`Usage cache ready (${elapsed}ms)`));
+    logger.info('usage.aggregator.prewarm-ready', `Usage cache ready (${elapsed}ms)`, {
+      elapsedMs: elapsed,
+    });
     return { timestamp: Date.now(), elapsed, source: 'fresh' };
   } catch (err) {
     process.stderr.write(String(fail(`Failed to prewarm usage cache: ${err}`)) + '\n');

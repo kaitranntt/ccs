@@ -89,7 +89,7 @@ export function detectCircularSymlink(target: string, sharedDir: string): boolea
     // loop, even if the current ~/.ccs/shared entry ultimately resolves to
     // an external path.
     if (isPathWithinDirectory(resolvedTarget, sharedDirPath)) {
-      console.log(warn(`Circular symlink detected: ${target} → ${resolvedTarget}`));
+      console.log(warn(`Circular symlink detected: ${target} -> ${resolvedTarget}`));
       return true;
     }
 
@@ -100,7 +100,7 @@ export function detectCircularSymlink(target: string, sharedDir: string): boolea
     const canonicalResolvedTarget = resolveCanonicalPath(resolvedTarget);
 
     if (isPathWithinDirectory(canonicalResolvedTarget, sharedDirCanonical)) {
-      console.log(warn(`Circular symlink detected: ${target} → ${resolvedTarget}`));
+      console.log(warn(`Circular symlink detected: ${target} -> ${resolvedTarget}`));
       return true;
     }
   } catch (err) {
