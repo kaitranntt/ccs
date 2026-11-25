@@ -824,6 +824,91 @@ describe('ToolSanitizationProxy Integration', () => {
         proxy.stop();
       }
     });
+
+    it('strips config suffixes from the advisor tool model id', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      try {
+        await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            // Same shape as a CCS profile whose model carries an effort level
+            model: 'claude-opus-5-5[1m](high)',
+            tools: [
+              { type: 'advisor_20250115', name: 'advisor', model: 'claude-opus-5-5(high)' },
+              { name: 'regular_tool', model: 'claude-opus-5-5(high)' },
+            ],
+          }),
+        });
+
+        const sentTools = (lastRequest!.body as Record<string, unknown>).tools as Array<
+          Record<string, unknown>
+        >;
+        expect(sentTools[0].type).toBe('advisor_20250115');
+        expect(sentTools[0].name).toBe('advisor');
+        expect(sentTools[0].model).toBe('claude-opus-5-5');
+        // Non-advisor tools keep their own fields untouched
+        expect(sentTools[1].model).toBe('claude-opus-5-5(high)');
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    it('strips both the extended-context and effort suffixes from the advisor tool model id', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      try {
+        await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-5-5[1m](max)',
+            tools: [
+              { type: 'advisor_20250115', name: 'advisor', model: 'claude-sonnet-5-5[1m](max)' },
+            ],
+          }),
+        });
+
+        const sentTools = (lastRequest!.body as Record<string, unknown>).tools as Array<
+          Record<string, unknown>
+        >;
+        expect(sentTools[0].model).toBe('claude-sonnet-5-5');
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    it('leaves an advisor tool model id without suffixes unchanged', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      try {
+        await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-opus-5-5[1m](high)',
+            tools: [{ type: 'advisor_20250115', name: 'advisor', model: 'claude-opus-5-5' }],
+          }),
+        });
+
+        const sentTools = (lastRequest!.body as Record<string, unknown>).tools as Array<
+          Record<string, unknown>
+        >;
+        expect(sentTools[0].model).toBe('claude-opus-5-5');
+      } finally {
+        proxy.stop();
+      }
+    });
   });
 
   describe('Response Restoration (Buffered)', () => {

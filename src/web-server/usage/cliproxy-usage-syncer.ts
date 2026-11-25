@@ -67,6 +67,15 @@ const SYNC_INTERVAL_MS = Math.max(
 
 let syncIntervalId: ReturnType<typeof setInterval> | null = null;
 let snapshotTimestampOrdinal = 0;
+let cachedSnapshot: {
+  path: string;
+  identity: string;
+  snapshot: CliproxyUsageSnapshot;
+} | null = null;
+
+function getSnapshotIdentity(stat: fs.Stats): string {
+  return [stat.dev, stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs].join(':');
+}
 
 function getCliproxyCacheDir(): string {
   return path.join(getCcsDir(), 'cache', 'cliproxy-usage');
@@ -76,19 +85,19 @@ function getLatestSnapshotPath(): string {
   return path.join(getCliproxyCacheDir(), 'latest.json');
 }
 
-function ensurePrivateDirectory(dir: string): void {
-  fs.mkdirSync(dir, { recursive: true, mode: PRIVATE_DIR_MODE });
-  fs.chmodSync(dir, PRIVATE_DIR_MODE);
+async function ensurePrivateDirectory(dir: string): Promise<void> {
+  await fs.promises.mkdir(dir, { recursive: true, mode: PRIVATE_DIR_MODE });
+  await fs.promises.chmod(dir, PRIVATE_DIR_MODE);
 }
 
-function ensureCliproxyCacheDir(): void {
+async function ensureCliproxyCacheDir(): Promise<void> {
   const ccsDir = getCcsDir();
   const cacheDir = path.join(ccsDir, 'cache');
   const cliproxyCacheDir = path.join(cacheDir, 'cliproxy-usage');
 
-  ensurePrivateDirectory(ccsDir);
-  ensurePrivateDirectory(cacheDir);
-  ensurePrivateDirectory(cliproxyCacheDir);
+  await ensurePrivateDirectory(ccsDir);
+  await ensurePrivateDirectory(cacheDir);
+  await ensurePrivateDirectory(cliproxyCacheDir);
 }
 
 function getSnapshotTimestamp(): number {
@@ -191,14 +200,17 @@ function migrateLegacySnapshot(
   };
 }
 
-function readSnapshot(emitWarnings = true): CliproxyUsageSnapshot | null {
+async function readSnapshot(
+  emitWarnings = true,
+  includeAggregates = true
+): Promise<CliproxyUsageSnapshot | null> {
   try {
     const snapshotPath = getLatestSnapshotPath();
-    if (!fs.existsSync(snapshotPath)) {
-      return null;
+    const identity = getSnapshotIdentity(await fs.promises.stat(snapshotPath));
+    if (cachedSnapshot?.path === snapshotPath && cachedSnapshot.identity === identity) {
+      return cachedSnapshot.snapshot;
     }
-
-    const raw = fs.readFileSync(snapshotPath, 'utf-8');
+    const raw = await fs.promises.readFile(snapshotPath, 'utf-8');
     const snapshot = JSON.parse(raw) as CliproxyUsageSnapshot | LegacyCliproxyUsageSnapshot;
 
     if (snapshot.version === SNAPSHOT_VERSION) {
@@ -220,9 +232,11 @@ function readSnapshot(emitWarnings = true): CliproxyUsageSnapshot | null {
       const normalizedDetails = details
         .map((detail) => normalizeCliproxyUsageHistoryDetail(detail))
         .filter((detail): detail is CliproxyUsageHistoryDetail => detail !== null);
-      const { daily, hourly, monthly } = buildCliproxyUsageHistoryAggregates(normalizedDetails);
+      const { daily, hourly, monthly } = includeAggregates
+        ? buildCliproxyUsageHistoryAggregates(normalizedDetails)
+        : { daily: [], hourly: [], monthly: [] };
 
-      return {
+      const result = {
         version: SNAPSHOT_VERSION,
         timestamp: Number(snapshot.timestamp),
         details: normalizedDetails,
@@ -230,6 +244,8 @@ function readSnapshot(emitWarnings = true): CliproxyUsageSnapshot | null {
         hourly,
         monthly,
       };
+      if (includeAggregates) cachedSnapshot = { path: snapshotPath, identity, snapshot: result };
+      return result;
     }
 
     if (snapshot.version === 1 || snapshot.version === 2) {
@@ -241,6 +257,8 @@ function readSnapshot(emitWarnings = true): CliproxyUsageSnapshot | null {
     }
     return null;
   } catch (err) {
+    cachedSnapshot = null;
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
     if (emitWarnings) {
       console.log(warn('Failed to read CLIProxy snapshot:') + ` ${(err as Error).message}`);
     }
@@ -271,32 +289,57 @@ function buildSnapshot(
 async function writeSnapshotWithMerge(
   incomingDetails: CliproxyUsageHistoryDetail[]
 ): Promise<void> {
-  ensureCliproxyCacheDir();
+  await ensureCliproxyCacheDir();
   const snapshotPath = getLatestSnapshotPath();
 
   for (let attempt = 0; attempt < MAX_WRITE_ATTEMPTS; attempt++) {
-    const baseSnapshot = readSnapshot(false);
+    const baseSnapshot = await readSnapshot(false, false);
     const baseTimestamp = baseSnapshot?.timestamp ?? -Infinity;
     const snapshot = buildSnapshot(baseSnapshot?.details ?? [], incomingDetails);
     const tempFile = `${snapshotPath}.${process.pid}.${snapshot.timestamp}.tmp`;
 
-    fs.writeFileSync(tempFile, JSON.stringify(snapshot), {
-      encoding: 'utf-8',
-      mode: PRIVATE_FILE_MODE,
-    });
-    fs.chmodSync(tempFile, PRIVATE_FILE_MODE);
+    try {
+      await fs.promises.writeFile(tempFile, JSON.stringify(snapshot), {
+        encoding: 'utf-8',
+        mode: PRIVATE_FILE_MODE,
+      });
+      await fs.promises.chmod(tempFile, PRIVATE_FILE_MODE);
 
-    const latestSnapshot = readSnapshot(false);
-    const latestTimestamp = latestSnapshot?.timestamp ?? -Infinity;
-    if (latestTimestamp > baseTimestamp) {
-      fs.rmSync(tempFile, { force: true });
-      continue;
+      // Keep the final optimistic check and rename in one event-loop turn so
+      // concurrent in-process syncs cannot both publish from the same base.
+      let latestTimestamp = -Infinity;
+      try {
+        const latest = JSON.parse(fs.readFileSync(snapshotPath, 'utf-8')) as {
+          version?: unknown;
+          timestamp?: unknown;
+          details?: unknown;
+        };
+        if (
+          latest.version === SNAPSHOT_VERSION &&
+          Array.isArray(latest.details) &&
+          typeof latest.timestamp === 'number' &&
+          Number.isFinite(latest.timestamp)
+        ) {
+          latestTimestamp = latest.timestamp;
+        }
+      } catch {
+        // Missing or malformed snapshots are replaced by the normalized result.
+      }
+      if (latestTimestamp > baseTimestamp) continue;
+
+      const pendingIdentity = getSnapshotIdentity(fs.statSync(tempFile));
+      fs.renameSync(tempFile, snapshotPath);
+      // Rename preserves the private mode already applied to the temporary file.
+      const publishedIdentity = getSnapshotIdentity(fs.statSync(snapshotPath));
+      cachedSnapshot =
+        pendingIdentity === publishedIdentity
+          ? { path: snapshotPath, identity: publishedIdentity, snapshot }
+          : null;
+      console.log(ok('CLIProxy usage snapshot updated'));
+      return;
+    } finally {
+      await fs.promises.rm(tempFile, { force: true });
     }
-
-    fs.renameSync(tempFile, snapshotPath);
-    fs.chmodSync(snapshotPath, PRIVATE_FILE_MODE);
-    console.log(ok('CLIProxy usage snapshot updated'));
-    return;
   }
 
   throw new Error('Failed to write CLIProxy snapshot after repeated overlap retries');
@@ -309,7 +352,7 @@ export async function loadCachedCliproxyData(): Promise<{
 }> {
   const empty = { daily: [], hourly: [], monthly: [] };
 
-  const snapshot = readSnapshot();
+  const snapshot = await readSnapshot();
   if (!snapshot) {
     return empty;
   }
@@ -360,10 +403,22 @@ export function startCliproxySync(syncNow: () => Promise<void> = () => syncClipr
   const intervalMin = Math.round(SYNC_INTERVAL_MS / 60_000);
   console.log(info(`Starting CLIProxy usage sync (interval: ${intervalMin} min)`));
 
-  void syncNow();
+  let running = false;
+  const run = async () => {
+    if (running) return;
+    running = true;
+    try {
+      await syncNow();
+    } catch (err) {
+      console.log(warn('CLIProxy usage sync failed:') + ` ${(err as Error).message}`);
+    } finally {
+      running = false;
+    }
+  };
+  void run();
 
   syncIntervalId = setInterval(() => {
-    void syncNow();
+    void run();
   }, SYNC_INTERVAL_MS);
 }
 

@@ -50,10 +50,12 @@ mock.module('../../config/config-generator', () => ({
 }));
 
 mock.module('../../../utils/websearch-manager', () => ({
-  appendThirdPartyWebSearchToolArgs: (args: string[], enabled = true) =>
-    enabled
-      ? [...args, '--append-system-prompt', 'CCS WebSearch steering']
-      : [...args, '--disallowedTools', 'WebSearch'],
+  appendThirdPartyWebSearchToolArgs: (args: string[], enabled = true, native = false) =>
+    native
+      ? args
+      : enabled
+        ? [...args, '--append-system-prompt', 'CCS WebSearch steering']
+        : [...args, '--disallowedTools', 'WebSearch'],
   createWebSearchTraceContext: jest.fn().mockReturnValue({}),
   ensureWebSearchMcpOrThrow: jest.fn(),
   displayWebSearchStatus: jest.fn(),
@@ -139,6 +141,7 @@ function baseContext(overrides: object = {}) {
     webSearchLaunch: {
       config: { enabled: true },
       enabled: true,
+      native: false,
       hookEnv: { CCS_WEBSEARCH_ENABLED: '1' },
     },
     browserRuntimeEnv: undefined,
@@ -216,6 +219,7 @@ describe('launchClaude', () => {
         webSearchLaunch: {
           config: { enabled: false },
           enabled: false,
+          native: false,
           hookEnv: { CCS_WEBSEARCH_ENABLED: '0', CCS_WEBSEARCH_SKIP: '1' },
         },
       })
@@ -223,6 +227,22 @@ describe('launchClaude', () => {
     const spawnArgs = mockSpawn.mock.calls[0][1] as string[];
     expect(spawnArgs).toContain('--disallowedTools');
     expect(spawnArgs).toContain('WebSearch');
+    expect(spawnArgs).not.toContain('CCS WebSearch steering');
+  });
+
+  it('keeps native WebSearch when the launch snapshot is native', async () => {
+    await launchClaude(
+      baseContext({
+        webSearchLaunch: {
+          config: { enabled: false },
+          enabled: false,
+          native: true,
+          hookEnv: { CCS_WEBSEARCH_ENABLED: '0', CCS_WEBSEARCH_SKIP: '1' },
+        },
+      })
+    );
+    const spawnArgs = mockSpawn.mock.calls[0][1] as string[];
+    expect(spawnArgs).not.toContain('--disallowedTools');
     expect(spawnArgs).not.toContain('CCS WebSearch steering');
   });
 

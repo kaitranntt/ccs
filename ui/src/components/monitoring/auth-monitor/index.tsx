@@ -34,6 +34,7 @@ export function AuthMonitor() {
     totalFailure,
     totalRequests,
     providerStats,
+    recentRequests,
     overallSuccessRate,
     isLoading,
     error,
@@ -226,6 +227,7 @@ export function AuthMonitor() {
         {selectedProviderData ? (
           <AccountFlowViz
             providerData={selectedProviderData}
+            recentRequests={recentRequests}
             onBack={() => setSelectedProvider(null)}
             onPauseToggle={handlePauseToggle}
             isPausingAccount={

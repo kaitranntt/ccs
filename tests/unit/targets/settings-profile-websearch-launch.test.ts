@@ -157,6 +157,34 @@ exit 0
     expect(launchedArgs).not.toContain(STEERING_PROMPT_SNIPPET);
   });
 
+  it('keeps native WebSearch for profiles listed in native_profiles', () => {
+    if (process.platform === 'win32') return;
+
+    fs.writeFileSync(
+      path.join(ccsDir, 'config.yaml'),
+      ['version: 12', 'websearch:', '  enabled: true', '  native_profiles:', '    - glm', ''].join(
+        '\n'
+      ),
+      'utf8'
+    );
+    // Managed WebSearch cannot be prepared; native profiles must not depend on it.
+    fs.writeFileSync(path.join(ccsDir, 'hooks'), 'not-a-directory', 'utf8');
+
+    for (const args of [
+      ['glm', 'smoke'],
+      ['glm', '-p', 'smoke'],
+    ]) {
+      fs.rmSync(claudeArgsLogPath, { force: true });
+      const result = runCcs(args, baseEnv);
+
+      expect(result.status).toBe(0);
+      expect(result.stderr).not.toContain('could not prepare the local WebSearch tool');
+      const launchedArgs = fs.readFileSync(claudeArgsLogPath, 'utf8');
+      expect(launchedArgs).not.toContain('--disallowedTools');
+      expect(launchedArgs).not.toContain(STEERING_PROMPT_SNIPPET);
+    }
+  });
+
   it('keeps native WebSearch disallowed without CCS steering for disabled headless launches', () => {
     if (process.platform === 'win32') return;
 

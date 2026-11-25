@@ -103,11 +103,6 @@ export function ConnectionTimeline({ events, privacyMode }: ConnectionTimelinePr
                       >
                         {event.status}
                       </span>
-                      {event.latencyMs && (
-                        <span className="text-[9px] text-muted-foreground font-mono">
-                          {event.latencyMs}ms
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>

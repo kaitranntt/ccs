@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, it, expect } from 'bun:test';
 import {
   getModelPricing,
   calculateCost,
+  createCostCalculator,
   getKnownModels,
   hasCustomPricing,
   type TokenUsage,
@@ -18,6 +19,27 @@ import {
 } from '../../src/web-server/models-dev/registry-cache';
 
 describe('model-pricing', () => {
+  it('keeps batch arithmetic equal for base, fallback and service-tier rates', () => {
+    const usage = {
+      inputTokens: 300001,
+      outputTokens: 12345,
+      cacheCreationTokens: 111,
+      cacheReadTokens: 222,
+    };
+    for (const model of [
+      'unknown-model-xyz',
+      'claude-opus-5-5',
+      'claude-opus-5-5-fast',
+      'gemini-3-pro-high',
+    ]) {
+      for (const serviceTier of [undefined, 'fast', 'priority', 'unknown-tier']) {
+        const options = { serviceTier };
+        expect(createCostCalculator(model, options)(usage)).toBe(
+          calculateCost(usage, model, options)
+        );
+      }
+    }
+  });
   describe('getModelPricing', () => {
     it('should return exact match pricing', () => {
       const pricing = getModelPricing('claude-sonnet-4-5-20250929');

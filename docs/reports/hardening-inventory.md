@@ -6,10 +6,10 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 
 | Metric | Value |
 |---|---:|
-| Sync fs occurrences (all) | 2674 |
-| Sync fs files affected (all) | 283 |
-| Sync fs occurrences (runtime hotpaths) | 1221 |
-| Sync fs files affected (runtime hotpaths) | 164 |
+| Sync fs occurrences (all) | 2679 |
+| Sync fs files affected (all) | 284 |
+| Sync fs occurrences (runtime hotpaths) | 1224 |
+| Sync fs files affected (runtime hotpaths) | 165 |
 | Legacy shim markers | 494 |
 | Legacy shim files affected | 185 |
 
@@ -57,13 +57,13 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 
 | Metric | Value |
 |---|---:|
-| typed-error adoption (typed/total throws) | 24.8% (120/484) |
+| typed-error adoption (typed/total throws) | 24.7% (120/485) |
 | typed-error adoption (P4 locked subdomains) | 93.3% (28/30), target 40% |
-| hotpath console.error/warn occurrences | 267 (593 total, 326 CLI-UX exempt) |
+| hotpath console.error/warn occurrences | 268 (594 total, 326 CLI-UX exempt) |
 | hotpath console.error/warn files | 82 |
-| files with createLogger | 68/781 |
+| files with createLogger | 68/782 |
 | subdomains with zero createLogger | 14 (api, bin, channels, cliproxy, cliproxy/accounts, cliproxy/binary, cliproxy/config, cliproxy/management, cliproxy/sync, cliproxy/types, config, dispatcher, shared, types) |
-| files > 400 LOC | 96 |
+| files > 400 LOC | 97 |
 | files > 600 LOC | 44 |
 
 ### Top Hotpath console.error/warn Files
@@ -93,15 +93,15 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 | `src/web-server/usage/native-quota-collector.ts` | 1718 |
 | `src/web-server/routes/cliproxy-auth-routes.ts` | 1531 |
 | `src/cliproxy/auth/oauth-handler.ts` | 1510 |
+| `src/web-server/model-pricing.ts` | 1298 |
 | `src/cliproxy/config/generator.ts` | 1295 |
-| `src/web-server/model-pricing.ts` | 1286 |
 | `src/cursor/cursor-executor.ts` | 1234 |
 | `src/cliproxy/config/env-builder.ts` | 1053 |
+| `src/cliproxy/proxy/tool-sanitization-proxy.ts` | 1052 |
 | `src/cliproxy/auth/oauth-process.ts` | 1048 |
 | `src/web-server/routes/settings-routes.ts` | 1042 |
 | `src/cliproxy/model-catalog.ts` | 1019 |
 | `src/commands/cliproxy/variant-subcommand.ts` | 1003 |
-| `src/cliproxy/proxy/tool-sanitization-proxy.ts` | 988 |
 | `src/cliproxy/quota/quota-manager.ts` | 946 |
 | `src/web-server/services/codex-dashboard-service.ts` | 940 |
 | `src/cliproxy/accounts/registry.ts` | 927 |

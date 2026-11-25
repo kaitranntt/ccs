@@ -10,6 +10,7 @@ import SharedManager, {
   normalizePluginMetadataContent as normalizeSharedManagerPluginMetadataContent,
   normalizePluginMetadataPathString as normalizeSharedManagerPluginMetadataPathString,
 } from '../../src/management/shared-manager';
+import { adoptDivergedFileContent } from '../../src/management/shared-manager/diverged-file-adopter';
 import { reconcileLocalMarketplaceRegistry } from '../../src/management/shared-manager/plugin-metadata-normalizer';
 
 describe('SharedManager', () => {
@@ -273,7 +274,7 @@ describe('SharedManager', () => {
       ).toBe(claudeSettingsPath);
     });
 
-    it('still blocks real circular links back into ~/.ccs/shared', () => {
+    it('leaves a ~/.claude link to a real shared directory in place without warning', () => {
       const manager = new SharedManager();
       const claudeCommandsPath = path.join(claudeDir(), 'commands');
       const sharedCommandsPath = path.join(ccsDir(), 'shared', 'commands');
@@ -285,12 +286,157 @@ describe('SharedManager', () => {
 
       manager.ensureSharedDirectories();
 
+      expect(logSpy.mock.calls.some(([message]) => /circular symlink/i.test(String(message)))).toBe(
+        false
+      );
+      expect(fs.lstatSync(sharedCommandsPath).isDirectory()).toBe(true);
+      expect(fs.lstatSync(claudeCommandsPath).isSymbolicLink()).toBe(true);
+      expect(
+        path.resolve(path.dirname(claudeCommandsPath), fs.readlinkSync(claudeCommandsPath))
+      ).toBe(sharedCommandsPath);
+    });
+
+    it('leaves a ~/.claude link to a real shared settings.json in place without warning', () => {
+      const manager = new SharedManager();
+      const claudeSettingsPath = path.join(claudeDir(), 'settings.json');
+      const sharedSettingsPath = path.join(ccsDir(), 'shared', 'settings.json');
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      writeJson(sharedSettingsPath, { model: 'opus' });
+      fs.symlinkSync(sharedSettingsPath, claudeSettingsPath, 'file');
+
+      manager.ensureSharedDirectories();
+
+      expect(logSpy.mock.calls.some(([message]) => /circular symlink/i.test(String(message)))).toBe(
+        false
+      );
+      expect(fs.lstatSync(sharedSettingsPath).isFile()).toBe(true);
+      expect(readJson(sharedSettingsPath)).toEqual({ model: 'opus' });
+      expect(fs.lstatSync(claudeSettingsPath).isSymbolicLink()).toBe(true);
+      expect(
+        path.resolve(path.dirname(claudeSettingsPath), fs.readlinkSync(claudeSettingsPath))
+      ).toBe(sharedSettingsPath);
+      expect(findRecovery(sharedSettingsPath)).toBeUndefined();
+    });
+
+    it('still warns for a ~/.claude link to a different path inside ~/.ccs/shared', () => {
+      const manager = new SharedManager();
+      const claudeCommandsPath = path.join(claudeDir(), 'commands');
+      const sharedCommandsPath = path.join(ccsDir(), 'shared', 'commands');
+      const sharedOtherPath = path.join(ccsDir(), 'shared', 'other-commands');
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      fs.mkdirSync(sharedCommandsPath, { recursive: true });
+      fs.symlinkSync(sharedCommandsPath, sharedOtherPath, 'dir');
+      fs.symlinkSync(sharedOtherPath, claudeCommandsPath, 'dir');
+
+      manager.ensureSharedDirectories();
+
+      expect(
+        logSpy.mock.calls.some(([message]) =>
+          String(message).includes('Skipping commands: circular symlink detected')
+        )
+      ).toBe(true);
+      expect(
+        path.resolve(path.dirname(claudeCommandsPath), fs.readlinkSync(claudeCommandsPath))
+      ).toBe(sharedOtherPath);
+      expect(fs.lstatSync(sharedCommandsPath).isDirectory()).toBe(true);
+    });
+
+    it('still warns when a ~/.claude link only names the shared entry lexically', () => {
+      const manager = new SharedManager();
+      const claudeCommandsPath = path.join(claudeDir(), 'commands');
+      const sharedCommandsPath = path.join(ccsDir(), 'shared', 'commands');
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      fs.mkdirSync(sharedCommandsPath, { recursive: true });
+      // `missing/..` collapses to the shared entry on paper, but the link cannot be followed.
+      fs.symlinkSync(`${tempRoot}/missing/../.ccs/shared/commands`, claudeCommandsPath, 'dir');
+
+      manager.ensureSharedDirectories();
+
       expect(
         logSpy.mock.calls.some(([message]) =>
           String(message).includes('Skipping commands: circular symlink detected')
         )
       ).toBe(true);
       expect(fs.lstatSync(sharedCommandsPath).isDirectory()).toBe(true);
+    });
+
+    it('still warns when a ~/.claude link reaches a different object than the shared entry', () => {
+      const manager = new SharedManager();
+      const claudeCommandsPath = path.join(claudeDir(), 'commands');
+      const sharedCommandsPath = path.join(ccsDir(), 'shared', 'commands');
+      const elsewhereRoot = path.join(tempRoot, 'elsewhere');
+      const aliasPath = path.join(tempRoot, 'alias');
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      fs.mkdirSync(sharedCommandsPath, { recursive: true });
+      fs.mkdirSync(path.join(elsewhereRoot, 'sub'), { recursive: true });
+      fs.mkdirSync(path.join(elsewhereRoot, '.ccs', 'shared', 'commands'), { recursive: true });
+      fs.symlinkSync(path.join(elsewhereRoot, 'sub'), aliasPath, 'dir');
+      // Names the shared entry on paper; the kernel follows `alias` first and lands under `elsewhere`.
+      fs.symlinkSync(`${tempRoot}/alias/../.ccs/shared/commands`, claudeCommandsPath, 'dir');
+
+      manager.ensureSharedDirectories();
+
+      expect(
+        logSpy.mock.calls.some(([message]) =>
+          String(message).includes('Skipping commands: circular symlink detected')
+        )
+      ).toBe(true);
+      expect(fs.lstatSync(sharedCommandsPath).isDirectory()).toBe(true);
+    });
+
+    it('still warns when the shared entry is not the type the item expects', () => {
+      const manager = new SharedManager();
+      const claudeCommandsPath = path.join(claudeDir(), 'commands');
+      const sharedCommandsPath = path.join(ccsDir(), 'shared', 'commands');
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      fs.mkdirSync(path.dirname(sharedCommandsPath), { recursive: true });
+      fs.writeFileSync(sharedCommandsPath, 'not a directory', 'utf8');
+      fs.symlinkSync(sharedCommandsPath, claudeCommandsPath, 'dir');
+
+      manager.ensureSharedDirectories();
+
+      expect(
+        logSpy.mock.calls.some(([message]) =>
+          String(message).includes('Skipping commands: circular symlink detected')
+        )
+      ).toBe(true);
+      expect(fs.lstatSync(sharedCommandsPath).isFile()).toBe(true);
+    });
+
+    it('still blocks real circular links back into ~/.ccs/shared', () => {
+      const manager = new SharedManager();
+      const claudeCommandsPath = path.join(claudeDir(), 'commands');
+      const sharedCommandsPath = path.join(ccsDir(), 'shared', 'commands');
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      fs.mkdirSync(path.join(ccsDir(), 'shared'), { recursive: true });
+      fs.symlinkSync(sharedCommandsPath, claudeCommandsPath, 'dir');
+      fs.symlinkSync(claudeCommandsPath, sharedCommandsPath, 'dir');
+
+      manager.ensureSharedDirectories();
+
+      expect(
+        logSpy.mock.calls.some(([message]) =>
+          String(message).includes('Skipping commands: circular symlink detected')
+        )
+      ).toBe(true);
+      expect(
+        path.resolve(path.dirname(claudeCommandsPath), fs.readlinkSync(claudeCommandsPath))
+      ).toBe(sharedCommandsPath);
+      expect(
+        path.resolve(path.dirname(sharedCommandsPath), fs.readlinkSync(sharedCommandsPath))
+      ).toBe(claudeCommandsPath);
     });
 
     it('does not materialize dangling external settings symlinks', () => {
@@ -497,6 +643,93 @@ describe('SharedManager', () => {
         generation: 1,
       });
     });
+
+    // #1829: a missing ~/.claude/settings.json is seeded with an empty object
+    // (by ensureSharedDirectories, or by the recovery manager before it), and
+    // that placeholder is always newer than the user's real shared file.
+    const seededCanonicalCases: ReadonlyArray<{ seed: string; placeholder: string | null }> = [
+      { seed: 'ensureSharedDirectories', placeholder: null },
+      { seed: 'the recovery manager', placeholder: '{}\n' },
+    ];
+
+    for (const { seed, placeholder } of seededCanonicalCases) {
+      it(`adopts shared settings over an empty ~/.claude/settings.json seeded by ${seed}`, () => {
+        const manager = new SharedManager();
+        const claudeSettingsPath = path.join(claudeDir(), 'settings.json');
+        const sharedSettingsPath = path.join(ccsDir(), 'shared', 'settings.json');
+        const sharedSettings = {
+          model: 'opus',
+          permissions: { allow: ['Bash(git status:*)'] },
+        };
+
+        fs.mkdirSync(claudeDir(), { recursive: true });
+        writeJson(sharedSettingsPath, sharedSettings);
+        setMtime(sharedSettingsPath, Date.now() - 60_000);
+        if (placeholder !== null) {
+          fs.writeFileSync(claudeSettingsPath, placeholder, 'utf8');
+        }
+
+        manager.ensureSharedDirectories();
+
+        expect(fs.lstatSync(sharedSettingsPath).isSymbolicLink()).toBe(true);
+        expect(readJson(claudeSettingsPath)).toEqual(sharedSettings);
+        expect(readJson(sharedSettingsPath)).toEqual(sharedSettings);
+        expect(findRecovery(sharedSettingsPath)).toBeUndefined();
+        expect(readJson(`${claudeSettingsPath}.bak-ccs-adopt`)).toEqual({});
+      });
+    }
+
+    it('adopts an older instance settings.json over an empty canonical file', () => {
+      const manager = new SharedManager();
+      const instancePath = instanceDir('work');
+      const claudeSettingsPath = path.join(claudeDir(), 'settings.json');
+      const instanceSettingsPath = path.join(instancePath, 'settings.json');
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      fs.writeFileSync(claudeSettingsPath, '{}\n', 'utf8');
+      writeJson(instanceSettingsPath, { theme: 'dark' });
+      setMtime(instanceSettingsPath, fs.statSync(claudeSettingsPath).mtimeMs - 2_000);
+
+      manager.linkSharedDirectories(instancePath);
+
+      expect(fs.lstatSync(instanceSettingsPath).isSymbolicLink()).toBe(true);
+      expect(readJson(claudeSettingsPath)).toEqual({ theme: 'dark' });
+      expect(findRecovery(instanceSettingsPath)).toBeUndefined();
+    });
+
+    // Anything but a top-level empty object in settings.json still wins on
+    // mtime: these canonical contents are newer and must not be replaced. An
+    // empty object in any other file (e.g. plugin state) is real state.
+    const nonEmptyCanonicalCases: ReadonlyArray<{ label: string; name: string; content: string }> =
+      [
+        { label: 'an object with an empty member', name: 'settings.json', content: '{"env":{}}' },
+        { label: 'an empty array', name: 'settings.json', content: '[]' },
+        { label: 'null', name: 'settings.json', content: 'null' },
+        { label: 'malformed JSON', name: 'settings.json', content: '{' },
+        { label: '{} in a file other than settings.json', name: 'custom.json', content: '{}' },
+      ];
+
+    for (const { label, name, content } of nonEmptyCanonicalCases) {
+      it(`refuses an older diverged file when the canonical file holds ${label}`, () => {
+        const canonicalPath = path.join(claudeDir(), name);
+        const divergedPath = path.join(ccsDir(), 'shared', name);
+
+        fs.mkdirSync(claudeDir(), { recursive: true });
+        fs.mkdirSync(path.dirname(divergedPath), { recursive: true });
+        fs.writeFileSync(canonicalPath, content, 'utf8');
+        fs.writeFileSync(divergedPath, '{"theme":"dark"}', 'utf8');
+        setMtime(divergedPath, fs.statSync(canonicalPath).mtimeMs - 2_000);
+
+        expect(adoptDivergedFileContent(divergedPath, canonicalPath)).toBe('claimed');
+
+        expect(fs.readFileSync(canonicalPath, 'utf8')).toBe(content);
+        const recoveryName = findRecovery(divergedPath);
+        expect(recoveryName).toBeDefined();
+        expect(fs.readFileSync(path.join(path.dirname(divergedPath), recoveryName!), 'utf8')).toBe(
+          '{"theme":"dark"}'
+        );
+      });
+    }
 
     it('preserves divergence when the canonical settings symlink is dangling', () => {
       const manager = new SharedManager();

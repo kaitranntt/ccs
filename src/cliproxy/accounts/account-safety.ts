@@ -700,7 +700,8 @@ function truncate(str: string, maxLen: number): string {
 export function writeQuotaWarning(accountId: string, quotaPercent: number): void {
   emitSessionNotice({
     level: 'warning',
-    title: `Quota Low: ${maskEmail(accountId)} (${Math.round(quotaPercent)}% remaining)`,
+    // The fact first: a narrow status line cuts the end of the title.
+    title: `Quota low (${Math.round(quotaPercent)}% left): ${maskEmail(accountId)}`,
     details: ['Next session will use a different account if available'],
   });
 }
@@ -716,7 +717,7 @@ function writeQuotaExhausted(
 ): void {
   emitSessionNotice({
     level: 'error',
-    title: `Quota Exhausted: ${maskEmail(accountId)}`,
+    title: `Quota exhausted: ${maskEmail(accountId)}`,
     details: [
       `Cooldown: ${cooldownMinutes} minutes`,
       switchedTo
