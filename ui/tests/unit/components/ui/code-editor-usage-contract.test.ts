@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const boundedConsumers = [
   {
-    file: 'src/pages/cliproxy-ai-providers.tsx',
+    file: 'src/components/cliproxy/ai-providers/entry-inspector-raw-pane.tsx',
     expectedCount: 2,
   },
   {

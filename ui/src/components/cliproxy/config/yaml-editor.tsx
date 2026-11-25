@@ -1,15 +1,16 @@
 /**
  * YAML Editor Component
- * Right panel YAML editor with syntax highlighting and validation
+ * Right panel YAML editor backed by lazy-loaded CodeEditor with validation status bar
  */
 
-import { useState, useCallback } from 'react';
-import Editor from 'react-simple-code-editor';
-import { Highlight, themes } from 'prism-react-renderer';
-import { useTheme } from '@/hooks/use-theme';
+import { lazy, Suspense } from 'react';
 import { cn } from '@/lib/utils';
-import { AlertCircle, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+
+const CodeEditor = lazy(() =>
+  import('@/components/shared/code-editor').then((m) => ({ default: m.CodeEditor }))
+);
 
 interface YamlEditorProps {
   value: string;
@@ -26,65 +27,27 @@ export function YamlEditor({
   errorLine,
   className,
 }: YamlEditorProps) {
-  const { isDark } = useTheme();
-  const [isFocused, setIsFocused] = useState(false);
-
-  const highlightCode = useCallback(
-    (code: string) => (
-      <Highlight theme={isDark ? themes.nightOwl : themes.github} code={code} language="yaml">
-        {({ tokens, getLineProps, getTokenProps }) => (
-          <>
-            {tokens.map((line, i) => (
-              <div
-                key={i}
-                {...getLineProps({ line })}
-                className={cn(
-                  'px-2',
-                  errorLine === i + 1 && 'bg-destructive/20 border-l-2 border-destructive'
-                )}
-              >
-                <span className="inline-block w-8 text-right mr-4 text-muted-foreground/50 select-none text-xs">
-                  {i + 1}
-                </span>
-                {line.map((token, key) => (
-                  <span key={key} {...getTokenProps({ token })} />
-                ))}
-              </div>
-            ))}
-          </>
-        )}
-      </Highlight>
-    ),
-    [isDark, errorLine]
-  );
-
   return (
-    <div
-      className={cn(
-        'relative rounded-md border overflow-hidden bg-muted/30 h-full',
-        isFocused && 'ring-2 ring-ring ring-offset-2 ring-offset-background',
-        readonly && 'opacity-70',
-        className
-      )}
+    <Suspense
+      fallback={
+        <div className={cn('flex h-full min-h-[200px] items-center justify-center', className)}>
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      }
     >
-      <Editor
+      <CodeEditor
         value={value}
-        onValueChange={readonly ? () => {} : onChange}
-        highlight={highlightCode}
-        key={isDark ? 'dark' : 'light'}
-        padding={12}
-        disabled={readonly}
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
-        textareaClassName="focus:outline-none font-mono text-sm leading-6"
-        preClassName="font-mono text-sm leading-6"
-        style={{
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-          fontSize: '0.875rem',
-          minHeight: '100%',
-        }}
+        onChange={onChange}
+        language="yaml"
+        readonly={readonly}
+        heightMode="fill-parent"
+        minHeight="100%"
+        className={cn(
+          errorLine !== undefined && 'ring-1 ring-destructive/40 rounded-md',
+          className
+        )}
       />
-    </div>
+    </Suspense>
   );
 }
 

@@ -45,8 +45,9 @@ function noticeMatchesQuery(notice: SupportNotice, queryValue: string): boolean 
 
 export function UpdatesPage() {
   const { t } = useTranslation();
-  const notices = [...getSupportNotices()].sort((a, b) =>
-    b.publishedAt.localeCompare(a.publishedAt)
+  const notices = useMemo(
+    () => [...getSupportNotices()].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)),
+    []
   );
   const [viewMode, setViewMode] = useState<NoticeViewMode>('inbox');
   const [query, setQuery] = useState('');

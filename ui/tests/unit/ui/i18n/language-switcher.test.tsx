@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTranslation } from 'react-i18next';
 import { render, screen, userEvent, waitFor } from '@tests/setup/test-utils';
-import i18n from '@/lib/i18n';
+import i18n, { loadLocaleMessages } from '@/lib/i18n';
 import { ContinuityOverview } from '@/components/account/continuity-overview';
 import { LanguageSwitcher } from '@/components/layout/language-switcher';
 import { TabNavigation } from '@/pages/settings/components/tab-navigation';
@@ -227,13 +227,9 @@ describe('Dashboard i18n', () => {
 
   it.each(SUPPORTED_LOCALES.filter((locale: string) => locale !== 'en'))(
     'keeps %s translation keys in parity with en and preserves placeholders',
-    (locale: string) => {
-      const resources = i18n.options.resources as
-        | Record<string, { translation: Record<string, unknown> }>
-        | undefined;
-
-      const enTranslation = resources?.en?.translation;
-      const localeTranslation = resources?.[locale]?.translation;
+    async (locale: string) => {
+      const enTranslation = await loadLocaleMessages('en');
+      const localeTranslation = await loadLocaleMessages(locale);
 
       expect(enTranslation).toBeDefined();
       expect(localeTranslation).toBeDefined();

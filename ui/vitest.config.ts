@@ -31,10 +31,27 @@ export default defineConfig({
         'src/pages/analytics/utils.ts',
         // Auth monitor - pure utils
         'src/components/monitoring/auth-monitor/utils.ts',
+        // Tested hooks
+        'src/hooks/use-websocket.ts',
+        'src/hooks/use-websocket-context.ts',
+        'src/hooks/use-copilot.ts',
+        'src/hooks/use-droid.ts',
+        'src/hooks/use-overview.ts',
+        // Tested core libs
+        'src/lib/i18n.ts',
+        'src/lib/account-continuity.ts',
+        'src/lib/account-identity.ts',
+        'src/lib/cliproxy-account-stats.ts',
+        'src/lib/codex-effort.ts',
+        'src/lib/default-ports.ts',
+        'src/lib/last-route.ts',
+        'src/lib/reasoning-control.ts',
+        'src/lib/sensitive-keys.ts',
       ],
       exclude: [
         'src/**/*.d.ts',
         'src/components/ui/**', // shadcn components
+        'src/lib/locales/**', // static translation dictionaries
         'src/main.tsx',
         'src/**/index.tsx', // barrel exports and page containers
         'src/**/index.ts', // barrel exports
