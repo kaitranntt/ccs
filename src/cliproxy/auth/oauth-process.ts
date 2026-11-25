@@ -35,7 +35,7 @@ import {
   DEVICE_CODE_TIMEOUT_MS,
   type DeviceCodePrompt,
 } from '../auth/device-code-handler';
-import { OAUTH_FLOW_TYPES } from '../../management';
+import { getOAuthFlowType } from '../provider-capabilities';
 import {
   registerAuthSession,
   attachProcessToSession,
@@ -124,7 +124,7 @@ async function handleProjectSelection(
 }
 
 function resolveAuthFlowType(options: OAuthProcessOptions): 'device_code' | 'authorization_code' {
-  return options.authFlowType || OAUTH_FLOW_TYPES[options.provider] || 'authorization_code';
+  return options.authFlowType || getOAuthFlowType(options.provider) || 'authorization_code';
 }
 
 export function extractDeviceCodePrompt(output: string): {

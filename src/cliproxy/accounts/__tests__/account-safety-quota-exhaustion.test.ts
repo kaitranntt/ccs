@@ -14,12 +14,12 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
-  handleQuotaExhaustion,
   writeQuotaWarning,
   maskEmail,
   pauseAccountForQuotaCooldown,
   restoreExpiredQuotaPauses,
 } from '../../accounts/account-safety';
+import { handleQuotaExhaustion } from '../../quota/quota-manager';
 import { sanitizeEmail } from '../../auth/auth-utils';
 import { pauseAccount } from '../registry';
 

@@ -16,7 +16,7 @@ import {
   createWebSearchTraceContext,
 } from '../../utils/websearch-manager';
 import type { WebSearchLaunchState } from '../../utils/websearch-manager';
-import { appendThirdPartyImageAnalysisToolArgs } from '../../utils/image-analysis';
+import { appendThirdPartyImageAnalysisToolArgs } from '../../utils/image-analysis/claude-tool-args';
 import { appendBrowserToolArgs } from '../../utils/browser';
 import { getDefaultAccount } from '../accounts/account-manager';
 import { CLIProxyProvider, ExecutorConfig } from '../types';

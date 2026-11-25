@@ -7,14 +7,16 @@ import { ok, warn, info } from '../../utils/ui';
 import {
   isCLIProxyInstalled,
   getCLIProxyPath,
-  getAllAuthStatus,
-  getCliproxyConfigPath,
   getInstalledCliproxyVersion,
-  CLIPROXY_DEFAULT_PORT,
+} from '../../cliproxy/binary-manager';
+import { getAllAuthStatus } from '../../cliproxy/auth/auth-handler';
+import { getCliproxyConfigPath } from '../../cliproxy/config/path-resolver';
+import { CLIPROXY_DEFAULT_PORT } from '../../cliproxy/config/port-manager';
+import {
   configNeedsRegeneration,
   regenerateConfig,
   CLIPROXY_CONFIG_VERSION,
-} from '../../cliproxy';
+} from '../../cliproxy/config/config-generator';
 import { getPortProcess, isCLIProxyProcess } from '../../utils/port-utils';
 import { HealthCheck, IHealthChecker, createSpinner } from './types';
 

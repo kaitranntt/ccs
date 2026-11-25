@@ -13,13 +13,19 @@
 import * as fs from 'fs';
 import { fail, warn, info } from '../utils/ui';
 import { LEGACY_CURSOR_PROFILE_NAME } from '../cursor/constants';
-import { resolveTargetType, stripTargetFlag } from '../targets/target-resolver';
 import { resolveDroidReasoningRuntime } from '../targets/droid-reasoning-runtime';
 import type { ProfileDetectionResult } from '../auth/profile-detector';
 import { setGlobalConfigDir, detectCloudSyncPath } from '../utils/config-manager';
 import { resolveBrowserLaunchFlagResolution } from '../utils/browser';
 import type { BrowserLaunchOverride } from '../utils/browser';
 import { ValidationError } from '../errors/error-types';
+import { shouldPassthroughNativeCodexCommand } from './codex-passthrough';
+export {
+  CODEX_NATIVE_PASSTHROUGH_FLAGS,
+  CODEX_NATIVE_PASSTHROUGH_SUBCOMMANDS,
+  getNativeCodexPassthroughArgs,
+  shouldPassthroughNativeCodexCommand,
+} from './codex-passthrough';
 
 // ========== Bootstrap Result ==========
 
@@ -200,32 +206,6 @@ export const CODEX_RUNTIME_REASONING_LEVELS = new Set([
   'xhigh',
 ]);
 
-export const CODEX_NATIVE_PASSTHROUGH_FLAGS = new Set(['--help', '-h', '--version', '-v']);
-export const CODEX_NATIVE_PASSTHROUGH_SUBCOMMANDS = new Set([
-  'a',
-  'app',
-  'app-server',
-  'apply',
-  'cloud',
-  'completion',
-  'debug',
-  'e',
-  'exec',
-  'exec-server',
-  'features',
-  'fork',
-  'help',
-  'login',
-  'logout',
-  'mcp',
-  'mcp-server',
-  'plugin',
-  'remote-control',
-  'resume',
-  'review',
-  'sandbox',
-]);
-
 export const NATIVE_CLAUDE_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 
 export const NATIVE_CLAUDE_EFFORT_LEVEL_SET = new Set<string>(NATIVE_CLAUDE_EFFORT_LEVELS);
@@ -371,35 +351,4 @@ export function shouldNormalizeNativeClaudeEffort(
   profileType: ProfileDetectionResult['type']
 ): boolean {
   return profileType === 'default' || profileType === 'account' || profileType === 'settings';
-}
-
-// ========== Native Codex Passthrough ==========
-
-export function shouldPassthroughNativeCodexCommand(args: string[]): boolean {
-  return getNativeCodexPassthroughArgs(args) !== null;
-}
-
-export function getNativeCodexPassthroughArgs(args: string[]): string[] | null {
-  const targetArgs = stripTargetFlag(args);
-  if (resolveTargetType(args) !== 'codex' || targetArgs.length === 0) {
-    return null;
-  }
-
-  const firstArg = targetArgs[0] || '';
-  if (CODEX_NATIVE_PASSTHROUGH_FLAGS.has(firstArg)) {
-    return targetArgs;
-  }
-  if (CODEX_NATIVE_PASSTHROUGH_SUBCOMMANDS.has(firstArg)) {
-    return targetArgs;
-  }
-
-  const secondArg = targetArgs[1] || '';
-  if (firstArg === 'codex' && CODEX_NATIVE_PASSTHROUGH_FLAGS.has(secondArg)) {
-    return targetArgs.slice(1);
-  }
-  if (firstArg === 'codex' && CODEX_NATIVE_PASSTHROUGH_SUBCOMMANDS.has(secondArg)) {
-    return targetArgs.slice(1);
-  }
-
-  return null;
 }

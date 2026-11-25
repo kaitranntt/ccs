@@ -25,7 +25,7 @@ import {
   normalizeOfficialChannelIds,
   resolveLegacyDiscordSelection,
 } from '../../channels/official-channels-ids';
-import { getRecommendedBrowserUserDataDir } from '../../utils/browser/browser-settings';
+import { getRecommendedBrowserUserDataDir } from '../../shared/ccs-paths';
 import { GO_DURATION_PATTERN, GO_DURATION_SEGMENT } from './io-locks';
 
 // ---------------------------------------------------------------------------

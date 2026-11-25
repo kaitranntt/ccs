@@ -17,7 +17,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import * as yaml from 'js-yaml';
-import { getCcsDir } from '../../utils/config-manager';
+import { getCcsDir } from '../../shared/ccs-paths';
 import { ConfigError } from '../../errors/error-types';
 import {
   isUnifiedConfig,

@@ -36,6 +36,8 @@ import {
 import type { RuntimeMonitorConfig } from '../../config/unified-config-types';
 import { loadOrCreateUnifiedConfig } from '../../config/config-loader-facade';
 import { getTierLockForProvider } from '../../config/schemas/quota';
+import { emitSessionNotice } from '../accounts/session-notices';
+import { maskEmail, pauseAccountForQuotaCooldown } from '../accounts/account-safety';
 
 export type ManagedQuotaProvider = 'agy' | 'claude' | 'codex' | 'gemini' | 'ghcp';
 type ManagedQuotaResult =
@@ -835,7 +837,6 @@ function scheduleNextPoll(
         // NOTE: Monitor stops here intentionally. The current session continues
         // on the exhausted account (can't hot-swap mid-session). The switched
         // default only takes effect on next session start via preflightCheck().
-        const { handleQuotaExhaustion } = await import('../accounts/account-safety');
         await handleQuotaExhaustion(provider, accountId, monitorConfig.cooldown_minutes);
         state.stopped = true;
         state.timer = null;
@@ -943,4 +944,67 @@ export function stopQuotaMonitor(): void {
     }
   }
   activeRuntimeMonitors.clear();
+}
+
+/**
+ * Raise the quota-exhausted notice.
+ * Called when quota falls below exhaustion_threshold — account will be cooled down.
+ */
+function writeQuotaExhausted(
+  accountId: string,
+  switchedTo: string | null,
+  cooldownMinutes: number
+): void {
+  emitSessionNotice({
+    level: 'error',
+    title: `Quota exhausted: ${maskEmail(accountId)}`,
+    details: [
+      `Cooldown: ${cooldownMinutes} minutes`,
+      switchedTo
+        ? `Next session default: ${maskEmail(switchedTo)}`
+        : 'No alternative accounts available',
+    ],
+  });
+}
+
+/**
+ * Handle quota exhaustion for an active session.
+ * Applies cooldown to exhausted account, finds healthy alternative,
+ * switches default, and alerts user via stderr.
+ *
+ * @returns switchedTo account ID or null if no alternatives
+ */
+export async function handleQuotaExhaustion(
+  provider: CLIProxyProvider,
+  accountId: string,
+  cooldownMinutes: number
+): Promise<{ switchedTo: string | null; reason: string }> {
+  const config = loadOrCreateUnifiedConfig();
+  const threshold = config.quota_management?.auto?.exhaustion_threshold ?? 5;
+
+  // Apply cooldown to exhausted account
+  applyCooldown(provider, accountId, cooldownMinutes);
+
+  // Find healthy alternative
+  const alternative = await findHealthyAccount(provider, [accountId]);
+
+  if (alternative) {
+    if (alternative.lastQuota !== null && alternative.lastQuota >= threshold) {
+      pauseAccountForQuotaCooldown(provider, accountId, cooldownMinutes);
+    }
+    setDefaultAccount(provider, alternative.id);
+    touchAccount(provider, alternative.id);
+    writeQuotaExhausted(accountId, alternative.id, cooldownMinutes);
+    return {
+      switchedTo: alternative.id,
+      reason: `Quota exhausted, switched to ${maskEmail(alternative.id)}`,
+    };
+  }
+
+  // No alternatives — warn but continue (graceful degradation)
+  writeQuotaExhausted(accountId, null, cooldownMinutes);
+  return {
+    switchedTo: null,
+    reason: 'Quota exhausted, no alternatives available',
+  };
 }

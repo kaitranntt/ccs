@@ -62,10 +62,8 @@ mock.module('../../../utils/websearch-manager', () => ({
   getWebSearchHookEnv: jest.fn().mockReturnValue({}),
 }));
 
-mock.module('../../../utils/image-analysis', () => ({
+mock.module('../../../utils/image-analysis/claude-tool-args', () => ({
   appendThirdPartyImageAnalysisToolArgs: (args: string[]) => [...args, '--mcp-image-analysis'],
-  syncImageAnalysisMcpToConfigDir: jest.fn(),
-  ensureImageAnalysisMcpOrThrow: jest.fn().mockReturnValue(true),
 }));
 
 mock.module('../../../utils/browser', () => ({

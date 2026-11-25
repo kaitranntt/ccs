@@ -9,12 +9,16 @@ import { spawn, ChildProcess } from 'child_process';
 import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as http from 'http';
 import type { CursorDaemonConfig, CursorDaemonStatus } from './types';
 import { getPidFromFile, writePidToFile, removePidFile } from './cursor-daemon-pid';
 import { getCursorDaemonToken } from './cursor-daemon-auth';
 import { verifyDaemonOwnership } from './daemon-process-ownership';
 import { createLogger, forwardRequestIdEnv } from '../services/logging';
+import {
+  isValidDaemonPort,
+  probeLocalDaemonHealth,
+  waitForProcessExit,
+} from '../shared/daemon-lifecycle';
 export { getPidFromFile, writePidToFile, removePidFile } from './cursor-daemon-pid';
 
 const logger = createLogger('cursor:daemon');
@@ -68,53 +72,15 @@ export function buildDaemonProcessEnv(daemonToken: string): NodeJS.ProcessEnv {
  * Uses 127.0.0.1 instead of localhost for more reliable local connections.
  */
 export async function isDaemonRunning(port: number, daemonToken?: string): Promise<boolean> {
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    return false;
-  }
-  return new Promise((resolve) => {
-    const req = http.request(
-      {
-        hostname: '127.0.0.1',
-        port,
-        path: '/health',
-        method: 'GET',
-        timeout: 3000,
-        headers: daemonToken ? { 'x-ccs-cursor-token': daemonToken } : undefined,
-      },
-      (res) => {
-        let body = '';
-        res.setEncoding('utf8');
-
-        res.on('data', (chunk) => {
-          body += chunk;
-        });
-
-        res.on('end', () => {
-          if (res.statusCode !== 200) {
-            resolve(false);
-            return;
-          }
-
-          try {
-            const payload = JSON.parse(body) as { service?: string };
-            resolve(payload.service === 'cursor-daemon');
-          } catch {
-            resolve(false);
-          }
-        });
-      }
-    );
-
-    req.on('error', () => {
-      resolve(false);
-    });
-
-    req.on('timeout', () => {
-      req.destroy();
-      resolve(false);
-    });
-
-    req.end();
+  return probeLocalDaemonHealth({
+    port,
+    path: '/health',
+    timeoutMs: 3000,
+    headers: daemonToken ? { 'x-ccs-cursor-token': daemonToken } : undefined,
+    validateBody: (body) => {
+      const payload = JSON.parse(body) as { service?: string };
+      return payload.service === 'cursor-daemon';
+    },
   });
 }
 
@@ -153,7 +119,7 @@ export async function startDaemon(
   const effectiveConfig: CursorDaemonConfig = { ...config, daemon_token: daemonToken };
 
   // Validate port before probing or interpolation (prevents injection and bad port RangeError)
-  if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535) {
+  if (!isValidDaemonPort(config.port)) {
     return { success: false, error: `Invalid port: ${config.port}` };
   }
 
@@ -350,21 +316,10 @@ export async function stopDaemon(): Promise<{ success: boolean; error?: string }
     process.kill(pid, 'SIGTERM');
 
     // Wait for process to exit (up to 5 seconds)
-    let attempts = 0;
-    while (attempts < 10) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      try {
-        // Check if process still exists (kill(pid, 0) throws if not)
-        process.kill(pid, 0);
-        attempts++;
-      } catch {
-        // Process no longer exists
-        break;
-      }
-    }
+    const exited = await waitForProcessExit(pid, 10, 500);
 
     // Escalate to SIGKILL only if SIGTERM wait loop exhausted
-    if (attempts >= 10) {
+    if (!exited) {
       try {
         process.kill(pid, 'SIGKILL');
       } catch {

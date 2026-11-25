@@ -6,32 +6,34 @@
  */
 
 import { spawn, ChildProcess } from 'child_process';
-import * as fs from 'fs';
 import * as path from 'path';
-import * as http from 'http';
 import { CopilotDaemonStatus } from './types';
 import { CopilotConfig, DEFAULT_COPILOT_CONFIG } from '../config/unified-config-types';
 
 import { getCopilotDir, getCopilotApiBinPath } from './copilot-package-manager';
-import { verifyProcessOwnership } from '../cursor/daemon-process-ownership';
+import {
+  MIN_DAEMON_PORT,
+  MAX_DAEMON_PORT,
+  isValidDaemonPort,
+  getDaemonPidFromFile,
+  writeDaemonPidToFile,
+  removeDaemonPidFile,
+  probeLocalDaemonHealth,
+  verifyProcessOwnership,
+  waitForProcessExit,
+} from '../shared/daemon-lifecycle';
 import { createLogger } from '../services/logging';
 import { loadOrCreateUnifiedConfig } from '../config/config-loader-facade';
 
 const logger = createLogger('copilot:daemon');
 
 const DAEMON_HEALTH_MARKER = 'server running';
-const MIN_PORT = 1;
-const MAX_PORT = 65535;
-
-function isValidPort(port: number): boolean {
-  return Number.isInteger(port) && port >= MIN_PORT && port <= MAX_PORT;
-}
 
 function getConfiguredCopilotPort(): number {
   try {
     const config = loadOrCreateUnifiedConfig();
     const port = config.copilot?.port ?? DEFAULT_COPILOT_CONFIG.port;
-    return isValidPort(port) ? port : DEFAULT_COPILOT_CONFIG.port;
+    return isValidDaemonPort(port) ? port : DEFAULT_COPILOT_CONFIG.port;
   } catch {
     return DEFAULT_COPILOT_CONFIG.port;
   }
@@ -46,48 +48,11 @@ function getPidFilePath(): string {
  * Uses 127.0.0.1 instead of localhost for more reliable local connections.
  */
 export async function isDaemonRunning(port: number): Promise<boolean> {
-  if (!isValidPort(port)) {
-    return false;
-  }
-
-  return new Promise((resolve) => {
-    const req = http.request(
-      {
-        hostname: '127.0.0.1',
-        port,
-        path: '/',
-        method: 'GET',
-        timeout: 3000,
-      },
-      (res) => {
-        let body = '';
-        res.setEncoding('utf8');
-
-        res.on('data', (chunk) => {
-          body += chunk;
-        });
-
-        res.on('end', () => {
-          if (res.statusCode !== 200) {
-            resolve(false);
-            return;
-          }
-
-          resolve(body.trim().toLowerCase().includes(DAEMON_HEALTH_MARKER));
-        });
-      }
-    );
-
-    req.on('error', () => {
-      resolve(false);
-    });
-
-    req.on('timeout', () => {
-      req.destroy();
-      resolve(false);
-    });
-
-    req.end();
+  return probeLocalDaemonHealth({
+    port,
+    path: '/',
+    timeoutMs: 3000,
+    validateBody: (body) => body.trim().toLowerCase().includes(DAEMON_HEALTH_MARKER),
   });
 }
 
@@ -109,47 +74,21 @@ export async function getDaemonStatus(port: number): Promise<CopilotDaemonStatus
  * Read PID from file.
  */
 function getPidFromFile(): number | null {
-  const pidFile = getPidFilePath();
-  try {
-    if (fs.existsSync(pidFile)) {
-      const content = fs.readFileSync(pidFile, 'utf8').trim();
-      const pid = parseInt(content, 10);
-      return isNaN(pid) ? null : pid;
-    }
-  } catch {
-    // Ignore errors
-  }
-  return null;
+  return getDaemonPidFromFile(getPidFilePath());
 }
 
 /**
  * Write PID to file.
  */
 function writePidToFile(pid: number): void {
-  const pidFile = getPidFilePath();
-  try {
-    const dir = path.dirname(pidFile);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    }
-    fs.writeFileSync(pidFile, pid.toString(), { mode: 0o600 });
-  } catch {
-    // Ignore errors
-  }
+  writeDaemonPidToFile(getPidFilePath(), pid);
 }
 
 /**
  * Remove PID file.
  */
 function removePidFile(): void {
-  const pidFile = getPidFilePath();
-  try {
-    if (fs.existsSync(pidFile)) {
-      fs.unlinkSync(pidFile);
-    }
-  } catch {
-    // Ignore errors
-  }
+  removeDaemonPidFile(getPidFilePath());
 }
 
 /**
@@ -161,10 +100,10 @@ function removePidFile(): void {
 export async function startDaemon(
   config: CopilotConfig
 ): Promise<{ success: boolean; pid?: number; error?: string }> {
-  if (!isValidPort(config.port)) {
+  if (!isValidDaemonPort(config.port)) {
     return {
       success: false,
-      error: `Invalid Copilot daemon port ${config.port}. Expected integer between ${MIN_PORT} and ${MAX_PORT}.`,
+      error: `Invalid Copilot daemon port ${config.port}. Expected integer between ${MIN_DAEMON_PORT} and ${MAX_DAEMON_PORT}.`,
     };
   }
 
@@ -369,18 +308,7 @@ export async function stopDaemon(): Promise<{ success: boolean; error?: string }
     process.kill(pid, 'SIGTERM');
 
     // Wait for process to exit (up to 5 seconds)
-    let attempts = 0;
-    while (attempts < 10) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      try {
-        // Check if process still exists (kill(pid, 0) throws if not)
-        process.kill(pid, 0);
-        attempts++;
-      } catch {
-        // Process no longer exists
-        break;
-      }
-    }
+    await waitForProcessExit(pid, 10, 500);
 
     removePidFile();
     return { success: true };

@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { BrowserConfig, BrowserEvalMode } from '../../config/unified-config-types';
-import { getCcsDir, getCcsPathDisplay } from '../config-manager';
+import { getCcsPathDisplay, getRecommendedBrowserUserDataDir } from '../../shared/ccs-paths';
+export { getRecommendedBrowserUserDataDir } from '../../shared/ccs-paths';
 import { expandPath } from '../helpers';
 import { type BrowserRuntimeEnv, resolveBrowserRuntimeEnv } from './chrome-reuse';
 import { getNodePlatformKey } from './platform';
@@ -40,10 +41,6 @@ export interface ManagedBrowserAttachNotReadyMessage {
   detail: string;
   nextStep: string;
   warning: string;
-}
-
-export function getRecommendedBrowserUserDataDir(): string {
-  return path.join(getCcsDir(), 'browser', 'chrome-user-data');
 }
 
 export function resolveBrowserUserDataDir(value?: string): string | undefined {

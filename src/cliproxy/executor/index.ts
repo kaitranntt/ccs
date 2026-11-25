@@ -34,7 +34,7 @@ import {
 import {
   ensureImageAnalysisMcpOrThrow,
   syncImageAnalysisMcpToConfigDir,
-} from '../../utils/image-analysis';
+} from '../../utils/image-analysis/mcp-installer';
 import { loadOrCreateUnifiedConfig, getThinkingConfig } from '../../config/config-loader-facade';
 import { HttpsTunnelProxy } from '../proxy/https-tunnel-proxy';
 import { resolveProfileContinuityInheritance } from '../../auth/profile-continuity-inheritance';

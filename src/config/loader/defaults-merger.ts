@@ -31,7 +31,7 @@ import type { UnifiedConfig } from '../unified-config-types';
 import { canonicalizeBrowserConfig, normalizeSessionAffinityTtl } from './normalizers';
 import { normalizeContinuityConfig, normalizeOfficialChannelsConfig } from './normalizers';
 import type { LegacyDiscordChannelsConfig } from './normalizers';
-import { canonicalizeImageAnalysisConfig } from '../../utils/hooks/image-analysis-backend-resolver';
+import { canonicalizeImageAnalysisConfig } from '../../shared/image-analysis-config';
 import {
   normalizeNativeWebSearchProfiles,
   normalizeSearxngBaseUrl,
