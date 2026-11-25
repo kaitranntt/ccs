@@ -18,10 +18,20 @@ describe('applyClaudeAutoCompactWindow', () => {
     );
     expect(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW).toBe('272000');
   });
-  it('injects 1.05M window for GPT-6.1 Sol with tuning suffixes', () => {
+  it('keeps GPT-6.1 Sol at 200K unless extended context is requested', () => {
     const env = applyClaudeAutoCompactWindow(
       {
         ANTHROPIC_MODEL: 'gpt-6.1-sol-max-fast',
+      },
+      'codex'
+    );
+    expect(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW).toBe('200000');
+  });
+
+  it('injects the catalog window for GPT-6.1 Sol with [1m]', () => {
+    const env = applyClaudeAutoCompactWindow(
+      {
+        ANTHROPIC_MODEL: 'gpt-6.1-sol-high[1m]',
       },
       'codex'
     );
@@ -128,6 +138,104 @@ describe('Claude launch auto-compact integration', () => {
 
     expect(env.ANTHROPIC_MODEL).toBe('gpt-5.4(high)');
     expect(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW).toBe('1050000');
+  });
+
+  for (const codexReasoningPort of [undefined, 18318]) {
+    it(`keeps --1m on GPT-6.1 Sol with reasoning port ${codexReasoningPort ?? 'disabled'}`, () => {
+      const settingsPath = path.join(tempHome, 'codex-long-context.settings.json');
+      fs.writeFileSync(
+        settingsPath,
+        JSON.stringify({
+          env: {
+            ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/codex',
+            ANTHROPIC_AUTH_TOKEN: 'test-token',
+            ANTHROPIC_MODEL: 'gpt-6.1-sol',
+          },
+        })
+      );
+
+      const env = buildClaudeEnvironment({
+        provider: 'codex',
+        useRemoteProxy: false,
+        localPort: 8317,
+        customSettingsPath: settingsPath,
+        codexReasoningPort,
+        thinkingOverride: 'high',
+        extendedContextOverride: true,
+        verbose: false,
+      });
+
+      expect(env.ANTHROPIC_MODEL).toBe(
+        codexReasoningPort ? 'gpt-6.1-sol-high[1m]' : 'gpt-6.1-sol(high)[1m]'
+      );
+      expect(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW).toBe('1050000');
+    });
+  }
+
+  for (const codexReasoningPort of [undefined, 18318]) {
+    for (const savedModel of ['gpt-6.1-sol[1m]', 'gpt-6.1-sol-high[1m]']) {
+      it(`preserves saved ${savedModel} with reasoning port ${codexReasoningPort ?? 'disabled'}`, () => {
+        const settingsPath = path.join(tempHome, 'codex-saved-context.settings.json');
+        fs.writeFileSync(
+          settingsPath,
+          JSON.stringify({
+            env: {
+              ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/codex',
+              ANTHROPIC_AUTH_TOKEN: 'test-token',
+              ANTHROPIC_MODEL: savedModel,
+              ANTHROPIC_DEFAULT_OPUS_MODEL: savedModel,
+              ANTHROPIC_DEFAULT_SONNET_MODEL: savedModel,
+            },
+          })
+        );
+
+        const env = buildClaudeEnvironment({
+          provider: 'codex',
+          useRemoteProxy: false,
+          localPort: 8317,
+          customSettingsPath: settingsPath,
+          codexReasoningPort,
+          verbose: false,
+        });
+
+        const expected = codexReasoningPort ? 'gpt-6.1-sol-high[1m]' : 'gpt-6.1-sol(high)[1m]';
+        const expectedOpus =
+          savedModel === 'gpt-6.1-sol[1m]'
+            ? codexReasoningPort
+              ? 'gpt-6.1-sol-xhigh[1m]'
+              : 'gpt-6.1-sol(xhigh)[1m]'
+            : expected;
+        expect(env.ANTHROPIC_MODEL).toBe(expected);
+        expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe(expectedOpus);
+        expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe(expected);
+        expect(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW).toBe('1050000');
+      });
+    }
+  }
+
+  it('preserves a saved context hint without an effort suffix on the direct route', () => {
+    const settingsPath = path.join(tempHome, 'codex-no-thinking.settings.json');
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        env: {
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/codex',
+          ANTHROPIC_AUTH_TOKEN: 'test-token',
+          ANTHROPIC_MODEL: 'gpt-6.1-sol[1m]',
+        },
+      })
+    );
+
+    const env = buildClaudeEnvironment({
+      provider: 'codex',
+      useRemoteProxy: false,
+      localPort: 8317,
+      customSettingsPath: settingsPath,
+      thinkingOverride: 'off',
+      verbose: false,
+    });
+
+    expect(env.ANTHROPIC_MODEL).toBe('gpt-6.1-sol[1m]');
   });
 
   it('preserves an inherited user value on Claude launches', () => {

@@ -71,6 +71,42 @@ describe('shouldApplyExtendedContext', () => {
     });
   });
 
+  describe('Codex long-context opt-in', () => {
+    it('accepts --1m for GPT-6.1 Sol', () => {
+      expect(shouldApplyExtendedContext('codex', 'gpt-6.1-sol', true)).toBe(true);
+      expect(consoleSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not auto-enable 1M for Codex without an opt-in', () => {
+      expect(shouldApplyExtendedContext('codex', 'gpt-6.1-sol')).toBe(false);
+    });
+
+    it('still rejects --1m for a smaller Codex model', () => {
+      expect(shouldApplyExtendedContext('codex', 'gpt-5.6-luna', true)).toBe(false);
+      expect(consoleSpy).toHaveBeenCalled();
+    });
+
+    it('preserves a supported saved Codex suffix in auto mode', () => {
+      const env: NodeJS.ProcessEnv = {
+        ANTHROPIC_MODEL: 'gpt-6.1-sol-high[1m]',
+      };
+
+      applyExtendedContextConfig(env, 'codex');
+
+      expect(env.ANTHROPIC_MODEL).toBe('gpt-6.1-sol-high[1m]');
+    });
+
+    it('removes the Codex suffix when --no-1m is explicit', () => {
+      const env: NodeJS.ProcessEnv = {
+        ANTHROPIC_MODEL: 'gpt-6.1-sol-high[1m]',
+      };
+
+      applyExtendedContextConfig(env, 'codex', false);
+
+      expect(env.ANTHROPIC_MODEL).toBe('gpt-6.1-sol-high');
+    });
+  });
+
   describe('explicit --1m override', () => {
     it('returns true for Claude models with explicit --1m flag', () => {
       expect(shouldApplyExtendedContext('claude', 'claude-opus-4-5-20251101', true)).toBe(true);

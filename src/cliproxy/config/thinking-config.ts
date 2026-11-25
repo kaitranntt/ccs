@@ -12,6 +12,11 @@ import { isThinkingOffValue, validateThinking } from '../thinking-validator';
 import { normalizeModelIdForProvider } from '../ai-providers/model-id-normalizer';
 import { warn } from '../../utils/ui';
 import { getThinkingConfig } from '../../config/config-loader-facade';
+import {
+  applyExtendedContextSuffix,
+  hasExtendedContextSuffix,
+  stripExtendedContextSuffix,
+} from '../../shared/extended-context-utils';
 
 /** Model tier types for thinking budget defaults */
 export type ModelTier = 'opus' | 'sonnet' | 'haiku';
@@ -93,6 +98,13 @@ function applyThinkingSuffixForProvider(
   thinkingValue: string | number,
   provider?: CLIProxyProvider
 ): string {
+  if (provider === 'codex' && hasExtendedContextSuffix(model)) {
+    // Normalize effort on the base ID, keeping the harness context hint last.
+    return applyExtendedContextSuffix(
+      applyThinkingSuffixForProvider(stripExtendedContextSuffix(model), thinkingValue, provider)
+    );
+  }
+
   const parenthesizedSuffixMatch = model.match(/\(([^)]+)\)$/);
 
   // Existing parenthesized suffix:
