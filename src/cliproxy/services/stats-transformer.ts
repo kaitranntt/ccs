@@ -7,7 +7,11 @@ import type {
   CliproxyRequestDetail,
   CliproxyStats,
   CliproxyUsageApiResponse,
+  RecentRequest,
 } from './stats-fetcher';
+
+/** Matches the dashboard Connection Timeline cap */
+const RECENT_REQUESTS_PER_PROVIDER = 100;
 
 interface BuildCliproxyStatsOptions {
   authFiles?: CliproxyManagementAuthFile[];
@@ -176,6 +180,14 @@ function shouldReplaceLastUsedAt(current: string | undefined, next: string | und
   return !Number.isFinite(currentTime) || nextTime > currentTime;
 }
 
+function selectRecentRequests(requestsByProvider: Map<string, RecentRequest[]>): RecentRequest[] {
+  return Array.from(requestsByProvider.values()).flatMap((requests) =>
+    requests
+      .sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp))
+      .slice(0, RECENT_REQUESTS_PER_PROVIDER)
+  );
+}
+
 export function buildCliproxyStatsFromUsageResponse(
   data: CliproxyUsageApiResponse,
   options: BuildCliproxyStatsOptions = {}
@@ -184,6 +196,7 @@ export function buildCliproxyStatsFromUsageResponse(
   const requestsByModel: Record<string, number> = {};
   const requestsByProvider: Record<string, number> = {};
   const accountStats: Record<string, AccountUsageStats> = {};
+  const recentRequestsByProvider = new Map<string, RecentRequest[]>();
   const authIndexLookup = buildAuthIndexLookup(options.authFiles);
   let totalSuccessCount = 0;
   let totalFailureCount = 0;
@@ -241,6 +254,15 @@ export function buildCliproxyStatsFromUsageResponse(
           if (shouldReplaceLastUsedAt(accountStats[accountKey].lastUsedAt, detail.timestamp)) {
             accountStats[accountKey].lastUsedAt = detail.timestamp;
           }
+          if (Number.isFinite(Date.parse(detail.timestamp))) {
+            const providerRequests = recentRequestsByProvider.get(resolvedProvider) ?? [];
+            providerRequests.push({
+              accountKey,
+              timestamp: detail.timestamp,
+              failed: Boolean(detail.failed),
+            });
+            recentRequestsByProvider.set(resolvedProvider, providerRequests);
+          }
           totalInputTokens += detail.tokens?.input_tokens ?? 0;
           totalOutputTokens += detail.tokens?.output_tokens ?? 0;
         }
@@ -292,6 +314,7 @@ export function buildCliproxyStatsFromUsageResponse(
     requestsByModel,
     requestsByProvider,
     accountStats,
+    recentRequests: selectRecentRequests(recentRequestsByProvider),
     quotaExceededCount: failureCount,
     retryCount: 0,
     collectedAt: new Date().toISOString(),

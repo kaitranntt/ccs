@@ -60,6 +60,14 @@ describe('Thinking Validator', () => {
       expect(result.warning).toBeUndefined();
     });
 
+    it('should treat max as a distinct top tier on Claude Fable 5.2', () => {
+      // Fable 5.2 keeps Fable 5.1's always-on adaptive thinking, steered by effort.
+      const result = validateThinking('claude', 'claude-fable-5-2', 'max');
+      expect(result.valid).toBe(true);
+      expect(result.value).toBe('max');
+      expect(result.warning).toBeUndefined();
+    });
+
     it('should treat max as a distinct top tier on Claude Fable 5.1', () => {
       // Fable 5.1 has always-on adaptive thinking steered only by effort level.
       const result = validateThinking('claude', 'claude-fable-5-1', 'max');

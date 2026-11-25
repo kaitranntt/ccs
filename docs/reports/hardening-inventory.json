@@ -1,10 +1,10 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2670,
-    "filesAffected": 282,
-    "hotpathOccurrences": 1220,
-    "hotpathFilesAffected": 163,
+    "totalOccurrences": 2682,
+    "filesAffected": 284,
+    "hotpathOccurrences": 1224,
+    "hotpathFilesAffected": 165,
     "topHotpathFiles": [
       {
         "file": "src/utils/browser/mcp-installer.ts",
@@ -231,7 +231,7 @@
       },
       {
         "file": "src/cliproxy/binary/__tests__/binary-installer-atomic.test.ts",
-        "count": 41,
+        "count": 47,
         "calls": [
           "existsSync",
           "mkdirSync",
@@ -500,11 +500,11 @@
   },
   "maintainability": {
     "typedErrors": {
-      "totalThrows": 484,
+      "totalThrows": 485,
       "typedThrows": 120,
       "plainThrows": 304,
-      "otherThrows": 60,
-      "adoptionRatio": 0.2479,
+      "otherThrows": 61,
+      "adoptionRatio": 0.2474,
       "topSubdomainsByThrows": [
         {
           "subdomain": "web-server",
@@ -582,8 +582,8 @@
     },
     "loggerCoverage": {
       "filesWithCreateLogger": 68,
-      "totalSourceFiles": 780,
-      "coverageRatio": 0.0872,
+      "totalSourceFiles": 782,
+      "coverageRatio": 0.087,
       "subdomainsWithZeroCreateLogger": [
         "api",
         "bin",
@@ -613,7 +613,7 @@
         },
         {
           "subdomain": "utils",
-          "count": 92,
+          "count": 94,
           "withLogger": 2
         },
         {
@@ -654,9 +654,9 @@
       ]
     },
     "hotpathConsoleErrors": {
-      "totalOccurrences": 593,
+      "totalOccurrences": 594,
       "exemptOccurrences": 326,
-      "hotpathOccurrences": 267,
+      "hotpathOccurrences": 268,
       "filesAffected": 82,
       "topFiles": [
         {
@@ -722,7 +722,7 @@
       ]
     },
     "largeFiles": {
-      "countOver400": 96,
+      "countOver400": 97,
       "countOver600": 44,
       "topOver400": [
         {
@@ -738,12 +738,12 @@
           "loc": 1510
         },
         {
-          "file": "src/cliproxy/config/generator.ts",
-          "loc": 1295
+          "file": "src/web-server/model-pricing.ts",
+          "loc": 1298
         },
         {
-          "file": "src/web-server/model-pricing.ts",
-          "loc": 1268
+          "file": "src/cliproxy/config/generator.ts",
+          "loc": 1295
         },
         {
           "file": "src/cursor/cursor-executor.ts",
@@ -754,6 +754,10 @@
           "loc": 1053
         },
         {
+          "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
+          "loc": 1052
+        },
+        {
           "file": "src/cliproxy/auth/oauth-process.ts",
           "loc": 1048
         },
@@ -762,16 +766,12 @@
           "loc": 1042
         },
         {
+          "file": "src/cliproxy/model-catalog.ts",
+          "loc": 1020
+        },
+        {
           "file": "src/commands/cliproxy/variant-subcommand.ts",
           "loc": 1003
-        },
-        {
-          "file": "src/cliproxy/model-catalog.ts",
-          "loc": 1002
-        },
-        {
-          "file": "src/cliproxy/proxy/tool-sanitization-proxy.ts",
-          "loc": 988
         },
         {
           "file": "src/cliproxy/quota/quota-manager.ts",

@@ -1060,9 +1060,21 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
         },
       },
       {
+        id: 'claude-fable-5-2',
+        name: 'Claude Fable 5.2',
+        description: 'Most powerful model',
+        extendedContext: true,
+        presetMapping: {
+          default: 'claude-fable-5-2',
+          opus: 'claude-fable-5-2',
+          sonnet: 'claude-sonnet-5-5',
+          haiku: 'claude-haiku-5-5',
+        },
+      },
+      {
         id: 'claude-fable-5-1',
         name: 'Claude Fable 5.1',
-        description: 'Most powerful model',
+        description: 'Previous most powerful model',
         extendedContext: true,
         presetMapping: {
           default: 'claude-fable-5-1',
@@ -1074,7 +1086,7 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
       {
         id: 'claude-fable-5',
         name: 'Claude Fable 5',
-        description: 'Previous most powerful model',
+        description: 'Older most powerful model',
         extendedContext: true,
         presetMapping: {
           default: 'claude-fable-5',

@@ -89,15 +89,21 @@ function findProvider(
   return registry[normalizedProvider];
 }
 
+const modelIndexes = new WeakMap<ModelsDevProvider, Map<string, ModelsDevModel>>();
+
 function findModel(provider: ModelsDevProvider, model: string): ModelsDevModel | undefined {
   const models = provider.models;
   if (!models) return undefined;
 
-  const normalizedEntries = new Map<string, ModelsDevModel>();
-  for (const [key, value] of Object.entries(models)) {
-    if (!isModelEntry(value)) continue;
-    normalizedEntries.set(normalizeId(key), value);
-    if (typeof value.id === 'string') normalizedEntries.set(normalizeId(value.id), value);
+  let normalizedEntries = modelIndexes.get(provider);
+  if (!normalizedEntries) {
+    normalizedEntries = new Map<string, ModelsDevModel>();
+    for (const [key, value] of Object.entries(models)) {
+      if (!isModelEntry(value)) continue;
+      normalizedEntries.set(normalizeId(key), value);
+      if (typeof value.id === 'string') normalizedEntries.set(normalizeId(value.id), value);
+    }
+    modelIndexes.set(provider, normalizedEntries);
   }
 
   for (const candidate of getModelCandidates(model)) {

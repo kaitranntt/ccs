@@ -1,1 +1,13 @@
-{ "name": "ccs-notices", "version": "0.1.0", "description": "Shows CCS quota alerts (low / exhausted) as a toast and status line instead of a box over the prompt" }
+{
+  "name": "ccs-notices",
+  "version": "0.1.0",
+  "description": "Shows CCS quota alerts (low / exhausted) as a toast and status line instead of a box over the prompt",
+  "userConfig": {
+    "status_line": {
+      "type": "boolean",
+      "title": "Quota alert status line",
+      "description": "Keep the latest CCS quota alert on a status line under the prompt. Off: toasts only, which saves a row on small screens.",
+      "default": true
+    }
+  }
+}

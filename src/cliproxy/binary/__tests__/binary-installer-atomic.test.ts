@@ -106,6 +106,79 @@ describe('atomic binary installation', () => {
     expect(stagingDirectories()).toEqual([]);
   });
 
+  it('runs beforeReplace after the binary is staged and before the swap', async () => {
+    const binaryName = getExecutableName('original');
+    const binaryPath = path.join(binPath, binaryName);
+    fs.writeFileSync(binaryPath, 'old-binary');
+    fs.writeFileSync(path.join(binPath, '.version'), '6.6.80');
+    const events: string[] = [];
+
+    await downloadAndInstall(
+      {
+        version: '6.7.1',
+        releaseUrl: 'https://example.invalid',
+        binPath,
+        maxRetries: 1,
+        verbose: false,
+        forceVersion: true,
+        replaceExisting: true,
+        skipAutoUpdate: false,
+        allowInstall: true,
+        backend: 'original',
+        beforeReplace: async () => {
+          events.push(`beforeReplace:${fs.readFileSync(binaryPath, 'utf8')}`);
+        },
+      },
+      false,
+      {
+        downloadWithRetryFn: async (_url, archivePath) => {
+          events.push('download');
+          fs.writeFileSync(archivePath, 'downloaded-archive');
+          return { success: true, filePath: archivePath, retries: 0 };
+        },
+        verifyChecksumFn: async () => ({ valid: true, expected: 'checksum', actual: 'checksum' }),
+        extractArchiveFn: async (_archivePath, destination) => {
+          events.push('extract');
+          fs.writeFileSync(path.join(destination, binaryName), 'new-binary');
+        },
+      }
+    );
+
+    expect(events).toEqual(['download', 'extract', 'beforeReplace:old-binary']);
+    expect(fs.readFileSync(binaryPath, 'utf8')).toBe('new-binary');
+  });
+
+  it('skips beforeReplace when the download fails', async () => {
+    fs.writeFileSync(path.join(binPath, getExecutableName('original')), 'old-binary');
+    let beforeReplaceCalls = 0;
+
+    await expect(
+      downloadAndInstall(
+        {
+          version: '6.7.1',
+          releaseUrl: 'https://example.invalid',
+          binPath,
+          maxRetries: 1,
+          verbose: false,
+          forceVersion: true,
+          replaceExisting: true,
+          skipAutoUpdate: false,
+          allowInstall: true,
+          backend: 'original',
+          beforeReplace: async () => {
+            beforeReplaceCalls += 1;
+          },
+        },
+        false,
+        {
+          downloadWithRetryFn: async () => ({ success: false, error: 'offline', retries: 1 }),
+        }
+      )
+    ).rejects.toThrow('offline');
+
+    expect(beforeReplaceCalls).toBe(0);
+  });
+
   it('preserves the installed binary and version when the atomic swap fails', async () => {
     const binaryName = getExecutableName('original');
     const binaryPath = path.join(binPath, binaryName);

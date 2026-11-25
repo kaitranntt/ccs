@@ -138,6 +138,30 @@ function validateManagedJson(filePath: string, content: Buffer): boolean {
 }
 
 /**
+ * True for a settings.json that holds only an empty object: the placeholder
+ * CCS (recovery manager, shared-dir linker, migration, postinstall) and Claude
+ * Code write when the file is missing. Other managed files are never seeded
+ * with {}, so an empty object there is real state and keeps its mtime rights.
+ */
+function isEmptySettingsPlaceholder(filePath: string, content: Buffer): boolean {
+  if (path.basename(filePath) !== 'settings.json') {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(content.toString('utf8')) as unknown;
+    return (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      !Array.isArray(parsed) &&
+      Object.keys(parsed).length === 0
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Identity of the canonical inode as it was read. Publication compares it
  * again immediately before replacing the file, so a concurrent writer is
  * detected instead of silently overwritten.
@@ -372,7 +396,12 @@ export function adoptDivergedFileContent(
         fs.unlinkSync(claimPath);
         return 'claimed';
       }
-      if (claimedStats.mtimeMs <= (canonical.mtimeMs ?? 0)) {
+      // A seeded empty settings.json is always newer than the diverged copy
+      // it would outrank, and holds no settings to protect.
+      if (
+        !isEmptySettingsPlaceholder(canonicalPath, canonical.content) &&
+        claimedStats.mtimeMs <= (canonical.mtimeMs ?? 0)
+      ) {
         preserveClaim(
           claimPath,
           divergedPath,

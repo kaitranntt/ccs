@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, it, expect } from 'bun:test';
 import {
   getModelPricing,
   calculateCost,
+  createCostCalculator,
   getKnownModels,
   hasCustomPricing,
   type TokenUsage,
@@ -18,6 +19,27 @@ import {
 } from '../../src/web-server/models-dev/registry-cache';
 
 describe('model-pricing', () => {
+  it('keeps batch arithmetic equal for base, fallback and service-tier rates', () => {
+    const usage = {
+      inputTokens: 300001,
+      outputTokens: 12345,
+      cacheCreationTokens: 111,
+      cacheReadTokens: 222,
+    };
+    for (const model of [
+      'unknown-model-xyz',
+      'claude-opus-5-5',
+      'claude-opus-5-5-fast',
+      'gemini-3-pro-high',
+    ]) {
+      for (const serviceTier of [undefined, 'fast', 'priority', 'unknown-tier']) {
+        const options = { serviceTier };
+        expect(createCostCalculator(model, options)(usage)).toBe(
+          calculateCost(usage, model, options)
+        );
+      }
+    }
+  });
   describe('getModelPricing', () => {
     it('should return exact match pricing', () => {
       const pricing = getModelPricing('claude-sonnet-4-5-20250929');
@@ -359,6 +381,21 @@ describe('model-pricing', () => {
       expect(fable51.cacheReadPerMillion).toBe(0.25);
     });
 
+    it('should return correct pricing for Claude Fable 5.2 and fast mode', () => {
+      // $8/$40 base; cache hits keep Fable 5.1's reduced 0.025x multiplier.
+      const fable52 = getModelPricing('claude-fable-5-2');
+      expect(fable52.inputPerMillion).toBe(8.0);
+      expect(fable52.outputPerMillion).toBe(40.0);
+      expect(fable52.cacheCreationPerMillion).toBe(10.0);
+      expect(fable52.cacheReadPerMillion).toBe(0.2);
+
+      const fable52Fast = getModelPricing('claude-fable-5-2', { serviceTier: 'fast' });
+      expect(fable52Fast.inputPerMillion).toBe(16.0);
+      expect(fable52Fast.outputPerMillion).toBe(80.0);
+      expect(fable52Fast.cacheCreationPerMillion).toBe(20.0);
+      expect(fable52Fast.cacheReadPerMillion).toBe(0.4);
+    });
+
     it('should return correct pricing for Claude Sonnet 5', () => {
       // The $2/$10 launch introductory rate became the standard price; the
       // scheduled 2026-09-01 increase to $3/$15 was cancelled.
@@ -555,6 +592,17 @@ describe('model-pricing', () => {
       };
       const cost = calculateCost(usage, 'claude-fable-5');
       expect(cost).toBe(73.5); // 10 + 50 + 12.5 + 1.0
+    });
+
+    it('should calculate Claude Fable 5.2 cost including cache token rates', () => {
+      const usage: TokenUsage = {
+        inputTokens: 1_000_000,
+        outputTokens: 1_000_000,
+        cacheCreationTokens: 1_000_000,
+        cacheReadTokens: 1_000_000,
+      };
+      const cost = calculateCost(usage, 'claude-fable-5-2');
+      expect(cost).toBe(58.2); // 8 + 40 + 10 + 0.2
     });
 
     it('should calculate Claude Sonnet 5 cost including cache token rates', () => {

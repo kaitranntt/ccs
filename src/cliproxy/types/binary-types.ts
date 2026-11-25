@@ -15,6 +15,12 @@ export interface BinaryManagerConfig {
   verbose: boolean;
   forceVersion: boolean;
   replaceExisting?: boolean;
+  /**
+   * Runs after the new binary is downloaded, verified and staged, right before
+   * it replaces the installed one. Lets callers stop a running proxy only for
+   * the swap instead of for the whole download.
+   */
+  beforeReplace?: () => Promise<void>;
   skipAutoUpdate: boolean;
   allowInstall: boolean;
   backend?: CLIProxyBackend;

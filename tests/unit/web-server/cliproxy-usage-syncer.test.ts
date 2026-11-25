@@ -10,10 +10,19 @@ import { runWithScopedConfigDir } from '../../../src/utils/config-manager';
 import { buildUsageResponseFromQueueRecords } from '../../../src/cliproxy/services/usage-compatibility-transformer';
 import {
   loadCachedCliproxyData,
+  syncCliproxyUsage as syncWithAuthFiles,
   startCliproxySync,
   stopCliproxySync,
-  syncCliproxyUsage,
 } from '../../../src/web-server/usage/cliproxy-usage-syncer';
+
+// Supplying a usage fixture must not leave the auth-files dependency pointed at
+// a real local proxy. Attribution tests pass their own second dependency.
+function syncCliproxyUsage(
+  fetchRaw: Parameters<typeof syncWithAuthFiles>[0],
+  fetchAuthFiles: Parameters<typeof syncWithAuthFiles>[1] = async () => []
+): Promise<void> {
+  return syncWithAuthFiles(fetchRaw, fetchAuthFiles);
+}
 
 let ccsDir = '';
 let rawResponse: CliproxyUsageApiResponse | null = null;
@@ -108,6 +117,29 @@ afterEach(() => {
 });
 
 describe('cliproxy usage syncer', () => {
+  it('reuses an unchanged normalized snapshot and reloads external changes', async () => {
+    await runWithScopedConfigDir(ccsDir, async () => {
+      await syncCliproxyUsage(fetchRawResponse);
+      const first = await loadCachedCliproxyData();
+      const read = spyOn(fs.promises, 'readFile');
+      try {
+        expect(await loadCachedCliproxyData()).toEqual(first);
+        expect(await loadCachedCliproxyData()).toEqual(first);
+        expect(read).not.toHaveBeenCalled();
+      } finally {
+        read.mockRestore();
+      }
+      const snapshotPath = path.join(ccsDir, 'cache', 'cliproxy-usage', 'latest.json');
+      const changed = JSON.parse(fs.readFileSync(snapshotPath, 'utf-8'));
+      changed.details[0].inputTokens += 1000;
+      fs.writeFileSync(snapshotPath, JSON.stringify(changed), 'utf-8');
+      expect((await loadCachedCliproxyData()).daily[0].inputTokens).toBe(
+        first.daily[0].inputTokens + 1000
+      );
+      fs.unlinkSync(snapshotPath);
+      expect((await loadCachedCliproxyData()).daily).toEqual([]);
+    });
+  });
   it('writes and loads snapshot data', async () => {
     await runWithScopedConfigDir(ccsDir, async () => {
       await syncCliproxyUsage(fetchRawResponse);
@@ -180,9 +212,11 @@ describe('cliproxy usage syncer', () => {
     const intervalSpy = spyOn(globalThis, 'setInterval');
 
     await runWithScopedConfigDir(ccsDir, async () => {
-      const syncNow = () => syncCliproxyUsage(fetchRawResponse);
+      let finish: Promise<void> | undefined;
+      const syncNow = () => (finish = syncCliproxyUsage(fetchRawResponse));
       startCliproxySync(syncNow);
       startCliproxySync(syncNow);
+      await finish;
     });
 
     expect(intervalSpy).toHaveBeenCalledTimes(1);
@@ -190,6 +224,38 @@ describe('cliproxy usage syncer', () => {
 
     stopCliproxySync();
     intervalSpy.mockRestore();
+  });
+
+  it('does not overlap scheduled syncs and resumes after a completed cycle', async () => {
+    let tick: (() => void) | undefined;
+    const intervalSpy = spyOn(globalThis, 'setInterval').mockImplementation((callback) => {
+      tick = callback as () => void;
+      return 123 as unknown as ReturnType<typeof setInterval>;
+    });
+    let release: (() => void) | undefined;
+    let calls = 0;
+    const syncNow = async () => {
+      calls++;
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    };
+    try {
+      startCliproxySync(syncNow);
+      tick?.();
+      tick?.();
+      expect(calls).toBe(1);
+      release?.();
+      await Promise.resolve();
+      await Promise.resolve();
+      tick?.();
+      expect(calls).toBe(2);
+      release?.();
+      await Promise.resolve();
+    } finally {
+      stopCliproxySync();
+      intervalSpy.mockRestore();
+    }
   });
 
   it('keeps stale cached snapshots available for historical analytics reads', async () => {
@@ -208,6 +274,21 @@ describe('cliproxy usage syncer', () => {
       expect(cached.daily).toHaveLength(1);
       expect(cached.hourly).toHaveLength(1);
       expect(cached.monthly).toHaveLength(1);
+    });
+  });
+
+  it('replaces an invalid future snapshot and leaves no temporary files', async () => {
+    await runWithScopedConfigDir(ccsDir, async () => {
+      const folder = path.join(ccsDir, 'cache', 'cliproxy-usage');
+      fs.mkdirSync(folder, { recursive: true });
+      fs.writeFileSync(
+        path.join(folder, 'latest.json'),
+        JSON.stringify({ version: 3, timestamp: Date.now() + 1_000_000, details: null })
+      );
+      await syncCliproxyUsage(fetchRawResponse);
+      const loaded = await loadCachedCliproxyData();
+      expect(loaded.daily).toHaveLength(1);
+      expect(fs.readdirSync(folder)).toEqual(['latest.json']);
     });
   });
 
