@@ -548,7 +548,7 @@ describe('InstanceManager MCP sync', () => {
       }
       return originalMkdirSync(directoryPath, options);
     });
-    spyOn(fs, 'lstatSync').mockImplementation((targetPath, options) => {
+    spyOn(fs, 'lstatSync').mockImplementation(((targetPath: fs.PathLike, options?: unknown) => {
       if (
         targetPath === managedCcsDir &&
         createdIdentityObserved &&
@@ -558,12 +558,12 @@ describe('InstanceManager MCP sync', () => {
         fs.renameSync(redirectedInstances, createdDirectory);
         originalMkdirSync(redirectedInstances);
       }
-      const stats = originalLstatSync(targetPath, options);
-      if (targetPath === managedInstances && replacedParent && stats.isDirectory()) {
+      const stats = originalLstatSync(targetPath, options as never);
+      if (targetPath === managedInstances && replacedParent && stats && stats.isDirectory()) {
         createdIdentityObserved = true;
       }
       return stats;
-    });
+    }) as unknown as typeof fs.lstatSync);
 
     const manager = new InstanceManager();
     await expect(

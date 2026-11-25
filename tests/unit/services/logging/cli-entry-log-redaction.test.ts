@@ -22,9 +22,11 @@ function removeNewListeners(
   event: 'SIGINT' | 'SIGTERM' | 'uncaughtException' | 'unhandledRejection',
   baseline: Array<(...args: unknown[]) => void>
 ): void {
-  for (const listener of process.listeners(event)) {
-    if (!baseline.includes(listener as (...args: unknown[]) => void)) {
-      process.removeListener(event, listener as (...args: unknown[]) => void);
+  for (const listener of (process.listeners as (e: string) => Array<(...args: unknown[]) => void>)(
+    event
+  )) {
+    if (!baseline.includes(listener)) {
+      process.removeListener(event, listener as never);
     }
   }
 }
@@ -54,14 +56,18 @@ beforeEach(() => {
     enabled: true,
     level: 'debug',
     redact: false,
-  };
+  } as typeof config.logging;
   saveUnifiedConfig(config);
   invalidateLoggingConfigCache();
 
-  baselineSigintListeners = process.listeners('SIGINT');
-  baselineSigtermListeners = process.listeners('SIGTERM');
-  baselineUncaughtExceptionListeners = process.listeners('uncaughtException');
-  baselineUnhandledRejectionListeners = process.listeners('unhandledRejection');
+  baselineSigintListeners = process.listeners('SIGINT') as Array<(...args: unknown[]) => void>;
+  baselineSigtermListeners = process.listeners('SIGTERM') as Array<(...args: unknown[]) => void>;
+  baselineUncaughtExceptionListeners = process.listeners('uncaughtException') as Array<
+    (...args: unknown[]) => void
+  >;
+  baselineUnhandledRejectionListeners = process.listeners('unhandledRejection') as Array<
+    (...args: unknown[]) => void
+  >;
 
   mock.module('../../../../src/utils/fetch-proxy-setup', () => ({
     applyGlobalFetchProxy: () => ({ enabled: false }),

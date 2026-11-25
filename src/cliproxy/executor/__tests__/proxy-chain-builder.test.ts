@@ -92,7 +92,7 @@ function baseCtx(overrides: Partial<ProxyChainContext> = {}): ProxyChainContext 
     cfg: makeCfg(),
     initialEnvVars: { ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317' },
     thinkingOverride: undefined,
-    thinkingCfg: makeThinkingCfg(),
+    thinkingCfg: makeThinkingCfg() as ProxyChainContext['thinkingCfg'],
     verbose: false,
     log: () => {},
     _ToolSanitizationProxy: defaultToolSan.ctor as unknown as new (

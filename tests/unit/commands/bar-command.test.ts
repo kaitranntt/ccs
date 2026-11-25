@@ -74,6 +74,7 @@ async function loadLaunchSubcommand() {
   );
   return mod as {
     handleBarLaunch: (args: string[], deps?: Record<string, unknown>) => Promise<void>;
+    resolveBarPort: (ccsDir: string) => number | null;
   };
 }
 
@@ -414,7 +415,7 @@ describe('bar install subcommand', () => {
   const FAKE_VERSION = '1.2.3';
 
   /** Create the fake CCS Bar.app in appsDir so the post-extract assertion passes. */
-  function fakeExtract(appsDir: string) {
+  function fakeExtract(_appsDir: string) {
     return async (_url: string, dest: string) => {
       fs.mkdirSync(path.join(dest, 'CCS Bar.app'), { recursive: true });
       calls.push('download');
@@ -587,7 +588,6 @@ describe('bar install subcommand', () => {
 describe('bar install: redirect-following download (#8)', () => {
   const REDIRECT_URL =
     'https://github.com/kaitranntt/ccs/releases/download/ccs-bar-latest/CCS-Bar.app.zip';
-  const FINAL_URL = 'https://objects.githubusercontent.com/download/CCS-Bar.app.zip';
   const FAKE_VERSION = '1.0.0';
 
   it('succeeds when downloadAndExtract follows a 302 redirect to githubusercontent', async () => {
@@ -669,7 +669,7 @@ describe('bar install: HTTP status code validation (#11)', () => {
       fetchReleaseAsset: async () => ({
         downloadUrl: FAKE_DOWNLOAD_URL,
       }),
-      downloadAndExtract: async (_url) => {
+      downloadAndExtract: async (_url: string) => {
         throw new Error(`Download failed: HTTP 404 for ${_url}`);
       },
       verifyCompat: async () => ({ compatible: true, reason: 'ok' }),
@@ -766,7 +766,7 @@ describe('bar install: compat capability handshake', () => {
   const FAKE_DOWNLOAD_URL =
     'https://github.com/kaitranntt/ccs/releases/download/ccs-bar-latest/CCS-Bar.app.zip';
 
-  function fakeExtract(appsDir: string) {
+  function fakeExtract(_appsDir: string) {
     return async (_url: string, dest: string) => {
       fs.mkdirSync(path.join(dest, 'CCS Bar.app'), { recursive: true });
     };
@@ -972,7 +972,7 @@ describe('bar install: Info.plist version extraction regression tests', () => {
   const FAKE_DOWNLOAD_URL =
     'https://github.com/kaitranntt/ccs/releases/download/ccs-bar-latest/CCS-Bar.app.zip';
 
-  function fakeExtract(appsDir: string) {
+  function fakeExtract(_appsDir: string) {
     return async (_url: string, dest: string) => {
       fs.mkdirSync(path.join(dest, 'CCS Bar.app'), { recursive: true });
     };
@@ -1512,7 +1512,7 @@ describe('bar install: stale version-pin removal on null plist read (Fix 1)', ()
   const FAKE_DOWNLOAD_URL =
     'https://github.com/kaitranntt/ccs/releases/download/ccs-bar-latest/CCS-Bar.app.zip';
 
-  function fakeExtract(appsDir: string) {
+  function fakeExtract(_appsDir: string) {
     return async (_url: string, dest: string) => {
       fs.mkdirSync(path.join(dest, 'CCS Bar.app'), { recursive: true });
     };
@@ -2047,7 +2047,8 @@ describe('defaultFindRunningServer: priority over response speed (GH-1500)', () 
       res.end('{}');
     });
     await new Promise<void>((resolve) => fastServer.listen(0, '127.0.0.1', resolve));
-    const fastPort = (fastServer.address() as { port: number }).port;
+    const _fastPort = (fastServer.address() as { port: number }).port;
+    void _fastPort;
 
     // Higher-priority server (bar.json port): adds ~300 ms artificial delay,
     // but still responds 200 within the 1500 ms timeout.
@@ -2227,7 +2228,7 @@ describe('bar install: quarantine handling (GH-1504)', () => {
   const FAKE_DOWNLOAD_URL =
     'https://github.com/kaitranntt/ccs/releases/download/ccs-bar-latest/CCS-Bar.app.zip';
 
-  function fakeExtract(appsDir: string) {
+  function fakeExtract(_appsDir: string) {
     return async (_url: string, dest: string) => {
       fs.mkdirSync(path.join(dest, 'CCS Bar.app'), { recursive: true });
     };
@@ -2293,7 +2294,7 @@ describe('bar install: Gatekeeper quarantine preservation', () => {
   const FAKE_DOWNLOAD_URL =
     'https://github.com/kaitranntt/ccs/releases/download/ccs-bar-latest/CCS-Bar.app.zip';
 
-  function fakeExtract(appsDir: string) {
+  function fakeExtract(_appsDir: string) {
     return async (_url: string, dest: string) => {
       fs.mkdirSync(path.join(dest, 'CCS Bar.app'), { recursive: true });
     };
@@ -2358,7 +2359,7 @@ describe('bar install: launch flags and prompt (GH-1504)', () => {
   const FAKE_DOWNLOAD_URL =
     'https://github.com/kaitranntt/ccs/releases/download/ccs-bar-latest/CCS-Bar.app.zip';
 
-  function fakeExtract(appsDir: string) {
+  function fakeExtract(_appsDir: string) {
     return async (_url: string, dest: string) => {
       fs.mkdirSync(path.join(dest, 'CCS Bar.app'), { recursive: true });
     };
@@ -2487,7 +2488,7 @@ describe('bar install: stdin-TTY gate for launch prompt (Finding 2)', () => {
   const FAKE_DOWNLOAD_URL =
     'https://github.com/kaitranntt/ccs/releases/download/ccs-bar-latest/CCS-Bar.app.zip';
 
-  function fakeExtract(appsDir: string) {
+  function fakeExtract(_appsDir: string) {
     return async (_url: string, dest: string) => {
       fs.mkdirSync(path.join(dest, 'CCS Bar.app'), { recursive: true });
     };
@@ -2575,7 +2576,7 @@ describe('bar install: already-running detection (Finding 3)', () => {
   const FAKE_DOWNLOAD_URL =
     'https://github.com/kaitranntt/ccs/releases/download/ccs-bar-latest/CCS-Bar.app.zip';
 
-  function fakeExtract(appsDir: string) {
+  function fakeExtract(_appsDir: string) {
     return async (_url: string, dest: string) => {
       fs.mkdirSync(path.join(dest, 'CCS Bar.app'), { recursive: true });
     };
@@ -3049,7 +3050,7 @@ describe('defaultFindRunningServer: socket-level 401/403 classifies authRequired
 
   function makeNetMock(statusLine: string, token: string) {
     return {
-      connect: (opts: { host: string; port: number }, onConnect: () => void): unknown => {
+      connect: (_opts: { host: string; port: number }, onConnect: () => void): unknown => {
         const listeners: Record<string, Array<(arg?: unknown) => void>> = {};
         const socket = {
           on(event: string, cb: (arg?: unknown) => void) {
@@ -3163,7 +3164,7 @@ describe('defaultFindRunningServer: socket-level 401/403 classifies authRequired
     );
 
     mock.module('net', () => ({
-      connect: (opts: { host: string; port: number }, onConnect: () => void): unknown => {
+      connect: (_opts: { host: string; port: number }, onConnect: () => void): unknown => {
         const listeners: Record<string, Array<(arg?: unknown) => void>> = {};
         const socket = {
           on(event: string, cb: (arg?: unknown) => void) {
@@ -3719,7 +3720,7 @@ describe('launch: --port selects the server port', () => {
     } = { spawnPort: null, getPortCandidates: null, stopped: false, descriptorPort: null };
 
     const deps = {
-      findRunningServer: async () => null,
+      findRunningServer: async (): Promise<{ port: number; baseUrl: string } | null> => null,
       getPort: async (opts: { port: number[]; host: string }) => {
         seen.getPortCandidates = opts.port;
         return opts.port[0];
@@ -3727,7 +3728,7 @@ describe('launch: --port selects the server port', () => {
       spawnDetachedServer: (p: number) => {
         seen.spawnPort = p;
       },
-      waitForServerLive: async () => {},
+      waitForServerLive: async (_baseUrl: string) => {},
       createLaunchDescriptor: (opts?: { port?: number }) => {
         seen.descriptorPort = opts?.port ?? null;
         return {

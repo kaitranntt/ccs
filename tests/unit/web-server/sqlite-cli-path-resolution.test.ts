@@ -49,7 +49,7 @@ describe('validateEnvOverridePath', () => {
     const fakebin = makeTempExecutable(tempDir, 'sqlite3');
 
     // Make realpathSync return the /tmp path itself
-    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation(() => fakebin as string);
+    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation((() => fakebin as string) as unknown as typeof fs.realpathSync);
 
     expect(() => validateEnvOverridePath(fakebin)).toThrow(
       /does not resolve under a trusted system prefix/
@@ -62,7 +62,7 @@ describe('validateEnvOverridePath', () => {
     if (process.platform === 'win32') return;
 
     const homeLocalBin = path.join(os.homedir(), '.local', 'bin', 'sqlite3');
-    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation(() => homeLocalBin as string);
+    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation((() => homeLocalBin as string) as unknown as typeof fs.realpathSync);
     const accessSpy = spyOn(fs, 'accessSync').mockImplementation(() => undefined);
 
     expect(() => validateEnvOverridePath(homeLocalBin)).toThrow(
@@ -77,7 +77,7 @@ describe('validateEnvOverridePath', () => {
     if (process.platform === 'win32') return;
 
     const trustedPath = '/usr/bin/sqlite3';
-    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation(() => trustedPath as string);
+    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation((() => trustedPath as string) as unknown as typeof fs.realpathSync);
     const accessSpy = spyOn(fs, 'accessSync').mockImplementation(() => undefined);
 
     expect(() => validateEnvOverridePath(trustedPath)).not.toThrow();
@@ -92,7 +92,7 @@ describe('validateEnvOverridePath', () => {
     if (process.platform === 'win32') return;
 
     const nixPath = '/nix/store/abc123-sqlite-3.45.0/bin/sqlite3';
-    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation(() => nixPath as string);
+    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation((() => nixPath as string) as unknown as typeof fs.realpathSync);
     const accessSpy = spyOn(fs, 'accessSync').mockImplementation(() => undefined);
 
     expect(() => validateEnvOverridePath(nixPath)).not.toThrow();
@@ -107,7 +107,7 @@ describe('validateEnvOverridePath', () => {
     if (process.platform === 'win32') return;
 
     const macPortsPath = '/opt/local/bin/sqlite3';
-    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation(() => macPortsPath as string);
+    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation((() => macPortsPath as string) as unknown as typeof fs.realpathSync);
     const accessSpy = spyOn(fs, 'accessSync').mockImplementation(() => undefined);
 
     expect(() => validateEnvOverridePath(macPortsPath)).not.toThrow();
@@ -129,7 +129,7 @@ describe('validateEnvOverridePath', () => {
     const evilTarget = path.join(tempDir, 'evil-sqlite3');
     makeTempExecutable(tempDir, 'evil-sqlite3');
 
-    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation(() => evilTarget as string);
+    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation((() => evilTarget as string) as unknown as typeof fs.realpathSync);
     const accessSpy = spyOn(fs, 'accessSync').mockImplementation(() => undefined);
 
     // The symlink source looks trusted, but the realpath (evilTarget in /tmp) is not
@@ -155,7 +155,7 @@ describe('resolveTrustedSqlitePath with CCS_SQLITE_BIN', () => {
     if (process.platform === 'win32') return;
 
     const nixPath = '/nix/store/xyz-sqlite/bin/sqlite3';
-    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation(() => nixPath as string);
+    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation((() => nixPath as string) as unknown as typeof fs.realpathSync);
     const accessSpy = spyOn(fs, 'accessSync').mockImplementation(() => undefined);
 
     const result = resolveTrustedSqlitePath({ CCS_SQLITE_BIN: nixPath });
@@ -169,7 +169,7 @@ describe('resolveTrustedSqlitePath with CCS_SQLITE_BIN', () => {
     if (process.platform === 'win32') return;
 
     const tmpBin = '/tmp/sqlite3';
-    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation(() => tmpBin as string);
+    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation((() => tmpBin as string) as unknown as typeof fs.realpathSync);
     const accessSpy = spyOn(fs, 'accessSync').mockImplementation(() => undefined);
 
     expect(() => resolveTrustedSqlitePath({ CCS_SQLITE_BIN: tmpBin })).toThrow(
@@ -187,7 +187,7 @@ describe('resolveTrustedSqlitePath with CCS_SQLITE_BIN', () => {
     const accessSpy = spyOn(fs, 'accessSync').mockImplementation(() => {
       throw new Error('ENOENT');
     });
-    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation((p: fs.PathLike) => p as string);
+    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation(((p: fs.PathLike) => p as string) as unknown as typeof fs.realpathSync);
 
     expect(() => resolveTrustedSqlitePath({ CCS_SQLITE_BIN: '' })).toThrow(
       'sqlite3 command not available'
@@ -212,7 +212,7 @@ describe('resolveTrustedSqlitePath platform path list', () => {
 
     // Simulate /usr/bin/sqlite3 missing, /usr/local/bin/sqlite3 present
     let callCount = 0;
-    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation((p: fs.PathLike) => p as string);
+    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation(((p: fs.PathLike) => p as string) as unknown as typeof fs.realpathSync);
     const accessSpy = spyOn(fs, 'accessSync').mockImplementation(() => {
       callCount++;
       if (callCount === 1) throw new Error('ENOENT'); // /usr/bin/sqlite3 missing
@@ -229,7 +229,7 @@ describe('resolveTrustedSqlitePath platform path list', () => {
   it('throws "not available" when no trusted path exists and no env override', () => {
     if (process.platform === 'win32') return;
 
-    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation((p: fs.PathLike) => p as string);
+    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation(((p: fs.PathLike) => p as string) as unknown as typeof fs.realpathSync);
     const accessSpy = spyOn(fs, 'accessSync').mockImplementation(() => {
       throw new Error('ENOENT');
     });
@@ -244,7 +244,7 @@ describe('resolveTrustedSqlitePath platform path list', () => {
     if (process.platform !== 'win32') return;
 
     const winPath = 'C:\\Program Files\\SQLite\\sqlite3.exe';
-    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation(() => winPath as string);
+    const realpathSpy = spyOn(fs, 'realpathSync').mockImplementation((() => winPath as string) as unknown as typeof fs.realpathSync);
     const accessSpy = spyOn(fs, 'accessSync').mockImplementation(() => undefined);
 
     const result = resolveTrustedSqlitePath({ CCS_SQLITE_BIN: winPath });

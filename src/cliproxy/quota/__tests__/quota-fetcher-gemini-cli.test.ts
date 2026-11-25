@@ -454,14 +454,14 @@ describe('Gemini CLI Quota Fetcher', () => {
       ]);
 
       const mockedFetch = globalThis.fetch;
-      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
         const url =
           typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
         if (url === GEMINI_CODE_ASSIST_URL) {
           throw new TypeError('supplementary network down');
         }
         return mockedFetch(input, init);
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       try {
         const result = await fetchGeminiCliQuota('supplementary-network@example.com');
@@ -758,7 +758,7 @@ describe('Gemini CLI Quota Fetcher', () => {
       let quotaAttempt = 0;
       let managedLookupAttempt = 0;
       let managedRequestAttempt = 0;
-      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
         const url =
           typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
 
@@ -815,7 +815,7 @@ describe('Gemini CLI Quota Fetcher', () => {
         }
 
         return originalFetch(input, init);
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       try {
         const result = await fetchGeminiCliQuota('retry@example.com');
@@ -857,7 +857,7 @@ describe('Gemini CLI Quota Fetcher', () => {
       let directQuotaAttempt = 0;
       let managedLookupAttempt = 0;
       let managedRequestAttempt = 0;
-      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
         const url =
           typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
 
@@ -888,7 +888,7 @@ describe('Gemini CLI Quota Fetcher', () => {
         }
 
         return originalFetch(input, init);
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       try {
         const result = await fetchGeminiCliQuota('managed-failure@example.com');

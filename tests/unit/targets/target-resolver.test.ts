@@ -1,7 +1,7 @@
 /**
  * Unit tests for target resolver
  */
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, afterEach } from 'bun:test';
 import { resolveTargetType, stripTargetFlag } from '../../../src/targets/target-resolver';
 
 describe('resolveTargetType', () => {

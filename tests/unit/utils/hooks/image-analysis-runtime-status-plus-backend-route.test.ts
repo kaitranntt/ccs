@@ -83,7 +83,7 @@ describe('resolveImageAnalysisRuntimeStatus plus backend route', () => {
       undefined,
       {
         checkRemoteProxy: async () => ({ reachable: true }),
-        fetchRemoteAuthStatus: async () => [{ provider: 'gemini', authenticated: true }],
+        fetchRemoteAuthStatus: (async () => [{ provider: 'gemini', authenticated: true }]) as never,
         getProxyTarget: () => ({
           host: '100.64.0.1',
           port: 8317,

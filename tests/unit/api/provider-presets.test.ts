@@ -97,7 +97,7 @@ describe('provider-presets', () => {
   });
 
   it('keeps glmt out of the canonical preset catalog while preserving alias compatibility', () => {
-    expect(PROVIDER_PRESETS.some((preset) => preset.id === 'glmt')).toBe(false);
+    expect(PROVIDER_PRESETS.some((preset) => String(preset.id) === 'glmt')).toBe(false);
     expect(isValidPresetId('glmt')).toBe(true);
   });
 

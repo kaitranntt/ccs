@@ -603,7 +603,7 @@ describe('web-server config-routes account context validation', () => {
       delete sanitized.cliproxy_server.remote.port;
     }
     if (sanitized.dashboard_auth) {
-      delete sanitized.dashboard_auth.username;
+      delete (sanitized.dashboard_auth as { username?: string }).username;
     }
 
     const putResponse = await putJson(baseUrl, '/api/config', sanitized);

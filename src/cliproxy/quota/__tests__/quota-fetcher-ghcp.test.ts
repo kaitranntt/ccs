@@ -237,7 +237,7 @@ describe('GHCP Quota Fetcher', () => {
             }
           )
         );
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const result = await fetchGhcpQuota('ghcp-main');
 
@@ -253,7 +253,9 @@ describe('GHCP Quota Fetcher', () => {
     it('returns needsReauth on 401/403 responses', async () => {
       createGhcpAccount('ghcp-auth', { access_token: 'token-auth' });
 
-      global.fetch = mock(() => Promise.resolve(new Response('', { status: 401 }))) as typeof fetch;
+      global.fetch = mock(() =>
+        Promise.resolve(new Response('', { status: 401 }))
+      ) as unknown as typeof fetch;
 
       const result = await fetchGhcpQuota('ghcp-auth');
 
@@ -265,7 +267,7 @@ describe('GHCP Quota Fetcher', () => {
     it('fails fast when token file has no valid access token', async () => {
       createGhcpAccount('ghcp-missing-token', { access_token: '   ' });
       const fetchMock = mock(() => Promise.resolve(new Response('', { status: 200 })));
-      global.fetch = fetchMock as typeof fetch;
+      global.fetch = fetchMock as unknown as typeof fetch;
 
       const result = await fetchGhcpQuota('ghcp-missing-token');
 

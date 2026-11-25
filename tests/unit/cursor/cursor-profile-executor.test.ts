@@ -83,7 +83,7 @@ describe('cursor-profile-executor', () => {
         CCS_CURRENT_PROVIDER: 'ghcp',
         CCS_IMAGE_ANALYSIS_SKIP: '0',
       }),
-      resolveImageAnalysisRuntimeStatus: async () => ({
+      resolveImageAnalysisRuntimeStatus: (async () => ({
         enabled: true,
         supported: true,
         status: 'active',
@@ -108,15 +108,15 @@ describe('cursor-profile-executor', () => {
           'Local CLIProxy service is idle. CCS will start it automatically when image analysis is needed.',
         effectiveRuntimeMode: 'cliproxy-image-analysis',
         effectiveRuntimeReason: null,
-      }),
-      ensureCliproxyService: async (port: number) => {
+      })) as never,
+      ensureCliproxyService: (async (port: number) => {
         ensuredPort = port;
         return {
           started: true,
           alreadyRunning: false,
           port,
         };
-      },
+      }) as never,
       resolveLifecyclePort: () => 9321,
     });
 

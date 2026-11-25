@@ -3,11 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-import {
-  buildUnifiedLaunchSettings,
-  createUnifiedLaunchSettings,
-  LAUNCH_ROUTING_ENV_KEYS,
-} from '../launch-settings';
+import { buildUnifiedLaunchSettings, createUnifiedLaunchSettings } from '../launch-settings';
 import { createOpenAICompatLaunchSettings } from '../openai-compat-launch-settings';
 import { runWithScopedCcsHome } from '../config-manager';
 import type { Settings } from '../../types/config';

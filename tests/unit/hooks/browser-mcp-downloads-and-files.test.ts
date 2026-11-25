@@ -9,7 +9,7 @@ import {
   tmpdir,
   join,
 } from './browser-mcp-test-harness';
-import type { MockPageState } from './browser-mcp-test-harness';
+import type { MockFileInputState, MockPageState } from './browser-mcp-test-harness';
 
 describe('ccs-browser MCP server - downloads and file inputs', () => {
   it('applies browser-scoped download behavior, records download summaries, and cancels an in-progress download', async () => {

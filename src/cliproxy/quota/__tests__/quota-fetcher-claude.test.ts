@@ -367,7 +367,7 @@ describe('Claude Quota Fetcher', () => {
             }
           )
         );
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const result = await fetchClaudeQuota('claude-main@example.com');
 
@@ -394,7 +394,9 @@ describe('Claude Quota Fetcher', () => {
         'anthropic'
       );
 
-      global.fetch = mock(() => Promise.resolve(new Response('', { status: 401 }))) as typeof fetch;
+      global.fetch = mock(() =>
+        Promise.resolve(new Response('', { status: 401 }))
+      ) as unknown as typeof fetch;
 
       const result = await fetchClaudeQuota('claude-auth@example.com');
 
@@ -427,7 +429,7 @@ describe('Claude Quota Fetcher', () => {
             { status: 401, headers: { 'Content-Type': 'application/json' } }
           )
         )
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchClaudeQuota('claude-oauth-nested-message@example.com');
 
@@ -452,7 +454,7 @@ describe('Claude Quota Fetcher', () => {
             { status: 401, headers: { 'Content-Type': 'application/json' } }
           )
         )
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchClaudeQuota('claude-oauth-root-message@example.com');
 
@@ -470,7 +472,7 @@ describe('Claude Quota Fetcher', () => {
 
       global.fetch = mock(() =>
         Promise.resolve(new Response('OAuth session expired.', { status: 401 }))
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchClaudeQuota('claude-oauth-plaintext@example.com');
 
@@ -498,7 +500,7 @@ describe('Claude Quota Fetcher', () => {
             { status: 401, headers: { 'Content-Type': 'application/json' } }
           )
         )
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchClaudeQuota('claude-auth-other-401@example.com');
 
@@ -514,7 +516,9 @@ describe('Claude Quota Fetcher', () => {
         type: 'claude',
       });
 
-      global.fetch = mock(() => Promise.resolve(new Response('', { status: 404 }))) as typeof fetch;
+      global.fetch = mock(() =>
+        Promise.resolve(new Response('', { status: 404 }))
+      ) as unknown as typeof fetch;
 
       const result = await fetchClaudeQuota('claude-usage-404@example.com');
 
@@ -530,7 +534,7 @@ describe('Claude Quota Fetcher', () => {
       });
 
       const fetchMock = mock(() => Promise.resolve(new Response('', { status: 200 })));
-      global.fetch = fetchMock as typeof fetch;
+      global.fetch = fetchMock as unknown as typeof fetch;
 
       const result = await fetchClaudeQuota('claude-missing@example.com');
 
@@ -552,7 +556,7 @@ describe('Claude Quota Fetcher', () => {
             headers: { 'Content-Type': 'application/json' },
           })
         )
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchClaudeQuota('claude-no-expiry@example.com');
 
@@ -577,7 +581,7 @@ describe('Claude Quota Fetcher', () => {
             },
           })
         )
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchClaudeQuota('claude-large-error@example.com');
 
@@ -610,7 +614,7 @@ describe('Claude Quota Fetcher', () => {
             { status: 200, headers: { 'Content-Type': 'application/json' } }
           )
         );
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const result = await fetchClaudeQuota('claude-retry@example.com');
 
@@ -638,7 +642,7 @@ describe('Claude Quota Fetcher', () => {
             headers: { 'Retry-After': '0', 'Content-Type': 'application/json' },
           })
         );
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const result = await fetchClaudeQuota('claude-429@example.com');
 
@@ -661,7 +665,9 @@ describe('Claude Quota Fetcher', () => {
         type: 'claude',
       });
 
-      global.fetch = mock(() => Promise.resolve(new Response('', { status: 403 }))) as typeof fetch;
+      global.fetch = mock(() =>
+        Promise.resolve(new Response('', { status: 403 }))
+      ) as unknown as typeof fetch;
 
       const result = await fetchClaudeQuota('claude-usage-403@example.com');
 
@@ -683,7 +689,7 @@ describe('Claude Quota Fetcher', () => {
       global.fetch = mock(() => {
         attempt += 1;
         return Promise.resolve(new Response('Service unavailable', { status: 503 }));
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const result = await fetchClaudeQuota('claude-usage-503@example.com');
 
@@ -707,17 +713,17 @@ describe('Claude Quota Fetcher', () => {
       const activeTimers = new Set<number>();
       let nextTimerId = 0;
 
-      globalThis.setTimeout = mock(((handler: TimerHandler, timeout?: number) => {
+      globalThis.setTimeout = mock((handler: (...args: unknown[]) => void, timeout?: number) => {
         void handler;
         void timeout;
         const timerId = ++nextTimerId;
         activeTimers.add(timerId);
         return timerId as unknown as ReturnType<typeof setTimeout>;
-      }) as typeof setTimeout);
+      }) as unknown as typeof setTimeout;
 
-      globalThis.clearTimeout = mock(((timerId?: ReturnType<typeof setTimeout>) => {
+      globalThis.clearTimeout = mock((timerId?: ReturnType<typeof setTimeout>) => {
         activeTimers.delete(timerId as unknown as number);
-      }) as typeof clearTimeout);
+      }) as unknown as typeof clearTimeout;
 
       let attempt = 0;
       global.fetch = mock(() => {
@@ -737,7 +743,7 @@ describe('Claude Quota Fetcher', () => {
             { status: 200, headers: { 'Content-Type': 'application/json' } }
           )
         );
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       try {
         const result = await fetchClaudeQuota('claude-retry-timeout@example.com');
@@ -746,9 +752,9 @@ describe('Claude Quota Fetcher', () => {
         expect(attempt).toBe(2);
         // The registry token-file lookup holds a short file lock with its own timer, so
         // count only the per-request abort timers (CLAUDE_QUOTA_TIMEOUT_MS).
-        const requestTimers = (globalThis.setTimeout as ReturnType<typeof mock>).mock.calls.filter(
-          ([, timeout]) => timeout === 10000
-        );
+        const requestTimers = (
+          globalThis.setTimeout as unknown as ReturnType<typeof mock>
+        ).mock.calls.filter(([, timeout]) => timeout === 10000);
         expect(requestTimers).toHaveLength(2);
         expect(activeTimers.size).toBe(0);
       } finally {
@@ -783,7 +789,7 @@ describe('Claude Quota Fetcher', () => {
             { status: 200, headers: { 'Content-Type': 'application/json' } }
           )
         );
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const result = await fetchClaudeQuota('claude-timeout@example.com');
 
@@ -846,7 +852,7 @@ describe('Claude Quota Fetcher', () => {
             headers: { 'Content-Type': 'application/json' },
           })
         );
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const result = await fetchClaudeQuota(accountId);
       expect(result.success).toBe(true);
@@ -882,7 +888,7 @@ describe('Claude Quota Fetcher', () => {
             { status: 200, headers: { 'Content-Type': 'application/json' } }
           )
         );
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
 
       const all = await fetchAllClaudeQuotas();
       const remainingByAccount = Object.fromEntries(
@@ -905,7 +911,7 @@ describe('Claude Quota Fetcher', () => {
 
       const fetchSpy = mock(() =>
         Promise.resolve(new Response(JSON.stringify({}), { status: 200 }))
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
       global.fetch = fetchSpy;
 
       const result = await fetchClaudeQuota('dev@example.com#a1b2c3d4');
@@ -945,7 +951,7 @@ describe('fetchClaudeQuota shared probe state', () => {
       const next = responses[calls] ?? responses[responses.length - 1];
       calls += 1;
       return Promise.resolve(next());
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
     return { calls: () => calls };
   }
 
@@ -1131,7 +1137,7 @@ describe('Claude quota caller cancellation', () => {
     const controller = new AbortController();
     controller.abort();
     const fetchSpy = mock(() => Promise.resolve(new Response(JSON.stringify(usage))));
-    global.fetch = fetchSpy as typeof fetch;
+    global.fetch = fetchSpy as unknown as typeof fetch;
     await expect(fetchClaudeQuota(accountId, false, controller.signal)).rejects.toMatchObject({
       name: 'AbortError',
     });
@@ -1161,7 +1167,7 @@ describe('Claude quota caller cancellation', () => {
         );
       });
     });
-    global.fetch = fetchSpy as typeof fetch;
+    global.fetch = fetchSpy as unknown as typeof fetch;
     const controller = new AbortController();
     const result = fetchClaudeQuota(accountId, false, controller.signal);
     const providerSignal = await started.promise;
@@ -1180,13 +1186,15 @@ describe('Claude quota caller cancellation', () => {
     const fetchSpy = mock((_input: unknown, init?: RequestInit) => {
       providerSignal = init?.signal as AbortSignal;
       const response = new Response('', { status: 200 });
-      response.json = () => {
-        bodyStarted.resolve();
-        return body.promise;
-      };
+      Object.defineProperty(response, 'json', {
+        value: () => {
+          bodyStarted.resolve();
+          return body.promise;
+        },
+      });
       return Promise.resolve(response);
     });
-    global.fetch = fetchSpy as typeof fetch;
+    global.fetch = fetchSpy as unknown as typeof fetch;
     const controller = new AbortController();
     const result = fetchClaudeQuota(accountId, false, controller.signal);
     await bodyStarted.promise;
@@ -1218,7 +1226,7 @@ describe('Claude quota caller cancellation', () => {
         });
         return Promise.resolve(new Response(stream, { status }));
       });
-      global.fetch = fetchSpy as typeof fetch;
+      global.fetch = fetchSpy as unknown as typeof fetch;
       const controller = new AbortController();
       const result = fetchClaudeQuota(accountId, false, controller.signal);
       await bodyStarted.promise;
@@ -1236,7 +1244,7 @@ describe('Claude quota caller cancellation', () => {
       started.resolve(init?.signal as AbortSignal);
       return provider.promise;
     });
-    global.fetch = fetchSpy as typeof fetch;
+    global.fetch = fetchSpy as unknown as typeof fetch;
     const firstController = new AbortController();
     const secondController = new AbortController();
     const first = fetchClaudeQuota(accountId, false, firstController.signal);
@@ -1261,7 +1269,7 @@ describe('Claude quota caller cancellation', () => {
       started.resolve(init?.signal as AbortSignal);
       return provider.promise;
     });
-    global.fetch = fetchSpy as typeof fetch;
+    global.fetch = fetchSpy as unknown as typeof fetch;
     const firstController = new AbortController();
     const secondController = new AbortController();
     const first = fetchClaudeQuota(accountId, false, firstController.signal);
@@ -1276,7 +1284,9 @@ describe('Claude quota caller cancellation', () => {
     await expect(second).rejects.toMatchObject({ name: 'AbortError' });
     expect(providerSignal.aborted).toBe(true);
     expect(fs.readFileSync(before.file, 'utf8')).toBe(before.original);
-    global.fetch = mock(() => Promise.resolve(new Response(JSON.stringify(usage)))) as typeof fetch;
+    global.fetch = mock(() =>
+      Promise.resolve(new Response(JSON.stringify(usage)))
+    ) as unknown as typeof fetch;
     expect((await fetchClaudeQuota(accountId)).success).toBe(true);
     provider.resolve(new Response(JSON.stringify(usage)));
   });

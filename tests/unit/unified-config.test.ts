@@ -316,7 +316,7 @@ describe('cliproxy session-affinity ttl normalization', () => {
     process.env.CCS_HOME = tempHome;
     try {
       const config = loadOrCreateUnifiedConfig();
-      expect(config.cliproxy.routing.session_affinity_ttl).toBe('1h');
+      expect(config.cliproxy.routing?.session_affinity_ttl).toBe('1h');
     } finally {
       if (originalCcsHome === undefined) {
         delete process.env.CCS_HOME;
@@ -349,7 +349,7 @@ describe('cliproxy session-affinity ttl normalization', () => {
     process.env.CCS_HOME = tempHome;
     try {
       const config = loadOrCreateUnifiedConfig();
-      expect(config.cliproxy.routing.session_affinity_ttl).toBe('1h');
+      expect(config.cliproxy.routing?.session_affinity_ttl).toBe('1h');
     } finally {
       if (originalCcsHome === undefined) {
         delete process.env.CCS_HOME;

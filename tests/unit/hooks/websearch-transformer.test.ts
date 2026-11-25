@@ -194,7 +194,7 @@ describe('websearch-transformer hook helpers', () => {
 
     process.env.CCS_WEBSEARCH_SEARXNG_URL = 'https://search.example.com/search/';
     process.env.CCS_WEBSEARCH_SEARXNG_MAX_RESULTS = '3';
-    global.fetch = async (url) => {
+    global.fetch = (async (url: string | URL | Request) => {
       requests.push(String(url));
       return {
         ok: true,
@@ -207,8 +207,8 @@ describe('websearch-transformer hook helpers', () => {
             },
           ],
         }),
-      } as Response;
-    };
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
 
     try {
       const result = await hook.trySearxngSearch('btc price', 1);
@@ -274,13 +274,13 @@ describe('websearch-transformer hook helpers', () => {
     const originalUrl = process.env.CCS_WEBSEARCH_SEARXNG_URL;
 
     process.env.CCS_WEBSEARCH_SEARXNG_URL = 'https://search.example.com';
-    global.fetch = async () =>
+    global.fetch = (async () =>
       ({
         ok: false,
         status: 403,
         headers: { get: () => null },
         text: async () => 'format=json disabled by this instance',
-      }) as Response;
+      }) as unknown as Response) as unknown as typeof fetch;
 
     try {
       const result = await hook.trySearxngSearch('btc price', 1);

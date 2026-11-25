@@ -253,7 +253,7 @@ process.exit(0);
         ['-c', 'model="gpt-5"', '--version'],
         [
           '-c',
-          `mcp_servers.ccs_browser.command=${JSON.stringify(process.platform === 'win32' ? 'npx.cmd' : 'npx')}`,
+          `mcp_servers.ccs_browser.command=${JSON.stringify(process.platform === ('win32' as NodeJS.Platform) ? 'npx.cmd' : 'npx')}`,
           '-c',
           `mcp_servers.ccs_browser.args=${JSON.stringify(['-y', '@playwright/mcp@0.0.70'])}`,
           '-c',

@@ -319,6 +319,8 @@ describe('cliproxy usage transformer', () => {
                       tokens: {
                         input_tokens: 1_000_000,
                         output_tokens: 0,
+                        reasoning_tokens: 0,
+                        cached_tokens: 0,
                         total_tokens: 1_000_000,
                       },
                       failed: false,

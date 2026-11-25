@@ -162,7 +162,7 @@ describe('HttpsTunnelProxy', () => {
         remoteHost: 'example.com',
       });
 
-      const port1 = await tunnel.start();
+      await tunnel.start();
       tunnel.stop();
 
       const port2 = await tunnel.start();
@@ -325,7 +325,8 @@ describe('HttpsTunnelProxy', () => {
       const net = await import('net');
       const socket = new net.Socket();
 
-      await new Promise<void>((resolve, reject) => {
+      await new Promise<void>((resolve, _reject) => {
+        const handleError = () => resolve();
         socket.connect(port, '127.0.0.1', () => {
           // Send partial HTTP request then destroy
           socket.write('POST /test HTTP/1.1\r\n');
@@ -334,7 +335,7 @@ describe('HttpsTunnelProxy', () => {
           socket.destroy(); // Trigger error
           resolve();
         });
-        socket.on('error', () => resolve()); // Ignore socket errors
+        socket.on('error', handleError); // Ignore socket errors
       });
 
       // Give time for error handling

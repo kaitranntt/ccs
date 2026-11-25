@@ -82,7 +82,7 @@ function createImageAnalysisStatus(
     effectiveRuntimeMode: 'cliproxy-image-analysis',
     effectiveRuntimeReason: null,
     ...overrides,
-  };
+  } as unknown as ImageAnalysisStatus;
 }
 
 describe('buildClaudeEnvironment codex fallback normalization', () => {

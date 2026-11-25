@@ -228,10 +228,10 @@ describe('cliproxy usage syncer', () => {
 
   it('does not overlap scheduled syncs and resumes after a completed cycle', async () => {
     let tick: (() => void) | undefined;
-    const intervalSpy = spyOn(globalThis, 'setInterval').mockImplementation((callback) => {
-      tick = callback as () => void;
+    const intervalSpy = spyOn(globalThis, 'setInterval').mockImplementation(((callback: () => void) => {
+      tick = callback;
       return 123 as unknown as ReturnType<typeof setInterval>;
-    });
+    }) as unknown as typeof globalThis.setInterval);
     let release: (() => void) | undefined;
     let calls = 0;
     const syncNow = async () => {

@@ -151,7 +151,9 @@ trust_level = "trusted"
     );
 
     const response = await fetch(`${baseUrl}/api/codex/diagnostics`);
-    const body = await response.json();
+    const body = (await response.json()) as {
+      config: { projectTrust: unknown[]; modelProviders: unknown[] };
+    };
     const serialized = JSON.stringify(body);
 
     expect(response.status).toBe(200);

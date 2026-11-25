@@ -58,8 +58,8 @@ describe('log storage', () => {
 
   it('buffers writes asynchronously and flushes via flushStructuredLogs()', async () => {
     const config = createEmptyUnifiedConfig();
-    config.logging.enabled = true;
-    config.logging.level = 'info';
+    config.logging!.enabled = true;
+    config.logging!.level = 'info';
     saveUnifiedConfig(config);
     invalidateLoggingConfigCache();
 
@@ -88,8 +88,8 @@ describe('log storage', () => {
 
   it('flushes buffered entries synchronously via flushStructuredLogsSync()', () => {
     const config = createEmptyUnifiedConfig();
-    config.logging.enabled = true;
-    config.logging.level = 'info';
+    config.logging!.enabled = true;
+    config.logging!.level = 'info';
     saveUnifiedConfig(config);
     invalidateLoggingConfigCache();
 
@@ -109,8 +109,8 @@ describe('log storage', () => {
 
   it('flushes in-flight async batches synchronously without dropping or duplicating entries', async () => {
     const config = createEmptyUnifiedConfig();
-    config.logging.enabled = true;
-    config.logging.level = 'info';
+    config.logging!.enabled = true;
+    config.logging!.level = 'info';
     saveUnifiedConfig(config);
     invalidateLoggingConfigCache();
 
@@ -119,10 +119,13 @@ describe('log storage', () => {
       releaseMkdir = resolve;
     });
     const originalMkdir = fs.promises.mkdir.bind(fs.promises);
-    const mkdirSpy = spyOn(fs.promises, 'mkdir').mockImplementation(async (target, options) => {
+    const mkdirSpy = spyOn(fs.promises, 'mkdir').mockImplementation((async (
+      target: fs.PathLike,
+      options?: unknown
+    ) => {
       await mkdirBlocked;
-      return await originalMkdir(target, options);
-    });
+      return await originalMkdir(target, options as never);
+    }) as unknown as typeof fs.promises.mkdir);
 
     try {
       const currentLogPath = getCurrentLogPath();
@@ -164,8 +167,8 @@ describe('log storage', () => {
 
   it('rotates the current log into the archive when the file exceeds the age threshold', async () => {
     const config = createEmptyUnifiedConfig();
-    config.logging.retain_days = 7;
-    config.logging.rotate_mb = 10;
+    config.logging!.retain_days = 7;
+    config.logging!.rotate_mb = 10;
     saveUnifiedConfig(config);
     invalidateLoggingConfigCache();
 
@@ -203,7 +206,7 @@ describe('log storage', () => {
 
   it('prunes expired archives according to retention settings', () => {
     const config = createEmptyUnifiedConfig();
-    config.logging.retain_days = 1;
+    config.logging!.retain_days = 1;
     saveUnifiedConfig(config);
     invalidateLoggingConfigCache();
 

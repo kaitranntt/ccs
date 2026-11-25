@@ -33,7 +33,7 @@ beforeEach(async () => {
   registryPath = path.join(ccsHome, '.ccs', 'codex-profiles.yaml');
 
   const mod = await import('../../../src/codex-auth/codex-profile-registry');
-  CodexProfileRegistry = mod.CodexProfileRegistry;
+  CodexProfileRegistry = mod.CodexProfileRegistry as unknown as typeof CodexProfileRegistry;
 });
 
 afterEach(() => {

@@ -29,6 +29,7 @@ describe('pr ci workflow', () => {
     expect(workflow).toContain('fail-fast: false');
     expect(workflow).toContain('runs-on: ubuntu-latest');
     expect(workflow).toContain("cmd: 'bun run typecheck'");
+    expect(workflow).toContain("cmd: 'bun run typecheck:tests'");
     expect(workflow).toContain("cmd: 'bun run lint'");
     expect(workflow).toContain("cmd: 'bun run format:check'");
     expect(workflow).toContain("key: ${{ runner.os }}-bun-cache-v2-${{ hashFiles('bun.lock', 'ui/bun.lock') }}");

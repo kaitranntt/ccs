@@ -137,8 +137,8 @@ describe.skipIf(!matrixEnabled)('real runtime upstream transport matrix', () => 
       });
     });
     await Promise.all([
-      new Promise<void>((resolve) => upstreamServer.listen(0, '127.0.0.1', resolve)),
-      new Promise<void>((resolve) => corporateProxy.listen(0, '127.0.0.1', resolve)),
+      new Promise<void>((resolve) => upstreamServer!.listen(0, '127.0.0.1', resolve)),
+      new Promise<void>((resolve) => corporateProxy!.listen(0, '127.0.0.1', resolve)),
     ]);
     upstreamPort = (upstreamServer.address() as { port: number }).port;
     corporateProxyPort = (corporateProxy.address() as { port: number }).port;

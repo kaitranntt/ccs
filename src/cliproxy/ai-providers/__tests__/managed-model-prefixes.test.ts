@@ -67,12 +67,12 @@ function installFetchMock(options: {
 
     if (url.endsWith('/v0/management/auth-files/fields') && method === 'PATCH') {
       const payload = JSON.parse(body ?? '{}') as { name?: string };
-      const status = (payload.name && options.patchStatuses?.[payload.name]) ?? 200;
+      const status = Number((payload.name && options.patchStatuses?.[payload.name]) ?? 200);
       return Promise.resolve(jsonResponse({ ok: status < 400 }, status));
     }
 
     return Promise.reject(new Error(`Unexpected fetch ${method} ${url}`));
-  }) as typeof fetch;
+  }) as unknown as typeof fetch;
 
   return requests;
 }
@@ -113,7 +113,7 @@ describe('ensureManagedModelPrefixes', () => {
 
   it('returns immediately when called for providers without managed prefixes', async () => {
     const fetchMock = mock(() => Promise.reject(new Error('should not fetch')));
-    global.fetch = fetchMock as typeof fetch;
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     const result = await ensureManagedModelPrefixes(['codex']);
 

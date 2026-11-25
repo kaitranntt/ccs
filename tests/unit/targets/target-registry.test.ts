@@ -192,6 +192,7 @@ describe('DroidAdapter', () => {
   it('should build minimal env (no ANTHROPIC_ vars)', () => {
     const env = adapter.buildEnv(
       {
+        profile: 'codex',
         baseUrl: 'http://localhost:8317',
         apiKey: 'dummy',
       },

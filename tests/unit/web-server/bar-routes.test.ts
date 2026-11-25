@@ -153,12 +153,12 @@ describe('GET /api/bar/summary', () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return summary as any;
       },
-      getCachedQuota: (_provider: string, accountId: string) => {
+      getCachedQuota: ((_provider: string, accountId: string) => {
         if (mockCachedQuota && mockAccounts.some((a) => a.id === accountId)) {
           return mockCachedQuota;
         }
         return null;
-      },
+      }) as <T>(provider: string, accountId: string) => T | null,
       setCachedQuota: (_provider: string, _accountId: string, _data: unknown) => {
         // no-op in tests
       },
@@ -671,13 +671,14 @@ describe('today_cost key consistency — non-email account.id (finding #4)', () 
 
     app2.use('/api/bar', router2);
 
+    const activeServer2 = app2.listen(0, '127.0.0.1');
+    server2 = activeServer2;
     await new Promise<void>((resolve, reject) => {
-      server2 = app2.listen(0, '127.0.0.1');
-      server2.once('error', reject);
-      server2.once('listening', () => resolve());
+      activeServer2.once('error', reject);
+      activeServer2.once('listening', () => resolve());
     });
 
-    const addr2 = server2.address();
+    const addr2 = activeServer2.address();
     if (!addr2 || typeof addr2 === 'string') throw new Error('No server address');
     const baseUrl2 = `http://127.0.0.1:${addr2.port}`;
 
@@ -1005,7 +1006,7 @@ describe('/summary force flag passed to getNativeAccountRows', () => {
     const router = createBarRouter({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       getAllAccountsSummary: () => ({ agy: [makeAccountInfo()] }) as any,
-      getCachedQuota: () => makeQuotaResult(),
+      getCachedQuota: (() => makeQuotaResult()) as <T>() => T | null,
       setCachedQuota: () => {},
       invalidateQuotaCache: () => {},
       fetchAccountQuota: async () => makeQuotaResult(),
@@ -1083,7 +1084,7 @@ describe('/summary force flag passed to getNativeAccountRows', () => {
     const router = createBarRouter({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       getAllAccountsSummary: () => ({ agy: [makeAccountInfo()] }) as any,
-      getCachedQuota: () => makeQuotaResult(),
+      getCachedQuota: (() => makeQuotaResult()) as <T>() => T | null,
       setCachedQuota: () => {},
       invalidateQuotaCache: () => {},
       fetchAccountQuota: async () => makeQuotaResult(),
@@ -1126,7 +1127,7 @@ describe('/summary force flag passed to getNativeAccountRows', () => {
     const router = createBarRouter({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       getAllAccountsSummary: () => ({ agy: [makeAccountInfo()] }) as any,
-      getCachedQuota: () => makeQuotaResult(),
+      getCachedQuota: (() => makeQuotaResult()) as <T>() => T | null,
       setCachedQuota: () => {},
       invalidateQuotaCache: () => {},
       fetchAccountQuota: () => new Promise(() => {}),
@@ -1320,7 +1321,7 @@ describe('/summary wire contract: surface/profile/is_subscription fields (GH-159
     const router = createBarRouter({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       getAllAccountsSummary: () => ({ agy: [cliproxyAccount] }) as any,
-      getCachedQuota: () => makeQuotaResult(),
+      getCachedQuota: (() => makeQuotaResult()) as <T>() => T | null,
       setCachedQuota: () => {},
       invalidateQuotaCache: () => {},
       fetchAccountQuota: async () => makeQuotaResult(),

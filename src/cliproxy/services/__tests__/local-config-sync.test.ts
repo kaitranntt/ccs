@@ -3,6 +3,7 @@
  * Verifies YAML section replacement logic and sync behavior.
  */
 
+import { describe, it } from 'bun:test';
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';

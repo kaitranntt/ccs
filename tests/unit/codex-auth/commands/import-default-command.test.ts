@@ -128,23 +128,11 @@ function captureOutput(): { stderr: string[]; restore: () => void } {
 }
 
 function mockProcessTable(psStdout: string) {
-  spyOn(childProcess, 'spawnSync').mockImplementation(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (cmd: string, _args: string[]): any => {
-      if (cmd === 'ps') {
-        return {
-          status: psStdout.trim().length > 0 ? 0 : 1,
-          stdout: psStdout,
-          stderr: '',
-          pid: 0,
-          output: [],
-          signal: null,
-          error: undefined,
-        };
-      }
+  spyOn(childProcess, 'spawnSync').mockImplementation(((cmd: string, _args: string[]) => {
+    if (cmd === 'ps') {
       return {
-        status: 1,
-        stdout: '',
+        status: psStdout.trim().length > 0 ? 0 : 1,
+        stdout: psStdout,
         stderr: '',
         pid: 0,
         output: [],
@@ -152,7 +140,16 @@ function mockProcessTable(psStdout: string) {
         error: undefined,
       };
     }
-  );
+    return {
+      status: 1,
+      stdout: '',
+      stderr: '',
+      pid: 0,
+      output: [],
+      signal: null,
+      error: undefined,
+    };
+  }) as unknown as typeof childProcess.spawnSync);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -493,7 +490,7 @@ describe('import-default — Codex running detection', () => {
   it('warns and refuses when process table finds a same-user Codex PID', async () => {
     fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
 
-    mockProcessTable(`12345 ${process.getuid()} /usr/local/bin/codex login\n`);
+    mockProcessTable(`12345 ${process.getuid!()} /usr/local/bin/codex login\n`);
 
     const { handleImportDefaultCodex } =
       await import('../../../../src/codex-auth/commands/import-default-command');
@@ -523,7 +520,7 @@ describe('import-default — Codex running detection', () => {
   it('proceeds with --force-while-running even when Codex is running', async () => {
     fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
 
-    mockProcessTable(`12345 ${process.getuid()} /usr/local/bin/codex login\n`);
+    mockProcessTable(`12345 ${process.getuid!()} /usr/local/bin/codex login\n`);
 
     const { handleImportDefaultCodex } =
       await import('../../../../src/codex-auth/commands/import-default-command');
@@ -543,7 +540,7 @@ describe('import-default — Codex running detection', () => {
   it('warns and refuses when Codex is running through a node shim', async () => {
     fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
 
-    mockProcessTable(`12345 ${process.getuid()} /usr/bin/node /usr/local/bin/codex login\n`);
+    mockProcessTable(`12345 ${process.getuid!()} /usr/bin/node /usr/local/bin/codex login\n`);
 
     const { handleImportDefaultCodex } =
       await import('../../../../src/codex-auth/commands/import-default-command');
@@ -573,7 +570,7 @@ describe('import-default — Codex running detection', () => {
   it('ignores process-table false positives that are not Codex executables', async () => {
     fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
 
-    mockProcessTable(`11111 ${process.getuid()} /usr/bin/node /tmp/codex-auth-helper.js\n`);
+    mockProcessTable(`11111 ${process.getuid!()} /usr/bin/node /tmp/codex-auth-helper.js\n`);
 
     const { handleImportDefaultCodex } =
       await import('../../../../src/codex-auth/commands/import-default-command');
@@ -593,7 +590,7 @@ describe('import-default — Codex running detection', () => {
     fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
 
     mockProcessTable(
-      `${process.pid} ${process.getuid()} node /workspace/ccs/dist/bin/codex-runtime.js auth import-default self\n`
+      `${process.pid} ${process.getuid!()} node /workspace/ccs/dist/bin/codex-runtime.js auth import-default self\n`
     );
 
     const { handleImportDefaultCodex } =
@@ -613,7 +610,7 @@ describe('import-default — Codex running detection', () => {
   it('ignores Codex processes owned by another uid', async () => {
     fs.writeFileSync(path.join(legacyCodexHome, 'auth.json'), VALID_AUTH_JSON);
 
-    const otherUid = process.getuid() + 1;
+    const otherUid = process.getuid!() + 1;
     mockProcessTable(`22222 ${otherUid} /usr/local/bin/codex login\n`);
 
     const { handleImportDefaultCodex } =

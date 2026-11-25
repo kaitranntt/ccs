@@ -22,9 +22,9 @@ let updateCheckResult: UpdateResult;
 let currentInstallOverride: ReturnType<typeof installDescriptor>;
 let stateReads = 0;
 
-function installDescriptor() {
+function installDescriptor(manager: 'npm' | 'bun' | 'yarn' | 'pnpm' = 'npm') {
   return {
-    manager: 'npm' as const,
+    manager,
     scriptPath: '/tmp/ccs-prefix/bin/ccs',
     resolvedScriptPath: '/tmp/ccs-prefix/lib/node_modules/@kaitranntt/ccs/dist/ccs.js',
     packageRoot: '/tmp/ccs-prefix/lib/node_modules/@kaitranntt/ccs',
@@ -33,7 +33,7 @@ function installDescriptor() {
   };
 }
 
-function createDeps(overrides: Partial<UpdateCommandDeps> = {}): UpdateCommandDeps {
+function createDeps(overrides: Partial<UpdateCommandDeps> = {}): Partial<UpdateCommandDeps> {
   return {
     initUI: async () => {},
     getVersion: () => '7.67.0-dev.5',
@@ -94,7 +94,7 @@ function createDeps(overrides: Partial<UpdateCommandDeps> = {}): UpdateCommandDe
           }
         },
       };
-    }) as typeof UpdateCommandDeps.prototype.spawn,
+    }) as unknown as UpdateCommandDeps['spawn'],
     ...overrides,
   };
 }

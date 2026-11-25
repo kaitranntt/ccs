@@ -43,7 +43,7 @@ describe('ClaudeCliChecker', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' });
 
     const spawnSpy = spyOn(childProcess, 'spawn').mockImplementation(
-      () => createMockChild() as unknown as ReturnType<typeof childProcess.spawn>
+      (() => createMockChild()) as unknown as typeof childProcess.spawn
     );
 
     try {
@@ -52,7 +52,7 @@ describe('ClaudeCliChecker', () => {
       await new ClaudeCliChecker().run(results);
 
       expect(spawnSpy).toHaveBeenCalledTimes(1);
-      const [, options] = spawnSpy.mock.calls[0] as [
+      const [, options] = spawnSpy.mock.calls[0] as unknown as [
         string,
         Record<string, unknown> | undefined,
       ];

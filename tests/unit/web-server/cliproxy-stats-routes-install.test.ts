@@ -36,7 +36,7 @@ beforeAll(async () => {
   setGlobalConfigDir(ccsDir);
 
   const config = createEmptyUnifiedConfig();
-  config.cliproxy = { backend: 'plus' };
+  config.cliproxy = { backend: 'plus' } as unknown as typeof config.cliproxy;
   saveUnifiedConfig(config);
 
   writeInstalledVersion(plusBinDir, '6.6.80');

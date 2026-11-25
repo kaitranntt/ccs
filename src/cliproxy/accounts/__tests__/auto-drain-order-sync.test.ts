@@ -9,15 +9,8 @@ import {
   discoverExistingAccounts,
   loadAccountsRegistry,
 } from '../registry';
-import {
-  applyDrainOrder,
-  readAuthFilePriority,
-  reapplyDrainOrderForProvider,
-  reapplyAllManagedDrainOrders,
-  resolveEffectiveDrainOrder,
-} from '../drain-order';
+import { readAuthFilePriority, reapplyAllManagedDrainOrders } from '../drain-order';
 import { runWithScopedCcsHome } from '../../../utils/config-manager';
-import type { CLIProxyProvider } from '../../types';
 
 function writeAuthFile(authDir: string, fileName: string, content: Record<string, unknown>): void {
   fs.writeFileSync(path.join(authDir, fileName), JSON.stringify(content, null, 2), 'utf8');
@@ -71,7 +64,7 @@ describe('reapplyDrainOrderForProvider after registry sync', () => {
 
         // Verify priorities are restored to auth files
         expect(readAuthFilePriority('antigravity-a.json')).toBeGreaterThan(
-          readAuthFilePriority('antigravity-b.json')
+          readAuthFilePriority('antigravity-b.json') as number
         );
 
         // 4. Idempotency test: subsequent re-apply performs ZERO writes (prevents reload loop)

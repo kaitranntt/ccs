@@ -227,9 +227,9 @@ describe('CLAUDECODE environment stripping', () => {
     delete process.env.CLAUDE_CONFIG_DIR;
     delete process.env.TMUX;
 
-    baselineSigintListeners = process.listeners('SIGINT');
-    baselineSigtermListeners = process.listeners('SIGTERM');
-    baselineSighupListeners = process.listeners('SIGHUP');
+    baselineSigintListeners = process.listeners('SIGINT') as Array<(...args: unknown[]) => void>;
+    baselineSigtermListeners = process.listeners('SIGTERM') as Array<(...args: unknown[]) => void>;
+    baselineSighupListeners = process.listeners('SIGHUP') as Array<(...args: unknown[]) => void>;
   });
 
   afterEach(async () => {
@@ -268,19 +268,19 @@ describe('CLAUDECODE environment stripping', () => {
     delete process.env.ANTHROPIC_SMALL_FAST_MODEL;
     delete process.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS;
 
-    for (const listener of process.listeners('SIGINT')) {
+    for (const listener of process.listeners('SIGINT') as Array<(...args: unknown[]) => void>) {
       if (!baselineSigintListeners.includes(listener)) {
-        process.removeListener('SIGINT', listener as (...args: unknown[]) => void);
+        process.removeListener('SIGINT', listener as never);
       }
     }
-    for (const listener of process.listeners('SIGTERM')) {
+    for (const listener of process.listeners('SIGTERM') as Array<(...args: unknown[]) => void>) {
       if (!baselineSigtermListeners.includes(listener)) {
-        process.removeListener('SIGTERM', listener as (...args: unknown[]) => void);
+        process.removeListener('SIGTERM', listener as never);
       }
     }
-    for (const listener of process.listeners('SIGHUP')) {
+    for (const listener of process.listeners('SIGHUP') as Array<(...args: unknown[]) => void>) {
       if (!baselineSighupListeners.includes(listener)) {
-        process.removeListener('SIGHUP', listener as (...args: unknown[]) => void);
+        process.removeListener('SIGHUP', listener as never);
       }
     }
 

@@ -9,6 +9,8 @@ import type {
   ClaudeKey,
 } from '../management-api-types';
 
+const asFetch = (fn: unknown): typeof fetch => fn as typeof fetch;
+
 describe('management-api-client', () => {
   describe('ManagementApiClient', () => {
     let config: ManagementClientConfig;
@@ -102,7 +104,7 @@ describe('management-api-client', () => {
             })
           )
         );
-        global.fetch = fetchMock as typeof global.fetch;
+        global.fetch = fetchMock as unknown as typeof fetch;
 
         const strategy = await client.getRoutingStrategy();
 
@@ -122,7 +124,7 @@ describe('management-api-client', () => {
             })
           )
         );
-        global.fetch = fetchMock as typeof global.fetch;
+        global.fetch = fetchMock as unknown as typeof fetch;
 
         const strategy = await client.putRoutingStrategy('round-robin');
 
@@ -146,7 +148,7 @@ describe('management-api-client', () => {
         // Test via health check which uses mapErrorToCode internally
         const client = new ManagementApiClient(config);
         const originalFetch = global.fetch;
-        global.fetch = mock(() => Promise.reject(error));
+        global.fetch = asFetch(mock(() => Promise.reject(error)));
 
         client.health().then((status: ManagementHealthStatus) => {
           expect(status.healthy).toBe(false);
@@ -162,7 +164,7 @@ describe('management-api-client', () => {
 
         const client = new ManagementApiClient(config);
         const originalFetch = global.fetch;
-        global.fetch = mock(() => Promise.reject(error));
+        global.fetch = asFetch(mock(() => Promise.reject(error)));
 
         client.health().then((status: ManagementHealthStatus) => {
           expect(status.healthy).toBe(false);
@@ -178,7 +180,7 @@ describe('management-api-client', () => {
 
         const client = new ManagementApiClient(config);
         const originalFetch = global.fetch;
-        global.fetch = mock(() => Promise.reject(error));
+        global.fetch = asFetch(mock(() => Promise.reject(error)));
 
         client.health().then((status: ManagementHealthStatus) => {
           expect(status.healthy).toBe(false);
@@ -194,7 +196,7 @@ describe('management-api-client', () => {
 
         const client = new ManagementApiClient(config);
         const originalFetch = global.fetch;
-        global.fetch = mock(() => Promise.reject(error));
+        global.fetch = asFetch(mock(() => Promise.reject(error)));
 
         client.health().then((status: ManagementHealthStatus) => {
           expect(status.healthy).toBe(false);
@@ -207,14 +209,16 @@ describe('management-api-client', () => {
       it('should map 401 status to AUTH_FAILED', async () => {
         const client = new ManagementApiClient(config);
         const originalFetch = global.fetch;
-        global.fetch = mock(() =>
-          Promise.resolve({
-            ok: false,
-            status: 401,
-            statusText: 'Unauthorized',
-            headers: new Headers(),
-            text: () => Promise.resolve(''),
-          } as Response)
+        global.fetch = asFetch(
+          mock(() =>
+            Promise.resolve({
+              ok: false,
+              status: 401,
+              statusText: 'Unauthorized',
+              headers: new Headers(),
+              text: () => Promise.resolve(''),
+            } as Response)
+          )
         );
 
         const status = await client.health();
@@ -227,14 +231,16 @@ describe('management-api-client', () => {
       it('should map 403 status to AUTH_FAILED', async () => {
         const client = new ManagementApiClient(config);
         const originalFetch = global.fetch;
-        global.fetch = mock(() =>
-          Promise.resolve({
-            ok: false,
-            status: 403,
-            statusText: 'Forbidden',
-            headers: new Headers(),
-            text: () => Promise.resolve(''),
-          } as Response)
+        global.fetch = asFetch(
+          mock(() =>
+            Promise.resolve({
+              ok: false,
+              status: 403,
+              statusText: 'Forbidden',
+              headers: new Headers(),
+              text: () => Promise.resolve(''),
+            } as Response)
+          )
         );
 
         const status = await client.health();
@@ -247,14 +253,16 @@ describe('management-api-client', () => {
       it('should map 404 status to NOT_FOUND', async () => {
         const client = new ManagementApiClient(config);
         const originalFetch = global.fetch;
-        global.fetch = mock(() =>
-          Promise.resolve({
-            ok: false,
-            status: 404,
-            statusText: 'Not Found',
-            headers: new Headers(),
-            text: () => Promise.resolve(''),
-          } as Response)
+        global.fetch = asFetch(
+          mock(() =>
+            Promise.resolve({
+              ok: false,
+              status: 404,
+              statusText: 'Not Found',
+              headers: new Headers(),
+              text: () => Promise.resolve(''),
+            } as Response)
+          )
         );
 
         const status = await client.health();
@@ -267,14 +275,16 @@ describe('management-api-client', () => {
       it('should map 400 status to BAD_REQUEST', async () => {
         const client = new ManagementApiClient(config);
         const originalFetch = global.fetch;
-        global.fetch = mock(() =>
-          Promise.resolve({
-            ok: false,
-            status: 400,
-            statusText: 'Bad Request',
-            headers: new Headers(),
-            text: () => Promise.resolve(''),
-          } as Response)
+        global.fetch = asFetch(
+          mock(() =>
+            Promise.resolve({
+              ok: false,
+              status: 400,
+              statusText: 'Bad Request',
+              headers: new Headers(),
+              text: () => Promise.resolve(''),
+            } as Response)
+          )
         );
 
         const status = await client.health();
@@ -287,14 +297,16 @@ describe('management-api-client', () => {
       it('should map 500+ status to SERVER_ERROR', async () => {
         const client = new ManagementApiClient(config);
         const originalFetch = global.fetch;
-        global.fetch = mock(() =>
-          Promise.resolve({
-            ok: false,
-            status: 500,
-            statusText: 'Internal Server Error',
-            headers: new Headers(),
-            text: () => Promise.resolve(''),
-          } as Response)
+        global.fetch = asFetch(
+          mock(() =>
+            Promise.resolve({
+              ok: false,
+              status: 500,
+              statusText: 'Internal Server Error',
+              headers: new Headers(),
+              text: () => Promise.resolve(''),
+            } as Response)
+          )
         );
 
         const status = await client.health();
@@ -307,7 +319,7 @@ describe('management-api-client', () => {
       it('should map unknown errors to UNKNOWN', async () => {
         const client = new ManagementApiClient(config);
         const originalFetch = global.fetch;
-        global.fetch = mock(() => Promise.reject(new Error('Something weird happened')));
+        global.fetch = asFetch(mock(() => Promise.reject(new Error('Something weird happened'))));
 
         const status = await client.health();
         expect(status.healthy).toBe(false);
@@ -323,17 +335,19 @@ describe('management-api-client', () => {
         let capturedHeaders: Record<string, string> = {};
 
         const originalFetch = global.fetch;
-        global.fetch = mock((url: string, options?: RequestInit) => {
-          if (options?.headers) {
-            capturedHeaders = options.headers as Record<string, string>;
-          }
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            headers: new Headers(),
-            text: () => Promise.resolve('{"claude-api-key":[]}'),
-          } as Response);
-        });
+        global.fetch = asFetch(
+          mock((_url: string, options?: RequestInit) => {
+            if (options?.headers) {
+              capturedHeaders = options.headers as Record<string, string>;
+            }
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              headers: new Headers(),
+              text: () => Promise.resolve('{"claude-api-key":[]}'),
+            } as Response);
+          })
+        );
 
         await client.getClaudeKeys();
         expect(capturedHeaders['Authorization']).toBe('Bearer test-management-key-12345');
@@ -364,15 +378,17 @@ describe('management-api-client', () => {
         const client = new ManagementApiClient({ ...config, timeout: 100 });
 
         const originalFetch = global.fetch;
-        global.fetch = mock(
-          () =>
-            new Promise((_, reject) => {
-              setTimeout(() => {
-                const error = new Error('The operation was aborted');
-                error.name = 'AbortError';
-                reject(error);
-              }, 150);
-            })
+        global.fetch = asFetch(
+          mock(
+            () =>
+              new Promise((_, reject) => {
+                setTimeout(() => {
+                  const error = new Error('The operation was aborted');
+                  error.name = 'AbortError';
+                  reject(error);
+                }, 150);
+              })
+          )
         );
 
         const status = await client.health();
@@ -389,15 +405,17 @@ describe('management-api-client', () => {
 
         const originalFetch = global.fetch;
         let fetchCalled = false;
-        global.fetch = mock(() => {
-          fetchCalled = true;
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            headers: new Headers(),
-            text: () => Promise.resolve('{"claude-api-key":[]}'),
-          } as Response);
-        });
+        global.fetch = asFetch(
+          mock(() => {
+            fetchCalled = true;
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              headers: new Headers(),
+              text: () => Promise.resolve('{"claude-api-key":[]}'),
+            } as Response);
+          })
+        );
 
         await client.getClaudeKeys();
         expect(fetchCalled).toBe(true);
@@ -426,15 +444,17 @@ describe('management-api-client', () => {
 
         const originalFetch = global.fetch;
         let fetchCalled = false;
-        global.fetch = mock(() => {
-          fetchCalled = true;
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            headers: new Headers(),
-            text: () => Promise.resolve('{"claude-api-key":[]}'),
-          } as Response);
-        });
+        global.fetch = asFetch(
+          mock(() => {
+            fetchCalled = true;
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              headers: new Headers(),
+              text: () => Promise.resolve('{"claude-api-key":[]}'),
+            } as Response);
+          })
+        );
 
         await client.getClaudeKeys();
         expect(fetchCalled).toBe(true);
@@ -448,16 +468,18 @@ describe('management-api-client', () => {
         const client = new ManagementApiClient(config);
 
         const originalFetch = global.fetch;
-        global.fetch = mock(() =>
-          Promise.resolve({
-            ok: true,
-            status: 200,
-            headers: new Headers({
-              'x-cpa-version': '1.2.3',
-              'x-cpa-commit': 'abc123',
-            }),
-            text: () => Promise.resolve('{"claude-api-key":[]}'),
-          } as Response)
+        global.fetch = asFetch(
+          mock(() =>
+            Promise.resolve({
+              ok: true,
+              status: 200,
+              headers: new Headers({
+                'x-cpa-version': '1.2.3',
+                'x-cpa-commit': 'abc123',
+              }),
+              text: () => Promise.resolve('{"claude-api-key":[]}'),
+            } as Response)
+          )
         );
 
         const status = await client.health();
@@ -473,7 +495,7 @@ describe('management-api-client', () => {
         const client = new ManagementApiClient(config);
 
         const originalFetch = global.fetch;
-        global.fetch = mock(() => Promise.reject(new Error('Connection failed')));
+        global.fetch = asFetch(mock(() => Promise.reject(new Error('Connection failed'))));
 
         const status = await client.health();
         expect(status.healthy).toBe(false);
@@ -490,13 +512,15 @@ describe('management-api-client', () => {
         const mockKeys: ClaudeKey[] = [{ 'api-key': 'sk-test-123', prefix: 'glm-' }];
 
         const originalFetch = global.fetch;
-        global.fetch = mock(() =>
-          Promise.resolve({
-            ok: true,
-            status: 200,
-            headers: new Headers(),
-            text: () => Promise.resolve(JSON.stringify({ 'claude-api-key': mockKeys })),
-          } as Response)
+        global.fetch = asFetch(
+          mock(() =>
+            Promise.resolve({
+              ok: true,
+              status: 200,
+              headers: new Headers(),
+              text: () => Promise.resolve(JSON.stringify({ 'claude-api-key': mockKeys })),
+            } as Response)
+          )
         );
 
         const keys = await client.getClaudeKeys();
@@ -511,15 +535,17 @@ describe('management-api-client', () => {
 
         const originalFetch = global.fetch;
         let requestBody: string | undefined;
-        global.fetch = mock((url: string, options?: RequestInit) => {
-          requestBody = options?.body as string;
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            headers: new Headers(),
-            text: () => Promise.resolve(''),
-          } as Response);
-        });
+        global.fetch = asFetch(
+          mock((_url: string, options?: RequestInit) => {
+            requestBody = options?.body as string;
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              headers: new Headers(),
+              text: () => Promise.resolve(''),
+            } as Response);
+          })
+        );
 
         await client.putClaudeKeys(mockKeys);
         expect(requestBody).toBe(JSON.stringify(mockKeys));
@@ -536,15 +562,17 @@ describe('management-api-client', () => {
 
         const originalFetch = global.fetch;
         let requestBody: string | undefined;
-        global.fetch = mock((url: string, options?: RequestInit) => {
-          requestBody = options?.body as string;
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            headers: new Headers(),
-            text: () => Promise.resolve(''),
-          } as Response);
-        });
+        global.fetch = asFetch(
+          mock((_url: string, options?: RequestInit) => {
+            requestBody = options?.body as string;
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              headers: new Headers(),
+              text: () => Promise.resolve(''),
+            } as Response);
+          })
+        );
 
         await client.patchClaudeKey(patch);
         expect(requestBody).toBe(JSON.stringify(patch));
@@ -558,15 +586,17 @@ describe('management-api-client', () => {
 
         const originalFetch = global.fetch;
         let requestUrl = '';
-        global.fetch = mock((url: string) => {
-          requestUrl = url;
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            headers: new Headers(),
-            text: () => Promise.resolve(''),
-          } as Response);
-        });
+        global.fetch = asFetch(
+          mock((url: string) => {
+            requestUrl = url;
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              headers: new Headers(),
+              text: () => Promise.resolve(''),
+            } as Response);
+          })
+        );
 
         await client.deleteClaudeKey(apiKey);
         expect(requestUrl).toContain(encodeURIComponent(apiKey));

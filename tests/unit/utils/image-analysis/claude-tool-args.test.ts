@@ -75,7 +75,9 @@ describe('appendThirdPartyImageAnalysisToolArgs', () => {
       '/tmp/user-ccs-prompt-image-analysis-tool-notes.txt',
     ]);
 
-    const filePaths = result.filter((arg, index) => result[index - 1] === '--append-system-prompt-file');
+    const filePaths = result.filter(
+      (_arg, index) => result[index - 1] === '--append-system-prompt-file'
+    );
     expect(filePaths).toContain('/tmp/user-ccs-prompt-image-analysis-tool-notes.txt');
     expect(filePaths.some((filePath) => filePath.endsWith('/ccs-prompt-image-analysis-tool.txt'))).toBe(true);
   });

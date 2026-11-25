@@ -165,7 +165,7 @@ describe('getThinkingValueForTier', () => {
     const thinkingConfig = {
       mode: 'auto' as const,
       // tier_defaults is optional - centralized defaults kick in
-    };
+    } as Parameters<typeof getThinkingValueForTier>[2];
 
     const result = getThinkingValueForTier('opus', 'agy' as CLIProxyProvider, thinkingConfig);
     // DEFAULT_THINKING_TIER_DEFAULTS.opus = 'high'
@@ -438,12 +438,6 @@ describe('applyThinkingConfig - composite variant integration', () => {
       ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-6-thinking',
       ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4-5-thinking',
       ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5-20251001',
-    };
-
-    const compositeTierThinking = {
-      opus: 'high',
-      sonnet: 'medium',
-      haiku: 'low',
     };
 
     // Mock thinking config with mode=off by calling without thinkingOverride

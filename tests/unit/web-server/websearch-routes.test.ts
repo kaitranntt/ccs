@@ -175,7 +175,7 @@ describe('websearch routes', () => {
 
     const response = await fetch(`${baseUrl}/api/websearch`);
     expect(response.status).toBe(200);
-    const payload = await response.json();
+    const payload = (await response.json()) as Record<string, any>;
 
     expect(payload.providers.exa).toMatchObject({
       enabled: true,
@@ -191,7 +191,7 @@ describe('websearch routes', () => {
 
     const statusResponse = await fetch(`${baseUrl}/api/websearch/status`);
     expect(statusResponse.status).toBe(200);
-    const statusPayload = await statusResponse.json();
+    const statusPayload = (await statusResponse.json()) as Record<string, any>;
     expect(statusPayload.readiness).toMatchObject({
       status: 'ready',
     });
@@ -218,7 +218,7 @@ describe('websearch routes', () => {
     });
 
     expect(createResponse.status).toBe(200);
-    const createdPayload = await createResponse.json();
+    const createdPayload = (await createResponse.json()) as Record<string, any>;
     expect(createdPayload.websearch.apiKeys.exa).toMatchObject({
       configured: true,
       source: 'global_env',
@@ -241,7 +241,7 @@ describe('websearch routes', () => {
     });
 
     expect(removeResponse.status).toBe(200);
-    const removedPayload = await removeResponse.json();
+    const removedPayload = (await removeResponse.json()) as Record<string, any>;
     expect(removedPayload.websearch.apiKeys.exa).toMatchObject({
       configured: false,
       source: 'none',
@@ -274,7 +274,7 @@ describe('websearch routes', () => {
     });
 
     expect(response.status).toBe(200);
-    const payload = await response.json();
+    const payload = (await response.json()) as Record<string, any>;
     expect(payload.websearch.providers.exa).toMatchObject({
       enabled: true,
       max_results: 9,
@@ -300,7 +300,7 @@ describe('websearch routes', () => {
     });
 
     expect(response.status).toBe(200);
-    const payload = await response.json();
+    const payload = (await response.json()) as Record<string, any>;
     expect(payload.websearch.providers.searxng).toEqual({
       enabled: true,
       url: 'https://search.example.com',
@@ -318,11 +318,17 @@ describe('websearch routes', () => {
   it('persists native_profiles and keeps them when other settings change', async () => {
     const saved = await putWebsearch({ native_profiles: [' gateway ', 'gateway', 'codex'] });
     expect(saved.status).toBe(200);
-    expect((await saved.json()).websearch.native_profiles).toEqual(['gateway', 'codex']);
+    expect(((await saved.json()) as Record<string, any>).websearch.native_profiles).toEqual([
+      'gateway',
+      'codex',
+    ]);
 
     const updated = await putWebsearch({ enabled: false });
     expect(updated.status).toBe(200);
-    expect((await updated.json()).websearch.native_profiles).toEqual(['gateway', 'codex']);
+    expect(((await updated.json()) as Record<string, any>).websearch.native_profiles).toEqual([
+      'gateway',
+      'codex',
+    ]);
     expect(loadOrCreateUnifiedConfig().websearch?.native_profiles).toEqual(['gateway', 'codex']);
   });
 
@@ -348,7 +354,7 @@ describe('websearch routes', () => {
     });
 
     expect(response.status).toBe(200);
-    const payload = await response.json();
+    const payload = (await response.json()) as Record<string, any>;
     expect(payload.websearch.providers.searxng).toEqual({
       enabled: true,
       url: 'https://search.example.com/custom',
@@ -382,7 +388,7 @@ describe('websearch routes', () => {
     });
 
     expect(response.status).toBe(200);
-    const payload = await response.json();
+    const payload = (await response.json()) as Record<string, any>;
     expect(payload.websearch.providers.searxng).toEqual({
       enabled: false,
       url: '',
@@ -408,7 +414,7 @@ describe('websearch routes', () => {
     const response = await fetch(`${baseUrl}/api/websearch`);
 
     expect(response.status).toBe(200);
-    const payload = await response.json();
+    const payload = (await response.json()) as Record<string, any>;
     expect(payload.providers.searxng).toEqual({
       enabled: true,
       url: '',

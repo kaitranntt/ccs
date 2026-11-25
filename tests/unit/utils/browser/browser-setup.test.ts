@@ -2,99 +2,31 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { UnifiedConfig } from '../../../../src/config/unified-config-types';
+import {
+  createEmptyUnifiedConfig,
+  type UnifiedConfig,
+} from '../../../../src/config/unified-config-types';
 import {
   runBrowserSetup,
   type BrowserSetupDeps,
 } from '../../../../src/utils/browser/browser-setup';
 
-function createUnifiedConfig(userDataDir: string): UnifiedConfig {
+function createUnifiedConfig(userDataDir: string): UnifiedConfig & { browser: NonNullable<UnifiedConfig['browser']> } {
+  const base = createEmptyUnifiedConfig();
   return {
-    version: 12,
-    default: undefined,
-    profiles: {},
-    profile_targets: {},
-    copilot: {
-      enabled: false,
-      prompt: '',
-      command: '',
-      args: [],
-      env: {},
-      auto_install: false,
-    },
-    cursor: {
-      enabled: false,
-      model: '',
-      port: 3891,
-      daemon_mode: false,
-      auth: {
-        token: '',
-      },
-    },
-    websearch: {
-      enabled: false,
-      providers: {},
-    },
+    ...base,
     browser: {
       claude: {
         enabled: false,
         user_data_dir: userDataDir,
         devtools_port: 9222,
+        policy: { mode: 'never' },
       },
       codex: {
         enabled: true,
       },
     },
-    image_analysis: {
-      enabled: false,
-      providers: {},
-    },
-    global_env: {},
-    cliproxy_server: {
-      mode: 'local',
-      remote: {
-        enabled: false,
-        host: '',
-        port: 0,
-        protocol: 'http',
-        auth_token: '',
-        management_key: '',
-      },
-      local: {
-        port: 8085,
-        auto_start: true,
-      },
-    },
-    cliproxy_safety: {
-      concurrent_limit: 1,
-      cooldown_seconds: 0,
-      shared_responsibility: false,
-    },
-    quota_management: {
-      enabled: false,
-    },
-    thinking: {
-      mode: 'auto',
-      show_warnings: true,
-    },
-    official_channels: {
-      enabled: false,
-      selected: [],
-      unattended: false,
-    },
-    dashboard_auth: {
-      enabled: false,
-      users: [],
-      session_secret: '',
-    },
-    logging: {
-      enabled: true,
-      profile_starts: true,
-      delegation_calls: true,
-      proxy_requests: false,
-      quota_polls: false,
-    },
-  };
+  } as unknown as UnifiedConfig & { browser: NonNullable<UnifiedConfig['browser']> };
 }
 
 describe('browser setup', () => {

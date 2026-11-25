@@ -1263,7 +1263,6 @@ describe('CursorExecutor', () => {
 
       const result = executor.transformProtobufToJSON(buffer, 'test-model', {
         messages: [],
-        stream: false,
       });
 
       expect(result.status).toBe(502);
@@ -1279,7 +1278,6 @@ describe('CursorExecutor', () => {
 
       const result = executor.transformProtobufToSSE(frame, 'test-model', {
         messages: [],
-        stream: true,
       });
 
       expect(result.status).toBe(502);
@@ -1297,7 +1295,6 @@ describe('CursorExecutor', () => {
 
       const result = executor.transformProtobufToSSE(combined, 'test-model', {
         messages: [],
-        stream: true,
       });
 
       expect(result.status).toBe(200);
@@ -1314,7 +1311,6 @@ describe('CursorExecutor', () => {
 
       const result = executor.transformProtobufToSSE(combined, 'test-model', {
         messages: [],
-        stream: true,
       });
 
       expect(result.status).toBe(200);

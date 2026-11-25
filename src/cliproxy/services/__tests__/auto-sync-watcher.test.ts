@@ -3,6 +3,7 @@
  * Verifies debounce behavior, watcher lifecycle, and state management.
  */
 
+import { afterEach, beforeEach, describe, it } from 'bun:test';
 import * as assert from 'assert';
 
 describe('Auto-Sync Watcher', () => {

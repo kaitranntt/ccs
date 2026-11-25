@@ -18,9 +18,7 @@ function provider(
   overrides: Partial<WebSearchCliInfo> & Pick<WebSearchCliInfo, 'id' | 'name'>
 ): WebSearchCliInfo {
   return {
-    id: overrides.id,
     kind: overrides.kind ?? 'backend',
-    name: overrides.name,
     enabled: overrides.enabled ?? false,
     available: overrides.available ?? false,
     version: overrides.version ?? null,

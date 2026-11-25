@@ -5,7 +5,7 @@ let originalExitCode: number | undefined;
 
 beforeEach(() => {
   calls = [];
-  originalExitCode = process.exitCode;
+  originalExitCode = typeof process.exitCode === 'number' ? process.exitCode : undefined;
   process.exitCode = 0;
 
   mock.module('../../../src/commands/docker/help-subcommand', () => ({

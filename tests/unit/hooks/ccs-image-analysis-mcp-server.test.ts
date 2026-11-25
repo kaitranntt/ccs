@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { spawn } from 'child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import * as http from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -47,7 +47,7 @@ function collectResponses(
       }
     }
 
-    child.stdout.on('data', (chunk: Buffer) => {
+    child.stdout?.on('data', (chunk: Buffer) => {
       buffer = Buffer.concat([buffer, chunk]);
       try {
         tryParse();
@@ -215,10 +215,11 @@ describe('ccs-image-analysis MCP server', () => {
           },
         ],
       });
-      expect(receivedRequest?.path).toBe('/api/provider/agy/v1/messages');
-      expect(receivedRequest?.apiKey).toBe('test-api-key');
+      const capturedRequest = receivedRequest as { path?: string; apiKey?: string; body?: unknown } | null;
+      expect(capturedRequest?.path).toBe('/api/provider/agy/v1/messages');
+      expect(capturedRequest?.apiKey).toBe('test-api-key');
       expect(
-        (((receivedRequest?.body as { messages: Array<{ content: Array<{ text?: string }> }> })
+        (((capturedRequest?.body as { messages: Array<{ content: Array<{ text?: string }> }> })
           ?.messages[0]?.content[0] || {}) as { text?: string }).text
       ).toContain('Specific focus');
       expect(toolCall?.result).toBeDefined();
@@ -428,12 +429,13 @@ describe('ccs-image-analysis MCP server', () => {
       );
 
       const responses = await responsesPromise;
-      const requestBody = receivedRequest?.body as {
+      const capturedRequest = receivedRequest as { path?: string; apiKey?: string; body?: unknown } | null;
+      const requestBody = capturedRequest?.body as {
         messages: Array<{ content: Array<{ type: string; source?: { media_type?: string } }> }>;
       };
 
-      expect(receivedRequest?.path).toBe('/api/provider/agy/v1/messages');
-      expect(receivedRequest?.apiKey).toBe('test-api-key');
+      expect(capturedRequest?.path).toBe('/api/provider/agy/v1/messages');
+      expect(capturedRequest?.apiKey).toBe('test-api-key');
       expect(requestBody.messages[0]?.content[1]?.type).toBe('document');
       expect(requestBody.messages[0]?.content[1]?.source?.media_type).toBe('application/pdf');
       expect(((responses[1]?.result as { content: Array<{ text: string }> }).content[0] || {}).text).toContain(

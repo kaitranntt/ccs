@@ -146,7 +146,7 @@ describe('registerAccount optional nickname flow', () => {
 
     expect(result.team.id).toBe('kaidu.kd@gmail.com');
     expect(result.free.id).toBe('kaidu.kd@gmail.com#free');
-    expect(result.accounts.map((account) => account.id).sort()).toEqual([
+    expect(result.accounts.map((account: any) => account.id).sort()).toEqual([
       'kaidu.kd@gmail.com#04a0f049-team',
       'kaidu.kd@gmail.com#free',
     ]);
@@ -180,7 +180,7 @@ describe('registerAccount optional nickname flow', () => {
     expect(result.team.nickname).toBe('dev-a1b2c3d4');
     expect(
       result.accounts
-        .map((account) => [account.id, account.tokenFile, account.nickname, account.isDefault])
+        .map((account: any) => [account.id, account.tokenFile, account.nickname, account.isDefault])
         .sort()
     ).toEqual([
       ['dev@example.com#a1b2c3d4', 'claude-a1b2c3d4-dev@example.com.json', 'dev-a1b2c3d4', false],
@@ -210,7 +210,7 @@ describe('registerAccount optional nickname flow', () => {
 
     expect(result.registered.id).toBe('solo@example.com');
     expect(result.registered.nickname).toBe('solo');
-    expect(result.accounts.map((account) => [account.id, account.nickname])).toEqual([
+    expect(result.accounts.map((account: any) => [account.id, account.nickname])).toEqual([
       ['solo@example.com', 'solo'],
     ]);
   });

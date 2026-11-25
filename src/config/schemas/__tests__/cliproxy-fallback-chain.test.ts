@@ -30,7 +30,7 @@ describe('CLIProxy fallback chain schema', () => {
       cliproxy: {
         fallback_chain: configuredFallbackChain,
       },
-    } as Partial<UnifiedConfig>);
+    } as unknown as Partial<UnifiedConfig>);
 
     const serialized = yaml.load(generateYamlWithComments(merged)) as UnifiedConfig;
 

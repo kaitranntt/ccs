@@ -16,6 +16,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { ChildProcess } from 'child_process';
 import type { CLIProxyProvider, ExecutorConfig } from '../../types';
+import type { ClaudeLaunchContext } from '../claude-launcher';
+import type { WebSearchLaunchState } from '../../../utils/websearch-manager';
 
 // ── Spawn mock ────────────────────────────────────────────────────────────────
 
@@ -125,7 +127,7 @@ function makeCfg(overrides: Partial<ExecutorConfig> = {}): ExecutorConfig {
   } as ExecutorConfig;
 }
 
-function baseContext(overrides: object = {}) {
+function baseContext(overrides: Partial<ClaudeLaunchContext> = {}): ClaudeLaunchContext {
   return {
     claudeCli: '/usr/local/bin/claude',
     claudeArgs: ['chat', '--model', 'gemini-2.5-pro'],
@@ -141,7 +143,7 @@ function baseContext(overrides: object = {}) {
       enabled: true,
       native: false,
       hookEnv: { CCS_WEBSEARCH_ENABLED: '1' },
-    },
+    } as unknown as WebSearchLaunchState,
     browserRuntimeEnv: undefined,
     inheritedClaudeConfigDir: undefined,
     codexReasoningProxy: null,
@@ -219,7 +221,7 @@ describe('launchClaude', () => {
           enabled: false,
           native: false,
           hookEnv: { CCS_WEBSEARCH_ENABLED: '0', CCS_WEBSEARCH_SKIP: '1' },
-        },
+        } as unknown as WebSearchLaunchState,
       })
     );
     const spawnArgs = mockSpawn.mock.calls[0][1] as string[];
@@ -236,7 +238,7 @@ describe('launchClaude', () => {
           enabled: false,
           native: true,
           hookEnv: { CCS_WEBSEARCH_ENABLED: '0', CCS_WEBSEARCH_SKIP: '1' },
-        },
+        } as unknown as WebSearchLaunchState,
       })
     );
     const spawnArgs = mockSpawn.mock.calls[0][1] as string[];

@@ -57,7 +57,7 @@ describe('killWithEscalation', () => {
 
     // Simulate process exit before grace timeout
     await wait(10);
-    proc.exitCode = 0;
+    (proc as { exitCode: number | null }).exitCode = 0;
     proc.emit('exit', 0);
 
     await wait(60);
@@ -79,11 +79,11 @@ describe('killWithEscalation', () => {
 
     let observedDelay: number | undefined;
 
-    globalThis.setTimeout = ((handler: TimerHandler, timeout?: number) => {
+    globalThis.setTimeout = ((handler: (...args: unknown[]) => void, timeout?: number) => {
       observedDelay = timeout;
       void handler; // avoid executing callback in this assertion-only test
       return fakeTimer;
-    }) as typeof globalThis.setTimeout;
+    }) as unknown as typeof globalThis.setTimeout;
 
     try {
       killWithEscalation(proc);
@@ -107,11 +107,11 @@ describe('killWithEscalation', () => {
 
     let observedDelay: number | undefined;
 
-    globalThis.setTimeout = ((handler: TimerHandler, timeout?: number) => {
+    globalThis.setTimeout = ((handler: (...args: unknown[]) => void, timeout?: number) => {
       observedDelay = timeout;
       void handler;
       return fakeTimer;
-    }) as typeof globalThis.setTimeout;
+    }) as unknown as typeof globalThis.setTimeout;
 
     try {
       killWithEscalation(proc, 5000);
@@ -137,7 +137,7 @@ describe('killWithEscalation', () => {
       killWithEscalation(proc, 50);
 
       // Simulate immediate exit
-      proc.exitCode = 0;
+      (proc as { exitCode: number | null }).exitCode = 0;
       proc.emit('exit', 0);
 
       await wait(70);

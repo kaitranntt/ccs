@@ -34,7 +34,7 @@ describe('Claude pool management adapter', () => {
           credential_priority_cas: true,
         },
       ]) {
-        globalThis.fetch = (async () => Response.json(value)) as typeof fetch;
+        globalThis.fetch = (async () => Response.json(value)) as unknown as typeof fetch;
         await expect(api.checkCapabilities()).rejects.toThrow('requires');
       }
       globalThis.fetch = (async () =>
@@ -42,21 +42,21 @@ describe('Claude pool management adapter', () => {
           provider_affinity_overrides: true,
           local_builtin_selector: true,
           credential_priority_cas: true,
-        })) as typeof fetch;
+        })) as unknown as typeof fetch;
       await api.checkCapabilities();
     }));
 
   it('sends atomic exact expected/current values exclusively to the v8 priority endpoint', async () =>
     isolated(async () => {
       const requests: Array<{ url: string; method?: string; body: unknown }> = [];
-      globalThis.fetch = (async (input, options) => {
+      globalThis.fetch = (async (input: unknown, options: RequestInit | undefined) => {
         requests.push({
           url: String(input),
           method: options?.method,
           body: JSON.parse(String(options?.body)),
         });
         return Response.json({ status: 'ok' });
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
       const api = createClaudePoolManagementApi(target);
       await api.setPriority('synthetic.json', 4, null);
       await api.setPriority('synthetic.json', null, 4);
@@ -81,7 +81,7 @@ describe('Claude pool management adapter', () => {
             { name: 'b.json', priority: 0 },
             { name: 'c.json', priority: -7 },
           ],
-        })) as typeof fetch;
+        })) as unknown as typeof fetch;
       expect(await createClaudePoolManagementApi(target).listCredentials()).toEqual([
         { name: 'a.json', priority: null },
         { name: 'b.json', priority: 0 },
@@ -92,10 +92,11 @@ describe('Claude pool management adapter', () => {
   it('rejects malformed lists and does not guess a numeric string priority', async () =>
     isolated(async () => {
       const api = createClaudePoolManagementApi(target);
-      globalThis.fetch = (async () => Response.json({ files: 'invalid' })) as typeof fetch;
+      globalThis.fetch = (async () =>
+        Response.json({ files: 'invalid' })) as unknown as typeof fetch;
       await expect(api.listCredentials()).rejects.toThrow('Invalid');
       globalThis.fetch = (async () =>
-        Response.json({ files: [{ name: 'a.json', priority: '4' }] })) as typeof fetch;
+        Response.json({ files: [{ name: 'a.json', priority: '4' }] })) as unknown as typeof fetch;
       await expect(api.listCredentials()).rejects.toThrow('Invalid priority');
     }));
 
@@ -105,7 +106,7 @@ describe('Claude pool management adapter', () => {
       globalThis.fetch = (async () => {
         calls++;
         return Response.json({ error: 'changed' }, { status: 409 });
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
       await expect(
         createClaudePoolManagementApi(target).setPriority('a.json', 4, null)
       ).rejects.toThrow('409');
@@ -120,7 +121,7 @@ describe('Claude pool management adapter', () => {
         started = resolve;
       });
       let calls = 0;
-      globalThis.fetch = (async (_input, options) => {
+      globalThis.fetch = (async (_input: unknown, options: RequestInit | undefined) => {
         calls++;
         started();
         return new Promise<Response>((_resolve, reject) => {
@@ -128,7 +129,7 @@ describe('Claude pool management adapter', () => {
           if (options?.signal?.aborted) abort();
           else options?.signal?.addEventListener('abort', abort, { once: true });
         });
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
       const api = createClaudePoolManagementApi(target, controller.signal);
       const request = api.listCredentials();
       await entered;

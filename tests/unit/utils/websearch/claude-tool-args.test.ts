@@ -168,7 +168,7 @@ describe('appendThirdPartyWebSearchToolArgs', () => {
     ]);
 
     const filePaths = result.filter(
-      (arg, index) => result[index - 1] === '--append-system-prompt-file'
+      (_arg, index) => result[index - 1] === '--append-system-prompt-file'
     );
     expect(filePaths).toContain('/tmp/user-ccs-prompt-websearch-tool-notes.txt');
     expect(filePaths.some((filePath) => filePath.endsWith('/ccs-prompt-websearch-tool.txt'))).toBe(

@@ -36,7 +36,7 @@ describe('readClaudeCredentials', () => {
       readFileSyncImpl: () => JSON.stringify(makeCreds()),
       execFileImpl: () => {
         keychainCalled = true;
-        return '';
+        return { kill: () => {} };
       },
     });
     expect(creds?.claudeAiOauth?.accessToken).toBe('tok-abc');
@@ -91,7 +91,7 @@ describe('readClaudeCredentials', () => {
       },
       execFileImpl: () => {
         keychainCalled = true;
-        return '';
+        return { kill: () => {} };
       },
     });
     expect(creds).toBeNull();
@@ -168,7 +168,7 @@ describe('readClaudeCredentialsForConfigDir', () => {
       },
       execFileImpl: () => {
         keychainCalled = true;
-        return '';
+        return { kill: () => {} };
       },
     });
     expect(creds?.claudeAiOauth?.accessToken).toBe('tok-abc');
@@ -231,7 +231,7 @@ describe('readClaudeCredentialsForConfigDir', () => {
       },
       execFileImpl: () => {
         keychainCalled = true;
-        return '';
+        return { kill: () => {} };
       },
     });
     expect(creds).toBeNull();

@@ -3,7 +3,9 @@
  * Verifies syncable profile detection and ClaudeKey mapping.
  */
 
+import { describe, it } from 'bun:test';
 import * as assert from 'assert';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const fs = require('fs');
 
 describe('Profile Mapper', () => {

@@ -55,7 +55,7 @@ describe('ai-provider service stable ids', () => {
     });
 
     const listed = await listAiProviders();
-    const family = listed.families.find((entry) => entry.id === 'gemini-api-key');
+    const family = listed.families.find((entry: any) => entry.id === 'gemini-api-key');
 
     expect(family).toBeDefined();
     expect(family?.entries).toHaveLength(2);
@@ -131,7 +131,7 @@ describe('ai-provider service stable ids', () => {
     });
 
     const listed = await listAiProviders();
-    const family = listed.families.find((entry) => entry.id === 'openai-compatibility');
+    const family = listed.families.find((entry: any) => entry.id === 'openai-compatibility');
     const connectorId = family?.entries[0]?.id;
 
     expect(connectorId).toBeTruthy();
@@ -182,8 +182,9 @@ describe('ai-provider service stable ids', () => {
     });
 
     const listed = await listAiProviders();
-    const claudeEntry = listed.families.find((entry) => entry.id === 'claude-api-key')?.entries[0];
-    const openAiEntry = listed.families.find((entry) => entry.id === 'openai-compatibility')
+    const claudeEntry = listed.families.find((entry: any) => entry.id === 'claude-api-key')
+      ?.entries[0];
+    const openAiEntry = listed.families.find((entry: any) => entry.id === 'openai-compatibility')
       ?.entries[0];
 
     expect(claudeEntry?.baseUrl).toBe('https://***:***@anthropic.example/v1');
@@ -215,7 +216,7 @@ describe('ai-provider service stable ids', () => {
     });
 
     const listed = await listAiProviders();
-    const entry = listed.families.find((family) => family.id === 'claude-api-key')?.entries[0];
+    const entry = listed.families.find((family: any) => family.id === 'claude-api-key')?.entries[0];
 
     expect(entry).toBeDefined();
 
@@ -253,7 +254,7 @@ describe('ai-provider service stable ids', () => {
     });
 
     const listed = await listAiProviders();
-    const family = listed.families.find((entry) => entry.id === 'openai-compatibility');
+    const family = listed.families.find((entry: any) => entry.id === 'openai-compatibility');
 
     expect(family?.entries[0]?.models).toEqual([{ name: 'gpt-4o-mini', alias: '' }]);
   });

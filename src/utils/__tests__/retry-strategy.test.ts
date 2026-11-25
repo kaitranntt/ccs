@@ -87,7 +87,7 @@ describe('withRetry', () => {
   });
 
   it('calls onRetry callback on each retry attempt', async () => {
-    const onRetry = mock(() => {});
+    const onRetry = mock((_error: Error, _attempt: number) => {});
     const fn = mock(() => Promise.reject(new RetryableError('fail')));
 
     await expect(withRetry(fn, { maxRetries: 3, baseDelayMs: 1, onRetry })).rejects.toThrow('fail');

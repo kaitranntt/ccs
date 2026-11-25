@@ -61,7 +61,12 @@ describe('hotpath redaction regression (token-laden payloads)', () => {
     clearRecentLogEntries();
     invalidateLoggingConfigCache();
     const config = createEmptyUnifiedConfig();
-    config.logging = { ...config.logging, enabled: true, level: 'debug', redact: true };
+    config.logging = {
+      ...config.logging,
+      enabled: true,
+      level: 'debug',
+      redact: true,
+    } as typeof config.logging;
     saveUnifiedConfig(config);
     invalidateLoggingConfigCache();
   });

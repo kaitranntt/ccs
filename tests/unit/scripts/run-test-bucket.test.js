@@ -74,25 +74,37 @@ describe('run-test-bucket', () => {
     expect(args).toEqual(['test', '--max-concurrency=1', './tests/integration/example.test.ts']);
   });
 
-  test('isolates src tests while keeping already-covered tests in a shared run', () => {
+  test('runs pure src tests in the shared run while isolating polluting mock suites', () => {
     const runs = bucket.getBunRuns('fast', [
       'tests/unit/scripts/run-test-bucket.test.js',
       'src/cliproxy/types/__tests__/types-backward-compat.test.ts',
       'src/errors/__tests__/error-types.test.ts',
+      'src/cliproxy/routing/__tests__/routing-strategy.test.ts',
+      'src/cliproxy/executor/__tests__/arg-parser.test.ts',
     ]);
 
     expect(runs.map((run) => run.label)).toEqual([
       'shared',
+      'src/cliproxy/routing/__tests__/routing-strategy.test.ts',
+      'src/cliproxy/executor/__tests__/arg-parser.test.ts',
+    ]);
+    expect(runs[0].selected).toEqual([
+      'tests/unit/scripts/run-test-bucket.test.js',
       'src/cliproxy/types/__tests__/types-backward-compat.test.ts',
       'src/errors/__tests__/error-types.test.ts',
     ]);
-    expect(runs[0].selected).toEqual(['tests/unit/scripts/run-test-bucket.test.js']);
-    expect(runs[0].bunArgs).toEqual(['test', './tests/unit/scripts/run-test-bucket.test.js']);
+    expect(runs[0].bunArgs).toEqual([
+      'test',
+      './tests/unit/scripts/run-test-bucket.test.js',
+      './src/cliproxy/types/__tests__/types-backward-compat.test.ts',
+      './src/errors/__tests__/error-types.test.ts',
+    ]);
     expect(runs[1].bunArgs).toEqual([
       'test',
-      './src/cliproxy/types/__tests__/types-backward-compat.test.ts',
+      './src/cliproxy/routing/__tests__/routing-strategy.test.ts',
     ]);
     expect(runs[1].quietOnPass).toBe(true);
+    expect(runs[2].quietOnPass).toBe(true);
   });
 
   test('isolates known sticky mock suites outside src', () => {

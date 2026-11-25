@@ -23,7 +23,12 @@ describe('request-logging-middleware requestId propagation', () => {
     clearRecentLogEntries();
     invalidateLoggingConfigCache();
     const config = createEmptyUnifiedConfig();
-    config.logging = { ...config.logging, enabled: true, level: 'debug', redact: false };
+    config.logging = {
+      ...config.logging,
+      enabled: true,
+      level: 'debug',
+      redact: false,
+    } as typeof config.logging;
     saveUnifiedConfig(config);
     invalidateLoggingConfigCache();
   });

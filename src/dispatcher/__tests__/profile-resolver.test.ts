@@ -16,6 +16,23 @@
 
 import { describe, it, expect, beforeEach, afterEach, mock, spyOn } from 'bun:test';
 import type { Logger } from '../../services/logging/logger';
+import type { TargetType } from '../../targets/target-adapter';
+
+type ProfileType = 'default' | 'settings' | 'cliproxy' | 'account' | 'copilot';
+
+interface MockProfileDetection {
+  type: ProfileType;
+  name: string;
+  provider?: string;
+  settingsPath?: string;
+  target?: TargetType;
+}
+
+interface MockTargetAdapter {
+  displayName: string;
+  detectBinary: () => { path: string; version: string } | null;
+  supportsProfileType: () => boolean;
+}
 
 // ========== Stub Logger ==========
 
@@ -35,15 +52,17 @@ function makeStubLogger(): Logger {
 // Bun's module mock API replaces modules in the registry for the current test file.
 
 // Mock ProfileDetector — most tests override detectProfileType per-case
-const mockDetectProfileType = mock((_profile: string) => ({
-  type: 'default' as const,
-  name: 'default',
-  target: undefined,
-}));
+const mockDetectProfileType = mock(
+  (_profile: string): MockProfileDetection => ({
+    type: 'default',
+    name: 'default',
+    target: undefined,
+  })
+);
 const mockGetAllProfiles = mock(() => ({
   settings: [] as string[],
-  cliproxy: [],
-  cliproxyVariants: [],
+  cliproxy: [] as string[],
+  cliproxyVariants: [] as string[],
 }));
 
 mock.module('../../auth/profile-detector', () => ({
@@ -65,7 +84,7 @@ mock.module('../../auth/profile-continuity-inheritance', () => ({
 }));
 
 // Mock target-resolver
-const mockResolveTargetType = mock((_args: string[]) => 'claude' as const);
+const mockResolveTargetType = mock((_args: string[]): TargetType => 'claude');
 const mockStripTargetFlag = mock((args: string[]) => args);
 mock.module('../../targets/target-resolver', () => ({
   resolveTargetType: mockResolveTargetType,
@@ -73,7 +92,7 @@ mock.module('../../targets/target-resolver', () => ({
 }));
 
 // Mock targets registry
-const mockGetTarget = mock((_name: string) => null);
+const mockGetTarget = mock((_name: string): MockTargetAdapter | null => null);
 const mockEvaluateTargetRuntimeCompatibility = mock(() => ({ supported: true }));
 const mockPruneOrphanedModels = mock(async () => {});
 mock.module('../../targets', () => ({
@@ -83,7 +102,7 @@ mock.module('../../targets', () => ({
 }));
 
 // Mock claude-detector
-const mockDetectClaudeCli = mock(() => '/usr/local/bin/claude');
+const mockDetectClaudeCli = mock((): string | null => '/usr/local/bin/claude');
 mock.module('../../utils/claude-detector', () => ({
   detectClaudeCli: mockDetectClaudeCli,
 }));

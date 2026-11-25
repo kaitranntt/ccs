@@ -63,7 +63,7 @@ describe('codex-adapter exec', () => {
     fs.writeFileSync(fakeCodex, '');
 
     const spawnSpy = spyOn(childProcess, 'spawn').mockImplementation(
-      () => createMockChild() as unknown as ReturnType<typeof childProcess.spawn>
+      (() => createMockChild()) as unknown as typeof childProcess.spawn
     );
     const signalSpy = spyOn(signalForwarder, 'wireChildProcessSignals').mockImplementation(
       () => undefined
@@ -90,7 +90,7 @@ describe('codex-adapter exec', () => {
       adapter.exec(args, {}, { binaryInfo });
 
       expect(spawnSpy).toHaveBeenCalledTimes(1);
-      const [command, options] = spawnSpy.mock.calls[0] as [
+      const [command, options] = spawnSpy.mock.calls[0] as unknown as [
         string,
         Record<string, unknown> | undefined,
       ];

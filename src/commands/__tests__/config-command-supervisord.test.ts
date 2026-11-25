@@ -14,8 +14,8 @@ describe('handleConfigCommand Docker supervisord lifecycle', () => {
 
     try {
       await handleConfigCommand([], {
-        getPort: async () => 3000,
-        openBrowser: async () => ({}),
+        getPort: (async () => 3000) as any,
+        openBrowser: (async () => ({})) as never,
         startServer: async () =>
           ({
             server: { address: () => ({ address: '0.0.0.0' }) },
@@ -28,7 +28,7 @@ describe('handleConfigCommand Docker supervisord lifecycle', () => {
           return { started: false, alreadyRunning: false, port: 8317 };
         },
         isRunningUnderSupervisord: () => true,
-        getDashboardAuthConfig: () => ({ enabled: true }),
+        getDashboardAuthConfig: () => ({ enabled: true }) as never,
         initUI: async () => {},
         header: (text: string) => text,
         ok: (text: string) => text,

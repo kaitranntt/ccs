@@ -2,7 +2,6 @@ import { describe, expect, it } from 'bun:test';
 import { DEFAULT_COPILOT_CONFIG } from '../../../src/config/unified-config-types';
 import {
   DEPRECATED_COPILOT_MODEL_IDS,
-  normalizeCopilotConfig,
   normalizeCopilotConfigWithWarnings,
   normalizeCopilotModelId,
   normalizeCopilotSettings,

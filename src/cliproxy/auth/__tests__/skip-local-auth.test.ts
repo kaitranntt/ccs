@@ -222,8 +222,8 @@ describe('skip-local-auth logic', () => {
       const isModelBroken = true;
 
       // Warning should show regardless of skipLocalAuth
-      const shouldWarnRemote = currentModel && isModelBroken; // skipLocalAuth=true
-      const shouldWarnLocal = currentModel && isModelBroken; // skipLocalAuth=false
+      const shouldWarnRemote = Boolean(currentModel && isModelBroken); // skipLocalAuth=true
+      const shouldWarnLocal = Boolean(currentModel && isModelBroken); // skipLocalAuth=false
 
       expect(shouldWarnRemote).toBe(true);
       expect(shouldWarnLocal).toBe(true);
@@ -231,8 +231,6 @@ describe('skip-local-auth logic', () => {
 
     it('should show different message for remote vs local mode', () => {
       const skipLocalAuth = true;
-      const currentModel = 'some-broken-model';
-      const isModelBroken = true;
 
       // When remote: "Note: Model may be overridden by remote proxy configuration."
       // When local: "Run ccs <provider> --config to change model."

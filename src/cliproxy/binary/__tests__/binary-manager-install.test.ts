@@ -33,7 +33,8 @@ describe('installCliproxyVersion', () => {
     );
 
     await binaryManager.installCliproxyVersion('6.7.1', false, 'plus', {
-      withInstallLifecycleLockFn: async (_backend, operation) => operation(),
+      withInstallLifecycleLockFn: async <T>(_backend: unknown, operation: () => Promise<T>) =>
+        operation(),
       createManager: (_config: unknown, backend: string) => {
         seenBackend = backend;
         return {
@@ -148,7 +149,8 @@ describe('installCliproxyVersion', () => {
     const binaryManager = await import(`../../binary-manager?binary-manager-install=${Date.now()}`);
 
     await binaryManager.installCliproxyVersion('6.7.1', false, 'plus', {
-      withInstallLifecycleLockFn: async (_backend, operation) => operation(),
+      withInstallLifecycleLockFn: async <T>(_backend: unknown, operation: () => Promise<T>) =>
+        operation(),
       createManager: (config: { beforeReplace?: () => Promise<void> }) => ({
         isBinaryInstalled: () => false,
         deleteBinary: () => {
@@ -190,7 +192,8 @@ describe('installCliproxyVersion', () => {
     );
 
     await binaryManager.installCliproxyVersion('6.7.1', false, 'plus', {
-      withInstallLifecycleLockFn: async (_backend, operation) => operation(),
+      withInstallLifecycleLockFn: async <T>(_backend: unknown, operation: () => Promise<T>) =>
+        operation(),
       createManager: () => ({
         isBinaryInstalled: () => true,
         deleteBinary: () => {
@@ -220,7 +223,8 @@ describe('installCliproxyVersion', () => {
     );
 
     await binaryManager.installCliproxyVersion('6.7.1', false, 'plus', {
-      withInstallLifecycleLockFn: async (_backend, operation) => operation(),
+      withInstallLifecycleLockFn: async <T>(_backend: unknown, operation: () => Promise<T>) =>
+        operation(),
       createManager: (config: { beforeReplace?: () => Promise<void> }) => ({
         isBinaryInstalled: () => false,
         deleteBinary: () => undefined,
@@ -250,7 +254,8 @@ describe('installCliproxyVersion', () => {
     );
 
     await binaryManager.installCliproxyVersion('8.0.56-0', false, 'plus', {
-      withInstallLifecycleLockFn: async (_backend, operation) => operation(),
+      withInstallLifecycleLockFn: async <T>(_backend: unknown, operation: () => Promise<T>) =>
+        operation(),
       createManager: (config: { beforeReplace?: () => Promise<void> }) => ({
         isBinaryInstalled: () => true,
         deleteBinary: () => undefined,
@@ -286,7 +291,8 @@ describe('installCliproxyVersion', () => {
 
     await expect(
       binaryManager.installCliproxyVersion('8.0.56-0', false, 'plus', {
-        withInstallLifecycleLockFn: async (_backend, operation) => operation(),
+        withInstallLifecycleLockFn: async <T>(_backend: unknown, operation: () => Promise<T>) =>
+          operation(),
         createManager: () => ({
           isBinaryInstalled: () => true,
           deleteBinary: () => undefined,

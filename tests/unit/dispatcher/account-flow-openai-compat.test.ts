@@ -118,7 +118,7 @@ function buildAccountDispatchContext(
     ProfileRegistry: StubProfileRegistry as never,
     resolveAccountContextPolicy: () => ({ mode: 'isolated' }) as never,
     isAccountContextMetadata: () => false,
-  } as ProfileDispatchContext;
+  } as unknown as ProfileDispatchContext;
 }
 
 describe('account-flow OpenAI-compatible shaping proxy (Issue #1469)', () => {
@@ -213,7 +213,7 @@ describe('account-flow OpenAI-compatible shaping proxy (Issue #1469)', () => {
 
     let capturedCli = '';
     let capturedArgs: string[] = [];
-    let capturedEnv: NodeJS.ProcessEnv | null = null;
+    let capturedEnv: NodeJS.ProcessEnv | undefined | null = null;
     let capturedCleanup: (() => void) | undefined;
 
     const execSpy = spyOn(shellExecutor, 'execClaude').mockImplementation(
@@ -224,9 +224,7 @@ describe('account-flow OpenAI-compatible shaping proxy (Issue #1469)', () => {
         capturedCleanup = onExitCleanup;
       }
     );
-    const hintSpy = spyOn(poolOnboardingHint, 'maybeShowPoolOnboardingHint').mockImplementation(
-      () => {}
-    );
+    const hintSpy = spyOn(poolOnboardingHint, 'maybeShowPoolOnboardingHint').mockImplementation((() => ({ shown: false })) as unknown as typeof poolOnboardingHint.maybeShowPoolOnboardingHint);
 
     try {
       await runAccountFlow(
@@ -239,13 +237,13 @@ describe('account-flow OpenAI-compatible shaping proxy (Issue #1469)', () => {
 
     expect(startProxyCallCount).toBe(1);
     expect(capturedCli).toBe('/usr/local/bin/claude');
-    expect(capturedEnv?.CLAUDE_CONFIG_DIR).toBe(instancePath);
-    expect(capturedEnv?.CCS_PROFILE_TYPE).toBe('account');
-    expect(capturedEnv?.CCS_WEBSEARCH_SKIP).toBe('1');
-    expect(capturedEnv?.CCS_IMAGE_ANALYSIS_SKIP).toBe('1');
-    expect(capturedEnv?.ANTHROPIC_BASE_URL).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
-    expect(capturedEnv?.ANTHROPIC_AUTH_TOKEN).toBe('test-account-proxy-token');
-    expect(capturedEnv?.ANTHROPIC_API_KEY).toBeUndefined();
+    expect((capturedEnv as NodeJS.ProcessEnv | null)?.CLAUDE_CONFIG_DIR).toBe(instancePath);
+    expect((capturedEnv as NodeJS.ProcessEnv | null)?.CCS_PROFILE_TYPE).toBe('account');
+    expect((capturedEnv as NodeJS.ProcessEnv | null)?.CCS_WEBSEARCH_SKIP).toBe('1');
+    expect((capturedEnv as NodeJS.ProcessEnv | null)?.CCS_IMAGE_ANALYSIS_SKIP).toBe('1');
+    expect((capturedEnv as NodeJS.ProcessEnv | null)?.ANTHROPIC_BASE_URL).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    expect((capturedEnv as NodeJS.ProcessEnv | null)?.ANTHROPIC_AUTH_TOKEN).toBe('test-account-proxy-token');
+    expect((capturedEnv as NodeJS.ProcessEnv | null)?.ANTHROPIC_API_KEY).toBeUndefined();
     expect(capturedCleanup).toBeFunction();
 
     // Isolated launch settings must strip routing env keys so Claude Code does not bypass the proxy
@@ -286,7 +284,7 @@ describe('account-flow OpenAI-compatible shaping proxy (Issue #1469)', () => {
     fs.writeFileSync(path.join(instancePath, 'settings.json'), JSON.stringify({}), 'utf8');
 
     let capturedArgs: string[] = [];
-    let capturedEnv: NodeJS.ProcessEnv | null = null;
+    let capturedEnv: NodeJS.ProcessEnv | undefined | null = null;
     let capturedCleanup: (() => void) | undefined;
 
     const execSpy = spyOn(shellExecutor, 'execClaude').mockImplementation(
@@ -296,9 +294,7 @@ describe('account-flow OpenAI-compatible shaping proxy (Issue #1469)', () => {
         capturedCleanup = onExitCleanup;
       }
     );
-    const hintSpy = spyOn(poolOnboardingHint, 'maybeShowPoolOnboardingHint').mockImplementation(
-      () => {}
-    );
+    const hintSpy = spyOn(poolOnboardingHint, 'maybeShowPoolOnboardingHint').mockImplementation((() => ({ shown: false })) as unknown as typeof poolOnboardingHint.maybeShowPoolOnboardingHint);
 
     try {
       await runAccountFlow(
@@ -325,7 +321,7 @@ describe('account-flow OpenAI-compatible shaping proxy (Issue #1469)', () => {
     fs.mkdirSync(instancePath, { recursive: true });
 
     let capturedArgs: string[] = [];
-    let capturedEnv: NodeJS.ProcessEnv | null = null;
+    let capturedEnv: NodeJS.ProcessEnv | undefined | null = null;
 
     const execSpy = spyOn(shellExecutor, 'execClaude').mockImplementation(
       (_cli, args, envVars) => {
@@ -333,9 +329,7 @@ describe('account-flow OpenAI-compatible shaping proxy (Issue #1469)', () => {
         capturedEnv = envVars;
       }
     );
-    const hintSpy = spyOn(poolOnboardingHint, 'maybeShowPoolOnboardingHint').mockImplementation(
-      () => {}
-    );
+    const hintSpy = spyOn(poolOnboardingHint, 'maybeShowPoolOnboardingHint').mockImplementation((() => ({ shown: false })) as unknown as typeof poolOnboardingHint.maybeShowPoolOnboardingHint);
 
     try {
       await runAccountFlow(
@@ -348,8 +342,8 @@ describe('account-flow OpenAI-compatible shaping proxy (Issue #1469)', () => {
 
     expect(startProxyCallCount).toBe(0);
     expect(capturedArgs).toEqual(['--continue']);
-    expect(capturedEnv?.CLAUDE_CONFIG_DIR).toBe(instancePath);
-    expect(capturedEnv?.CCS_PROFILE_TYPE).toBe('account');
-    expect(capturedEnv?.ANTHROPIC_BASE_URL).toBeUndefined();
+    expect((capturedEnv as NodeJS.ProcessEnv | null)?.CLAUDE_CONFIG_DIR).toBe(instancePath);
+    expect((capturedEnv as NodeJS.ProcessEnv | null)?.CCS_PROFILE_TYPE).toBe('account');
+    expect((capturedEnv as NodeJS.ProcessEnv | null)?.ANTHROPIC_BASE_URL).toBeUndefined();
   });
 });

@@ -24,7 +24,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
 
 // Non-cache-busted facade import so mutateConfig targets the SHARED singleton
 import { invalidateConfigCache as invalidateSharedConfigCache } from '../../config/config-loader-facade';

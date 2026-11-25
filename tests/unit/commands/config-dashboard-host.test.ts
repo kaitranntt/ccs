@@ -32,11 +32,8 @@ describe('config dashboard host helpers', () => {
       en0: [
         {
           address: '192.168.1.25',
-          netmask: '255.255.255.0',
           family: 'IPv4',
-          mac: '00:00:00:00:00:00',
           internal: false,
-          cidr: '192.168.1.25/24',
         },
       ],
       utun5: [

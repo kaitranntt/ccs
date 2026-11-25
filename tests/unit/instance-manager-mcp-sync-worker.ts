@@ -26,13 +26,16 @@ spyOn(lockfile, 'lockSync').mockImplementation((target, options) => {
   }
 });
 
-spyOn(fs, 'readFileSync').mockImplementation((target, options) => {
-  const result = read(target, options);
+spyOn(fs, 'readFileSync').mockImplementation(((
+  target: fs.PathOrFileDescriptor,
+  options?: unknown
+) => {
+  const result = read(target, options as never);
   if (target !== configPath) return result;
   process.stdout.write(`read-${role}\n`);
   if (role === 'first') awaitParent();
   // Independent fields are injected into the real read/merge/write transaction.
   return JSON.stringify({ ...JSON.parse(String(result)), [role]: true });
-});
+}) as unknown as typeof fs.readFileSync);
 
 process.exitCode = new InstanceManager().syncMcpServers(instancePath) ? 0 : 1;

@@ -90,7 +90,7 @@ function reserveClosedPort(): number {
   });
   const { port } = server;
   server.stop(true);
-  return port;
+  return port as number;
 }
 
 describe('default profile browser launch', () => {

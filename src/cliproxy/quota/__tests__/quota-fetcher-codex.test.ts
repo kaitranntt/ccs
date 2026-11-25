@@ -597,7 +597,7 @@ describe('Codex Quota Fetcher', () => {
             headers: { 'Content-Type': 'application/json' },
           })
         )
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchCodexQuota('workspace@example.com');
 
@@ -612,7 +612,9 @@ describe('Codex Quota Fetcher', () => {
     it('maps 401 responses to reauth-required metadata', async () => {
       createValidCodexAccount('reauth@example.com', 'workspace-reauth');
 
-      global.fetch = mock(() => Promise.resolve(new Response('', { status: 401 }))) as typeof fetch;
+      global.fetch = mock(() =>
+        Promise.resolve(new Response('', { status: 401 }))
+      ) as unknown as typeof fetch;
 
       const result = await fetchCodexQuota('reauth@example.com');
 
@@ -642,7 +644,7 @@ describe('Codex Quota Fetcher', () => {
         'kaidu.kd@gmail.com'
       );
 
-      const fetchSpy = mock((input: RequestInfo | URL, init?: RequestInit) =>
+      const fetchSpy = mock((_input: string | URL | Request, _init?: RequestInit) =>
         Promise.resolve(
           new Response(
             JSON.stringify({
@@ -657,8 +659,8 @@ describe('Codex Quota Fetcher', () => {
             }
           )
         )
-      ) as typeof fetch;
-      global.fetch = fetchSpy;
+      );
+      global.fetch = fetchSpy as unknown as typeof fetch;
 
       const result = await fetchCodexQuota(freeAccount.id);
       const requestInit = fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined;
@@ -687,8 +689,8 @@ describe('Codex Quota Fetcher', () => {
             }
           )
         )
-      ) as typeof fetch;
-      global.fetch = fetchSpy;
+      );
+      global.fetch = fetchSpy as unknown as typeof fetch;
 
       const result = await fetchCodexQuota('kaidu.kd@gmail.com#04a0f049-team');
 
@@ -707,7 +709,7 @@ describe('Codex Quota Fetcher', () => {
             headers: { 'Content-Type': 'application/json' },
           })
         )
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchCodexQuota('forbidden@example.com');
 
@@ -728,7 +730,7 @@ describe('Codex Quota Fetcher', () => {
             headers: { 'Content-Type': 'application/json' },
           })
         )
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchCodexQuota('rate-limit@example.com');
 
@@ -749,7 +751,7 @@ describe('Codex Quota Fetcher', () => {
             headers: { 'Content-Type': 'application/json' },
           })
         )
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchCodexQuota('outage@example.com');
 
@@ -770,7 +772,7 @@ describe('Codex Quota Fetcher', () => {
             headers: { 'Content-Type': 'application/json' },
           })
         )
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchCodexQuota('teapot@example.com');
 
@@ -800,7 +802,7 @@ describe('Codex Quota Fetcher', () => {
             }
           )
         )
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchCodexQuota('sanitized@example.com');
 
@@ -821,7 +823,7 @@ describe('Codex Quota Fetcher', () => {
             headers: { 'Content-Type': 'text/html' },
           })
         )
-      ) as typeof fetch;
+      ) as unknown as typeof fetch;
 
       const result = await fetchCodexQuota('html@example.com');
 

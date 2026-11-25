@@ -190,8 +190,8 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
 
     expect(response.statusCode).toBe(200);
     expect(capturedPath).toBe('/api/provider/codex/v1/messages');
-    expect(capturedBody?.model).toBe('gpt-5.3-codex(high)');
-    expect(capturedBody?.reasoning).toBeUndefined();
+    expect((capturedBody as JsonRecord | null)?.model).toBe('gpt-5.3-codex(high)');
+    expect((capturedBody as JsonRecord | null)?.reasoning).toBeUndefined();
   });
 
   it('ends streaming responses when upstream stalls after headers', async () => {
@@ -417,8 +417,10 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
     proxy.stop();
 
     expect(response.statusCode).toBe(200);
-    expect(capturedBody?.model).toBe('gpt-5.3-codex');
-    expect((capturedBody?.reasoning as JsonRecord | undefined)?.effort).toBeUndefined();
+    expect((capturedBody as JsonRecord | null)?.model).toBe('gpt-5.3-codex');
+    expect(
+      ((capturedBody as JsonRecord | null)?.reasoning as JsonRecord | undefined)?.effort
+    ).toBeUndefined();
   });
 
   it('rejects oversized non-2xx upstream error bodies', async () => {
@@ -492,9 +494,11 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
     proxy.stop();
 
     expect(response.statusCode).toBe(200);
-    expect(capturedBody?.model).toBe('gpt-5.4');
-    expect((capturedBody?.reasoning as JsonRecord | undefined)?.effort).toBeUndefined();
-    expect(capturedBody?.service_tier).toBe('priority');
+    expect((capturedBody as JsonRecord | null)?.model).toBe('gpt-5.4');
+    expect(
+      ((capturedBody as JsonRecord | null)?.reasoning as JsonRecord | undefined)?.effort
+    ).toBeUndefined();
+    expect((capturedBody as JsonRecord | null)?.service_tier).toBe('priority');
   });
 
   it('does not strip unknown model ids that merely end with "-high"', async () => {
@@ -535,7 +539,7 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
     proxy.stop();
 
     expect(response.statusCode).toBe(200);
-    expect(capturedBody?.model).toBe('enterprise-internal-high');
+    expect((capturedBody as JsonRecord | null)?.model).toBe('enterprise-internal-high');
   });
 
   it('retries unsupported live-session models once and remembers the fallback', async () => {
@@ -678,8 +682,8 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
 
     expect(response.statusCode).toBe(200);
     expect(disableEffort).toBe(false);
-    expect(capturedBody?.model).toBe('gpt-5.3-codex(high)');
-    expect(capturedBody?.reasoning).toBeUndefined();
+    expect((capturedBody as JsonRecord | null)?.model).toBe('gpt-5.3-codex(high)');
+    expect((capturedBody as JsonRecord | null)?.reasoning).toBeUndefined();
   });
 
   it('disables reasoning when CCS_THINKING=off is provided', async () => {
@@ -737,7 +741,9 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
 
     expect(response.statusCode).toBe(200);
     expect(disableEffort).toBe(true);
-    expect(capturedBody?.model).toBe('gpt-5.3-codex');
-    expect((capturedBody?.reasoning as JsonRecord | undefined)?.effort).toBeUndefined();
+    expect((capturedBody as JsonRecord | null)?.model).toBe('gpt-5.3-codex');
+    expect(
+      ((capturedBody as JsonRecord | null)?.reasoning as JsonRecord | undefined)?.effort
+    ).toBeUndefined();
   });
 });

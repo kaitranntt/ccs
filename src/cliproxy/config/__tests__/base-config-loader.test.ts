@@ -16,8 +16,8 @@ describe('base-config-loader new providers', () => {
     expect(config.env.ANTHROPIC_BASE_URL).toContain(baseUrlPath);
     expect(config.env.ANTHROPIC_AUTH_TOKEN).toBe('ccs-internal-managed');
     expect(config.env.ANTHROPIC_MODEL).toBe(defaultModel);
-    expect(config.env.ANTHROPIC_DEFAULT_OPUS_MODEL.length).toBeGreaterThan(0);
-    expect(config.env.ANTHROPIC_DEFAULT_SONNET_MODEL.length).toBeGreaterThan(0);
-    expect(config.env.ANTHROPIC_DEFAULT_HAIKU_MODEL.length).toBeGreaterThan(0);
+    expect(config.env?.ANTHROPIC_DEFAULT_OPUS_MODEL?.length).toBeGreaterThan(0);
+    expect(config.env?.ANTHROPIC_DEFAULT_SONNET_MODEL?.length).toBeGreaterThan(0);
+    expect(config.env?.ANTHROPIC_DEFAULT_HAIKU_MODEL?.length).toBeGreaterThan(0);
   });
 });

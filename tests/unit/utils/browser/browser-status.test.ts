@@ -116,10 +116,10 @@ describe('browser status', () => {
         enabled: true,
         user_data_dir: '/tmp/explicit-claude',
         devtools_port: 9333,
-      } as typeof config.browser.claude,
+      } as NonNullable<typeof config.browser>['claude'],
       codex: {
         enabled: true,
-      } as typeof config.browser.codex,
+      } as NonNullable<typeof config.browser>['codex'],
     };
     saveUnifiedConfig(config);
 
@@ -328,6 +328,7 @@ describe('browser status', () => {
 
     const resolution = await resolveOptionalBrowserAttachRuntime({
       enabled: true,
+      evalMode: 'disabled',
       source: 'config',
       overrideActive: false,
       userDataDir: managedDir,
@@ -430,11 +431,11 @@ describe('browser status', () => {
         enabled: true,
         policy: 'auto',
         user_data_dir: '/tmp/config-browser',
-      } as typeof config.browser.claude,
+      } as NonNullable<typeof config.browser>['claude'],
       codex: {
         enabled: true,
         policy: 'auto',
-      } as typeof config.browser.codex,
+      } as NonNullable<typeof config.browser>['codex'],
     };
     saveUnifiedConfig(config);
 

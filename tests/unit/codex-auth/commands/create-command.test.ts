@@ -83,16 +83,6 @@ function silenceConsole(): () => void {
   };
 }
 
-function mockDetectCodexReturns(value: string | null) {
-  // We need to mock before importing the command module
-  // Use a global environment approach instead
-  if (value === null) {
-    process.env._TEST_CODEX_PATH = '';
-  } else {
-    process.env._TEST_CODEX_PATH = value;
-  }
-}
-
 describe('handleCreateCodex — happy path', () => {
   it('creates profile dir and registry entry (no codex binary)', async () => {
     const detectorMod = await import('../../../../src/targets/codex-detector');
@@ -219,10 +209,8 @@ describe('handleCreateCodex — validation', () => {
     );
     const ctx = await makeCtx();
 
-    let exitCalled = false;
     const origExit = process.exit;
     process.exit = (code?: number) => {
-      exitCalled = true;
       void code;
       throw new Error(`process.exit(${code})`);
     };
@@ -335,7 +323,7 @@ describe('handleCreateCodex — auto-spawn login (D11)', () => {
     // Mock spawn to emit exit(0) and write auth.json
     spyOn(childProcess, 'spawn').mockImplementation(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (_cmd: string, _args: string[], opts: any) => {
+      ((_cmd: string, _args: string[], opts: any) => {
         const dir = (opts?.env?.CODEX_HOME as string) ?? '';
         if (dir) {
           fs.mkdirSync(dir, { recursive: true });
@@ -350,8 +338,8 @@ describe('handleCreateCodex — auto-spawn login (D11)', () => {
             return ee;
           },
         };
-        return ee as ReturnType<typeof childProcess.spawn>;
-      }
+        return ee;
+      }) as unknown as typeof childProcess.spawn
     );
 
     const { handleCreateCodex } = await import(
@@ -377,15 +365,15 @@ describe('handleCreateCodex — auto-spawn login (D11)', () => {
 
     spyOn(childProcess, 'spawn').mockImplementation(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (_cmd: string, _args: string[], _opts: any) => {
+      ((_cmd: string, _args: string[], _opts: any) => {
         const ee = {
           on: (evt: string, cb: (n: number) => void) => {
             if (evt === 'exit') setImmediate(() => cb(1));
             return ee;
           },
         };
-        return ee as ReturnType<typeof childProcess.spawn>;
-      }
+        return ee;
+      }) as unknown as typeof childProcess.spawn
     );
 
     const { handleCreateCodex } = await import(
@@ -421,7 +409,7 @@ describe('handleCreateCodex — auto-spawn login (D11)', () => {
 
     spyOn(childProcess, 'spawn').mockImplementation(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (_cmd: string, _args: string[], opts: any) => {
+      ((_cmd: string, _args: string[], opts: any) => {
         const dir = (opts?.env?.CODEX_HOME as string) ?? '';
         if (dir) {
           fs.mkdirSync(dir, { recursive: true });
@@ -444,8 +432,8 @@ describe('handleCreateCodex — auto-spawn login (D11)', () => {
             return ee;
           },
         };
-        return ee as ReturnType<typeof childProcess.spawn>;
-      }
+        return ee;
+      }) as unknown as typeof childProcess.spawn
     );
 
     const { handleCreateCodex } = await import(

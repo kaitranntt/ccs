@@ -1,7 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import { beforeEach, describe, expect, it } from 'bun:test';
 
 // Lazy import so tests can run before implementation
 let decodeIdToken: (idToken: string) => { email?: string; plan_type?: string; account_id?: string };
