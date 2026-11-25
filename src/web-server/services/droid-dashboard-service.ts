@@ -1,7 +1,10 @@
 import * as os from 'os';
 import * as path from 'path';
-import { execFileSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { detectDroidCli } from '../../targets/droid-detector';
+
+const execFileAsync = promisify(execFile);
 import type {
   DroidByokDiagnostics,
   DroidCustomModelDiagnostics,
@@ -94,16 +97,13 @@ export function resolveDroidConfigPaths(
   };
 }
 
-function getBinaryVersion(binaryPath: string): string | null {
+async function getBinaryVersion(binaryPath: string): Promise<string | null> {
   try {
-    return execFileSync(binaryPath, ['--version'], {
+    const { stdout } = await execFileAsync(binaryPath, ['--version'], {
       encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
       timeout: 5000,
-    })
-      .trim()
-      .split('\n')[0]
-      .trim();
+    });
+    return stdout.trim().split('\n')[0].trim();
   } catch {
     return null;
   }
@@ -192,16 +192,11 @@ export async function getDroidDashboardDiagnostics(): Promise<DroidDashboardDiag
 
   const source = process.env.CCS_DROID_PATH ? 'CCS_DROID_PATH' : binaryPath ? 'PATH' : 'missing';
 
-  const settingsProbe = await probeJsonObjectFile(
-    paths.settingsPath,
-    'BYOK settings',
-    paths.settingsDisplayPath
-  );
-  const legacyConfigProbe = await probeJsonObjectFile(
-    paths.legacyConfigPath,
-    'Legacy config',
-    paths.legacyConfigDisplayPath
-  );
+  const [settingsProbe, legacyConfigProbe, binaryVersion] = await Promise.all([
+    probeJsonObjectFile(paths.settingsPath, 'BYOK settings', paths.settingsDisplayPath),
+    probeJsonObjectFile(paths.legacyConfigPath, 'Legacy config', paths.legacyConfigDisplayPath),
+    binaryPath ? getBinaryVersion(binaryPath) : Promise.resolve(null),
+  ]);
 
   const settingsJson = asObject(settingsProbe.json);
   const legacyJson = asObject(legacyConfigProbe.json);
@@ -233,7 +228,7 @@ export async function getDroidDashboardDiagnostics(): Promise<DroidDashboardDiag
       path: binaryPath,
       installDir: binaryPath ? path.dirname(binaryPath) : null,
       source,
-      version: binaryPath ? getBinaryVersion(binaryPath) : null,
+      version: binaryVersion,
       overridePath: process.env.CCS_DROID_PATH || null,
     },
     files: {

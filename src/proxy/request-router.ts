@@ -1,6 +1,10 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { expandPath } from '../utils/helpers';
+import { getCcsDir, getConfigPath } from '../utils/config-manager';
 import type { ProxyOpenAIRequest } from './transformers/request-transformer';
 import {
+  invalidateOpenAICompatProxyRoutingCache,
   loadOpenAICompatProxyRoutingConfig,
   type OpenAICompatProxyRoutingConfig,
 } from './routing-config';
@@ -23,19 +27,85 @@ export interface ProxyRequestRoute {
     | 'active-default';
 }
 
+interface SettingsFileStamp {
+  path: string;
+  fingerprint: string;
+}
+
+interface ProfilesCacheEntry {
+  configYamlFingerprint: string;
+  configJsonPath: string;
+  configJsonFingerprint: string;
+  settingsFiles: SettingsFileStamp[];
+  profiles: OpenAICompatProfileConfig[];
+}
+
+const MAX_CACHE_ENTRIES = 16;
+const profilesCache = new Map<string, ProfilesCacheEntry>();
+
+function getFileFingerprint(filePath: string): string {
+  try {
+    const stats = fs.statSync(filePath, { bigint: true });
+    return `${stats.mtimeNs}:${stats.size}`;
+  } catch {
+    return 'missing';
+  }
+}
+
+function isProfilesCacheValid(
+  cached: ProfilesCacheEntry,
+  configYamlFingerprint: string,
+  configJsonPath: string,
+  configJsonFingerprint: string
+): boolean {
+  if (
+    cached.configYamlFingerprint !== configYamlFingerprint ||
+    cached.configJsonPath !== configJsonPath ||
+    cached.configJsonFingerprint !== configJsonFingerprint
+  ) {
+    return false;
+  }
+
+  return cached.settingsFiles.every(
+    (entry) => getFileFingerprint(entry.path) === entry.fingerprint
+  );
+}
+
+export function invalidateProxyRequestRouterCache(): void {
+  profilesCache.clear();
+  invalidateOpenAICompatProxyRoutingCache();
+}
+
 function loadOpenAICompatProfiles(
   activeProfile: OpenAICompatProfileConfig
 ): OpenAICompatProfileConfig[] {
+  const ccsDir = getCcsDir();
+  const configYamlFingerprint = getFileFingerprint(path.join(ccsDir, 'config.yaml'));
+  const configJsonPath = getConfigPath();
+  const configJsonFingerprint = getFileFingerprint(configJsonPath);
+
+  const cached = profilesCache.get(ccsDir);
+  if (
+    cached &&
+    isProfilesCacheValid(cached, configYamlFingerprint, configJsonPath, configJsonFingerprint)
+  ) {
+    return [
+      activeProfile,
+      ...cached.profiles.filter((profile) => profile.profileName !== activeProfile.profileName),
+    ];
+  }
+
   const config = loadConfigSafe();
-  const profiles = [activeProfile];
+  const settingsFiles: SettingsFileStamp[] = [];
+  const configuredProfiles: OpenAICompatProfileConfig[] = [];
 
   for (const [profileName, settingsPath] of Object.entries(config.profiles)) {
-    if (profileName === activeProfile.profileName) {
-      continue;
-    }
-
     try {
       const expandedPath = expandPath(settingsPath);
+      settingsFiles.push({
+        path: expandedPath,
+        fingerprint: getFileFingerprint(expandedPath),
+      });
       const settings = loadSettings(expandedPath);
       const profile = resolveOpenAICompatProfileConfig(
         profileName,
@@ -43,14 +113,31 @@ function loadOpenAICompatProfiles(
         settings.env || {}
       );
       if (profile) {
-        profiles.push(profile);
+        configuredProfiles.push(profile);
       }
     } catch {
       // Ignore invalid profiles while routing a live request.
     }
   }
 
-  return profiles;
+  if (profilesCache.size >= MAX_CACHE_ENTRIES && !profilesCache.has(ccsDir)) {
+    const oldestKey = profilesCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      profilesCache.delete(oldestKey);
+    }
+  }
+  profilesCache.set(ccsDir, {
+    configYamlFingerprint,
+    configJsonPath,
+    configJsonFingerprint,
+    settingsFiles,
+    profiles: configuredProfiles,
+  });
+
+  return [
+    activeProfile,
+    ...configuredProfiles.filter((profile) => profile.profileName !== activeProfile.profileName),
+  ];
 }
 
 function resolveSelectorTarget(

@@ -89,6 +89,7 @@ const router = Router();
 const logger = createLogger('web-server:routes:cliproxy-auth');
 const MANUAL_AUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const POLLED_AUTH_LOCAL_TOKEN_GRACE_MS = 15 * 1000;
+const MAX_PENDING_MANUAL_AUTH_STATE = 200;
 
 const pendingManualAuthState = new Map<
   string,
@@ -132,6 +133,29 @@ function pruneExpiredManualAuthState(now = Date.now()): void {
   }
 }
 
+function evictOldestManualAuthState(now = Date.now()): void {
+  while (pendingManualAuthState.size >= MAX_PENDING_MANUAL_AUTH_STATE) {
+    let keyToEvict: string | undefined;
+    for (const [candidateKey, candidate] of pendingManualAuthState.entries()) {
+      const withinLocalTokenGrace =
+        candidate.upstreamCompletedAt !== undefined &&
+        now - candidate.upstreamCompletedAt < POLLED_AUTH_LOCAL_TOKEN_GRACE_MS;
+      if (!withinLocalTokenGrace) {
+        keyToEvict = candidateKey;
+        break;
+      }
+    }
+
+    if (keyToEvict === undefined) {
+      keyToEvict = pendingManualAuthState.keys().next().value;
+    }
+    if (keyToEvict === undefined) {
+      break;
+    }
+    pendingManualAuthState.delete(keyToEvict);
+  }
+}
+
 function rememberManualAuthState(
   state: string,
   pending: {
@@ -141,10 +165,16 @@ function rememberManualAuthState(
     knownTokenFiles: ProviderTokenSnapshot[];
   }
 ): void {
-  pruneExpiredManualAuthState();
+  const now = Date.now();
+  pruneExpiredManualAuthState(now);
+  if (pendingManualAuthState.has(state)) {
+    pendingManualAuthState.delete(state);
+  } else {
+    evictOldestManualAuthState(now);
+  }
   pendingManualAuthState.set(state, {
     ...pending,
-    createdAt: Date.now(),
+    createdAt: now,
   });
 }
 

@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
-import { getActiveConfigPath, getConfigPath } from '../utils/config-manager';
+import { getActiveConfigPath, getCcsDir, getConfigPath } from '../utils/config-manager';
 
 export interface OpenAICompatProxyRoutingConfig {
   default?: string;
@@ -9,6 +9,30 @@ export interface OpenAICompatProxyRoutingConfig {
   longContext?: string;
   webSearch?: string;
   longContextThreshold?: number;
+}
+
+interface RoutingConfigCacheEntry {
+  activePath: string;
+  activeFingerprint: string;
+  legacyPath: string;
+  legacyFingerprint: string;
+  config: OpenAICompatProxyRoutingConfig;
+}
+
+const MAX_CACHE_ENTRIES = 16;
+const routingConfigCache = new Map<string, RoutingConfigCacheEntry>();
+
+function getFileFingerprint(filePath: string): string {
+  try {
+    const stats = fs.statSync(filePath, { bigint: true });
+    return `${stats.mtimeNs}:${stats.size}`;
+  } catch {
+    return 'missing';
+  }
+}
+
+export function invalidateOpenAICompatProxyRoutingCache(): void {
+  routingConfigCache.clear();
 }
 
 function readRawConfigObject(configPath: string): Record<string, unknown> | null {
@@ -55,14 +79,15 @@ function normalizeRoutingConfig(value: unknown): OpenAICompatProxyRoutingConfig 
   };
 }
 
-export function loadOpenAICompatProxyRoutingConfig(): OpenAICompatProxyRoutingConfig {
-  const activePath = getActiveConfigPath();
+function resolveUncachedRoutingConfig(
+  activePath: string,
+  legacyPath: string
+): OpenAICompatProxyRoutingConfig {
   const rawConfig = readRawConfigObject(activePath);
   if (rawConfig?.proxy && typeof rawConfig.proxy === 'object') {
     return normalizeRoutingConfig((rawConfig.proxy as Record<string, unknown>).routing);
   }
 
-  const legacyPath = getConfigPath();
   if (legacyPath !== activePath) {
     const legacyConfig = readRawConfigObject(legacyPath);
     if (legacyConfig?.proxy && typeof legacyConfig.proxy === 'object') {
@@ -71,4 +96,41 @@ export function loadOpenAICompatProxyRoutingConfig(): OpenAICompatProxyRoutingCo
   }
 
   return {};
+}
+
+export function loadOpenAICompatProxyRoutingConfig(): OpenAICompatProxyRoutingConfig {
+  const cacheKey = getCcsDir();
+  const activePath = getActiveConfigPath();
+  const legacyPath = getConfigPath();
+  const activeFingerprint = getFileFingerprint(activePath);
+  const legacyFingerprint =
+    legacyPath === activePath ? activeFingerprint : getFileFingerprint(legacyPath);
+
+  const cached = routingConfigCache.get(cacheKey);
+  if (
+    cached &&
+    cached.activePath === activePath &&
+    cached.activeFingerprint === activeFingerprint &&
+    cached.legacyPath === legacyPath &&
+    cached.legacyFingerprint === legacyFingerprint
+  ) {
+    return { ...cached.config };
+  }
+
+  const resolved = resolveUncachedRoutingConfig(activePath, legacyPath);
+  if (routingConfigCache.size >= MAX_CACHE_ENTRIES && !routingConfigCache.has(cacheKey)) {
+    const oldestKey = routingConfigCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      routingConfigCache.delete(oldestKey);
+    }
+  }
+  routingConfigCache.set(cacheKey, {
+    activePath,
+    activeFingerprint,
+    legacyPath,
+    legacyFingerprint,
+    config: resolved,
+  });
+
+  return { ...resolved };
 }

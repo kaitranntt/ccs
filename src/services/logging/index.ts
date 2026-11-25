@@ -2,7 +2,11 @@ export { createLogger } from './logger';
 export type { Logger, StageOptions } from './logger';
 export { getResolvedLoggingConfig, invalidateLoggingConfigCache } from './log-config';
 export { readLogEntries, readLogSourceSummaries, normalizeLogQueryLevel } from './log-reader';
-export { pruneExpiredLogArchives } from './log-storage';
+export {
+  flushStructuredLogs,
+  flushStructuredLogsSync,
+  pruneExpiredLogArchives,
+} from './log-storage';
 export {
   ensureLoggingDirectories,
   getCurrentLogPath,

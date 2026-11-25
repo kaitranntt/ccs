@@ -6,6 +6,7 @@
 
 import { Server as HTTPServer } from 'http';
 import { WebSocketServer } from 'ws';
+import { flushStructuredLogs } from '../services/logging';
 import { ok } from '../utils/ui';
 
 /**
@@ -28,6 +29,7 @@ export function setupGracefulShutdown(
     if (cleanup) {
       await cleanup();
     }
+    await flushStructuredLogs();
 
     // Close server and exit immediately
     process.exit(0);

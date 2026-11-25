@@ -9,25 +9,35 @@ import {
 
 const CACHE_RECHECK_MS = 1000;
 let cachedConfig: LoggingConfig = { ...DEFAULT_LOGGING_CONFIG };
+let cachedConfigPath: string | null = null;
 let cachedMtimeMs: number | null = null;
 let lastCheckedAt = 0;
 
 export function invalidateLoggingConfigCache(): void {
   cachedConfig = { ...DEFAULT_LOGGING_CONFIG };
+  cachedConfigPath = null;
   cachedMtimeMs = null;
   lastCheckedAt = 0;
 }
 
+function readConfigMtimeMs(configPath: string): number | null {
+  try {
+    return fs.statSync(configPath).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
 export function getResolvedLoggingConfig(): LoggingConfig {
   const now = Date.now();
-  if (now - lastCheckedAt < CACHE_RECHECK_MS) {
+  const configPath = getConfigYamlPath();
+  if (cachedConfigPath === configPath && now - lastCheckedAt < CACHE_RECHECK_MS) {
     return cachedConfig;
   }
 
   try {
-    const configPath = getConfigYamlPath();
-    const nextMtimeMs = fs.existsSync(configPath) ? fs.statSync(configPath).mtimeMs : null;
-    if (nextMtimeMs === cachedMtimeMs) {
+    const nextMtimeMs = readConfigMtimeMs(configPath);
+    if (cachedConfigPath === configPath && nextMtimeMs === cachedMtimeMs) {
       lastCheckedAt = now;
       return cachedConfig;
     }
@@ -36,11 +46,13 @@ export function getResolvedLoggingConfig(): LoggingConfig {
       ...DEFAULT_LOGGING_CONFIG,
       ...getUnifiedLoggingConfig(),
     };
+    cachedConfigPath = configPath;
     cachedMtimeMs = nextMtimeMs;
     lastCheckedAt = now;
     return cachedConfig;
   } catch {
     cachedConfig = { ...DEFAULT_LOGGING_CONFIG };
+    cachedConfigPath = configPath;
     cachedMtimeMs = null;
     lastCheckedAt = now;
     return cachedConfig;

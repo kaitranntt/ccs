@@ -18,6 +18,7 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import * as yaml from 'js-yaml';
 import { getCcsDir } from '../../utils/config-manager';
+import { ConfigError } from '../../errors/error-types';
 import {
   isUnifiedConfig,
   createEmptyUnifiedConfig,
@@ -79,10 +80,93 @@ function processExists(pid: number): boolean {
 // Lockfile primitives
 // ---------------------------------------------------------------------------
 
+const CLEANUP_GUARD_STALE_MS = 2000;
+const NEW_EMPTY_LOCK_GRACE_MS = 1000;
+
+function getCleanupGuardPath(lockPath: string): string {
+  return `${lockPath}.cleanup`;
+}
+
+function tryAcquireCleanupGuard(cleanupPath: string): string | null {
+  const guardToken = crypto.randomUUID();
+  const guardData = `${process.pid}\n${Date.now()}\n${guardToken}`;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      fs.writeFileSync(cleanupPath, guardData, { flag: 'wx', mode: 0o600 });
+      return guardToken;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        return null;
+      }
+
+      if (attempt > 0) {
+        return null;
+      }
+
+      try {
+        const stat = fs.statSync(cleanupPath);
+        const content = fs.readFileSync(cleanupPath, 'utf8');
+        const [pidStr, timestampStr] = content.trim().split('\n');
+        const pid = Number.parseInt(pidStr, 10);
+        const timestamp = Number.parseInt(timestampStr, 10);
+        const hasLiveOwner = Number.isInteger(pid) && pid > 0 && processExists(pid);
+        const isExpired =
+          Date.now() - stat.mtimeMs > CLEANUP_GUARD_STALE_MS &&
+          (!Number.isFinite(timestamp) || Date.now() - timestamp > CLEANUP_GUARD_STALE_MS);
+
+        if (hasLiveOwner || !isExpired) {
+          return null;
+        }
+
+        const verifyStat = fs.statSync(cleanupPath);
+        const verifyContent = fs.readFileSync(cleanupPath, 'utf8');
+        if (verifyStat.ino === stat.ino && verifyContent === content) {
+          fs.unlinkSync(cleanupPath);
+        }
+      } catch {
+        return null;
+      }
+    }
+  }
+
+  return null;
+}
+
+function releaseCleanupGuard(cleanupPath: string, guardToken: string): void {
+  try {
+    const content = fs.readFileSync(cleanupPath, 'utf8');
+    const fileToken = content.trim().split('\n')[2];
+    if (fileToken === guardToken) {
+      fs.unlinkSync(cleanupPath);
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
+function isObservedLockUnchanged(
+  lockPath: string,
+  expectedStat: fs.Stats,
+  expectedContent: string
+): boolean {
+  try {
+    const currentStat = fs.statSync(lockPath);
+    const currentContent = fs.readFileSync(lockPath, 'utf8');
+    return (
+      currentStat.ino === expectedStat.ino &&
+      currentStat.mtimeMs === expectedStat.mtimeMs &&
+      currentContent === expectedContent
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Acquire lockfile for config write operations.
  * Returns a lock token if acquired, null if already locked by another process.
- * Cleans up stale locks (older than LOCK_STALE_MS).
+ * Cleans up stale locks (older than LOCK_STALE_MS) without racing concurrent owners.
  */
 export function acquireLock(): string | null {
   const lockPath = getLockFilePath();
@@ -95,9 +179,39 @@ export function acquireLock(): string | null {
       fs.mkdirSync(lockDir, { recursive: true, mode: 0o700 });
     }
 
-    // Check if lock exists
-    if (fs.existsSync(lockPath)) {
-      const content = fs.readFileSync(lockPath, 'utf8');
+    try {
+      fs.writeFileSync(lockPath, lockData, { flag: 'wx', mode: 0o600 });
+      return lockToken;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        return null;
+      }
+    }
+
+    const cleanupPath = getCleanupGuardPath(lockPath);
+    const guardToken = tryAcquireCleanupGuard(cleanupPath);
+    if (!guardToken) {
+      return null;
+    }
+
+    try {
+      let stat: fs.Stats;
+      let content: string;
+      try {
+        stat = fs.statSync(lockPath);
+        content = fs.readFileSync(lockPath, 'utf8');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          fs.writeFileSync(lockPath, lockData, { flag: 'wx', mode: 0o600 });
+          return lockToken;
+        }
+        return null;
+      }
+
+      if (!content.trim() && Date.now() - stat.mtimeMs < NEW_EMPTY_LOCK_GRACE_MS) {
+        return null;
+      }
+
       const [pidStr, timestampStr] = content.trim().split('\n');
       const pid = Number.parseInt(pidStr, 10);
       const timestamp = Number.parseInt(timestampStr, 10);
@@ -108,19 +222,21 @@ export function acquireLock(): string | null {
         return null;
       }
 
-      if (isStale || !hasLiveOwner) {
-        fs.unlinkSync(lockPath);
+      if (!isStale && Number.isFinite(timestamp) && pid > 0) {
+        // Dead PID: safe to reclaim once verified unchanged under cleanup guard.
       }
-    }
 
-    // Acquire lock
-    fs.writeFileSync(lockPath, lockData, { flag: 'wx', mode: 0o600 });
-    return lockToken;
-  } catch (error) {
-    // EEXIST means another process acquired the lock between our check and write
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-      return null;
+      if (!isObservedLockUnchanged(lockPath, stat, content)) {
+        return null;
+      }
+
+      fs.unlinkSync(lockPath);
+      fs.writeFileSync(lockPath, lockData, { flag: 'wx', mode: 0o600 });
+      return lockToken;
+    } finally {
+      releaseCleanupGuard(cleanupPath, guardToken);
     }
+  } catch {
     return null;
   }
 }
@@ -130,6 +246,16 @@ export function acquireLock(): string | null {
  */
 export function releaseLock(lockToken: string): void {
   const lockPath = getLockFilePath();
+  const cleanupPath = getCleanupGuardPath(lockPath);
+  let guardToken: string | null = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    guardToken = tryAcquireCleanupGuard(cleanupPath);
+    if (guardToken) {
+      break;
+    }
+    sleepSync(2);
+  }
+
   try {
     if (fs.existsSync(lockPath)) {
       const content = fs.readFileSync(lockPath, 'utf8');
@@ -140,6 +266,10 @@ export function releaseLock(lockToken: string): void {
     }
   } catch {
     // Ignore cleanup errors
+  } finally {
+    if (guardToken) {
+      releaseCleanupGuard(cleanupPath, guardToken);
+    }
   }
 }
 
@@ -202,7 +332,10 @@ export function withConfigWriteLock<T>(callback: () => T): T {
   }
 
   if (!lockToken) {
-    throw new Error('Config file is locked by another process. Wait a moment and try again.');
+    throw new ConfigError(
+      'Config file is locked by another process. Wait a moment and try again.',
+      getLockFilePath()
+    );
   }
 
   try {
@@ -238,7 +371,7 @@ export function loadUnifiedConfigWithLockHeld(
   const parsed = yaml.load(content);
 
   if (!isUnifiedConfig(parsed)) {
-    throw new Error(`Invalid config format in ${yamlPath}`);
+    throw new ConfigError(`Invalid config format in ${yamlPath}`, yamlPath);
   }
 
   const merged = mergeWithDefaults(parsed);
@@ -292,9 +425,15 @@ export function writeUnifiedConfigWithLockHeld(
     // Classify filesystem errors
     const err = error as NodeJS.ErrnoException;
     if (err.code === 'ENOSPC') {
-      throw new Error('Disk full - cannot save config. Free up space and try again.');
+      throw new ConfigError(
+        'Disk full - cannot save config. Free up space and try again.',
+        yamlPath
+      );
     } else if (err.code === 'EROFS' || err.code === 'EACCES') {
-      throw new Error(`Cannot write config - check file permissions: ${err.message}`);
+      throw new ConfigError(
+        `Cannot write config - check file permissions: ${err.message}`,
+        yamlPath
+      );
     }
     throw error;
   }

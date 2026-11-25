@@ -5,9 +5,12 @@
  */
 
 import * as fs from 'fs';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { getClaudeCliInfo } from '../../utils/claude-detector';
 import type { HealthCheck } from './types';
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Check Claude CLI installation and version
@@ -26,11 +29,12 @@ export async function checkClaudeCli(): Promise<HealthCheck> {
   }
 
   try {
-    const version = execSync('claude --version', {
+    const { stdout } = await execFileAsync(cliInfo.path, ['--version'], {
       encoding: 'utf8',
       timeout: 5000,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
+      ...(cliInfo.needsShell ? { shell: true } : {}),
+    });
+    const version = stdout.trim();
 
     const versionMatch = version.match(/(\d+\.\d+\.\d+)/);
     const versionStr = versionMatch ? versionMatch[1] : 'unknown';

@@ -1,9 +1,9 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2693,
-    "filesAffected": 286,
-    "hotpathOccurrences": 1231,
+    "totalOccurrences": 2720,
+    "filesAffected": 287,
+    "hotpathOccurrences": 1243,
     "hotpathFilesAffected": 165,
     "topHotpathFiles": [
       {
@@ -308,8 +308,8 @@
     ]
   },
   "legacyShim": {
-    "totalMarkers": 494,
-    "filesAffected": 185,
+    "totalMarkers": 495,
+    "filesAffected": 186,
     "topFiles": [
       {
         "file": "src/auth/profile-detector.ts",
@@ -505,10 +505,10 @@
   "maintainability": {
     "typedErrors": {
       "totalThrows": 489,
-      "typedThrows": 140,
-      "plainThrows": 288,
+      "typedThrows": 145,
+      "plainThrows": 283,
       "otherThrows": 61,
-      "adoptionRatio": 0.2863,
+      "adoptionRatio": 0.2965,
       "topSubdomainsByThrows": [
         {
           "subdomain": "web-server",
@@ -726,7 +726,7 @@
       ]
     },
     "largeFiles": {
-      "countOver400": 97,
+      "countOver400": 99,
       "countOver600": 46,
       "topOver400": [
         {
@@ -735,7 +735,7 @@
         },
         {
           "file": "src/web-server/routes/cliproxy-auth-routes.ts",
-          "loc": 1591
+          "loc": 1621
         },
         {
           "file": "src/cliproxy/auth/oauth-handler.ts",

@@ -2,7 +2,7 @@ import { fail } from './utils/ui';
 // Import centralized error handling
 import { handleError, runCleanup } from './errors';
 
-import { createLogger, runWithRequestId } from './services/logging';
+import { createLogger, flushStructuredLogsSync, runWithRequestId } from './services/logging';
 import { redactArgv } from './services/logging/log-redaction';
 
 // Import early bootstrap parser; defer proxy, target adapters, pre-dispatch, and flows
@@ -133,6 +133,7 @@ async function main(): Promise<void> {
     } else {
       console.error(fail(err.message));
     }
+    flushStructuredLogsSync();
     process.exit(1);
   }
 }
@@ -156,6 +157,7 @@ process.on('SIGTERM', () => {
   } catch {
     // Cleanup failure should not block termination.
   }
+  flushStructuredLogsSync();
   // If a target exec path registered additional signal listeners, let those
   // listeners forward/coordinate child shutdown and final exit codes.
   if (process.listenerCount('SIGTERM') <= 1) {
@@ -169,6 +171,7 @@ process.on('SIGINT', () => {
   } catch {
     // Cleanup failure should not block termination.
   }
+  flushStructuredLogsSync();
   // Same coordination rule as SIGTERM.
   if (process.listenerCount('SIGINT') <= 1) {
     process.exit(130); // 128 + SIGINT(2)

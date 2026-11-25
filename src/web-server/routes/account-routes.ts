@@ -48,6 +48,7 @@ import {
   isManagedQuotaProvider,
   MANAGED_QUOTA_PROVIDERS,
 } from '../../cliproxy/quota/quota-manager';
+import { createRouteErrorHelpers } from './route-helpers';
 
 /** Valid account tier values for tier-lock validation */
 const VALID_ACCOUNT_TIERS: ReadonlySet<string> = new Set<AccountTier>([
@@ -58,6 +59,7 @@ const VALID_ACCOUNT_TIERS: ReadonlySet<string> = new Set<AccountTier>([
 ]);
 
 const router = Router();
+const { respondInternalError } = createRouteErrorHelpers('account-routes');
 
 function createProfileRegistry(): ProfileRegistry {
   return new ProfileRegistry();
@@ -193,7 +195,7 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to list accounts.');
   }
 });
 
@@ -231,7 +233,7 @@ router.post('/default', (req: Request, res: Response): void => {
 
     res.json({ default: name });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to set default account.');
   }
 });
 
@@ -376,7 +378,7 @@ router.put('/:name/context', async (req: Request, res: Response): Promise<void> 
       continuity_inferred: false,
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to update account context.');
   }
 });
 
@@ -459,7 +461,7 @@ router.put('/:name/shared-resources', async (req: Request, res: Response): Promi
       bare: mode === 'profile-local' ? true : undefined,
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to update shared resource mode.');
   }
 });
 
@@ -476,7 +478,7 @@ router.delete('/reset-default', (_req: Request, res: Response): void => {
     }
     res.json({ success: true, default: null });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to reset default account.');
   }
 });
 
@@ -543,7 +545,7 @@ router.delete('/:name', async (req: Request, res: Response): Promise<void> => {
 
     res.json({ success: true, deleted: name });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to delete account.');
   }
 });
 
@@ -580,7 +582,7 @@ router.post('/bulk-pause', (req: Request, res: Response): void => {
     const result = bulkPauseAccounts(provider, accountIds);
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to pause accounts.');
   }
 });
 
@@ -617,7 +619,7 @@ router.post('/bulk-resume', (req: Request, res: Response): void => {
     const result = bulkResumeAccounts(provider, accountIds);
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to resume accounts.');
   }
 });
 
@@ -646,7 +648,7 @@ router.post('/solo', async (req: Request, res: Response): Promise<void> => {
 
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to activate solo account.');
   }
 });
 
@@ -761,7 +763,7 @@ router.post('/tier-lock', (req: Request, res: Response): void => {
 
     res.json({ provider, tier_lock: tier ?? null });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to update tier lock.');
   }
 });
 

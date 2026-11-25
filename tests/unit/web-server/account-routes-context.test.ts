@@ -491,7 +491,8 @@ describe('web-server account-routes context normalization', () => {
       });
       expect(response.status).toBe(500);
       const payload = (await response.json()) as { error: string };
-      expect(payload.error).toContain('reconcile failed');
+      expect(payload.error).toBe('Failed to update shared resource mode.');
+      expect(payload.error).not.toContain('reconcile failed');
     } finally {
       ensureSpy.mockRestore();
     }

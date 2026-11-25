@@ -17,7 +17,12 @@ import {
   VALID_THINKING_TIERS,
   THINKING_OFF_VALUES,
 } from '../../cliproxy';
-import { validateFilePath, withPathLock, writeTextFileAtomically } from './route-helpers';
+import {
+  createRouteErrorHelpers,
+  validateFilePath,
+  withPathLock,
+  writeTextFileAtomically,
+} from './route-helpers';
 import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
 import {
   getCcsDir,
@@ -28,6 +33,7 @@ import {
 } from '../../config/config-loader-facade';
 
 const router = Router();
+const { respondInternalError } = createRouteErrorHelpers('misc-routes');
 
 router.use((req: Request, res: Response, next) => {
   if (
@@ -94,7 +100,7 @@ router.get('/file', (req: Request, res: Response): void => {
       path: expandedPath,
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to read file.');
   }
 });
 
@@ -187,7 +193,7 @@ router.put('/file', (req: Request, res: Response): void => {
       backupPath: result.backupPath,
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to write file.');
   }
 });
 
@@ -220,7 +226,7 @@ router.get('/files', (_req: Request, res: Response): void => {
 
     res.json({ files });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to list files.');
   }
 });
 
@@ -235,7 +241,7 @@ router.get('/global-env', (_req: Request, res: Response): void => {
     const config = getGlobalEnvConfig();
     res.json(config);
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to load global environment configuration.');
   }
 });
 
@@ -266,7 +272,7 @@ router.put('/global-env', (req: Request, res: Response): void => {
     });
     res.json({ success: true, config: updated.global_env });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to update global environment configuration.');
   }
 });
 
@@ -289,7 +295,7 @@ router.get('/thinking', (_req: Request, res: Response): void => {
     }
     res.json({ config, lastModified });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to load thinking configuration.');
   }
 });
 
@@ -497,7 +503,7 @@ router.put('/thinking', (req: Request, res: Response): void => {
 
     res.json({ success: true, config: config.thinking, lastModified: newMtime });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to update thinking configuration.');
   }
 });
 

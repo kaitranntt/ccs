@@ -87,10 +87,39 @@ describe('api-routes remote write guard', () => {
     }
   });
 
-  it('allows remote read-only GET requests when dashboard auth is disabled', async () => {
-    const response = await fetch(`${baseUrl}/api/profiles`);
+  it('blocks unguarded remote GET requests when dashboard auth is disabled', async () => {
+    for (const endpoint of [
+      '/api/profiles',
+      '/api/accounts',
+      '/api/droid/settings/raw',
+      '/api/codex/diagnostics',
+    ]) {
+      const response = await fetch(`${baseUrl}${endpoint}`);
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({
+        error: 'Remote dashboard reads require localhost access when dashboard auth is disabled.',
+      });
+    }
+  });
 
-    expect(response.status).toBe(200);
+  it('preserves remote health and auth status GET endpoints when dashboard auth is disabled', async () => {
+    for (const endpoint of ['/api/health', '/api/auth/check', '/api/auth/setup']) {
+      const response = await fetch(`${baseUrl}${endpoint}`);
+      expect(response.status).toBe(200);
+    }
+
+    const fixResponse = await fetch(`${baseUrl}/api/health/fix/ccs-dir`, { method: 'POST' });
+    expect(fixResponse.status).toBe(403);
+  });
+
+  it('allows loopback GET requests when dashboard auth is disabled', async () => {
+    forcedRemoteAddress = '127.0.0.1';
+
+    const profilesResponse = await fetch(`${baseUrl}/api/profiles`);
+    expect(profilesResponse.status).toBe(200);
+
+    const diagnosticsResponse = await fetch(`${baseUrl}/api/codex/diagnostics`);
+    expect(diagnosticsResponse.status).toBe(200);
   });
 
   it('blocks remote Codex raw config reads when dashboard auth is disabled', async () => {
@@ -102,13 +131,8 @@ describe('api-routes remote write guard', () => {
     });
   });
 
-  it('allows remote Codex diagnostics when dashboard auth is disabled', async () => {
-    const response = await fetch(`${baseUrl}/api/codex/diagnostics`);
-
-    expect(response.status).toBe(200);
-  });
-
-  it('redacts sensitive Codex diagnostics data while preserving remote access', async () => {
+  it('redacts sensitive Codex diagnostics data on loopback access', async () => {
+    forcedRemoteAddress = '127.0.0.1';
     const codexHome = process.env.CODEX_HOME;
     if (!codexHome) throw new Error('CODEX_HOME was not initialized');
     fs.mkdirSync(codexHome, { recursive: true });
@@ -321,6 +345,13 @@ trust_level = "trusted"
       });
 
       expect(response.status).toBe(201);
+
+      const getResponse = await fetch(`${authBaseUrl}/api/profiles`, {
+        headers: {
+          Cookie: cookie as string,
+        },
+      });
+      expect(getResponse.status).toBe(200);
 
       await new Promise<void>((resolve) => authServer.close(() => resolve()));
 
