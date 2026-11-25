@@ -143,7 +143,7 @@ export async function handleBarServe(args: string[], deps: Partial<ServeDeps> = 
       console.error(`[X] Failed to write bar.json: ${msg}`);
       exit(1);
     }
-    console.log(`[OK] CCS server already running at ${running.baseUrl} — reusing.`);
+    console.log(`[OK] CCS server already running at ${running.baseUrl} - reusing.`);
     exit(0);
   }
 
@@ -221,7 +221,7 @@ export async function handleBarServe(args: string[], deps: Partial<ServeDeps> = 
   }
 
   console.log(`[OK] CCS Bar server started at ${dashboardInfo.baseUrl}`);
-  console.log(`[i]  PID ${process.pid} — stop with \`ccs bar stop\``);
+  console.log(`[i]  PID ${process.pid} - stop with \`ccs bar stop\``);
 
   // 4. Clean shutdown on SIGINT / SIGTERM.
   const shutdown = (): void => {

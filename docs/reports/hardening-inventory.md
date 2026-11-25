@@ -57,12 +57,12 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 
 | Metric | Value |
 |---|---:|
-| typed-error adoption (typed/total throws) | 31.4% (154/490) |
+| typed-error adoption (typed/total throws) | 66.3% (325/490) |
 | typed-error adoption (P4 locked subdomains) | 93.3% (28/30), target 40% |
 | hotpath console.error/warn occurrences | 268 (594 total, 326 CLI-UX exempt) |
 | hotpath console.error/warn files | 83 |
-| files with createLogger | 68/846 |
-| subdomains with zero createLogger | 15 (api, bin, channels, cliproxy, cliproxy/accounts, cliproxy/binary, cliproxy/config, cliproxy/management, cliproxy/model-catalog-data, cliproxy/sync, cliproxy/types, config, dispatcher, shared, types) |
+| files with createLogger | 71/846 |
+| subdomains with zero createLogger | 14 (api, bin, channels, cliproxy, cliproxy/accounts, cliproxy/binary, cliproxy/config, cliproxy/management, cliproxy/model-catalog-data, cliproxy/types, config, dispatcher, shared, types) |
 | files > 400 LOC | 87 |
 | files > 600 LOC | 33 |
 
@@ -95,14 +95,14 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 | `src/cliproxy/accounts/registry.ts` | 898 |
 | `src/channels/official-channels-runtime.ts` | 867 |
 | `src/cliproxy/ai-providers/codex-reasoning-proxy.ts` | 865 |
-| `src/web-server/usage/handlers.ts` | 860 |
-| `src/cliproxy/accounts/drain-order.ts` | 855 |
+| `src/web-server/usage/handlers.ts` | 861 |
+| `src/cliproxy/accounts/drain-order.ts` | 856 |
+| `src/web-server/usage/aggregator.ts` | 842 |
 | `src/cliproxy/quota/quota-fetcher-codex.ts` | 840 |
-| `src/web-server/usage/aggregator.ts` | 816 |
-| `src/proxy/transformers/request-transformer.ts` | 801 |
+| `src/proxy/transformers/request-transformer.ts` | 811 |
 | `src/web-server/routes/config-routes.ts` | 781 |
+| `src/commands/bar/install-subcommand.ts` | 777 |
 | `src/web-server/routes/account-routes.ts` | 770 |
 | `src/auth/profile-detector.ts` | 767 |
 | `src/delegation/headless-executor.ts` | 767 |
-| `src/proxy/proxy-daemon.ts` | 761 |
 

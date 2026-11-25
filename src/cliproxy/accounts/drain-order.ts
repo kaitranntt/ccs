@@ -31,6 +31,7 @@ import {
   type CLIProxyBackendMinVersions,
   meetsBackendMinimumVersion,
 } from '../binary/version-checker';
+import { ProfileError, ValidationError } from '../../errors/error-types';
 
 /** Minimum valid priority value. Management layer treats 0 as delete. */
 export const MIN_PRIORITY = 1;
@@ -151,7 +152,7 @@ export function computeManualDrainOrder(
   const seen = new Set<string>();
   for (const id of orderedIds) {
     if (seen.has(id)) {
-      throw new Error(`Duplicate account ID in order: ${id}`);
+      throw new ValidationError(`Duplicate account ID in order: ${id}`, 'orderedIds');
     }
     seen.add(id);
   }
@@ -159,7 +160,7 @@ export function computeManualDrainOrder(
   // Validate that all specified IDs exist
   for (const id of orderedIds) {
     if (!accountMap.has(id)) {
-      throw new Error(`Account ID not found: ${id}`);
+      throw new ProfileError(`Account ID not found: ${id}`, id);
     }
   }
 
@@ -266,14 +267,14 @@ export function readAuthFilePriority(tokenFile: string): number | undefined {
  */
 export function writeAuthFilePriorityDirect(tokenFile: string, priority: number): void {
   if (priority < MIN_PRIORITY) {
-    throw new Error(`Priority must be >= ${MIN_PRIORITY}, got ${priority}`);
+    throw new ValidationError(`Priority must be >= ${MIN_PRIORITY}, got ${priority}`, 'priority');
   }
 
   const authDir = getAuthDir();
   const filePath = path.join(authDir, tokenFile);
 
   if (!fs.existsSync(filePath)) {
-    throw new Error(`Auth file not found: ${tokenFile}`);
+    throw new ProfileError(`Auth file not found: ${tokenFile}`, tokenFile);
   }
 
   const content = fs.readFileSync(filePath, 'utf-8');
@@ -299,7 +300,7 @@ export async function writeAuthFilePriorityViaApi(
   priority: number
 ): Promise<boolean> {
   if (priority < MIN_PRIORITY) {
-    throw new Error(`Priority must be >= ${MIN_PRIORITY}, got ${priority}`);
+    throw new ValidationError(`Priority must be >= ${MIN_PRIORITY}, got ${priority}`, 'priority');
   }
 
   return patchAuthFilePriority(tokenFile, priority);
@@ -362,7 +363,7 @@ export function clearAuthFilePriorityDirect(tokenFile: string): boolean {
   const filePath = path.join(authDir, tokenFile);
 
   if (!fs.existsSync(filePath)) {
-    throw new Error(`Auth file not found: ${tokenFile}`);
+    throw new ProfileError(`Auth file not found: ${tokenFile}`, tokenFile);
   }
 
   const content = fs.readFileSync(filePath, 'utf-8');

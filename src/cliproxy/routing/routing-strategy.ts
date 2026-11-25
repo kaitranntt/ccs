@@ -15,6 +15,7 @@ import {
   meetsBackendMinimumVersion,
 } from '../binary/version-checker';
 import { getConfigYamlPath } from '../../config/loader/io-locks';
+import { ProxyError } from '../../errors/error-types';
 import { createLogger } from '../../services/logging';
 
 // Diagnostic-only logger for internal binary-compatibility notices. The
@@ -487,7 +488,7 @@ export function getConfiguredCliproxySessionAffinitySettings(): Required<Cliprox
 export async function fetchLiveCliproxyRoutingStrategy(): Promise<CliproxyRoutingStrategy> {
   const response = await fetchCliproxyRoutingResponse(getCliproxyRoutingTarget(), 'GET');
   if (!response.ok) {
-    throw new Error(
+    throw new ProxyError(
       await getRoutingErrorMessage(response, `Failed to read routing strategy (${response.status})`)
     );
   }
@@ -495,7 +496,7 @@ export async function fetchLiveCliproxyRoutingStrategy(): Promise<CliproxyRoutin
   const data = (await response.json()) as { strategy?: string };
   const strategy = normalizeCliproxyRoutingStrategy(data?.strategy);
   if (!strategy) {
-    throw new Error('CLIProxy returned an invalid routing strategy');
+    throw new ProxyError('CLIProxy returned an invalid routing strategy');
   }
 
   return strategy;
@@ -715,7 +716,7 @@ async function updateLiveCliproxyRoutingStrategy(strategy: CliproxyRoutingStrate
     value: strategy,
   });
   if (!response.ok) {
-    throw new Error(
+    throw new ProxyError(
       await getRoutingErrorMessage(
         response,
         `Failed to update routing strategy (${response.status})`

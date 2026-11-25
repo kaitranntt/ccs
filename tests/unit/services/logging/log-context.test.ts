@@ -59,7 +59,11 @@ describe('log-context (AsyncLocalStorage)', () => {
   it('mergeRequestContext merges active context, with input overriding ctx', () => {
     withRequestContext({ requestId: 'req-X', method: 'GET' }, () => {
       const merged = mergeRequestContext({ method: 'POST', extra: 1 });
-      expect(merged).toEqual({ requestId: 'req-X', method: 'POST', extra: 1 });
+      expect<Record<string, unknown>>(merged).toEqual({
+        requestId: 'req-X',
+        method: 'POST',
+        extra: 1,
+      });
     });
   });
 

@@ -1,4 +1,5 @@
 import { getManagedModelPrefix } from '../../shared/cliproxy-model-routing';
+import { ProviderError } from '../../errors/error-types';
 import {
   buildManagementHeaders,
   buildProxyUrl,
@@ -51,7 +52,7 @@ async function listAuthFiles(): Promise<ManagementAuthFileRecord[]> {
   const response = await fetchManagementEndpoint('/v0/management/auth-files');
 
   if (!response.ok) {
-    throw new Error(`auth file listing failed with status ${response.status}`);
+    throw new ProviderError(`auth file listing failed with status ${response.status}`, 'cliproxy');
   }
 
   const data = (await response.json()) as { files?: ManagementAuthFileRecord[] };
@@ -68,7 +69,10 @@ async function patchAuthFilePrefix(name: string, prefix: string): Promise<void> 
   });
 
   if (!response.ok) {
-    throw new Error(`auth file prefix patch failed for ${name} with status ${response.status}`);
+    throw new ProviderError(
+      `auth file prefix patch failed for ${name} with status ${response.status}`,
+      'cliproxy'
+    );
   }
 }
 
@@ -78,7 +82,10 @@ async function readAuthFileMetadata(name: string): Promise<AuthFileMetadata> {
   );
 
   if (!response.ok) {
-    throw new Error(`auth file download failed for ${name} with status ${response.status}`);
+    throw new ProviderError(
+      `auth file download failed for ${name} with status ${response.status}`,
+      'cliproxy'
+    );
   }
 
   const content = await response.text();

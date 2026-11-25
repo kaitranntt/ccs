@@ -962,7 +962,9 @@ describe('SharedManager', () => {
         expect(foreignWriter.placeholderWrites()).toBe(0);
         expect(fs.existsSync(canonicalPath)).toBe(true);
         expect(fs.readFileSync(canonicalPath, 'utf8')).not.toBe(placeholder);
-        expect([divergedSettings, previousSettings]).toContainEqual(readJson(canonicalPath));
+        expect<unknown[]>([divergedSettings, previousSettings]).toContainEqual(
+          readJson(canonicalPath)
+        );
       });
     }
 

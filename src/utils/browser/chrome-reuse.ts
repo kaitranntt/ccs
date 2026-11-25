@@ -1,6 +1,7 @@
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { ConfigError, NetworkError } from '../../errors/error-types';
 import { expandPath } from '../helpers';
 
 export interface BrowserReuseOptions {
@@ -38,7 +39,7 @@ export function resolveDefaultChromeUserDataDir(
     case 'win32': {
       const localAppData = env.LOCALAPPDATA;
       if (!localAppData) {
-        throw new Error(
+        throw new ConfigError(
           'LOCALAPPDATA is required to resolve the default Chrome user-data-dir on Windows'
         );
       }
@@ -61,7 +62,7 @@ export async function resolveBrowserRuntimeEnv(
 
   const directoryStat = await safeStat(userDataDir);
   if (!directoryStat?.isDirectory()) {
-    throw new Error(`Chrome profile directory is invalid: ${userDataDir}`);
+    throw new ConfigError(`Chrome profile directory is invalid: ${userDataDir}`, userDataDir);
   }
 
   const metadataPath = path.join(userDataDir, DEVTOOLS_ACTIVE_PORT_FILE);
@@ -77,11 +78,11 @@ export async function resolveBrowserRuntimeEnv(
   try {
     const response = await fetch(versionUrl);
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      throw new NetworkError(`HTTP ${response.status}`, versionUrl, response.status);
     }
     versionPayload = await response.json();
   } catch {
-    throw new Error(`Chrome DevTools endpoint is unreachable: ${httpUrl}`);
+    throw new NetworkError(`Chrome DevTools endpoint is unreachable: ${httpUrl}`, httpUrl);
   }
 
   const websocketUrl =
@@ -92,7 +93,10 @@ export async function resolveBrowserRuntimeEnv(
       : '';
 
   if (!websocketUrl) {
-    throw new Error(`Chrome DevTools endpoint did not provide a websocket target: ${versionUrl}`);
+    throw new NetworkError(
+      `Chrome DevTools endpoint did not provide a websocket target: ${versionUrl}`,
+      versionUrl
+    );
   }
 
   return {
@@ -111,12 +115,12 @@ function parseDevToolsPort(metadataPath: string, metadata: string): string {
     .filter((line) => line.length > 0);
 
   if (!rawPort || !/^\d+$/.test(rawPort)) {
-    throw new Error(`Chrome reuse metadata is invalid: ${metadataPath}`);
+    throw new ConfigError(`Chrome reuse metadata is invalid: ${metadataPath}`, metadataPath);
   }
 
   const port = Number.parseInt(rawPort, 10);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`Chrome reuse metadata is invalid: ${metadataPath}`);
+    throw new ConfigError(`Chrome reuse metadata is invalid: ${metadataPath}`, metadataPath);
   }
 
   return String(port);
@@ -139,7 +143,10 @@ async function resolveDevToolsPort(options: ResolveDevToolsPortOptions): Promise
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code && code !== 'ENOENT') {
-      throw new Error(`Chrome reuse metadata is unreadable: ${options.metadataPath}`);
+      throw new ConfigError(
+        `Chrome reuse metadata is unreadable: ${options.metadataPath}`,
+        options.metadataPath
+      );
     }
   }
 
@@ -152,17 +159,20 @@ async function resolveDevToolsPort(options: ResolveDevToolsPortOptions): Promise
     return discoveredPort;
   }
 
-  throw new Error(`Chrome reuse metadata not found: ${options.metadataPath}`);
+  throw new ConfigError(
+    `Chrome reuse metadata not found: ${options.metadataPath}`,
+    options.metadataPath
+  );
 }
 
 function parsePortValue(rawPort: string, sourceLabel: string): string {
   if (!/^\d+$/.test(rawPort)) {
-    throw new Error(`Chrome reuse metadata is invalid: ${sourceLabel}`);
+    throw new ConfigError(`Chrome reuse metadata is invalid: ${sourceLabel}`);
   }
 
   const port = Number.parseInt(rawPort, 10);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`Chrome reuse metadata is invalid: ${sourceLabel}`);
+    throw new ConfigError(`Chrome reuse metadata is invalid: ${sourceLabel}`);
   }
 
   return String(port);

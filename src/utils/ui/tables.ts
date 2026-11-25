@@ -29,29 +29,13 @@ function getTableConstructor() {
  * Create styled table
  */
 export function table(rows: string[][], options: TableOptions = {}): string {
+  const style = options.style ?? 'ascii';
   // Build table configuration
   const tableConfig: Record<string, unknown> = {
     wordWrap: options.wordWrap ?? true,
     chars:
-      options.style === 'ascii'
+      style === 'unicode'
         ? {
-            top: '-',
-            'top-mid': '+',
-            'top-left': '+',
-            'top-right': '+',
-            bottom: '-',
-            'bottom-mid': '+',
-            'bottom-left': '+',
-            'bottom-right': '+',
-            left: '|',
-            'left-mid': '+',
-            mid: '-',
-            'mid-mid': '+',
-            right: '|',
-            'right-mid': '+',
-            middle: '|',
-          }
-        : {
             top: '─',
             'top-mid': '┬',
             'top-left': '┌',
@@ -67,6 +51,23 @@ export function table(rows: string[][], options: TableOptions = {}): string {
             right: '│',
             'right-mid': '┤',
             middle: '│',
+          }
+        : {
+            top: '-',
+            'top-mid': '+',
+            'top-left': '+',
+            'top-right': '+',
+            bottom: '-',
+            'bottom-mid': '+',
+            'bottom-left': '+',
+            'bottom-right': '+',
+            left: '|',
+            'left-mid': '+',
+            mid: '-',
+            'mid-mid': '+',
+            right: '|',
+            'right-mid': '+',
+            middle: '|',
           },
   };
 

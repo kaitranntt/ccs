@@ -154,7 +154,7 @@ export class StreamingFrameParser {
       if (this.buffer.length < frameSize) break;
 
       const flags = this.buffer[0];
-      let payload = this.buffer.slice(5, frameSize);
+      let payload: Buffer = this.buffer.slice(5, frameSize);
       this.buffer = this.buffer.slice(frameSize);
 
       try {

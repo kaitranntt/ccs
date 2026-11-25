@@ -1,6 +1,7 @@
 import { execFile } from 'child_process';
 import * as fs from 'fs';
 import { promisify } from 'util';
+import { BinaryError, CCSError, ValidationError } from '../../errors/error-types';
 
 const execFileAsync = promisify(execFile);
 const SQLITE_JSON_MAX_BUFFER = 10 * 1024 * 1024;
@@ -74,8 +75,9 @@ function validateEnvOverridePath(rawPath: string): string {
   try {
     resolved = fs.realpathSync(rawPath);
   } catch {
-    throw new Error(
-      `CCS_SQLITE_BIN path "${rawPath}" could not be resolved: file not found or inaccessible`
+    throw new ValidationError(
+      `CCS_SQLITE_BIN path "${rawPath}" could not be resolved: file not found or inaccessible`,
+      'CCS_SQLITE_BIN'
     );
   }
 
@@ -87,7 +89,10 @@ function validateEnvOverridePath(rawPath: string): string {
       fs.accessSync(resolved, fs.constants.X_OK);
     }
   } catch {
-    throw new Error(`CCS_SQLITE_BIN path "${resolved}" is not executable`);
+    throw new ValidationError(
+      `CCS_SQLITE_BIN path "${resolved}" is not executable`,
+      'CCS_SQLITE_BIN'
+    );
   }
 
   const normalizedResolved = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
@@ -98,10 +103,11 @@ function validateEnvOverridePath(rawPath: string): string {
   });
 
   if (!trusted) {
-    throw new Error(
+    throw new ValidationError(
       `CCS_SQLITE_BIN path "${resolved}" does not resolve under a trusted system prefix. ` +
         `Paths under user-writable locations (e.g. /tmp, $HOME/.local) are rejected ` +
-        `to prevent PATH-hijack attacks.`
+        `to prevent PATH-hijack attacks.`,
+      'CCS_SQLITE_BIN'
     );
   }
 
@@ -135,7 +141,7 @@ function resolveTrustedSqlitePath(env: NodeJS.ProcessEnv = process.env): string 
   });
 
   if (!trustedPath) {
-    throw new Error('sqlite3 command not available');
+    throw new BinaryError('sqlite3 command not available', 'sqlite3');
   }
 
   // Return the realpath to avoid double-hop symlink confusion at exec time.
@@ -155,8 +161,11 @@ export async function querySqliteJson(
   try {
     sqlitePath = resolveTrustedSqlitePath(env);
   } catch (error) {
+    if (error instanceof CCSError) {
+      throw error;
+    }
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(message);
+    throw new BinaryError(message, 'sqlite3');
   }
 
   try {
@@ -172,11 +181,11 @@ export async function querySqliteJson(
     return Array.isArray(parsed) ? (parsed as SqliteJsonRow[]) : [];
   } catch (error) {
     if (isCommandMissing(error)) {
-      throw new Error('sqlite3 command not available');
+      throw new BinaryError('sqlite3 command not available', sqlitePath);
     }
 
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`sqlite3 query failed for ${dbPath}: ${message}`);
+    throw new BinaryError(`sqlite3 query failed for ${dbPath}: ${message}`, sqlitePath);
   }
 }
 

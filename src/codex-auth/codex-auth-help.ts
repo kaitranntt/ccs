@@ -56,7 +56,7 @@ Notes
 }
 
 export function printCodexAuthUseHelp(): void {
-  process.stdout.write(`ccsx auth use — Activate a Codex profile in the current shell
+  process.stdout.write(`ccsx auth use - Activate a Codex profile in the current shell
 
 Usage
   ccsx auth use <name> [--shell <bash|zsh|fish|pwsh|cmd>]

@@ -213,9 +213,9 @@ export async function handlePasteCallbackMode(
     const knownTokenFiles = listProviderTokenSnapshots(provider, tokenDir);
 
     console.log('');
-    console.log('  ╔══════════════════════════════════════════════════════════════╗');
-    console.log('  ║  Open this URL in any browser:                               ║');
-    console.log('  ╚══════════════════════════════════════════════════════════════╝');
+    console.log('  +--------------------------------------------------------------+');
+    console.log('  |  Open this URL in any browser:                               |');
+    console.log('  +--------------------------------------------------------------+');
     console.log('');
     console.log(`    ${authUrl}`);
     console.log('');

@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import * as lockfile from 'proper-lockfile';
+import { ConfigError, ProfileError, ValidationError } from '../errors/error-types';
 import { createLogger } from '../services/logging';
 import { getCodexAuthRegistryPath } from './codex-profile-paths';
 import { getCcsDirSource } from '../utils/config-manager';
@@ -26,15 +27,15 @@ export class CodexProfileRegistryReadError extends Error {
 
 export function validateCodexProfileRegistryData(parsed: unknown): CodexProfileData {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('registry YAML root is not an object');
+    throw new ConfigError('registry YAML root is not an object');
   }
 
   const data = parsed as Partial<CodexProfileData>;
   if (!data.profiles || typeof data.profiles !== 'object' || Array.isArray(data.profiles)) {
-    throw new Error('registry YAML is missing an object profiles map');
+    throw new ConfigError('registry YAML is missing an object profiles map');
   }
   if (data.default !== undefined && data.default !== null && typeof data.default !== 'string') {
-    throw new Error('registry YAML default must be a string or null');
+    throw new ConfigError('registry YAML default must be a string or null');
   }
   if (typeof data.default === 'string') {
     assertValidProfileName(data.default);
@@ -49,7 +50,7 @@ export function validateCodexProfileRegistryData(parsed: unknown): CodexProfileD
     typeof data.default === 'string' &&
     !Object.prototype.hasOwnProperty.call(profiles, data.default)
   ) {
-    throw new Error('registry YAML default profile is missing from profiles map');
+    throw new ConfigError('registry YAML default profile is missing from profiles map');
   }
 
   return {
@@ -62,38 +63,41 @@ export function validateCodexProfileRegistryData(parsed: unknown): CodexProfileD
 function assertValidProfileName(name: string): void {
   const nameError = getCodexProfileNameError(name);
   if (nameError) {
-    throw new Error(`registry YAML contains invalid profile name "${name}": ${nameError}`);
+    throw new ValidationError(
+      `registry YAML contains invalid profile name "${name}": ${nameError}`,
+      'name'
+    );
   }
 }
 
 function validateProfileMetadata(name: string, profile: unknown): CodexProfileMetadata {
   if (!profile || typeof profile !== 'object' || Array.isArray(profile)) {
-    throw new Error(`registry YAML profile "${name}" must be an object`);
+    throw new ConfigError(`registry YAML profile "${name}" must be an object`);
   }
   const meta = profile as Partial<CodexProfileMetadata>;
   if (meta.type !== 'codex') {
-    throw new Error(`registry YAML profile "${name}" must have type "codex"`);
+    throw new ConfigError(`registry YAML profile "${name}" must have type "codex"`);
   }
   if (typeof meta.created !== 'string') {
-    throw new Error(`registry YAML profile "${name}" must have a string created timestamp`);
+    throw new ConfigError(`registry YAML profile "${name}" must have a string created timestamp`);
   }
   if (meta.last_used !== null && typeof meta.last_used !== 'string') {
-    throw new Error(
+    throw new ConfigError(
       `registry YAML profile "${name}" must have a string or null last_used timestamp`
     );
   }
   if (meta.email !== undefined && typeof meta.email !== 'string') {
-    throw new Error(`registry YAML profile "${name}" email must be a string`);
+    throw new ConfigError(`registry YAML profile "${name}" email must be a string`);
   }
   if (
     meta.plan_type !== undefined &&
     meta.plan_type !== null &&
     typeof meta.plan_type !== 'string'
   ) {
-    throw new Error(`registry YAML profile "${name}" plan_type must be a string or null`);
+    throw new ConfigError(`registry YAML profile "${name}" plan_type must be a string or null`);
   }
   if (meta.account_id !== undefined && typeof meta.account_id !== 'string') {
-    throw new Error(`registry YAML profile "${name}" account_id must be a string`);
+    throw new ConfigError(`registry YAML profile "${name}" account_id must be a string`);
   }
   return meta as CodexProfileMetadata;
 }
@@ -201,7 +205,7 @@ export class CodexProfileRegistry {
         }
       }
       const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(`Failed to write codex profile registry: ${msg}`);
+      throw new ConfigError(`Failed to write codex profile registry: ${msg}`, this.registryPath);
     }
   }
 
@@ -229,7 +233,10 @@ export class CodexProfileRegistry {
 
     if (!release) {
       const msg = lastLockError instanceof Error ? lastLockError.message : 'unknown lock error';
-      throw new Error(`Failed to acquire codex profile registry lock: ${msg}`);
+      throw new ConfigError(
+        `Failed to acquire codex profile registry lock: ${msg}`,
+        this.registryPath
+      );
     }
 
     try {
@@ -274,7 +281,7 @@ export class CodexProfileRegistry {
     this._withRegistryWriteLock(() => {
       const data = this._read();
       if (data.profiles[name]) {
-        throw new Error(`Profile already exists: ${name}`);
+        throw new ProfileError(`Profile already exists: ${name}`, name);
       }
       data.profiles[name] = {
         type: 'codex',
@@ -292,7 +299,7 @@ export class CodexProfileRegistry {
     const data = this._read();
     const profile = data.profiles[name];
     if (!profile) {
-      throw new Error(`Profile not found: ${name}`);
+      throw new ProfileError(`Profile not found: ${name}`, name);
     }
     return profile;
   }
@@ -302,7 +309,7 @@ export class CodexProfileRegistry {
     this._withRegistryWriteLock(() => {
       const data = this._read();
       if (!data.profiles[name]) {
-        throw new Error(`Profile not found: ${name}`);
+        throw new ProfileError(`Profile not found: ${name}`, name);
       }
       data.profiles[name] = { ...data.profiles[name], ...partial } as CodexProfileMetadata;
       this._write(data);
@@ -314,10 +321,13 @@ export class CodexProfileRegistry {
     this._withRegistryWriteLock(() => {
       const data = this._read();
       if (!data.profiles[name]) {
-        throw new Error(`Profile not found: ${name}`);
+        throw new ProfileError(`Profile not found: ${name}`, name);
       }
       if (data.default === name && Object.keys(data.profiles).length > 1 && !options.forceDefault) {
-        throw new Error('Cannot remove default profile while other profiles exist without --force');
+        throw new ProfileError(
+          'Cannot remove default profile while other profiles exist without --force',
+          name
+        );
       }
       delete data.profiles[name];
       if (data.default === name) {
@@ -348,7 +358,7 @@ export class CodexProfileRegistry {
     this._withRegistryWriteLock(() => {
       const data = this._read();
       if (!data.profiles[name]) {
-        throw new Error(`Profile not found: ${name}`);
+        throw new ProfileError(`Profile not found: ${name}`, name);
       }
       data.default = name;
       this._write(data);

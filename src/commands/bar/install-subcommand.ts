@@ -19,6 +19,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { getCcsDir } from '../../config/config-loader-facade';
+import { NetworkError, ValidationError } from '../../errors/error-types';
 import { hasAnyFlag } from '../arg-extractor';
 import { getLaunchJsonPath } from './bar-paths';
 import type { LaunchJson } from './bar-paths';
@@ -135,11 +136,14 @@ export function validateDownloadUrl(url: string): void {
   try {
     parsed = new URL(url);
   } catch {
-    throw new Error(`Download URL is not a valid URL: ${url}`);
+    throw new ValidationError(`Download URL is not a valid URL: ${url}`, 'url');
   }
 
   if (parsed.protocol !== 'https:') {
-    throw new Error(`Download URL must use HTTPS, got: ${parsed.protocol} for ${url}`);
+    throw new ValidationError(
+      `Download URL must use HTTPS, got: ${parsed.protocol} for ${url}`,
+      'url'
+    );
   }
 
   const host = parsed.hostname.toLowerCase();
@@ -147,10 +151,11 @@ export function validateDownloadUrl(url: string): void {
     (DOWNLOAD_HOST_ALLOWLIST as string[]).includes(host) || host.endsWith('.githubusercontent.com');
 
   if (!allowed) {
-    throw new Error(
+    throw new ValidationError(
       `Download URL hostname "${host}" is not in the trusted allowlist ` +
         `(${DOWNLOAD_HOST_ALLOWLIST.join(', ')}, *.githubusercontent.com). ` +
-        `Refusing to download from untrusted host.`
+        `Refusing to download from untrusted host.`,
+      'url'
     );
   }
 }
@@ -170,7 +175,7 @@ async function defaultFetchReleaseAsset(tag: string, asset: string): Promise<Rel
   });
 
   if (statusCode !== 200) {
-    throw new Error(`GitHub API returned ${statusCode} for tag ${tag}`);
+    throw new NetworkError(`GitHub API returned ${statusCode} for tag ${tag}`, apiUrl, statusCode);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -179,15 +184,16 @@ async function defaultFetchReleaseAsset(tag: string, asset: string): Promise<Rel
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const found = (release.assets as any[]).find((a: { name: string }) => a.name === asset);
   if (!found) {
-    throw new Error(`Asset "${asset}" not found in release ${tag}`);
+    throw new NetworkError(`Asset "${asset}" not found in release ${tag}`, apiUrl);
   }
 
   const digest = typeof found.digest === 'string' ? found.digest : '';
   const match = /^sha256:([a-fA-F0-9]{64})$/.exec(digest.trim());
   if (!match || !match[1]) {
-    throw new Error(
+    throw new ValidationError(
       `Asset "${asset}" in release ${tag} does not include a valid sha256 digest. ` +
-        'Refusing to install an unverifiable CCS Bar archive.'
+        'Refusing to install an unverifiable CCS Bar archive.',
+      'digest'
     );
   }
 
@@ -226,7 +232,10 @@ async function defaultDownloadAndExtract(
   // Validate initial URL (Finding #9) and require an integrity pin.
   validateDownloadUrl(url);
   if (!/^[a-fA-F0-9]{64}$/.test(expectedSha256)) {
-    throw new Error('Missing or invalid SHA-256 digest for CCS Bar archive. Refusing to install.');
+    throw new ValidationError(
+      'Missing or invalid SHA-256 digest for CCS Bar archive. Refusing to install.',
+      'expectedSha256'
+    );
   }
 
   mkdirSync(dest, { recursive: true });
@@ -247,7 +256,11 @@ async function defaultDownloadAndExtract(
         : headers['location'];
 
       if (!location) {
-        throw new Error(`Redirect (HTTP ${statusCode}) from ${currentUrl} has no Location header`);
+        throw new NetworkError(
+          `Redirect (HTTP ${statusCode}) from ${currentUrl} has no Location header`,
+          currentUrl,
+          statusCode
+        );
       }
 
       // Resolve relative redirects against the current URL
@@ -257,7 +270,11 @@ async function defaultDownloadAndExtract(
       validateDownloadUrl(resolved);
 
       if (redirectsFollowed >= MAX_REDIRECTS) {
-        throw new Error(`Too many redirects (>${MAX_REDIRECTS}) while downloading ${url}`);
+        throw new NetworkError(
+          `Too many redirects (>${MAX_REDIRECTS}) while downloading ${url}`,
+          currentUrl,
+          statusCode
+        );
       }
 
       // Drain the body to free the socket before following the redirect
@@ -269,7 +286,11 @@ async function defaultDownloadAndExtract(
     }
 
     if (statusCode !== 200) {
-      throw new Error(`Download failed: HTTP ${statusCode} for ${currentUrl}`);
+      throw new NetworkError(
+        `Download failed: HTTP ${statusCode} for ${currentUrl}`,
+        currentUrl,
+        statusCode
+      );
     }
 
     const tmpZip = path.join(os.tmpdir(), `ccs-bar-${Date.now()}.zip`);
@@ -287,9 +308,10 @@ async function defaultDownloadAndExtract(
       } catch {
         /* ignore */
       }
-      throw new Error(
+      throw new ValidationError(
         'Downloaded CCS Bar archive failed SHA-256 verification. ' +
-          `Expected ${expectedSha256.toLowerCase()}, got ${actualSha256.toLowerCase()}.`
+          `Expected ${expectedSha256.toLowerCase()}, got ${actualSha256.toLowerCase()}.`,
+        'sha256'
       );
     }
 
@@ -314,9 +336,10 @@ async function defaultDownloadAndExtract(
           } catch {
             /* ignore */
           }
-          throw new Error(
+          throw new ValidationError(
             `Zip-slip detected: archive entry "${entryPath}" contains a path traversal ` +
-              `component. Refusing to extract.`
+              `component. Refusing to extract.`,
+            'archiveEntry'
           );
         }
       }

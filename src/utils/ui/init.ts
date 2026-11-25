@@ -60,10 +60,10 @@ export async function initUI(): Promise<void> {
  * Respects NO_COLOR and FORCE_COLOR environment variables
  */
 export function useColors(): boolean {
-  // FORCE_COLOR overrides all checks
-  if (process.env.FORCE_COLOR) return true;
-  // NO_COLOR disables colors
+  // NO_COLOR takes precedence over FORCE_COLOR (https://no-color.org/)
   if (process.env.NO_COLOR) return false;
+  // FORCE_COLOR enables colors even without TTY
+  if (process.env.FORCE_COLOR) return true;
   // Otherwise, check if TTY
   return !!process.stdout.isTTY;
 }

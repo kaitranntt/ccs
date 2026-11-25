@@ -360,7 +360,7 @@ describe('openai proxy daemon lifecycle', () => {
       hostname: '127.0.0.1',
       fetch: () => new Response('busy'),
     });
-    const occupiedPort = server.port;
+    const occupiedPort = server.port as number;
 
     try {
       const settingsPath = path.join(tempDir, 'occupied-explicit.settings.json');
@@ -451,7 +451,7 @@ describe('openai proxy daemon lifecycle', () => {
       hostname: '127.0.0.1',
       fetch: () => new Response('busy'),
     });
-    const occupiedPort = server.port;
+    const occupiedPort = server.port as number;
 
     try {
       mutateUnifiedConfig((config) => {

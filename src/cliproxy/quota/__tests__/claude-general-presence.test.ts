@@ -14,7 +14,7 @@ describe('Claude general window presence', () => {
     const expected = {
       fiveHour: mask & 1 ? 'present' : 'absent',
       weekly: mask & 2 ? 'present' : 'absent',
-    };
+    } as const;
     it(`recognizes complete modern 5h/weekly/Fable subset ${mask}`, () => {
       expect(
         buildClaudeGeneralWindowPresence({

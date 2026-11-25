@@ -10,6 +10,7 @@ import {
   type OpenAICompatEntry,
   type UpsertAiProviderEntryInput,
 } from './types';
+import { ValidationError } from '../../errors/error-types';
 import { getAiProvidersSourceSummary, readFamilyEntries, writeFamilyEntries } from './config-store';
 
 function maskSecret(value: string | undefined): string | undefined {
@@ -239,31 +240,31 @@ function resolveEntryIndex(entries: Array<{ id?: string }>, entryId: string): nu
     }
   }
 
-  throw new Error('Entry not found');
+  throw new ValidationError('Entry not found', 'entryId');
 }
 
 function assertEntryId(entryId: string): void {
   if (!entryId.trim()) {
-    throw new Error('Entry not found');
+    throw new ValidationError('Entry not found', 'entryId');
   }
 }
 
 function validateFamilyInput(family: AiProviderFamilyId, input: UpsertAiProviderEntryInput): void {
   if (family === 'openai-compatibility') {
     if (!(input.name?.trim() || '').length) {
-      throw new Error('name is required');
+      throw new ValidationError('name is required', 'name');
     }
     if (!(input.baseUrl?.trim() || '').length) {
-      throw new Error('baseUrl is required');
+      throw new ValidationError('baseUrl is required', 'baseUrl');
     }
     if (!input.preserveSecrets && !(input.apiKeys || []).some((value) => value.trim().length > 0)) {
-      throw new Error('At least one api key is required');
+      throw new ValidationError('At least one api key is required', 'apiKeys');
     }
     return;
   }
 
   if (!input.preserveSecrets && !(input.apiKey?.trim() || '').length) {
-    throw new Error('apiKey is required');
+    throw new ValidationError('apiKey is required', 'apiKey');
   }
 }
 

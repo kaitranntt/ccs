@@ -160,7 +160,7 @@ describe('global fetch proxy setup', () => {
 
     expect(globalThis.fetch).toBe(originalFetch);
     expect(applyGlobalFetchProxy()).toEqual({ enabled: true });
-    expect(globalThis.fetch).toBe(undiciFetch);
+    expect<unknown>(globalThis.fetch).toBe(undiciFetch);
     expect(getGlobalDispatcher()).not.toBe(originalDispatcher);
   });
 

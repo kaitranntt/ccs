@@ -18,6 +18,8 @@
  *   - The base URL is a known Anthropic-style provider host.
  */
 
+import { ValidationError } from '../errors/error-types';
+
 function normalizePathname(pathname: string): string {
   const trimmed = pathname.replace(/\/+$/, '');
   return trimmed || '';
@@ -25,7 +27,7 @@ function normalizePathname(pathname: string): string {
 
 function ensureSupportedProtocol(parsed: URL): void {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`Unsupported upstream protocol: ${parsed.protocol}`);
+    throw new ValidationError(`Unsupported upstream protocol: ${parsed.protocol}`, 'baseUrl');
   }
 }
 

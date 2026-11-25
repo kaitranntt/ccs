@@ -318,7 +318,7 @@ describe('resolveProfileAndTarget', () => {
     expect(result.profile).toBe('codex');
     expect(result.profileInfo.type).toBe('cliproxy');
     expect(result.resolvedTarget).toBe('codex');
-    expect(result.targetAdapter).toBe(mockCodexAdapter);
+    expect<unknown>(result.targetAdapter).toBe(mockCodexAdapter);
     expect(result.targetRemainingArgs).toEqual(['fix failing tests']);
     expect(mockEvaluateTargetRuntimeCompatibility).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -405,8 +405,8 @@ describe('resolveProfileAndTarget', () => {
     });
 
     expect(result.resolvedTarget).toBe('droid');
-    expect(result.targetAdapter).toBe(mockDroidAdapter);
-    expect(result.targetBinaryInfo).toBe(mockBinaryInfo);
+    expect<unknown>(result.targetAdapter).toBe(mockDroidAdapter);
+    expect<unknown>(result.targetBinaryInfo).toBe(mockBinaryInfo);
     expect(exitSpy).not.toHaveBeenCalled();
   });
 

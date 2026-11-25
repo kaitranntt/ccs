@@ -185,7 +185,7 @@ export function* parseProtobufFrames(buffer: Buffer): Generator<ParsedConnectFra
 
     if (offset + 5 + length > buffer.length) break;
 
-    let payload = buffer.slice(offset + 5, offset + 5 + length);
+    let payload: Buffer = buffer.slice(offset + 5, offset + 5 + length);
     offset += 5 + length;
 
     try {

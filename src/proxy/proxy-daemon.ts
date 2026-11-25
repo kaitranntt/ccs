@@ -3,6 +3,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as http from 'http';
 import * as lockfile from 'proper-lockfile';
+import { ProxyError } from '../errors/error-types';
 import { verifyProcessOwnership } from '../shared/daemon-lifecycle';
 import type { OpenAICompatProfileConfig } from './profile-router';
 import {
@@ -95,7 +96,7 @@ async function withOpenAICompatProxyLock<T>(operation: () => Promise<T>): Promis
       realpath: false,
     });
   } catch (error) {
-    throw new Error(
+    throw new ProxyError(
       `Failed to lock OpenAI-compatible proxy directory (${proxyDir}): ${(error as Error).message}`
     );
   }
