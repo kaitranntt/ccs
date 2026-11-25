@@ -127,6 +127,21 @@ export interface WebSearchConfig {
 }
 
 /**
+ * Normalize `websearch.native_profiles` into a list of unique, non-empty profile names.
+ */
+export function normalizeNativeWebSearchProfiles(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const names = value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  return [...new Set(names)];
+}
+
+/**
  * Normalize a SearXNG base URL so runtime code can safely append `/search`.
  *
  * Accepts optional subpaths (for reverse-proxy deployments), strips a trailing

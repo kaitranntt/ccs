@@ -654,9 +654,9 @@
       ]
     },
     "hotpathConsoleErrors": {
-      "totalOccurrences": 593,
+      "totalOccurrences": 594,
       "exemptOccurrences": 326,
-      "hotpathOccurrences": 267,
+      "hotpathOccurrences": 268,
       "filesAffected": 82,
       "topFiles": [
         {
