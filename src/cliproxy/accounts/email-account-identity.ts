@@ -77,6 +77,16 @@ export function extractCanonicalEmailFromAccountId(accountId: string): string | 
   return canonical && canonical.includes('@') ? canonical : null;
 }
 
+export function extractAccountVariantFromAccountId(accountId: string): string | null {
+  const hashIndex = accountId.indexOf('#');
+  if (hashIndex === -1) {
+    return null;
+  }
+
+  const variant = accountId.slice(hashIndex + 1).trim();
+  return variant.length > 0 ? variant : null;
+}
+
 export function extractEmailAccountVariantKey(
   provider: CLIProxyProvider | string,
   tokenFile: string,

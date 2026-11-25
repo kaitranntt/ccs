@@ -562,7 +562,7 @@ export function registerAccount(
       if (nickname) {
         const validationError = validateNickname(nickname);
         if (validationError) {
-          throw new Error(validationError);
+          throw new AuthError(validationError);
         }
 
         const existingAccounts = Object.entries(providerAccounts.accounts).map(([id, account]) => ({
@@ -570,7 +570,7 @@ export function registerAccount(
           nickname: account.nickname,
         }));
         if (hasAccountNameConflict(existingAccounts, nickname, accountId)) {
-          throw new Error(
+          throw new AuthError(
             `An account with nickname "${nickname}" already exists for ${provider}. ` +
               `Choose a different nickname.`
           );
@@ -589,8 +589,11 @@ export function registerAccount(
         ? new Set([...sameEmailEntries.map(([, account]) => account.tokenFile), tokenFile]).size
         : 1;
 
-      if (email && duplicateEmailCount > 1) {
+      if (email && sameEmailEntries.length > 0) {
         for (const [existingId, existingMeta] of sameEmailEntries) {
+          if (duplicateEmailCount <= 1 && existingMeta.tokenFile !== tokenFile) {
+            continue;
+          }
           const migratedId = buildEmailBackedAccountId(
             provider,
             existingMeta.tokenFile,
@@ -615,7 +618,7 @@ export function registerAccount(
       if (nickname) {
         const validationError = validateNickname(nickname);
         if (validationError) {
-          throw new Error(validationError);
+          throw new AuthError(validationError);
         }
 
         const existingAccounts = Object.entries(providerAccounts.accounts).map(([id, account]) => ({
@@ -623,7 +626,7 @@ export function registerAccount(
           nickname: account.nickname,
         }));
         if (hasAccountNameConflict(existingAccounts, nickname, accountId)) {
-          throw new Error(
+          throw new AuthError(
             `An account with nickname "${nickname}" already exists for ${provider}. ` +
               `Choose a different nickname.`
           );

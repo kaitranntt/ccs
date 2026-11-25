@@ -172,6 +172,24 @@ describe('cliproxy-auth-routes reauth account targeting', () => {
     });
   });
 
+  it('resolves a #variant account target when hydrated to its unambiguous canonical email', () => {
+    const hydratedAccounts = [
+      {
+        id: 'user@example.com',
+        email: 'user@example.com',
+        nickname: 'work',
+        tokenFile: 'claude-5bc8604b-user@example.com.json',
+      },
+    ];
+
+    expect(getReauthAccountTarget('user@example.com#5bc8604b', hydratedAccounts)).toEqual({
+      account: hydratedAccounts[0],
+    });
+    expect(getReauthAccountTarget('user@example.com#a1b2c3d4', hydratedAccounts)).toEqual({
+      error: "Account 'user@example.com#a1b2c3d4' not found for this provider",
+    });
+  });
+
   it('rejects unknown account targets instead of falling back to ambiguous registration', () => {
     expect(getReauthAccountTarget('missing', existingAccounts)).toEqual({
       error: "Account 'missing' not found for this provider",

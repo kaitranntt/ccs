@@ -5,6 +5,7 @@
  * Uses CLAUDE_CONFIG_DIR for per-profile instance isolation on all platforms.
  */
 
+import * as path from 'path';
 import { execClaude } from '../../utils/shell-executor';
 import { maybeWarnAboutResumeLaneMismatch } from '../../auth/resume-lane-warning';
 import { isProfileLocalSharedResourceMode } from '../../auth/shared-resource-policy';
@@ -12,6 +13,7 @@ import { resolveNativeClaudeLaunchArgs } from '../environment-builder';
 import type { ProfileDispatchContext } from '../dispatcher-context';
 import { maybeShowPoolOnboardingHint } from '../../cliproxy/routing/pool-onboarding-hint';
 import { hasUnifiedConfig } from '../../config/config-loader-facade';
+import { loadOptionalSettingsFile, prepareOpenAICompatLaunch } from './openai-compat-launch';
 
 export async function runAccountFlow(ctx: ProfileDispatchContext): Promise<void> {
   const {
@@ -72,5 +74,29 @@ export async function runAccountFlow(ctx: ProfileDispatchContext): Promise<void>
     'account',
     instancePath
   );
+
+  const instanceSettingsPath = path.join(instancePath, 'settings.json');
+  const instanceSettings = loadOptionalSettingsFile(instanceSettingsPath);
+  if (instanceSettings) {
+    const openAICompatLaunch = await prepareOpenAICompatLaunch({
+      profileName: profileInfo.name,
+      settingsPath: instanceSettingsPath,
+      settings: instanceSettings,
+      settingsEnv: instanceSettings.env || {},
+      baseEnv: envVars,
+      claudeConfigDir: instancePath,
+      args: launchArgs,
+    });
+    if (openAICompatLaunch) {
+      execClaude(
+        claudeCli,
+        openAICompatLaunch.launchArgs,
+        openAICompatLaunch.envVars,
+        openAICompatLaunch.cleanup
+      );
+      return;
+    }
+  }
+
   execClaude(claudeCli, launchArgs, envVars);
 }

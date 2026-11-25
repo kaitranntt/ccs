@@ -529,69 +529,147 @@ describe('cliproxy-auth-routes manual callback nickname persistence', () => {
     }
   });
 
-  it('does not treat rewrites of pre-existing token files as a newly added account', async () => {
+  it('matches an existing-email overwrite on add-account when no brand-new file appeared', async () => {
     const tokenDir = path.join(tempHome, '.ccs', 'cliproxy', 'auth');
     fs.mkdirSync(tokenDir, { recursive: true });
-    const tokenPath = path.join(tokenDir, 'codex-existing@example.com.json');
+    const tokenPath = path.join(tokenDir, 'claude-5bc8604b-existing@example.com.json');
     fs.writeFileSync(
       tokenPath,
-      JSON.stringify({ type: 'codex', email: 'existing@example.com', version: 1 }),
+      JSON.stringify({
+        type: 'claude',
+        email: 'existing@example.com',
+        access_token: 'old-access',
+        last_refresh: '2026-10-01T00:00:00.000Z',
+      }),
       'utf8'
     );
 
     mockFetch([
       {
-        url: /\/v0\/management\/codex-auth-url\?is_webui=true$/,
+        url: /\/v0\/management\/anthropic-auth-url\?is_webui=true$/,
         response: {
-          auth_url: 'https://auth.example.com/authorize?state=state-existing-rewrite',
-          state: 'state-existing-rewrite',
+          auth_url: 'https://auth.example.com/authorize?state=state-existing-overwrite',
+          state: 'state-existing-overwrite',
         },
       },
       {
-        url: /\/v0\/management\/get-auth-status\?state=state-existing-rewrite$/,
-        response: { status: 'ok' },
-      },
-      {
-        url: /\/v0\/management\/get-auth-status\?state=state-existing-rewrite$/,
+        url: /\/v0\/management\/get-auth-status\?state=state-existing-overwrite$/,
         response: { status: 'ok' },
       },
     ]);
 
-    const startResponse = await postJson('/api/cliproxy/auth/codex/start-url', {});
+    const startResponse = await postJson('/api/cliproxy/auth/claude/start-url', {});
     expect(startResponse.status).toBe(200);
 
     fs.writeFileSync(
       tokenPath,
-      JSON.stringify({ type: 'codex', email: 'existing@example.com', version: 2 }),
+      JSON.stringify({
+        type: 'claude',
+        email: 'existing@example.com',
+        access_token: 'new-access',
+        last_refresh: '2026-10-20T00:00:00.000Z',
+      }),
       'utf8'
     );
 
-    const realDateNow = Date.now;
-    let now = realDateNow();
-    Date.now = () => now;
-    try {
-      const firstStatusResponse = await getJson(
-        '/api/cliproxy/auth/codex/status?state=state-existing-rewrite'
-      );
+    const statusResponse = await getJson(
+      '/api/cliproxy/auth/claude/status?state=state-existing-overwrite'
+    );
 
-      expect(firstStatusResponse.status).toBe(200);
-      expect(firstStatusResponse.body).toEqual({ status: 'wait' });
+    expect(statusResponse.status).toBe(200);
+    expect(statusResponse.body).toEqual({
+      status: 'ok',
+      account: {
+        id: 'existing@example.com',
+        email: 'existing@example.com',
+        nickname: 'existing',
+        provider: 'claude',
+        isDefault: true,
+      },
+    });
+  });
 
-      now += 16_000;
+  it('reauthenticates a single-file #variant Claude account without returning 409', async () => {
+    const cliproxyDir = path.join(tempHome, '.ccs', 'cliproxy');
+    const tokenDir = path.join(cliproxyDir, 'auth');
+    fs.mkdirSync(tokenDir, { recursive: true });
+    const tokenFile = 'claude-5bc8604b-variant@example.com.json';
+    const tokenPath = path.join(tokenDir, tokenFile);
+    fs.writeFileSync(
+      tokenPath,
+      JSON.stringify({
+        type: 'claude',
+        email: 'variant@example.com',
+        access_token: 'old-access',
+      }),
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(cliproxyDir, 'accounts.json'),
+      JSON.stringify({
+        version: 1,
+        providers: {
+          claude: {
+            default: 'variant@example.com#5bc8604b',
+            accounts: {
+              'variant@example.com#5bc8604b': {
+                email: 'variant@example.com',
+                nickname: 'work',
+                tokenFile,
+                createdAt: '2026-01-01T00:00:00.000Z',
+                lastUsedAt: '2026-01-01T00:00:00.000Z',
+              },
+            },
+          },
+        },
+      }),
+      'utf8'
+    );
 
-      const secondStatusResponse = await getJson(
-        '/api/cliproxy/auth/codex/status?state=state-existing-rewrite'
-      );
+    mockFetch([
+      {
+        url: /\/v0\/management\/anthropic-auth-url\?is_webui=true$/,
+        response: {
+          auth_url: 'https://auth.example.com/authorize?state=state-claude-variant-reauth',
+          state: 'state-claude-variant-reauth',
+        },
+      },
+      {
+        url: /\/v0\/management\/get-auth-status\?state=state-claude-variant-reauth$/,
+        response: { status: 'ok' },
+      },
+    ]);
 
-      expect(secondStatusResponse.status).toBe(409);
-      expect(secondStatusResponse.body).toEqual({
-        status: 'error',
-        error:
-          'Authentication completed upstream, but no new local token was saved for this account. Update CCS/CLIProxy and retry.',
-      });
-    } finally {
-      Date.now = realDateNow;
-    }
+    const startResponse = await postJson('/api/cliproxy/auth/claude/start-url', {
+      accountId: 'variant@example.com#5bc8604b',
+    });
+    expect(startResponse.status).toBe(200);
+
+    fs.writeFileSync(
+      tokenPath,
+      JSON.stringify({
+        type: 'claude',
+        email: 'variant@example.com',
+        access_token: 'refreshed-access',
+      }),
+      'utf8'
+    );
+
+    const statusResponse = await getJson(
+      '/api/cliproxy/auth/claude/status?state=state-claude-variant-reauth'
+    );
+
+    expect(statusResponse.status).toBe(200);
+    expect(statusResponse.body).toEqual({
+      status: 'ok',
+      account: {
+        id: 'variant@example.com',
+        email: 'variant@example.com',
+        nickname: 'work',
+        provider: 'claude',
+        isDefault: true,
+      },
+    });
   });
 
   it('reauthenticates a targeted existing Codex account when its token file is rewritten', async () => {

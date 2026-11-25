@@ -6,9 +6,9 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 
 | Metric | Value |
 |---|---:|
-| Sync fs occurrences (all) | 2688 |
-| Sync fs files affected (all) | 285 |
-| Sync fs occurrences (runtime hotpaths) | 1228 |
+| Sync fs occurrences (all) | 2693 |
+| Sync fs files affected (all) | 286 |
+| Sync fs occurrences (runtime hotpaths) | 1231 |
 | Sync fs files affected (runtime hotpaths) | 165 |
 | Legacy shim markers | 494 |
 | Legacy shim files affected | 185 |
@@ -17,9 +17,9 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 
 | File | Sync Calls | API Names |
 |---|---:|---|
+| `src/management/shared-manager/diverged-file-adopter.ts` | 32 | chmodSync, closeSync, fsyncSync, linkSync, lstatSync, openSync, readdirSync, readFileSync, readlinkSync, renameSync, statSync, unlinkSync, writeFileSync |
 | `src/utils/browser/mcp-installer.ts` | 32 | chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync |
 | `src/utils/image-analysis/mcp-installer.ts` | 30 | chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync |
-| `src/management/shared-manager/diverged-file-adopter.ts` | 29 | chmodSync, closeSync, fsyncSync, linkSync, lstatSync, openSync, readdirSync, readFileSync, readlinkSync, renameSync, statSync, unlinkSync, writeFileSync |
 | `src/utils/claude-symlink-manager.ts` | 27 | copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, unlinkSync |
 | `src/cliproxy/config/env-builder.ts` | 25 | existsSync, mkdirSync, readFileSync, writeFileSync |
 | `src/management/shared-manager/migrations.ts` | 25 | copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readdirSync, symlinkSync, unlinkSync, writeFileSync |
@@ -57,14 +57,14 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 
 | Metric | Value |
 |---|---:|
-| typed-error adoption (typed/total throws) | 27.6% (135/489) |
+| typed-error adoption (typed/total throws) | 28.6% (140/489) |
 | typed-error adoption (P4 locked subdomains) | 93.3% (28/30), target 40% |
 | hotpath console.error/warn occurrences | 268 (594 total, 326 CLI-UX exempt) |
 | hotpath console.error/warn files | 82 |
-| files with createLogger | 68/781 |
+| files with createLogger | 68/782 |
 | subdomains with zero createLogger | 14 (api, bin, channels, cliproxy, cliproxy/accounts, cliproxy/binary, cliproxy/config, cliproxy/management, cliproxy/sync, cliproxy/types, config, dispatcher, shared, types) |
-| files > 400 LOC | 98 |
-| files > 600 LOC | 45 |
+| files > 400 LOC | 97 |
+| files > 600 LOC | 46 |
 
 ### Top Hotpath console.error/warn Files
 
@@ -91,7 +91,7 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 | File | LOC |
 |---|---:|
 | `src/web-server/usage/native-quota-collector.ts` | 1718 |
-| `src/web-server/routes/cliproxy-auth-routes.ts` | 1531 |
+| `src/web-server/routes/cliproxy-auth-routes.ts` | 1591 |
 | `src/cliproxy/auth/oauth-handler.ts` | 1510 |
 | `src/web-server/model-pricing.ts` | 1298 |
 | `src/cliproxy/config/generator.ts` | 1295 |
@@ -104,5 +104,5 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 | `src/commands/cliproxy/variant-subcommand.ts` | 1003 |
 | `src/cliproxy/quota/quota-manager.ts` | 946 |
 | `src/web-server/services/codex-dashboard-service.ts` | 940 |
-| `src/cliproxy/accounts/registry.ts` | 927 |
+| `src/cliproxy/accounts/registry.ts` | 930 |
 

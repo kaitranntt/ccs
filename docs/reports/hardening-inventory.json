@@ -1,11 +1,31 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 2688,
-    "filesAffected": 285,
-    "hotpathOccurrences": 1228,
+    "totalOccurrences": 2693,
+    "filesAffected": 286,
+    "hotpathOccurrences": 1231,
     "hotpathFilesAffected": 165,
     "topHotpathFiles": [
+      {
+        "file": "src/management/shared-manager/diverged-file-adopter.ts",
+        "count": 32,
+        "calls": [
+          "chmodSync",
+          "closeSync",
+          "fsyncSync",
+          "linkSync",
+          "lstatSync",
+          "openSync",
+          "readdirSync",
+          "readFileSync",
+          "readlinkSync",
+          "renameSync",
+          "statSync",
+          "unlinkSync",
+          "writeFileSync"
+        ],
+        "markers": []
+      },
       {
         "file": "src/utils/browser/mcp-installer.ts",
         "count": 32,
@@ -31,26 +51,6 @@
           "existsSync",
           "mkdirSync",
           "readFileSync",
-          "renameSync",
-          "statSync",
-          "unlinkSync",
-          "writeFileSync"
-        ],
-        "markers": []
-      },
-      {
-        "file": "src/management/shared-manager/diverged-file-adopter.ts",
-        "count": 29,
-        "calls": [
-          "chmodSync",
-          "closeSync",
-          "fsyncSync",
-          "linkSync",
-          "lstatSync",
-          "openSync",
-          "readdirSync",
-          "readFileSync",
-          "readlinkSync",
           "renameSync",
           "statSync",
           "unlinkSync",
@@ -286,14 +286,18 @@
         "markers": []
       },
       {
-        "file": "src/utils/browser/mcp-installer.ts",
+        "file": "src/management/shared-manager/diverged-file-adopter.ts",
         "count": 32,
         "calls": [
           "chmodSync",
-          "copyFileSync",
-          "existsSync",
-          "mkdirSync",
+          "closeSync",
+          "fsyncSync",
+          "linkSync",
+          "lstatSync",
+          "openSync",
+          "readdirSync",
           "readFileSync",
+          "readlinkSync",
           "renameSync",
           "statSync",
           "unlinkSync",
@@ -501,10 +505,10 @@
   "maintainability": {
     "typedErrors": {
       "totalThrows": 489,
-      "typedThrows": 135,
-      "plainThrows": 293,
+      "typedThrows": 140,
+      "plainThrows": 288,
       "otherThrows": 61,
-      "adoptionRatio": 0.2761,
+      "adoptionRatio": 0.2863,
       "topSubdomainsByThrows": [
         {
           "subdomain": "web-server",
@@ -515,8 +519,8 @@
         {
           "subdomain": "cliproxy/accounts",
           "count": 39,
-          "typed": 28,
-          "plain": 11
+          "typed": 32,
+          "plain": 7
         },
         {
           "subdomain": "proxy",
@@ -582,8 +586,8 @@
     },
     "loggerCoverage": {
       "filesWithCreateLogger": 68,
-      "totalSourceFiles": 781,
-      "coverageRatio": 0.0871,
+      "totalSourceFiles": 782,
+      "coverageRatio": 0.087,
       "subdomainsWithZeroCreateLogger": [
         "api",
         "bin",
@@ -722,8 +726,8 @@
       ]
     },
     "largeFiles": {
-      "countOver400": 98,
-      "countOver600": 45,
+      "countOver400": 97,
+      "countOver600": 46,
       "topOver400": [
         {
           "file": "src/web-server/usage/native-quota-collector.ts",
@@ -731,7 +735,7 @@
         },
         {
           "file": "src/web-server/routes/cliproxy-auth-routes.ts",
-          "loc": 1531
+          "loc": 1591
         },
         {
           "file": "src/cliproxy/auth/oauth-handler.ts",
@@ -783,7 +787,7 @@
         },
         {
           "file": "src/cliproxy/accounts/registry.ts",
-          "loc": 927
+          "loc": 930
         }
       ]
     }
