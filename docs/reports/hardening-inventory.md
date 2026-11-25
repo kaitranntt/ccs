@@ -93,15 +93,15 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 | `src/web-server/usage/native-quota-collector.ts` | 1718 |
 | `src/web-server/routes/cliproxy-auth-routes.ts` | 1531 |
 | `src/cliproxy/auth/oauth-handler.ts` | 1510 |
+| `src/web-server/model-pricing.ts` | 1298 |
 | `src/cliproxy/config/generator.ts` | 1295 |
-| `src/web-server/model-pricing.ts` | 1280 |
 | `src/cursor/cursor-executor.ts` | 1234 |
 | `src/cliproxy/config/env-builder.ts` | 1053 |
 | `src/cliproxy/proxy/tool-sanitization-proxy.ts` | 1052 |
 | `src/cliproxy/auth/oauth-process.ts` | 1048 |
 | `src/web-server/routes/settings-routes.ts` | 1042 |
+| `src/cliproxy/model-catalog.ts` | 1019 |
 | `src/commands/cliproxy/variant-subcommand.ts` | 1003 |
-| `src/cliproxy/model-catalog.ts` | 1001 |
 | `src/cliproxy/quota/quota-manager.ts` | 946 |
 | `src/web-server/services/codex-dashboard-service.ts` | 940 |
 | `src/cliproxy/accounts/registry.ts` | 927 |

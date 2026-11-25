@@ -738,12 +738,12 @@
           "loc": 1510
         },
         {
-          "file": "src/cliproxy/config/generator.ts",
-          "loc": 1295
+          "file": "src/web-server/model-pricing.ts",
+          "loc": 1298
         },
         {
-          "file": "src/web-server/model-pricing.ts",
-          "loc": 1280
+          "file": "src/cliproxy/config/generator.ts",
+          "loc": 1295
         },
         {
           "file": "src/cursor/cursor-executor.ts",
@@ -766,12 +766,12 @@
           "loc": 1042
         },
         {
-          "file": "src/commands/cliproxy/variant-subcommand.ts",
-          "loc": 1003
+          "file": "src/cliproxy/model-catalog.ts",
+          "loc": 1019
         },
         {
-          "file": "src/cliproxy/model-catalog.ts",
-          "loc": 1001
+          "file": "src/commands/cliproxy/variant-subcommand.ts",
+          "loc": 1003
         },
         {
           "file": "src/cliproxy/quota/quota-manager.ts",
