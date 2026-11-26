@@ -99,7 +99,7 @@ function normalizePluginMetadataFiles(
     }
 
     seen.add(dedupeKey);
-    normalizePluginMetadataFile(registryPath, successMessage, warningLabel);
+    normalizePluginMetadataFile(registryPath, roots.claudeDir, successMessage, warningLabel);
   }
 }
 
@@ -122,6 +122,7 @@ function getPluginMetadataFilePaths(
 
 function normalizePluginMetadataFile(
   registryPath: string,
+  targetConfigDir: string,
   successMessage: string,
   warningLabel: string
 ): void {
@@ -131,7 +132,7 @@ function normalizePluginMetadataFile(
 
   try {
     const original = fs.readFileSync(registryPath, 'utf8');
-    const normalized = normalizePluginMetadataContent(original);
+    const normalized = normalizePluginMetadataContent(original, targetConfigDir);
 
     if (normalized !== original) {
       fs.writeFileSync(registryPath, normalized, 'utf8');

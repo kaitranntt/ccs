@@ -13,12 +13,11 @@
  * its own.
  */
 
-import * as os from 'os';
 import * as path from 'path';
 
 import { warn } from '../../utils/ui';
 import type { AccountContextPolicy } from '../../auth/account-context';
-import { getCcsDir } from '../../config/config-loader-facade';
+import { getCcsDir, getCcsHome } from '../../shared/ccs-paths';
 import ProfileContextSyncLock from '../profile-context-sync-lock';
 
 import {
@@ -55,7 +54,7 @@ class SharedManager {
   private readonly pluginLayoutLock: ProfileContextSyncLock;
 
   constructor() {
-    this.homeDir = os.homedir();
+    this.homeDir = getCcsHome();
     const ccsDir = getCcsDir();
     this.sharedDir = path.join(ccsDir, 'shared');
     this.claudeDir = path.join(this.homeDir, '.claude');
