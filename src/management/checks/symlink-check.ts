@@ -4,17 +4,16 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { ok, fail, warn } from '../../utils/ui';
 import { HealthCheck, IHealthChecker, createSpinner } from './types';
-import { getCcsDir } from '../../config/config-loader-facade';
+import { getCcsDir, getCcsHome } from '../../shared/ccs-paths';
 import { listAccountInstanceNames } from '../instance-directory';
 
 const ora = createSpinner();
 
 // Get paths at runtime to respect CCS_HOME for test isolation
 function getHomedir(): string {
-  return os.homedir();
+  return getCcsHome();
 }
 
 function getCcsDirPath(): string {

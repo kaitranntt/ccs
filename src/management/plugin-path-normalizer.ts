@@ -1,5 +1,5 @@
-import * as os from 'os';
 import * as path from 'path';
+import { getCcsHome } from '../shared/ccs-paths';
 
 function getPluginPathModule(
   targetConfigDir: string,
@@ -19,7 +19,7 @@ function normalizeTargetConfigDir(targetConfigDir: string, input: string): strin
 
 export function normalizePluginMetadataPathString(
   input: string,
-  targetConfigDir = path.join(os.homedir(), '.claude')
+  targetConfigDir = path.join(getCcsHome(), '.claude')
 ): string {
   const match = input.match(
     /^(.*?)([\\/])(?:\.claude|\.ccs\2shared|\.ccs\2instances\2[^\\/]+)\2plugins(?:(\2.*))?$/
@@ -73,7 +73,7 @@ export function normalizePluginMetadataValue(
 
 export function normalizePluginMetadataContent(
   original: string,
-  targetConfigDir = path.join(os.homedir(), '.claude')
+  targetConfigDir = path.join(getCcsHome(), '.claude')
 ): string {
   const parsed = JSON.parse(original) as unknown;
   const result = normalizePluginMetadataValue(parsed, targetConfigDir);
