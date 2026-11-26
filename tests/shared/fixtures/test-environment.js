@@ -35,6 +35,39 @@ const os = require('os');
 let bootstrappedTestHome;
 const originalHomedir = os.homedir;
 let homedirPatched = false;
+const trackedTestHomes = new Set();
+let exitCleanupRegistered = false;
+let bunAfterAllRegistered = false;
+
+function cleanupTrackedTestHomes() {
+  for (const dir of [...trackedTestHomes]) {
+    trackedTestHomes.delete(dir);
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors during exit/test-runner teardown.
+    }
+  }
+}
+
+function registerCleanupHandlers() {
+  if (!exitCleanupRegistered) {
+    exitCleanupRegistered = true;
+    process.once('exit', cleanupTrackedTestHomes);
+  }
+
+  if (!bunAfterAllRegistered) {
+    try {
+      const bunTest = require('bun:test');
+      if (bunTest && typeof bunTest.afterAll === 'function') {
+        bunTest.afterAll(cleanupTrackedTestHomes);
+        bunAfterAllRegistered = true;
+      }
+    } catch {
+      // Not running inside the Bun test runner (e.g. Node or standalone Bun script).
+    }
+  }
+}
 
 function getEffectiveTestHome() {
   return process.env.CCS_HOME || process.env.HOME || process.env.USERPROFILE || bootstrappedTestHome || originalHomedir();
@@ -65,6 +98,8 @@ function ensureGlobalTestEnvironment() {
   }
 
   const testHome = createIsolatedTestHome();
+  trackedTestHomes.add(testHome);
+  registerCleanupHandlers();
   process.env.HOME = testHome;
   process.env.USERPROFILE = testHome;
   process.env.CCS_HOME = testHome;
@@ -87,6 +122,8 @@ function ensureGlobalTestEnvironment() {
 function createTestEnvironment() {
   // Create unique temp directory for this test run
   const testHome = createIsolatedTestHome('ccs-test-');
+  trackedTestHomes.add(testHome);
+  registerCleanupHandlers();
   const testCcsDir = path.join(testHome, '.ccs');
 
   // Store original environment
@@ -205,6 +242,7 @@ function createTestEnvironment() {
       }
 
       // Clean up temp directory
+      trackedTestHomes.delete(testHome);
       try {
         fs.rmSync(testHome, { recursive: true, force: true });
       } catch (err) {
