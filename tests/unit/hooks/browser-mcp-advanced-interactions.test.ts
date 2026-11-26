@@ -6,6 +6,7 @@ import {
   getMockDropzoneState,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
   tmpdir,
   join,
@@ -15,195 +16,203 @@ import type { MockPageState } from './browser-mcp-test-harness';
 describe('ccs-browser MCP server - advanced interactions', () => {
   it('drags local files onto normal, frame, and shadow dropzones', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'ccs-browser-drag-files-'));
-    const invoicePath = join(tempDir, 'invoice.pdf');
-    const receiptPath = join(tempDir, 'receipt.png');
-    writeFileSync(invoicePath, 'invoice');
-    writeFileSync(receiptPath, 'receipt');
+    try {
+      const invoicePath = join(tempDir, 'invoice.pdf');
+      const receiptPath = join(tempDir, 'receipt.png');
+      writeFileSync(invoicePath, 'invoice');
+      writeFileSync(receiptPath, 'receipt');
 
-    const pages: MockPageState[] = [
-      {
-        id: 'page-1',
-        title: 'Uploads',
-        currentUrl: 'https://example.com/uploads',
-        dropzones: {
-          '#dropzone': { accepted: true },
-          '#cancel-dropzone': { acceptedByCancel: true },
-        },
-        frames: [
-          {
-            selector: '#upload-frame',
-            dropzones: {
-              '#frame-dropzone': { accepted: true },
-            },
-          },
-        ],
-        shadowRoots: [
-          {
-            hostSelector: 'upload-panel',
-            dropzones: {
-              '#shadow-dropzone': { accepted: true },
-            },
-          },
-        ],
-      },
-    ];
-
-    const responses = await runMcpRequests(
-      pages,
-      [
-        {
-          jsonrpc: '2.0',
-          id: 901,
-          method: 'tools/call',
-          params: {
-            name: 'browser_drag_files',
-            arguments: { selector: '#dropzone', files: [invoicePath, receiptPath] },
-          },
-        },
-        {
-          jsonrpc: '2.0',
-          id: 902,
-          method: 'tools/call',
-          params: {
-            name: 'browser_drag_files',
-            arguments: {
-              selector: '#frame-dropzone',
-              files: [invoicePath],
-              frameSelector: '#upload-frame',
-            },
-          },
-        },
-        {
-          jsonrpc: '2.0',
-          id: 903,
-          method: 'tools/call',
-          params: {
-            name: 'browser_drag_files',
-            arguments: {
-              selector: '#shadow-dropzone',
-              files: [receiptPath],
-              pierceShadow: true,
-            },
-          },
-        },
-        {
-          jsonrpc: '2.0',
-          id: 904,
-          method: 'tools/call',
-          params: {
-            name: 'browser_drag_files',
-            arguments: {
-              selector: '#cancel-dropzone',
-              files: [invoicePath],
-            },
-          },
-        },
-      ],
-      { childEnv: { CCS_BROWSER_UPLOAD_ROOTS: tempDir } }
-    );
-
-    expect(getResponseText(responses.find((message) => message.id === 901))).toContain(
-      'status: files-dropped'
-    );
-    expect(getMockDropzoneState(pages[0]!, '#dropzone')?.receivedEventTypes).toEqual([
-      'dragenter',
-      'dragover',
-      'drop',
-    ]);
-    expect(getMockDropzoneState(pages[0]!, '#dropzone')?.receivedFiles).toEqual([
-      { name: 'invoice.pdf', size: 7, type: 'application/pdf' },
-      { name: 'receipt.png', size: 7, type: 'image/png' },
-    ]);
-    expect(
-      getMockDropzoneState(pages[0]!, '#frame-dropzone', { frameSelector: '#upload-frame' })
-        ?.receivedFiles
-    ).toEqual([{ name: 'invoice.pdf', size: 7, type: 'application/pdf' }]);
-    expect(
-      getMockDropzoneState(pages[0]!, '#shadow-dropzone', { pierceShadow: true })?.receivedFiles
-    ).toEqual([{ name: 'receipt.png', size: 7, type: 'image/png' }]);
-    expect(getResponseText(responses.find((message) => message.id === 904))).toContain(
-      'status: files-dropped'
-    );
-    expect(getMockDropzoneState(pages[0]!, '#cancel-dropzone')?.receivedFiles).toEqual([
-      { name: 'invoice.pdf', size: 7, type: 'application/pdf' },
-    ]);
-  });
-
-  it('rejects browser_drag_files for missing files, page conflicts, missing targets, and rejected drops', async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), 'ccs-browser-drag-files-'));
-    const okPath = join(tempDir, 'ok.txt');
-    const missingPath = join(tempDir, 'missing.txt');
-    writeFileSync(okPath, 'ok');
-
-    const responses = await runMcpRequests(
-      [
+      const pages: MockPageState[] = [
         {
           id: 'page-1',
           title: 'Uploads',
           currentUrl: 'https://example.com/uploads',
           dropzones: {
-            '#reject-dropzone': { accepted: false },
+            '#dropzone': { accepted: true },
+            '#cancel-dropzone': { acceptedByCancel: true },
           },
+          frames: [
+            {
+              selector: '#upload-frame',
+              dropzones: {
+                '#frame-dropzone': { accepted: true },
+              },
+            },
+          ],
+          shadowRoots: [
+            {
+              hostSelector: 'upload-panel',
+              dropzones: {
+                '#shadow-dropzone': { accepted: true },
+              },
+            },
+          ],
         },
-      ],
-      [
-        {
-          jsonrpc: '2.0',
-          id: 904,
-          method: 'tools/call',
-          params: {
-            name: 'browser_drag_files',
-            arguments: { selector: '#reject-dropzone', files: [missingPath] },
-          },
-        },
-        {
-          jsonrpc: '2.0',
-          id: 905,
-          method: 'tools/call',
-          params: {
-            name: 'browser_drag_files',
-            arguments: {
-              pageIndex: 0,
-              pageId: 'page-1',
-              selector: '#reject-dropzone',
-              files: [okPath],
+      ];
+
+      const responses = await runMcpRequests(
+        pages,
+        [
+          {
+            jsonrpc: '2.0',
+            id: 901,
+            method: 'tools/call',
+            params: {
+              name: 'browser_drag_files',
+              arguments: { selector: '#dropzone', files: [invoicePath, receiptPath] },
             },
           },
-        },
-        {
-          jsonrpc: '2.0',
-          id: 906,
-          method: 'tools/call',
-          params: {
-            name: 'browser_drag_files',
-            arguments: { selector: '#missing-dropzone', files: [okPath] },
+          {
+            jsonrpc: '2.0',
+            id: 902,
+            method: 'tools/call',
+            params: {
+              name: 'browser_drag_files',
+              arguments: {
+                selector: '#frame-dropzone',
+                files: [invoicePath],
+                frameSelector: '#upload-frame',
+              },
+            },
           },
-        },
-        {
-          jsonrpc: '2.0',
-          id: 907,
-          method: 'tools/call',
-          params: {
-            name: 'browser_drag_files',
-            arguments: { selector: '#reject-dropzone', files: [okPath] },
+          {
+            jsonrpc: '2.0',
+            id: 903,
+            method: 'tools/call',
+            params: {
+              name: 'browser_drag_files',
+              arguments: {
+                selector: '#shadow-dropzone',
+                files: [receiptPath],
+                pierceShadow: true,
+              },
+            },
           },
-        },
-      ],
-      { childEnv: { CCS_BROWSER_UPLOAD_ROOTS: tempDir } }
-    );
+          {
+            jsonrpc: '2.0',
+            id: 904,
+            method: 'tools/call',
+            params: {
+              name: 'browser_drag_files',
+              arguments: {
+                selector: '#cancel-dropzone',
+                files: [invoicePath],
+              },
+            },
+          },
+        ],
+        { childEnv: { CCS_BROWSER_UPLOAD_ROOTS: tempDir } }
+      );
 
-    expect(getResponseText(responses.find((message) => message.id === 904))).toContain(
-      'file does not exist'
-    );
-    expect(getResponseText(responses.find((message) => message.id === 905))).toContain(
-      'pageIndex and pageId cannot be used together'
-    );
-    expect(getResponseText(responses.find((message) => message.id === 906))).toContain(
-      'element not found for selector: #missing-dropzone'
-    );
-    expect(getResponseText(responses.find((message) => message.id === 907))).toContain(
-      'drop target rejected files'
-    );
+      expect(getResponseText(responses.find((message) => message.id === 901))).toContain(
+        'status: files-dropped'
+      );
+      expect(getMockDropzoneState(pages[0]!, '#dropzone')?.receivedEventTypes).toEqual([
+        'dragenter',
+        'dragover',
+        'drop',
+      ]);
+      expect(getMockDropzoneState(pages[0]!, '#dropzone')?.receivedFiles).toEqual([
+        { name: 'invoice.pdf', size: 7, type: 'application/pdf' },
+        { name: 'receipt.png', size: 7, type: 'image/png' },
+      ]);
+      expect(
+        getMockDropzoneState(pages[0]!, '#frame-dropzone', { frameSelector: '#upload-frame' })
+          ?.receivedFiles
+      ).toEqual([{ name: 'invoice.pdf', size: 7, type: 'application/pdf' }]);
+      expect(
+        getMockDropzoneState(pages[0]!, '#shadow-dropzone', { pierceShadow: true })?.receivedFiles
+      ).toEqual([{ name: 'receipt.png', size: 7, type: 'image/png' }]);
+      expect(getResponseText(responses.find((message) => message.id === 904))).toContain(
+        'status: files-dropped'
+      );
+      expect(getMockDropzoneState(pages[0]!, '#cancel-dropzone')?.receivedFiles).toEqual([
+        { name: 'invoice.pdf', size: 7, type: 'application/pdf' },
+      ]);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects browser_drag_files for missing files, page conflicts, missing targets, and rejected drops', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'ccs-browser-drag-files-'));
+    try {
+      const okPath = join(tempDir, 'ok.txt');
+      const missingPath = join(tempDir, 'missing.txt');
+      writeFileSync(okPath, 'ok');
+
+      const responses = await runMcpRequests(
+        [
+          {
+            id: 'page-1',
+            title: 'Uploads',
+            currentUrl: 'https://example.com/uploads',
+            dropzones: {
+              '#reject-dropzone': { accepted: false },
+            },
+          },
+        ],
+        [
+          {
+            jsonrpc: '2.0',
+            id: 904,
+            method: 'tools/call',
+            params: {
+              name: 'browser_drag_files',
+              arguments: { selector: '#reject-dropzone', files: [missingPath] },
+            },
+          },
+          {
+            jsonrpc: '2.0',
+            id: 905,
+            method: 'tools/call',
+            params: {
+              name: 'browser_drag_files',
+              arguments: {
+                pageIndex: 0,
+                pageId: 'page-1',
+                selector: '#reject-dropzone',
+                files: [okPath],
+              },
+            },
+          },
+          {
+            jsonrpc: '2.0',
+            id: 906,
+            method: 'tools/call',
+            params: {
+              name: 'browser_drag_files',
+              arguments: { selector: '#missing-dropzone', files: [okPath] },
+            },
+          },
+          {
+            jsonrpc: '2.0',
+            id: 907,
+            method: 'tools/call',
+            params: {
+              name: 'browser_drag_files',
+              arguments: { selector: '#reject-dropzone', files: [okPath] },
+            },
+          },
+        ],
+        { childEnv: { CCS_BROWSER_UPLOAD_ROOTS: tempDir } }
+      );
+
+      expect(getResponseText(responses.find((message) => message.id === 904))).toContain(
+        'file does not exist'
+      );
+      expect(getResponseText(responses.find((message) => message.id === 905))).toContain(
+        'pageIndex and pageId cannot be used together'
+      );
+      expect(getResponseText(responses.find((message) => message.id === 906))).toContain(
+        'element not found for selector: #missing-dropzone'
+      );
+      expect(getResponseText(responses.find((message) => message.id === 907))).toContain(
+        'drop target rejected files'
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it('drags an element to another element and to explicit coordinates', async () => {
@@ -660,61 +669,65 @@ describe('ccs-browser MCP server - advanced interactions', () => {
 
   it('rejects mutating browser tools when the selected page becomes stale', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'ccs-browser-stale-selection-'));
-    const patchedServerPath = join(tempDir, 'ccs-browser-server.cjs');
-    writeFileSync(
-      patchedServerPath,
-      readFileSync(bundledServerPath, 'utf8').replace(
-        "let selectedPageId = '';",
-        "let selectedPageId = 'page-2';"
-      )
-    );
+    try {
+      const patchedServerPath = join(tempDir, 'ccs-browser-server.cjs');
+      writeFileSync(
+        patchedServerPath,
+        readFileSync(bundledServerPath, 'utf8').replace(
+          "let selectedPageId = '';",
+          "let selectedPageId = 'page-2';"
+        )
+      );
 
-    const responses = await runMcpRequests(
-      [
-        {
-          id: 'page-1',
-          title: 'Primary Page',
-          currentUrl: 'https://example.com/primary',
-          query: {
-            '#handle': {
-              exists: true,
-              connected: true,
-              rect: {
-                x: 30,
-                y: 50,
-                width: 40,
-                height: 20,
-                top: 50,
-                right: 70,
-                bottom: 70,
-                left: 30,
+      const responses = await runMcpRequests(
+        [
+          {
+            id: 'page-1',
+            title: 'Primary Page',
+            currentUrl: 'https://example.com/primary',
+            query: {
+              '#handle': {
+                exists: true,
+                connected: true,
+                rect: {
+                  x: 30,
+                  y: 50,
+                  width: 40,
+                  height: 20,
+                  top: 50,
+                  right: 70,
+                  bottom: 70,
+                  left: 30,
+                },
+                display: 'block',
+                visibility: 'visible',
+                opacity: '1',
               },
-              display: 'block',
-              visibility: 'visible',
-              opacity: '1',
             },
           },
-        },
-      ],
-      [
-        {
-          jsonrpc: '2.0',
-          id: 923,
-          method: 'tools/call',
-          params: {
-            name: 'browser_pointer_action',
-            arguments: {
-              actions: [{ type: 'move', selector: '#handle' }],
+        ],
+        [
+          {
+            jsonrpc: '2.0',
+            id: 923,
+            method: 'tools/call',
+            params: {
+              name: 'browser_pointer_action',
+              arguments: {
+                actions: [{ type: 'move', selector: '#handle' }],
+              },
             },
           },
-        },
-      ],
-      { serverPath: patchedServerPath }
-    );
+        ],
+        { serverPath: patchedServerPath }
+      );
 
-    expect(getResponseText(responses.find((message) => message.id === 923))).toContain(
-      'Selected page is no longer available; specify pageIndex or pageId explicitly.'
-    );
+      expect(getResponseText(responses.find((message) => message.id === 923))).toContain(
+        'Selected page is no longer available; specify pageIndex or pageId explicitly.'
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it('waits for a matching navigation event with browser_wait_for_event', async () => {

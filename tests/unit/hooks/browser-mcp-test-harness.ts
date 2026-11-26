@@ -3,7 +3,7 @@
 
 import { expect } from 'bun:test';
 import { spawn } from 'child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import * as http from 'node:http';
 import { WebSocketServer } from 'ws';
 import { tmpdir } from 'node:os';
@@ -1874,11 +1874,19 @@ function createMockBrowser(pagesInput: MockPageState[]) {
       });
     });
 
+    const isolatedTmpDir = join(tempDir, 'tmp');
+    mkdirSync(isolatedTmpDir, { recursive: true });
+    const resolvedChildTmpDir =
+      childEnv.TMPDIR && childEnv.TMPDIR !== process.env.TMPDIR ? childEnv.TMPDIR : isolatedTmpDir;
+
     const child = spawn('node', [entryServerPath], {
       cwd: tempDir,
       env: {
         ...process.env,
         ...childEnv,
+        TMPDIR: resolvedChildTmpDir,
+        TMP: resolvedChildTmpDir,
+        TEMP: resolvedChildTmpDir,
         CCS_BROWSER_DEVTOOLS_HTTP_URL: `http://127.0.0.1:${port}`,
       },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -1943,7 +1951,19 @@ async function runMcpRequests(
 
     return await responsesPromise;
   } finally {
-    child.kill();
+    if (child.exitCode === null && child.signalCode === null) {
+      await new Promise<void>((resolve) => {
+        const forceKillTimer = setTimeout(() => {
+          child.kill('SIGKILL');
+          resolve();
+        }, 1000);
+        child.once('exit', () => {
+          clearTimeout(forceKillTimer);
+          resolve();
+        });
+        child.kill();
+      });
+    }
     await browser.stop();
   }
 }
