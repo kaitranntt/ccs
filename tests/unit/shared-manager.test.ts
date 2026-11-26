@@ -1630,4 +1630,214 @@ describe('SharedManager', () => {
       expect(fs.existsSync(path.join(instancePluginsDir, '.last_inuse_sweep'))).toBe(false);
     });
   });
+
+  describe('migrateToSharedSettings backup safety (#1848)', () => {
+    const listPreMigrationBackups = (instancePath: string): string[] =>
+      fs
+        .readdirSync(instancePath)
+        .filter(
+          (entry) =>
+            entry === 'settings.json.pre-shared-migration' ||
+            entry.startsWith('settings.json.pre-shared-migration-')
+        )
+        .sort();
+
+    it('creates .pre-shared-migration on first-time migration with divergent settings.json', () => {
+      const manager = new SharedManager();
+      const instancePath = instanceDir('first-time');
+      const instanceSettings = path.join(instancePath, 'settings.json');
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      writeJson(path.join(claudeDir(), 'settings.json'), { shared: true });
+      fs.mkdirSync(instancePath, { recursive: true });
+      fs.writeFileSync(instanceSettings, '{"isolated":"first"}\n', 'utf8');
+
+      manager.migrateToSharedSettings();
+
+      expect(fs.lstatSync(instanceSettings).isSymbolicLink()).toBe(true);
+      expect(listPreMigrationBackups(instancePath)).toEqual([
+        'settings.json.pre-shared-migration',
+      ]);
+      expect(
+        fs.readFileSync(path.join(instancePath, 'settings.json.pre-shared-migration'), 'utf8')
+      ).toBe('{"isolated":"first"}\n');
+    });
+
+    it('preserves existing .pre-shared-migration and saves new regular settings.json to -1', () => {
+      const manager = new SharedManager();
+      const instancePath = instanceDir('work');
+      const instanceSettings = path.join(instancePath, 'settings.json');
+      const staleBackup = `${instanceSettings}.pre-shared-migration`;
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      writeJson(path.join(claudeDir(), 'settings.json'), { shared: true });
+      fs.mkdirSync(instancePath, { recursive: true });
+      fs.writeFileSync(staleBackup, 'STALE_OLD_BACKUP', 'utf8');
+      fs.writeFileSync(instanceSettings, 'FRESH_NEW_SETTINGS', 'utf8');
+
+      manager.migrateToSharedSettings();
+
+      expect(fs.lstatSync(instanceSettings).isSymbolicLink()).toBe(true);
+      expect(fs.readFileSync(staleBackup, 'utf8')).toBe('STALE_OLD_BACKUP');
+      expect(fs.readFileSync(`${staleBackup}-1`, 'utf8')).toBe('FRESH_NEW_SETTINGS');
+      expect(listPreMigrationBackups(instancePath)).toEqual([
+        'settings.json.pre-shared-migration',
+        'settings.json.pre-shared-migration-1',
+      ]);
+    });
+
+    it('preserves -1 and -2 across multiple sequential divergent reinstalls without overwriting', () => {
+      const manager = new SharedManager();
+      const instancePath = instanceDir('sequential');
+      const instanceSettings = path.join(instancePath, 'settings.json');
+      const baseBackup = `${instanceSettings}.pre-shared-migration`;
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      writeJson(path.join(claudeDir(), 'settings.json'), { shared: true });
+      fs.mkdirSync(instancePath, { recursive: true });
+
+      fs.writeFileSync(instanceSettings, 'VERSION_0', 'utf8');
+      manager.migrateToSharedSettings();
+      expect(fs.lstatSync(instanceSettings).isSymbolicLink()).toBe(true);
+
+      fs.unlinkSync(instanceSettings);
+      fs.writeFileSync(instanceSettings, 'VERSION_1', 'utf8');
+      manager.migrateToSharedSettings();
+      expect(fs.lstatSync(instanceSettings).isSymbolicLink()).toBe(true);
+
+      fs.unlinkSync(instanceSettings);
+      fs.writeFileSync(instanceSettings, 'VERSION_2', 'utf8');
+      manager.migrateToSharedSettings();
+      expect(fs.lstatSync(instanceSettings).isSymbolicLink()).toBe(true);
+
+      expect(fs.readFileSync(baseBackup, 'utf8')).toBe('VERSION_0');
+      expect(fs.readFileSync(`${baseBackup}-1`, 'utf8')).toBe('VERSION_1');
+      expect(fs.readFileSync(`${baseBackup}-2`, 'utf8')).toBe('VERSION_2');
+      expect(listPreMigrationBackups(instancePath)).toEqual([
+        'settings.json.pre-shared-migration',
+        'settings.json.pre-shared-migration-1',
+        'settings.json.pre-shared-migration-2',
+      ]);
+    });
+
+    it('does not create a duplicate backup when settings.json matches an existing backup', () => {
+      const manager = new SharedManager();
+      const instancePath = instanceDir('matches-backup');
+      const instanceSettings = path.join(instancePath, 'settings.json');
+      const baseBackup = `${instanceSettings}.pre-shared-migration`;
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      writeJson(path.join(claudeDir(), 'settings.json'), { shared: true });
+      fs.mkdirSync(instancePath, { recursive: true });
+      fs.writeFileSync(baseBackup, 'INITIAL_BACKUP', 'utf8');
+      fs.writeFileSync(`${baseBackup}-1`, 'CURRENT_CONTENT', 'utf8');
+      fs.writeFileSync(instanceSettings, 'CURRENT_CONTENT', 'utf8');
+
+      manager.migrateToSharedSettings();
+
+      expect(fs.lstatSync(instanceSettings).isSymbolicLink()).toBe(true);
+      expect(listPreMigrationBackups(instancePath)).toEqual([
+        'settings.json.pre-shared-migration',
+        'settings.json.pre-shared-migration-1',
+      ]);
+    });
+
+    it('does not create a spurious backup when settings.json matches shared/settings.json', () => {
+      const manager = new SharedManager();
+      const instancePath = instanceDir('matches-shared');
+      const instanceSettings = path.join(instancePath, 'settings.json');
+      const sharedContent = JSON.stringify({ theme: 'dark', synced: true }, null, 2);
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      fs.writeFileSync(path.join(claudeDir(), 'settings.json'), sharedContent, 'utf8');
+      fs.mkdirSync(instancePath, { recursive: true });
+      fs.writeFileSync(instanceSettings, sharedContent, 'utf8');
+
+      manager.migrateToSharedSettings();
+
+      expect(fs.lstatSync(instanceSettings).isSymbolicLink()).toBe(true);
+      expect(listPreMigrationBackups(instancePath)).toEqual([]);
+    });
+
+    it('does not delete instance settings.json when shared/settings.json is missing', () => {
+      const manager = new SharedManager();
+      const instancePath = instanceDir('missing-shared');
+      const instanceSettings = path.join(instancePath, 'settings.json');
+      const claudeSettings = path.join(claudeDir(), 'settings.json');
+      const sharedSettings = path.join(ccsDir(), 'shared', 'settings.json');
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      fs.mkdirSync(path.join(ccsDir(), 'shared'), { recursive: true });
+      // Circular symlink causes ensureSharedDirectories to skip settings.json,
+      // leaving shared/settings.json absent.
+      fs.symlinkSync(sharedSettings, claudeSettings, 'file');
+      fs.mkdirSync(instancePath, { recursive: true });
+      fs.writeFileSync(instanceSettings, 'USER_SETTINGS_MUST_SURVIVE', 'utf8');
+
+      manager.migrateToSharedSettings();
+
+      expect(fs.lstatSync(instanceSettings).isFile()).toBe(true);
+      expect(fs.readFileSync(instanceSettings, 'utf8')).toBe('USER_SETTINGS_MUST_SURVIVE');
+      expect(listPreMigrationBackups(instancePath)).toEqual([]);
+      expect(
+        logSpy.mock.calls.some(([message]) =>
+          String(message).includes('Skipping missing-shared/settings.json')
+        )
+      ).toBe(true);
+    });
+
+    it('unlinks a dangling instance settings.json symlink before re-linking', () => {
+      const manager = new SharedManager();
+      const instancePath = instanceDir('dangling-link');
+      const instanceSettings = path.join(instancePath, 'settings.json');
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      writeJson(path.join(claudeDir(), 'settings.json'), { shared: true });
+      fs.mkdirSync(instancePath, { recursive: true });
+      fs.symlinkSync(path.join(tempRoot, 'nonexistent-target.json'), instanceSettings, 'file');
+
+      manager.migrateToSharedSettings();
+
+      expect(fs.lstatSync(instanceSettings).isSymbolicLink()).toBe(true);
+      expect(fs.existsSync(instanceSettings)).toBe(true);
+      expect(readJson(instanceSettings)).toEqual({ shared: true });
+      expect(listPreMigrationBackups(instancePath)).toEqual([]);
+    });
+
+    it('does not unlink instance settings.json if backup creation fails', () => {
+      const manager = new SharedManager();
+      const instancePath = instanceDir('backup-error');
+      const instanceSettings = path.join(instancePath, 'settings.json');
+      const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+
+      fs.mkdirSync(claudeDir(), { recursive: true });
+      writeJson(path.join(claudeDir(), 'settings.json'), { shared: true });
+      fs.mkdirSync(instancePath, { recursive: true });
+      fs.writeFileSync(instanceSettings, 'DO_NOT_DELETE_ON_BACKUP_ERROR', 'utf8');
+
+      const originalCopyFileSync = fs.copyFileSync;
+      const copySpy = spyOn(fs, 'copyFileSync').mockImplementation(((
+        src: fs.PathLike,
+        dest: fs.PathLike,
+        mode?: number
+      ) => {
+        if (String(dest).includes('.pre-shared-migration')) {
+          throw Object.assign(new Error('simulated disk full'), { code: 'ENOSPC' });
+        }
+        return originalCopyFileSync(src, dest, mode);
+      }) as typeof fs.copyFileSync);
+
+      manager.migrateToSharedSettings();
+      copySpy.mockRestore();
+
+      expect(fs.lstatSync(instanceSettings).isFile()).toBe(true);
+      expect(fs.readFileSync(instanceSettings, 'utf8')).toBe('DO_NOT_DELETE_ON_BACKUP_ERROR');
+      expect(
+        logSpy.mock.calls.some(([message]) =>
+          String(message).includes('Failed to migrate backup-error')
+        )
+      ).toBe(true);
+    });
+  });
 });

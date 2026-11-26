@@ -1,9 +1,9 @@
 /**
- * SharedManager - one-shot upgrade migrations.
+ * SharedManager - layout and shared-settings migrations.
  *
- * Extracted from the original monolithic shared-manager.ts. These run once
- * on upgrade to reconcile older on-disk layouts into the current symlink
- * based architecture.
+ * Extracted from the original monolithic shared-manager.ts. Handles both
+ * one-shot v3.1.1 -> v3.2.0 layout upgrades and idempotent per-install
+ * shared settings.json migration.
  */
 
 import * as fs from 'fs';
@@ -11,12 +11,100 @@ import * as path from 'path';
 
 import { info, ok, warn } from '../../utils/ui';
 import { listAccountInstanceNames } from '../instance-directory';
+import { getLstatSync } from './fs-helpers';
 import {
   ensureSharedDirectories,
   linkSharedDirectories,
   type LinkerRoots,
 } from './shared-dir-linker';
 import { SHARED_ITEMS } from './types';
+
+const PRE_SHARED_MIGRATION_SUFFIX = '.pre-shared-migration';
+const MAX_BACKUP_ATTEMPTS = 10_000;
+
+function isAccessibleFile(filePath: string): boolean {
+  try {
+    return fs.statSync(filePath).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function findMatchingPreMigrationBackup(
+  instancePath: string,
+  settingsFileName: string,
+  currentBytes: Buffer
+): string | null {
+  const baseBackupName = `${settingsFileName}${PRE_SHARED_MIGRATION_SUFFIX}`;
+  const entries = fs.readdirSync(instancePath);
+
+  for (const entry of entries) {
+    if (entry !== baseBackupName && !entry.startsWith(`${baseBackupName}-`)) {
+      continue;
+    }
+    const candidatePath = path.join(instancePath, entry);
+    const candidateStats = getLstatSync(candidatePath);
+    if (!candidateStats?.isFile() || candidateStats.size !== currentBytes.length) {
+      continue;
+    }
+    try {
+      if (fs.readFileSync(candidatePath).equals(currentBytes)) {
+        return candidatePath;
+      }
+    } catch {
+      // Ignore unreadable backup candidate and keep searching
+    }
+  }
+
+  return null;
+}
+
+function writeNonOverwritingBackup(instanceSettings: string, mode: number): string {
+  const baseBackupPath = `${instanceSettings}${PRE_SHARED_MIGRATION_SUFFIX}`;
+
+  for (let suffix = 0; suffix < MAX_BACKUP_ATTEMPTS; suffix++) {
+    const backupPath = suffix === 0 ? baseBackupPath : `${baseBackupPath}-${suffix}`;
+    try {
+      fs.copyFileSync(instanceSettings, backupPath, fs.constants.COPYFILE_EXCL);
+      try {
+        fs.chmodSync(backupPath, mode);
+      } catch {
+        // Best-effort mode preservation on platforms without POSIX chmod
+      }
+      return backupPath;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw Object.assign(new Error(`Exceeded backup retry limit for ${instanceSettings}`), {
+    code: 'EEXIST',
+  });
+}
+
+function backupRegularInstanceSettings(
+  instance: string,
+  instancePath: string,
+  instanceSettings: string,
+  sharedSettings: string,
+  mode: number
+): void {
+  const currentBytes = fs.readFileSync(instanceSettings);
+  const sharedBytes = fs.readFileSync(sharedSettings);
+  if (currentBytes.equals(sharedBytes)) {
+    return;
+  }
+
+  if (findMatchingPreMigrationBackup(instancePath, path.basename(instanceSettings), currentBytes)) {
+    return;
+  }
+
+  const backupPath = writeNonOverwritingBackup(instanceSettings, mode);
+  console.log(info(`Backed up ${instance}/settings.json to ${path.basename(backupPath)}`));
+}
 
 /**
  * Migrate from v3.1.1 (copied data in ~/.ccs/shared/) to v3.2.0 (symlinks
@@ -111,8 +199,10 @@ export function migrateFromV311(roots: LinkerRoots): void {
 
 /**
  * Migrate existing instances from isolated to shared settings.json (v4.4+).
- * Backs up each instance's pre-existing settings.json before replacing it
- * with a symlink to the shared settings.json.
+ * Runs idempotently on every install (via postinstall) to ensure each
+ * instance's settings.json links to shared settings.json, preserving any
+ * divergent regular-file contents in a non-overwriting `.pre-shared-migration`
+ * backup before replacing the file.
  */
 export function migrateToSharedSettings(roots: LinkerRoots): void {
   const claudeDir = roots.claudeDir;
@@ -122,7 +212,7 @@ export function migrateToSharedSettings(roots: LinkerRoots): void {
   console.log(info('Migrating instances to shared settings.json...'));
 
   const claudeSettings = path.join(claudeDir, 'settings.json');
-  if (!fs.existsSync(claudeSettings)) {
+  if (!getLstatSync(claudeSettings)) {
     fs.writeFileSync(claudeSettings, JSON.stringify({}, null, 2), 'utf8');
     console.log(info('Created ~/.claude/settings.json'));
   }
@@ -135,6 +225,7 @@ export function migrateToSharedSettings(roots: LinkerRoots): void {
   }
 
   const instances = listAccountInstanceNames(instancesDir);
+  const sharedSettings = path.join(sharedDir, 'settings.json');
 
   let migrated = 0;
   let skipped = 0;
@@ -144,23 +235,34 @@ export function migrateToSharedSettings(roots: LinkerRoots): void {
     const instanceSettings = path.join(instancePath, 'settings.json');
 
     try {
-      if (fs.existsSync(instanceSettings)) {
-        const stats = fs.lstatSync(instanceSettings);
-        if (stats.isSymbolicLink()) {
-          skipped++;
-          continue;
-        }
-
-        const backup = instanceSettings + '.pre-shared-migration';
-        if (!fs.existsSync(backup)) {
-          fs.copyFileSync(instanceSettings, backup);
-          console.log(info(`Backed up ${instance}/settings.json`));
-        }
-
-        fs.unlinkSync(instanceSettings);
+      const stats = getLstatSync(instanceSettings);
+      if (stats?.isSymbolicLink() && fs.existsSync(instanceSettings)) {
+        skipped++;
+        continue;
       }
 
-      const sharedSettings = path.join(sharedDir, 'settings.json');
+      if (!isAccessibleFile(sharedSettings)) {
+        console.log(warn(`Skipping ${instance}/settings.json: shared settings.json is missing`));
+        skipped++;
+        continue;
+      }
+
+      if (stats?.isSymbolicLink()) {
+        fs.unlinkSync(instanceSettings);
+      } else if (stats?.isFile()) {
+        backupRegularInstanceSettings(
+          instance,
+          instancePath,
+          instanceSettings,
+          sharedSettings,
+          stats.mode & 0o777
+        );
+        fs.unlinkSync(instanceSettings);
+      } else if (stats) {
+        console.log(warn(`Skipping ${instance}/settings.json: expected file or symlink`));
+        skipped++;
+        continue;
+      }
 
       try {
         fs.symlinkSync(sharedSettings, instanceSettings, 'file');
