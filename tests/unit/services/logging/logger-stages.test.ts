@@ -10,6 +10,7 @@ import {
 } from '../../../../src/services/logging/log-buffer';
 import { invalidateLoggingConfigCache } from '../../../../src/services/logging/log-config';
 import { withRequestContext } from '../../../../src/services/logging/log-context';
+import { flushStructuredLogsSync } from '../../../../src/services/logging/log-storage';
 import { createLogger } from '../../../../src/services/logging/logger';
 
 describe('Logger.stage()', () => {
@@ -34,6 +35,7 @@ describe('Logger.stage()', () => {
   });
 
   afterEach(() => {
+    flushStructuredLogsSync();
     if (originalCcsHome === undefined) delete process.env.CCS_HOME;
     else process.env.CCS_HOME = originalCcsHome;
     fs.rmSync(tempHome, { recursive: true, force: true });

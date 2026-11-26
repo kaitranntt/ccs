@@ -6,7 +6,7 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 
 | Metric | Value |
 |---|---:|
-| Sync fs occurrences (all) | 2648 |
+| Sync fs occurrences (all) | 2650 |
 | Sync fs files affected (all) | 290 |
 | Sync fs occurrences (runtime hotpaths) | 1138 |
 | Sync fs files affected (runtime hotpaths) | 169 |

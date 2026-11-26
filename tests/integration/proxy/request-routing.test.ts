@@ -5,6 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { startOpenAICompatProxyServer } from '../../../src/proxy/server/proxy-server';
 import type { OpenAICompatProfileConfig } from '../../../src/proxy/profile-router';
+import { flushStructuredLogs } from '../../../src/services/logging';
 
 let originalCcsHome: string | undefined;
 let tempDir: string;
@@ -107,6 +108,7 @@ afterEach(async () => {
   if (proxyServer) {
     await new Promise<void>((resolve) => proxyServer.close(() => resolve()));
   }
+  await flushStructuredLogs();
   if (originalCcsHome !== undefined) {
     process.env.CCS_HOME = originalCcsHome;
   } else {

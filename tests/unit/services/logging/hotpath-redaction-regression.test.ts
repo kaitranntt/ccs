@@ -7,6 +7,7 @@ import { saveUnifiedConfig } from '../../../../src/config/unified-config-loader'
 import {
   clearRecentLogEntries,
   createLogger,
+  flushStructuredLogsSync,
   getRecentLogEntries,
   invalidateLoggingConfigCache,
 } from '../../../../src/services/logging';
@@ -72,6 +73,7 @@ describe('hotpath redaction regression (token-laden payloads)', () => {
   });
 
   afterEach(() => {
+    flushStructuredLogsSync();
     if (originalCcsHome === undefined) delete process.env.CCS_HOME;
     else process.env.CCS_HOME = originalCcsHome;
     fs.rmSync(tempHome, { recursive: true, force: true });

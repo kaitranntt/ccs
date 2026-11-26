@@ -18,6 +18,7 @@ import {
   toLogErrorInfo,
 } from '../../../src/proxy/server/upstream-transport';
 import { loadSettings } from '../../../src/utils/config-manager';
+import { flushStructuredLogsSync } from '../../../src/services/logging';
 
 class FakeSocket extends EventEmitter {
   destroyed = false;
@@ -144,6 +145,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  flushStructuredLogsSync();
   globalThis.fetch = originalFetch;
   Agent.prototype.close = originalAgentClose;
   if (originalCcsHome !== undefined) {

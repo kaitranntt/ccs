@@ -6,6 +6,7 @@ import * as path from 'path';
 import * as zlib from 'zlib';
 import { startOpenAICompatProxyServer } from '../../../src/proxy/server/proxy-server';
 import type { OpenAICompatProfileConfig } from '../../../src/proxy/profile-router';
+import { flushStructuredLogs } from '../../../src/services/logging';
 
 let proxyServer: http.Server;
 let upstreamServer: http.Server;
@@ -75,17 +76,6 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  if (originalTimeoutEnv !== undefined) {
-    process.env.CCS_OPENAI_PROXY_REQUEST_TIMEOUT_MS = originalTimeoutEnv;
-  } else {
-    delete process.env.CCS_OPENAI_PROXY_REQUEST_TIMEOUT_MS;
-  }
-  if (originalCcsHome !== undefined) {
-    process.env.CCS_HOME = originalCcsHome;
-  } else {
-    delete process.env.CCS_HOME;
-  }
-
   if (proxyServer) {
     await new Promise<void>((resolve) => proxyServer.close(() => resolve()));
   }
@@ -95,6 +85,17 @@ afterEach(async () => {
     }
     upstreamSockets = new Set();
     await new Promise<void>((resolve) => upstreamServer.close(() => resolve()));
+  }
+  await flushStructuredLogs();
+  if (originalTimeoutEnv !== undefined) {
+    process.env.CCS_OPENAI_PROXY_REQUEST_TIMEOUT_MS = originalTimeoutEnv;
+  } else {
+    delete process.env.CCS_OPENAI_PROXY_REQUEST_TIMEOUT_MS;
+  }
+  if (originalCcsHome !== undefined) {
+    process.env.CCS_HOME = originalCcsHome;
+  } else {
+    delete process.env.CCS_HOME;
   }
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
