@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import logsRoutes from '../../../src/web-server/routes/logs-routes';
-import { createLogger } from '../../../src/services/logging';
+import { createLogger, flushStructuredLogsSync } from '../../../src/services/logging';
 import { clearRecentLogEntries } from '../../../src/services/logging/log-buffer';
 
 describe('logs routes', () => {
@@ -63,6 +63,7 @@ describe('logs routes', () => {
   });
 
   afterEach(() => {
+    flushStructuredLogsSync();
     if (originalCcsHome !== undefined) {
       process.env.CCS_HOME = originalCcsHome;
     } else {

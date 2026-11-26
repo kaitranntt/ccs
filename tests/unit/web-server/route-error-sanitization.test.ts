@@ -13,6 +13,7 @@ import websearchRoutes from '../../../src/web-server/routes/websearch-routes';
 import ProfileRegistry from '../../../src/auth/profile-registry';
 import * as browserUtils from '../../../src/utils/browser';
 import * as websearchManager from '../../../src/utils/websearch-manager';
+import { flushStructuredLogsSync } from '../../../src/services/logging';
 
 const SECRET_SENTINEL = 'SECRET_INTERNAL_PATH_/etc/shadow_sk-ant-api03-leak';
 
@@ -56,6 +57,7 @@ describe('respondInternalError HTTP 500 sanitization', () => {
   });
 
   afterEach(() => {
+    flushStructuredLogsSync();
     if (originalCcsHome !== undefined) {
       process.env.CCS_HOME = originalCcsHome;
     } else {

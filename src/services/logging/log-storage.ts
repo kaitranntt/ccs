@@ -23,6 +23,8 @@ const MAX_BUFFERED_BYTES = 64 * 1024;
 interface PendingLogWrite {
   logPath: string;
   archiveDir: string;
+  rootDir: string;
+  rootExistedAtEnqueue: boolean;
   line: string;
   rotateMb: number;
   retainDays: number;
@@ -31,6 +33,8 @@ interface PendingLogWrite {
 interface LogWriteBatch {
   logPath: string;
   archiveDir: string;
+  rootDir: string;
+  rootExistedAtEnqueue: boolean;
   rotateMb: number;
   retainDays: number;
   payload: string;
@@ -43,7 +47,7 @@ let pendingBytes = 0;
 const inFlightBatches: LogWriteBatch[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let flushChain: Promise<void> = Promise.resolve();
-let beforeExitHookRegistered = false;
+let exitHooksRegistered = false;
 
 function getRotateBytes(rotateMb: number): number {
   return Math.max(1, rotateMb) * 1024 * 1024;
@@ -69,15 +73,19 @@ function drainPendingBatches(): LogWriteBatch[] {
     if (
       lastBatch &&
       lastBatch.logPath === item.logPath &&
-      lastBatch.archiveDir === item.archiveDir
+      lastBatch.archiveDir === item.archiveDir &&
+      lastBatch.rootDir === item.rootDir
     ) {
       lastBatch.payload += item.line;
       lastBatch.rotateMb = item.rotateMb;
       lastBatch.retainDays = item.retainDays;
+      lastBatch.rootExistedAtEnqueue = lastBatch.rootExistedAtEnqueue || item.rootExistedAtEnqueue;
     } else {
       batches.push({
         logPath: item.logPath,
         archiveDir: item.archiveDir,
+        rootDir: item.rootDir,
+        rootExistedAtEnqueue: item.rootExistedAtEnqueue,
         rotateMb: item.rotateMb,
         retainDays: item.retainDays,
         payload: item.line,
@@ -96,12 +104,15 @@ function clearScheduledFlushTimer(): void {
   }
 }
 
-function registerBeforeExitFlush(): void {
-  if (beforeExitHookRegistered) {
+function registerProcessExitFlush(): void {
+  if (exitHooksRegistered) {
     return;
   }
-  beforeExitHookRegistered = true;
+  exitHooksRegistered = true;
   process.on('beforeExit', () => {
+    flushStructuredLogsSync();
+  });
+  process.on('exit', () => {
     flushStructuredLogsSync();
   });
 }
@@ -220,17 +231,25 @@ export function pruneExpiredLogArchives(): void {
   }
 }
 
+function shouldSkipDeletedRoot(batch: LogWriteBatch): boolean {
+  if (batch.rootExistedAtEnqueue && !fs.existsSync(batch.rootDir)) {
+    batch.flushed = true;
+    return true;
+  }
+  return false;
+}
+
 async function writeBatchAsync(batch: LogWriteBatch): Promise<void> {
-  if (batch.flushed) {
+  if (batch.flushed || shouldSkipDeletedRoot(batch)) {
     return;
   }
   await fs.promises.mkdir(path.dirname(batch.logPath), { recursive: true, mode: 0o700 });
   await fs.promises.mkdir(batch.archiveDir, { recursive: true, mode: 0o700 });
-  if (batch.flushed) {
+  if (batch.flushed || shouldSkipDeletedRoot(batch)) {
     return;
   }
   await rotateCurrentLogIfNeededAsync(batch.logPath, batch.archiveDir, batch.rotateMb);
-  if (batch.flushed) {
+  if (batch.flushed || shouldSkipDeletedRoot(batch)) {
     return;
   }
   await fs.promises.appendFile(batch.logPath, batch.payload, {
@@ -245,7 +264,7 @@ async function writeBatchAsync(batch: LogWriteBatch): Promise<void> {
 }
 
 function writeBatchSync(batch: LogWriteBatch): void {
-  if (batch.flushed) {
+  if (batch.flushed || shouldSkipDeletedRoot(batch)) {
     return;
   }
   fs.mkdirSync(path.dirname(batch.logPath), { recursive: true, mode: 0o700 });
@@ -313,21 +332,25 @@ export async function flushStructuredLogs(): Promise<void> {
 }
 
 export function flushStructuredLogsSync(): void {
-  clearScheduledFlushTimer();
-  const pendingBatches = drainPendingBatches();
-  const uncompletedInFlight = inFlightBatches.filter((batch) => !batch.flushed);
-  const batches = [...uncompletedInFlight, ...pendingBatches];
-  if (batches.length === 0) {
-    return;
-  }
-
-  for (const batch of batches) {
-    try {
-      writeBatchSync(batch);
-    } catch {
-      batch.flushed = true;
-      // Logging must never break runtime behavior.
+  try {
+    clearScheduledFlushTimer();
+    const pendingBatches = drainPendingBatches();
+    const uncompletedInFlight = inFlightBatches.filter((batch) => !batch.flushed);
+    const batches = [...uncompletedInFlight, ...pendingBatches];
+    if (batches.length === 0) {
+      return;
     }
+
+    for (const batch of batches) {
+      try {
+        writeBatchSync(batch);
+      } catch {
+        batch.flushed = true;
+        // Logging must never break runtime behavior.
+      }
+    }
+  } catch {
+    // Logging must never break runtime behavior.
   }
 }
 
@@ -339,11 +362,15 @@ export function appendStructuredLogEntry(entry: LogEntry): void {
 
   try {
     pushRecentLogEntry(entry, config.live_buffer_size);
-    registerBeforeExitFlush();
+    registerProcessExitFlush();
     const line = `${JSON.stringify(entry)}\n`;
+    const logPath = getCurrentLogPath();
+    const rootDir = path.dirname(path.dirname(path.dirname(logPath)));
     pendingQueue.push({
-      logPath: getCurrentLogPath(),
+      logPath,
       archiveDir: getLogArchiveDir(),
+      rootDir,
+      rootExistedAtEnqueue: fs.existsSync(rootDir),
       line,
       rotateMb: config.rotate_mb,
       retainDays: config.retain_days,
