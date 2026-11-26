@@ -324,30 +324,35 @@ describe('handlePasteCallbackMode traceability', () => {
       `../oauth-handler?paste-trace-rejected=${Date.now()}`
     );
 
-    const result = await handlePasteCallbackMode(
-      'codex',
-      { provider: 'codex', displayName: 'Codex', authUrl: '', scopes: [], authFlag: '' },
-      false,
-      fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-paste-trace-rejected-')),
-      undefined,
-      undefined,
-      {
-        trace,
-        promptForCallbackUrl: async () =>
-          'http://localhost:1455/callback?code=oauth-code-secret&state=upstream-state-secret',
-      }
-    );
+    const tokenDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-paste-trace-rejected-'));
+    try {
+      const result = await handlePasteCallbackMode(
+        'codex',
+        { provider: 'codex', displayName: 'Codex', authUrl: '', scopes: [], authFlag: '' },
+        false,
+        tokenDir,
+        undefined,
+        undefined,
+        {
+          trace,
+          promptForCallbackUrl: async () =>
+            'http://localhost:1455/callback?code=oauth-code-secret&state=upstream-state-secret',
+        }
+      );
 
-    expect(result).toBeNull();
-    expect(trace.snapshot().map((event) => event.phase)).toEqual([
-      OAuthTracePhase.AuthUrlDisplayed,
-      OAuthTracePhase.PasteCallbackPrompted,
-      OAuthTracePhase.PasteCallbackReceived,
-      OAuthTracePhase.PasteCallbackSubmitted,
-      OAuthTracePhase.Error,
-    ]);
-    expect(JSON.stringify(trace.snapshot())).not.toContain('oauth-code-secret');
-    expect(JSON.stringify(trace.snapshot())).not.toContain('upstream-state-secret');
+      expect(result).toBeNull();
+      expect(trace.snapshot().map((event) => event.phase)).toEqual([
+        OAuthTracePhase.AuthUrlDisplayed,
+        OAuthTracePhase.PasteCallbackPrompted,
+        OAuthTracePhase.PasteCallbackReceived,
+        OAuthTracePhase.PasteCallbackSubmitted,
+        OAuthTracePhase.Error,
+      ]);
+      expect(JSON.stringify(trace.snapshot())).not.toContain('oauth-code-secret');
+      expect(JSON.stringify(trace.snapshot())).not.toContain('upstream-state-secret');
+    } finally {
+      fs.rmSync(tokenDir, { recursive: true, force: true });
+    }
   });
 
   it('records token exchange and token-file-missing when callback succeeds without a local token', async () => {
@@ -378,80 +383,94 @@ describe('handlePasteCallbackMode traceability', () => {
       `../oauth-handler?paste-trace-token-missing=${Date.now()}`
     );
 
-    const result = await handlePasteCallbackMode(
-      'codex',
-      { provider: 'codex', displayName: 'Codex', authUrl: '', scopes: [], authFlag: '' },
-      false,
-      fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-paste-trace-token-missing-')),
-      undefined,
-      undefined,
-      {
-        trace,
-        promptForCallbackUrl: async () =>
-          'http://localhost:1455/callback?code=oauth-code-secret&state=state-123',
-        timeoutMs: 5,
-        pollIntervalMs: 1,
-      }
-    );
+    const tokenDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-paste-trace-token-missing-'));
+    try {
+      const result = await handlePasteCallbackMode(
+        'codex',
+        { provider: 'codex', displayName: 'Codex', authUrl: '', scopes: [], authFlag: '' },
+        false,
+        tokenDir,
+        undefined,
+        undefined,
+        {
+          trace,
+          promptForCallbackUrl: async () =>
+            'http://localhost:1455/callback?code=oauth-code-secret&state=state-123',
+          timeoutMs: 5,
+          pollIntervalMs: 1,
+        }
+      );
 
-    expect(result).toBeNull();
-    expect(trace.snapshot().map((event) => event.phase)).toContain(
-      OAuthTracePhase.TokenExchangePending
-    );
-    expect(trace.snapshot().map((event) => event.phase)).toContain(
-      OAuthTracePhase.TokenFileMissing
-    );
+      expect(result).toBeNull();
+      expect(trace.snapshot().map((event) => event.phase)).toContain(
+        OAuthTracePhase.TokenExchangePending
+      );
+      expect(trace.snapshot().map((event) => event.phase)).toContain(
+        OAuthTracePhase.TokenFileMissing
+      );
+    } finally {
+      fs.rmSync(tokenDir, { recursive: true, force: true });
+    }
   });
 });
 
 describe('findNewTokenSnapshotForManualAuth', () => {
   it('detects newly created provider token files', async () => {
     const tokenDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-kiro-manual-auth-'));
-    const existingFile = path.join(tokenDir, 'kiro-existing.json');
-    fs.writeFileSync(existingFile, JSON.stringify({ type: 'kiro', email: 'existing@example.com' }));
-    const existingMtimeMs = fs.statSync(existingFile).mtimeMs;
+    try {
+      const existingFile = path.join(tokenDir, 'kiro-existing.json');
+      fs.writeFileSync(
+        existingFile,
+        JSON.stringify({ type: 'kiro', email: 'existing@example.com' })
+      );
+      const existingMtimeMs = fs.statSync(existingFile).mtimeMs;
 
-    const { findNewTokenSnapshotForManualAuth } = await import(
-      `../oauth-handler?manual-auth-new-token=${Date.now()}`
-    );
+      const { findNewTokenSnapshotForManualAuth } = await import(
+        `../oauth-handler?manual-auth-new-token=${Date.now()}`
+      );
 
-    const newFile = path.join(tokenDir, 'kiro-new.json');
-    fs.writeFileSync(newFile, JSON.stringify({ type: 'kiro', email: 'new@example.com' }));
+      const newFile = path.join(tokenDir, 'kiro-new.json');
+      fs.writeFileSync(newFile, JSON.stringify({ type: 'kiro', email: 'new@example.com' }));
 
-    const snapshot = findNewTokenSnapshotForManualAuth('kiro', tokenDir, [
-      { file: 'kiro-existing.json', mtimeMs: existingMtimeMs },
-    ]);
+      const snapshot = findNewTokenSnapshotForManualAuth('kiro', tokenDir, [
+        { file: 'kiro-existing.json', mtimeMs: existingMtimeMs },
+      ]);
 
-    expect(snapshot?.file).toBe('kiro-new.json');
-    fs.rmSync(tokenDir, { recursive: true, force: true });
+      expect(snapshot?.file).toBe('kiro-new.json');
+    } finally {
+      fs.rmSync(tokenDir, { recursive: true, force: true });
+    }
   });
 
   it('treats a modified existing token as the new token during reauth', async () => {
     const tokenDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-kiro-reauth-'));
-    const tokenFile = path.join(tokenDir, 'kiro-existing.json');
-    fs.writeFileSync(tokenFile, JSON.stringify({ type: 'kiro', email: 'existing@example.com' }));
-    const existingMtimeMs = fs.statSync(tokenFile).mtimeMs;
+    try {
+      const tokenFile = path.join(tokenDir, 'kiro-existing.json');
+      fs.writeFileSync(tokenFile, JSON.stringify({ type: 'kiro', email: 'existing@example.com' }));
+      const existingMtimeMs = fs.statSync(tokenFile).mtimeMs;
 
-    const { findNewTokenSnapshotForManualAuth } = await import(
-      `../oauth-handler?manual-auth-updated-token=${Date.now()}`
-    );
+      const { findNewTokenSnapshotForManualAuth } = await import(
+        `../oauth-handler?manual-auth-updated-token=${Date.now()}`
+      );
 
-    fs.writeFileSync(
-      tokenFile,
-      JSON.stringify({ type: 'kiro', email: 'existing@example.com', refreshed: true })
-    );
-    const bumpedTime = new Date(existingMtimeMs + 10_000);
-    fs.utimesSync(tokenFile, bumpedTime, bumpedTime);
+      fs.writeFileSync(
+        tokenFile,
+        JSON.stringify({ type: 'kiro', email: 'existing@example.com', refreshed: true })
+      );
+      const bumpedTime = new Date(existingMtimeMs + 10_000);
+      fs.utimesSync(tokenFile, bumpedTime, bumpedTime);
 
-    const snapshot = findNewTokenSnapshotForManualAuth(
-      'kiro',
-      tokenDir,
-      [{ file: 'kiro-existing.json', mtimeMs: existingMtimeMs }],
-      'kiro-existing.json'
-    );
+      const snapshot = findNewTokenSnapshotForManualAuth(
+        'kiro',
+        tokenDir,
+        [{ file: 'kiro-existing.json', mtimeMs: existingMtimeMs }],
+        'kiro-existing.json'
+      );
 
-    expect(snapshot?.file).toBe('kiro-existing.json');
-    fs.rmSync(tokenDir, { recursive: true, force: true });
+      expect(snapshot?.file).toBe('kiro-existing.json');
+    } finally {
+      fs.rmSync(tokenDir, { recursive: true, force: true });
+    }
   });
 });
 

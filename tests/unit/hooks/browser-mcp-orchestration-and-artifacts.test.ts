@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { runMcpRequests, getResponseText, createReplayStep, createOrchestrationBlock, mkdtempSync, writeFileSync, tmpdir, join } from './browser-mcp-test-harness';
+import { runMcpRequests, getResponseText, createReplayStep, createOrchestrationBlock, mkdtempSync, rmSync, writeFileSync, tmpdir, join } from './browser-mcp-test-harness';
 import type { MockPageState } from './browser-mcp-test-harness';
 
 describe('ccs-browser MCP server - orchestration and artifacts', () => {
@@ -1463,45 +1463,49 @@ describe('ccs-browser MCP server - orchestration and artifacts', () => {
 
   it('rejects duplicate export, invalid import payload, and missing artifact delete target', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'ccs-browser-artifact-failures-'));
-    const oversizedArtifactPath = join(tempDir, 'oversized-artifact.json');
-    writeFileSync(oversizedArtifactPath, Buffer.alloc(5 * 1024 * 1024 + 1, 'a'));
+    try {
+      const oversizedArtifactPath = join(tempDir, 'oversized-artifact.json');
+      writeFileSync(oversizedArtifactPath, Buffer.alloc(5 * 1024 * 1024 + 1, 'a'));
 
-    const responses = await runMcpRequests(
-      [
-        {
-          id: 'page-1',
-          title: 'Artifact Failure Page',
-          currentUrl: 'https://example.com/artifact-failure',
-          recording: {
-            events: [{ kind: 'click', selector: '#submit', timestamp: 1710000000000 }],
+      const responses = await runMcpRequests(
+        [
+          {
+            id: 'page-1',
+            title: 'Artifact Failure Page',
+            currentUrl: 'https://example.com/artifact-failure',
+            recording: {
+              events: [{ kind: 'click', selector: '#submit', timestamp: 1710000000000 }],
+            },
           },
-        },
-      ],
-      [
-        { jsonrpc: '2.0', id: 1612, method: 'tools/call', params: { name: 'browser_start_recording', arguments: {} } },
-        { jsonrpc: '2.0', id: 1613, method: 'tools/call', params: { name: 'browser_stop_recording', arguments: {} } },
-        { jsonrpc: '2.0', id: 1614, method: 'tools/call', params: { name: 'browser_export_artifact', arguments: { kind: 'recording', name: 'dup-artifact' } } },
-        { jsonrpc: '2.0', id: 1615, method: 'tools/call', params: { name: 'browser_export_artifact', arguments: { kind: 'recording', name: 'dup-artifact' } } },
-        { jsonrpc: '2.0', id: 1616, method: 'tools/call', params: { name: 'browser_import_artifact', arguments: { path: 'artifact:invalid-json' } } },
-        { jsonrpc: '2.0', id: 1617, method: 'tools/call', params: { name: 'browser_delete_artifact', arguments: { name: 'missing-artifact' } } },
-        { jsonrpc: '2.0', id: 1618, method: 'tools/call', params: { name: 'browser_export_artifact', arguments: { kind: 'recording', name: '../escape' } } },
-        { jsonrpc: '2.0', id: 1619, method: 'tools/call', params: { name: 'browser_import_artifact', arguments: { path: 'artifact:../escape' } } },
-        { jsonrpc: '2.0', id: 1620, method: 'tools/call', params: { name: 'browser_import_artifact', arguments: { path: oversizedArtifactPath } } },
-      ]
-    );
+        ],
+        [
+          { jsonrpc: '2.0', id: 1612, method: 'tools/call', params: { name: 'browser_start_recording', arguments: {} } },
+          { jsonrpc: '2.0', id: 1613, method: 'tools/call', params: { name: 'browser_stop_recording', arguments: {} } },
+          { jsonrpc: '2.0', id: 1614, method: 'tools/call', params: { name: 'browser_export_artifact', arguments: { kind: 'recording', name: 'dup-artifact' } } },
+          { jsonrpc: '2.0', id: 1615, method: 'tools/call', params: { name: 'browser_export_artifact', arguments: { kind: 'recording', name: 'dup-artifact' } } },
+          { jsonrpc: '2.0', id: 1616, method: 'tools/call', params: { name: 'browser_import_artifact', arguments: { path: 'artifact:invalid-json' } } },
+          { jsonrpc: '2.0', id: 1617, method: 'tools/call', params: { name: 'browser_delete_artifact', arguments: { name: 'missing-artifact' } } },
+          { jsonrpc: '2.0', id: 1618, method: 'tools/call', params: { name: 'browser_export_artifact', arguments: { kind: 'recording', name: '../escape' } } },
+          { jsonrpc: '2.0', id: 1619, method: 'tools/call', params: { name: 'browser_import_artifact', arguments: { path: 'artifact:../escape' } } },
+          { jsonrpc: '2.0', id: 1620, method: 'tools/call', params: { name: 'browser_import_artifact', arguments: { path: oversizedArtifactPath } } },
+        ]
+      );
 
-    expect(getResponseText(responses.find((message) => message.id === 1615))).toContain('artifact already exists');
-    expect(getResponseText(responses.find((message) => message.id === 1616))).toContain('artifact file not found');
-    expect(getResponseText(responses.find((message) => message.id === 1617))).toContain('artifact not found');
-    expect(getResponseText(responses.find((message) => message.id === 1618))).toContain(
-      'artifact name must start with a letter or number'
-    );
-    expect(getResponseText(responses.find((message) => message.id === 1619))).toContain(
-      'artifact name must start with a letter or number'
-    );
-    expect(getResponseText(responses.find((message) => message.id === 1620))).toContain(
-      'artifact file exceeds maximum size'
-    );
+      expect(getResponseText(responses.find((message) => message.id === 1615))).toContain('artifact already exists');
+      expect(getResponseText(responses.find((message) => message.id === 1616))).toContain('artifact file not found');
+      expect(getResponseText(responses.find((message) => message.id === 1617))).toContain('artifact not found');
+      expect(getResponseText(responses.find((message) => message.id === 1618))).toContain(
+        'artifact name must start with a letter or number'
+      );
+      expect(getResponseText(responses.find((message) => message.id === 1619))).toContain(
+        'artifact name must start with a letter or number'
+      );
+      expect(getResponseText(responses.find((message) => message.id === 1620))).toContain(
+        'artifact file exceeds maximum size'
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it('runs select_page_then_run and executes the inner single-page block on the selected page', async () => {
