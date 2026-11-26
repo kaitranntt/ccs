@@ -165,7 +165,8 @@ class SharedManager {
 
   /**
    * Migrate existing instances from isolated to shared settings.json
-   * (v4.4+). Runs once on upgrade.
+   * (v4.4+). Idempotent across installs: preserves divergent regular-file
+   * settings in non-overwriting backups before linking to shared settings.
    */
   migrateToSharedSettings(): void {
     migrateToSharedSettings(this.roots);

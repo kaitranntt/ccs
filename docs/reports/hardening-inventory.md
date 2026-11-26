@@ -6,9 +6,9 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 
 | Metric | Value |
 |---|---:|
-| Sync fs occurrences (all) | 2642 |
+| Sync fs occurrences (all) | 2646 |
 | Sync fs files affected (all) | 290 |
-| Sync fs occurrences (runtime hotpaths) | 1134 |
+| Sync fs occurrences (runtime hotpaths) | 1138 |
 | Sync fs files affected (runtime hotpaths) | 169 |
 | Legacy shim markers | 469 |
 | Legacy shim files affected | 188 |
@@ -18,8 +18,8 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 | File | Sync Calls | API Names |
 |---|---:|---|
 | `src/management/shared-manager/diverged-file-adopter.ts` | 32 | chmodSync, closeSync, fsyncSync, linkSync, lstatSync, openSync, readdirSync, readFileSync, readlinkSync, renameSync, statSync, unlinkSync, writeFileSync |
+| `src/management/shared-manager/migrations.ts` | 29 | chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, statSync, symlinkSync, unlinkSync, writeFileSync |
 | `src/utils/claude-symlink-manager.ts` | 27 | copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, unlinkSync |
-| `src/management/shared-manager/migrations.ts` | 25 | copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readdirSync, symlinkSync, unlinkSync, writeFileSync |
 | `src/cliproxy/services/variant-settings.ts` | 23 | existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync |
 | `src/management/recovery-manager.ts` | 23 | copyFileSync, existsSync, lstatSync, mkdirSync, renameSync, statSync, unlinkSync, writeFileSync |
 | `src/utils/shell-completion.ts` | 23 | appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, statSync |
