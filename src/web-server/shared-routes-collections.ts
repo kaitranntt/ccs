@@ -9,7 +9,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { getCcsDir } from '../config/config-loader-facade';
-import { safeRealPath, isPathWithinAny, resolveAllowedRoots } from './shared-routes-path-guards';
+import { getClaudeConfigDir } from '../utils/claude-config-path';
+import {
+  safeRealPath,
+  isPathWithinAny,
+  resolveAllowedRoots,
+  normalizeForPathComparison,
+} from './shared-routes-path-guards';
 import {
   readMarkdownDescription,
   readFirstMarkdownDescription,
@@ -18,6 +24,7 @@ import {
 import { getPluginItems } from './shared-routes-plugins';
 import type {
   SharedItem,
+  SharedItemSource,
   SharedItemsCacheEntry,
   SharedCollectionType,
 } from './shared-routes-types';
@@ -107,12 +114,126 @@ export function getSkillOrAgentItem(
 }
 
 // ---------------------------------------------------------------------------
+// Skills collector (ccs-shared + claude-default with canonical dedup)
+// ---------------------------------------------------------------------------
+
+function scanSkillDirectory(
+  dirPath: string,
+  allowedRoots: Set<string>,
+  source: SharedItemSource,
+  seenRealPaths: Set<string>,
+  dedupeSeen: boolean
+): SharedItem[] {
+  const items: SharedItem[] = [];
+
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+
+    for (const entry of entries) {
+      try {
+        const entryPath = path.join(dirPath, entry.name);
+        const resolvedEntryPath = safeRealPath(entryPath);
+        if (!resolvedEntryPath || !isPathWithinAny(resolvedEntryPath, allowedRoots)) {
+          continue;
+        }
+
+        const canonicalPath = normalizeForPathComparison(resolvedEntryPath);
+        if (dedupeSeen && seenRealPaths.has(canonicalPath)) {
+          continue;
+        }
+
+        const stats = fs.statSync(resolvedEntryPath);
+        const item = getSkillOrAgentItem(
+          'skills',
+          entry,
+          entryPath,
+          resolvedEntryPath,
+          allowedRoots,
+          stats
+        );
+        if (!item) {
+          continue;
+        }
+
+        seenRealPaths.add(canonicalPath);
+        items.push({ ...item, source });
+      } catch {
+        // Fail soft per entry so one bad item does not hide valid results.
+      }
+    }
+  } catch {
+    // Directory read failed — return empty list
+  }
+
+  return items;
+}
+
+/**
+ * Collect skill items from ~/.ccs/shared/skills ('ccs-shared') and unlinked
+ * ~/.claude/skills ('claude-default'), deduplicating by canonical realpath.
+ */
+function collectSkillItems(ccsDir: string, sharedDir: string): SharedItem[] {
+  const claudeSkillsDir = path.join(getClaudeConfigDir(), 'skills');
+  const cacheKey = `${sharedDir}\0${claudeSkillsDir}`;
+  const now = Date.now();
+
+  const cached = sharedItemsCache.get('skills');
+  if (cached && cached.cacheKey === cacheKey && cached.expiresAt > now) {
+    return cached.items;
+  }
+
+  const hasSharedDir = fs.existsSync(sharedDir);
+  const hasClaudeSkillsDir = fs.existsSync(claudeSkillsDir);
+  if (!hasSharedDir && !hasClaudeSkillsDir) {
+    sharedItemsCache.delete('skills');
+    return [];
+  }
+
+  const sharedDirRoot = hasSharedDir ? (safeRealPath(sharedDir) ?? path.resolve(sharedDir)) : null;
+  const allowedRoots = resolveAllowedRoots('skills', ccsDir, sharedDirRoot);
+  const seenRealPaths = new Set<string>();
+  const items: SharedItem[] = [];
+
+  if (hasSharedDir) {
+    items.push(...scanSkillDirectory(sharedDir, allowedRoots, 'ccs-shared', seenRealPaths, false));
+  }
+
+  if (hasClaudeSkillsDir) {
+    const claudeSkillsRoot = safeRealPath(claudeSkillsDir) ?? path.resolve(claudeSkillsDir);
+    const sameRootAsShared =
+      sharedDirRoot !== null &&
+      normalizeForPathComparison(claudeSkillsRoot) === normalizeForPathComparison(sharedDirRoot);
+
+    if (!sameRootAsShared) {
+      items.push(
+        ...scanSkillDirectory(claudeSkillsDir, allowedRoots, 'claude-default', seenRealPaths, true)
+      );
+    }
+  }
+
+  const sortedItems = items.sort(
+    (a, b) => a.name.localeCompare(b.name) || a.path.localeCompare(b.path)
+  );
+  sharedItemsCache.set('skills', {
+    items: sortedItems,
+    cacheKey,
+    expiresAt: now + SHARED_ITEMS_CACHE_TTL_MS,
+  });
+  return sortedItems;
+}
+
+// ---------------------------------------------------------------------------
 // Public cache-backed entry point
 // ---------------------------------------------------------------------------
 
 export function getSharedItems(type: SharedCollectionType): SharedItem[] {
   const ccsDir = getCcsDir();
   const sharedDir = path.join(ccsDir, 'shared', type);
+
+  if (type === 'skills') {
+    return collectSkillItems(ccsDir, sharedDir);
+  }
+
   const now = Date.now();
 
   if (!fs.existsSync(sharedDir)) {
@@ -121,7 +242,7 @@ export function getSharedItems(type: SharedCollectionType): SharedItem[] {
   }
 
   const cached = sharedItemsCache.get(type);
-  if (cached && cached.sharedDir === sharedDir && cached.expiresAt > now) {
+  if (cached && cached.cacheKey === sharedDir && cached.expiresAt > now) {
     return cached.items;
   }
 
@@ -132,7 +253,7 @@ export function getSharedItems(type: SharedCollectionType): SharedItem[] {
     const commandItems = getCommandItems(sharedDir, allowedRoots);
     sharedItemsCache.set(type, {
       items: commandItems,
-      sharedDir,
+      cacheKey: sharedDir,
       expiresAt: now + SHARED_ITEMS_CACHE_TTL_MS,
     });
     return commandItems;
@@ -142,13 +263,13 @@ export function getSharedItems(type: SharedCollectionType): SharedItem[] {
     const pluginItems = getPluginItems(sharedDir, allowedRoots);
     sharedItemsCache.set(type, {
       items: pluginItems,
-      sharedDir,
+      cacheKey: sharedDir,
       expiresAt: now + SHARED_ITEMS_CACHE_TTL_MS,
     });
     return pluginItems;
   }
 
-  // skills | agents
+  // agents
   const items: SharedItem[] = [];
   try {
     const entries = fs.readdirSync(sharedDir, { withFileTypes: true });
@@ -185,7 +306,7 @@ export function getSharedItems(type: SharedCollectionType): SharedItem[] {
   const sortedItems = items.sort((a, b) => a.name.localeCompare(b.name));
   sharedItemsCache.set(type, {
     items: sortedItems,
-    sharedDir,
+    cacheKey: sharedDir,
     expiresAt: now + SHARED_ITEMS_CACHE_TTL_MS,
   });
   return sortedItems;

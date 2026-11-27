@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { getCcsDir } from '../config/config-loader-facade';
+import { getClaudeConfigDir } from '../utils/claude-config-path';
 import { requireLocalAccessWhenAuthDisabled } from './middleware/auth-middleware';
 import { isSharedContentType } from './shared-routes-types';
 import {
@@ -94,18 +95,28 @@ sharedRoutes.get('/content', (req: Request, res: Response) => {
   const sharedDir =
     typeParam === 'settings' ? path.join(ccsDir, 'shared') : path.join(ccsDir, 'shared', typeParam);
 
-  if (!fs.existsSync(sharedDir)) {
+  const hasSharedDir = fs.existsSync(sharedDir);
+  const hasClaudeSkillsDir =
+    typeParam === 'skills' && fs.existsSync(path.join(getClaudeConfigDir(), 'skills'));
+
+  if (typeParam === 'skills' ? !hasSharedDir && !hasClaudeSkillsDir : !hasSharedDir) {
     res.status(404).json({ error: 'Shared directory not found' });
     return;
   }
 
-  const sharedDirRoot = safeRealPath(sharedDir) ?? path.resolve(sharedDir);
+  const sharedDirRoot = hasSharedDir ? (safeRealPath(sharedDir) ?? path.resolve(sharedDir)) : null;
+  const fallbackSharedDirRoot = sharedDirRoot ?? path.resolve(sharedDir);
   const allowedRoots =
     typeParam === 'settings'
-      ? resolveSettingsAllowedRoots(ccsDir, sharedDirRoot)
+      ? resolveSettingsAllowedRoots(ccsDir, fallbackSharedDirRoot)
       : resolveAllowedRoots(typeParam, ccsDir, sharedDirRoot);
 
-  const contentResult = getSharedItemContent(typeParam, itemPathParam, allowedRoots, sharedDirRoot);
+  const contentResult = getSharedItemContent(
+    typeParam,
+    itemPathParam,
+    allowedRoots,
+    fallbackSharedDirRoot
+  );
 
   if (!contentResult) {
     res.status(404).json({ error: 'Shared content not found' });

@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 import { AlertCircle, AlertTriangle, FileJson, FolderOpen, RefreshCw, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { MarkdownViewer } from './markdown-viewer';
-import { type SharedTabType, formatSharedItemPath } from './shared-utils';
+import { type SharedTabType, formatSharedItemPath, getSharedItemSourceMeta } from './shared-utils';
 
 const CodeEditor = lazy(() =>
   import('@/components/shared/code-editor').then((m) => ({ default: m.CodeEditor }))
@@ -241,27 +241,41 @@ export function SharedItemsSidebar({
           </div>
         ) : (
           <div className="p-2 space-y-1">
-            {filteredItems.map((item) => (
-              <button
-                key={`${item.type}:${item.path}`}
-                type="button"
-                onClick={() => onSelectItem(item.path)}
-                className={cn(
-                  'w-full text-left p-3 rounded-md border transition-colors',
-                  selectedItem?.path === item.path
-                    ? 'bg-primary/10 border-primary/30'
-                    : 'bg-background hover:bg-muted border-transparent'
-                )}
-              >
-                <p className="text-sm font-medium truncate">{item.name}</p>
-                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                  {item.description}
-                </p>
-                <p className="text-[11px] text-muted-foreground/90 mt-2 font-mono truncate">
-                  {formatSharedItemPath(item.path)}
-                </p>
-              </button>
-            ))}
+            {filteredItems.map((item) => {
+              const sourceMeta = getSharedItemSourceMeta(item.source, t);
+
+              return (
+                <button
+                  key={`${item.type}:${item.path}`}
+                  type="button"
+                  onClick={() => onSelectItem(item.path)}
+                  className={cn(
+                    'w-full text-left p-3 rounded-md border transition-colors',
+                    selectedItem?.path === item.path
+                      ? 'bg-primary/10 border-primary/30'
+                      : 'bg-background hover:bg-muted border-transparent'
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <p className="text-sm font-medium truncate min-w-0">{item.name}</p>
+                    {sourceMeta ? (
+                      <Badge
+                        variant="outline"
+                        className={cn('shrink-0 text-[10px] px-1.5 py-0', sourceMeta.className)}
+                      >
+                        {sourceMeta.label}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                    {item.description}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/90 mt-2 font-mono truncate">
+                    {formatSharedItemPath(item.path)}
+                  </p>
+                </button>
+              );
+            })}
           </div>
         )}
       </ScrollArea>
@@ -393,21 +407,30 @@ export function SharedMarkdownDetailPanel({
   onRetryContent: () => void;
 }) {
   const { t } = useTranslation();
+  const sourceMeta = getSharedItemSourceMeta(selectedItem.source, t);
 
   return (
     <>
       <div className="px-4 py-3 border-b bg-background">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <h2 className="text-base font-semibold truncate">{selectedItem.name}</h2>
-          <Badge variant="outline" className="uppercase text-[10px]">
+          <Badge variant="outline" className="uppercase text-[10px] shrink-0">
             {selectedItem.type}
           </Badge>
+          {sourceMeta ? (
+            <Badge variant="outline" className={cn('text-[10px] shrink-0', sourceMeta.className)}>
+              {sourceMeta.label}
+            </Badge>
+          ) : null}
         </div>
       </div>
 
       <div className="p-4 space-y-4 min-h-0 flex-1 flex flex-col">
         <div className="rounded-md border bg-muted/35 p-3">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {sourceMeta ? (
+              <MetadataField label={t('sharedPage.sourceLabel')} value={sourceMeta.label} />
+            ) : null}
             <MetadataField
               label={t('sharedPage.pathLabel')}
               value={formatSharedItemPath(selectedItem.path)}

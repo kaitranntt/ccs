@@ -14,6 +14,7 @@ import {
   type SharedTabType,
   getPreferredInitialTab,
   getSharedErrorMessage,
+  getSharedItemSourceMeta,
 } from '@/components/shared-resources/shared-utils';
 import { useAccounts } from '@/hooks/use-accounts';
 import { useSharedItemContent, useSharedItems, useSharedSummary } from '@/hooks/use-shared';
@@ -56,12 +57,13 @@ export function SharedPage() {
       return sourceItems;
     }
 
-    return sourceItems.filter((item) =>
-      [item.name, item.description, item.path].some((value) =>
-        value.toLowerCase().includes(normalizedQuery)
-      )
-    );
-  }, [items, normalizedQuery]);
+    return sourceItems.filter((item) => {
+      const sourceLabel = getSharedItemSourceMeta(item.source, t)?.label;
+      return [item.name, item.description, item.path, item.source, sourceLabel].some(
+        (value) => typeof value === 'string' && value.toLowerCase().includes(normalizedQuery)
+      );
+    });
+  }, [items, normalizedQuery, t]);
 
   const selectedItem = useMemo(() => {
     if (filteredItems.length === 0) {

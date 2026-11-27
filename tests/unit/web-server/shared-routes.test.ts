@@ -790,4 +790,202 @@ describe('web-server shared-routes', () => {
       message: 'Symlinks active',
     });
   });
+
+  it('lists unlinked ~/.claude/skills as claude-default and serves content without ~/.ccs/shared/skills', async () => {
+    const claudeConfigDir = path.join(tempHome, 'custom-claude');
+    process.env.CLAUDE_CONFIG_DIR = claudeConfigDir;
+
+    const claudeSkillDir = path.join(claudeConfigDir, 'skills', 'unlinked-skill');
+    fs.mkdirSync(claudeSkillDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(claudeSkillDir, 'SKILL.md'),
+      [
+        '---',
+        'name: unlinked-skill',
+        'description: Default Claude skill before CCS symlink.',
+        '---',
+        '',
+        '# Unlinked Skill',
+        '',
+        'Preview body from default Claude skills.',
+      ].join('\n')
+    );
+
+    const skillsPayload = await getJson<{
+      items: Array<{
+        name: string;
+        type: string;
+        description: string;
+        path: string;
+        source?: string;
+      }>;
+    }>(baseUrl, '/api/shared/skills');
+
+    expect(skillsPayload.items).toEqual([
+      {
+        name: 'unlinked-skill',
+        type: 'skill',
+        description: 'Default Claude skill before CCS symlink.',
+        path: claudeSkillDir,
+        source: 'claude-default',
+      },
+    ]);
+
+    const summaryPayload = await getJson<{ skills: number; total: number }>(
+      baseUrl,
+      '/api/shared/summary'
+    );
+    expect(summaryPayload.skills).toBe(1);
+    expect(summaryPayload.total).toBe(1);
+
+    const contentPayload = await getJson<{ content: string; contentPath: string }>(
+      baseUrl,
+      `/api/shared/content?type=skills&path=${encodeURIComponent(claudeSkillDir)}`
+    );
+    expect(contentPayload.content).toContain('Preview body from default Claude skills.');
+    expect(contentPayload.contentPath).toBe(fs.realpathSync(path.join(claudeSkillDir, 'SKILL.md')));
+  });
+
+  it('deduplicates skills by canonical realpath when ~/.ccs/shared/skills symlinks to ~/.claude/skills', async () => {
+    const claudeConfigDir = path.join(tempHome, 'custom-claude');
+    process.env.CLAUDE_CONFIG_DIR = claudeConfigDir;
+
+    const claudeSkillsDir = path.join(claudeConfigDir, 'skills');
+    const claudeSkillDir = path.join(claudeSkillsDir, 'linked-root-skill');
+    fs.mkdirSync(claudeSkillDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(claudeSkillDir, 'SKILL.md'),
+      '---\ndescription: Root-symlinked skill.\n---\n\n# Linked Root Skill'
+    );
+
+    const sharedSkillsDir = path.join(ccsDir, 'shared', 'skills');
+    createDirectorySymlink(claudeSkillsDir, sharedSkillsDir);
+
+    const payload = await getJson<{
+      items: Array<{
+        name: string;
+        type: string;
+        description: string;
+        path: string;
+        source?: string;
+      }>;
+    }>(baseUrl, '/api/shared/skills');
+
+    expect(payload.items).toEqual([
+      {
+        name: 'linked-root-skill',
+        type: 'skill',
+        description: 'Root-symlinked skill.',
+        path: path.join(sharedSkillsDir, 'linked-root-skill'),
+        source: 'ccs-shared',
+      },
+    ]);
+  });
+
+  it('deduplicates individual symlinked skill entries pointing to ~/.claude/skills', async () => {
+    const claudeConfigDir = path.join(tempHome, 'custom-claude');
+    process.env.CLAUDE_CONFIG_DIR = claudeConfigDir;
+
+    const claudeSkillDir = path.join(claudeConfigDir, 'skills', 'single-linked-skill');
+    fs.mkdirSync(claudeSkillDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(claudeSkillDir, 'SKILL.md'),
+      '---\ndescription: Individually linked skill.\n---\n\n# Single Linked Skill'
+    );
+
+    const sharedSkillsDir = path.join(ccsDir, 'shared', 'skills');
+    fs.mkdirSync(sharedSkillsDir, { recursive: true });
+    const sharedLinkPath = path.join(sharedSkillsDir, 'single-linked-skill');
+    createDirectorySymlink(claudeSkillDir, sharedLinkPath);
+
+    const payload = await getJson<{
+      items: Array<{
+        name: string;
+        type: string;
+        description: string;
+        path: string;
+        source?: string;
+      }>;
+    }>(baseUrl, '/api/shared/skills');
+
+    expect(payload.items).toEqual([
+      {
+        name: 'single-linked-skill',
+        type: 'skill',
+        description: 'Individually linked skill.',
+        path: sharedLinkPath,
+        source: 'ccs-shared',
+      },
+    ]);
+  });
+
+  it('returns both ccs-shared and claude-default skills when directories are mixed', async () => {
+    const claudeConfigDir = path.join(tempHome, 'custom-claude');
+    process.env.CLAUDE_CONFIG_DIR = claudeConfigDir;
+
+    const sharedSkillsDir = path.join(ccsDir, 'shared', 'skills');
+    const sharedOnlyDir = path.join(sharedSkillsDir, 'alpha-shared');
+    fs.mkdirSync(sharedOnlyDir, { recursive: true });
+    fs.writeFileSync(path.join(sharedOnlyDir, 'SKILL.md'), 'Shared-only skill description');
+
+    const claudeSkillsDir = path.join(claudeConfigDir, 'skills');
+    const claudeOnlyDir = path.join(claudeSkillsDir, 'beta-claude');
+    fs.mkdirSync(claudeOnlyDir, { recursive: true });
+    fs.writeFileSync(path.join(claudeOnlyDir, 'SKILL.md'), 'Claude-only skill description');
+
+    const payload = await getJson<{
+      items: Array<{
+        name: string;
+        type: string;
+        description: string;
+        path: string;
+        source?: string;
+      }>;
+    }>(baseUrl, '/api/shared/skills');
+
+    expect(payload.items).toEqual([
+      {
+        name: 'alpha-shared',
+        type: 'skill',
+        description: 'Shared-only skill description',
+        path: sharedOnlyDir,
+        source: 'ccs-shared',
+      },
+      {
+        name: 'beta-claude',
+        type: 'skill',
+        description: 'Claude-only skill description',
+        path: claudeOnlyDir,
+        source: 'claude-default',
+      },
+    ]);
+  });
+
+  it('ignores symlinks inside ~/.claude/skills pointing outside allowed roots and returns 404 for content', async () => {
+    const claudeConfigDir = path.join(tempHome, 'custom-claude');
+    process.env.CLAUDE_CONFIG_DIR = claudeConfigDir;
+
+    const claudeSkillsDir = path.join(claudeConfigDir, 'skills');
+    fs.mkdirSync(claudeSkillsDir, { recursive: true });
+
+    const outsideSkillDir = path.join(tempHome, '.agents', 'skills', 'external-skill');
+    fs.mkdirSync(outsideSkillDir, { recursive: true });
+    fs.writeFileSync(path.join(outsideSkillDir, 'SKILL.md'), 'External agent skill');
+
+    const escapedLinkPath = path.join(claudeSkillsDir, 'external-skill');
+    createDirectorySymlink(outsideSkillDir, escapedLinkPath);
+
+    const listPayload = await getJson<{ items: Array<{ name: string }> }>(
+      baseUrl,
+      '/api/shared/skills'
+    );
+    expect(listPayload.items).toEqual([]);
+
+    const contentResponse = await fetch(
+      `${baseUrl}/api/shared/content?type=skills&path=${encodeURIComponent(escapedLinkPath)}`
+    );
+    expect(contentResponse.status).toBe(404);
+    const contentPayload = (await contentResponse.json()) as { error: string };
+    expect(contentPayload.error).toBe('Shared content not found');
+  });
 });

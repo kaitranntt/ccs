@@ -44,22 +44,22 @@ export function isPathWithinAny(candidatePath: string, basePaths: Set<string>): 
 export function resolveAllowedRoots(
   type: SharedCollectionType,
   ccsDir: string,
-  sharedDirRoot: string
+  sharedDirRoot?: string | null
 ): Set<string> {
   if (type === 'commands' || type === 'plugins') {
-    return new Set<string>([sharedDirRoot]);
+    return new Set<string>(sharedDirRoot ? [sharedDirRoot] : []);
   }
 
-  return new Set<string>([
-    sharedDirRoot,
-    ...[
-      path.join(getClaudeConfigDir(), type),
-      path.join(ccsDir, '.claude', type),
-      path.join(ccsDir, 'shared', type),
-    ]
-      .map((dirPath) => safeRealPath(dirPath))
-      .filter((dirPath): dirPath is string => typeof dirPath === 'string'),
-  ]);
+  return new Set<string>(
+    [
+      sharedDirRoot,
+      ...[
+        path.join(getClaudeConfigDir(), type),
+        path.join(ccsDir, '.claude', type),
+        path.join(ccsDir, 'shared', type),
+      ].map((dirPath) => safeRealPath(dirPath)),
+    ].filter((dirPath): dirPath is string => typeof dirPath === 'string' && dirPath.length > 0)
+  );
 }
 
 export function resolveSettingsAllowedRoots(ccsDir: string, sharedDirRoot: string): Set<string> {
