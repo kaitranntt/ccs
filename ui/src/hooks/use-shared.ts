@@ -1,10 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 
+export type SharedItemSource = 'ccs-shared' | 'claude-default';
+
 export interface SharedItem {
   name: string;
   description: string;
   path: string;
   type: 'command' | 'skill' | 'agent' | 'plugin';
+  source?: SharedItemSource;
 }
 
 export type SharedResourceTab = 'commands' | 'skills' | 'agents' | 'plugins' | 'settings';

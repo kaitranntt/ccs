@@ -328,4 +328,95 @@ describe('SharedPage', () => {
     ).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Retry counts' })).toBeInTheDocument();
   });
+
+  it('renders CCS shared and Claude default source badges, filters by source label, and previews claude-default skills when symlinks are invalid', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = requestUrl(input);
+      if (url.endsWith('/api/shared/summary')) {
+        return jsonResponse({
+          commands: 0,
+          skills: 2,
+          agents: 0,
+          plugins: 0,
+          settings: false,
+          total: 2,
+          symlinkStatus: { valid: false, message: 'Symlinks inactive' },
+        });
+      }
+      if (url.endsWith('/api/accounts')) {
+        return accountsResponse();
+      }
+      if (url.endsWith('/api/shared/skills')) {
+        return jsonResponse({
+          items: [
+            {
+              name: 'team-helper',
+              description: 'Shared CCS helper skill.',
+              path: '/tmp/.ccs/shared/skills/team-helper/SKILL.md',
+              type: 'skill',
+              source: 'ccs-shared',
+            },
+            {
+              name: 'claude-builtin',
+              description: 'Default Claude skill.',
+              path: '/tmp/.claude/skills/claude-builtin/SKILL.md',
+              type: 'skill',
+              source: 'claude-default',
+            },
+          ],
+        });
+      }
+      if (url.includes('/api/shared/content?') && url.includes('type=skills')) {
+        if (url.includes('claude-builtin')) {
+          return jsonResponse({
+            content: '# Claude Builtin\n\nLoaded directly from ~/.claude/skills',
+            contentPath: '/tmp/.claude/skills/claude-builtin/SKILL.md',
+          });
+        }
+        return jsonResponse({
+          content: '# Team Helper\n\nLoaded from ~/.ccs/shared/skills',
+          contentPath: '/tmp/.ccs/shared/skills/team-helper/SKILL.md',
+        });
+      }
+
+      return jsonResponse({ items: [] });
+    });
+
+    render(<SharedPage />);
+
+    expect(await screen.findByText('Showing 2 of 2 skills')).toBeInTheDocument();
+    expect(screen.getByText('Configuration Required')).toBeInTheDocument();
+
+    // First item (ccs-shared) is selected initially: sidebar badge + detail header badge + Source metadata field
+    expect(screen.getByText('Source')).toBeInTheDocument();
+    expect(screen.getAllByText('CCS shared').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Claude default')).toBeInTheDocument();
+    expect(await screen.findByText('Team Helper')).toBeInTheDocument();
+
+    // Filter by localized source label "Claude default"
+    const searchInput = screen.getByRole('textbox', {
+      name: 'Filter skills by name, description, or path',
+    });
+    await userEvent.type(searchInput, 'Claude default');
+
+    expect(
+      await screen.findByText('Showing 1 of 2 skills for "Claude default"')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('team-helper')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'claude-builtin' })).toBeInTheDocument();
+
+    // Clicking the filtered claude-default skill loads /api/shared/content even with invalid symlinkStatus
+    await userEvent.click(screen.getByRole('button', { name: /claude-builtin/i }));
+
+    expect(await screen.findByText('Claude Builtin')).toBeInTheDocument();
+    expect(screen.getAllByText('Claude default').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText('CCS shared')).not.toBeInTheDocument();
+
+    const requestedUrls = fetchMock.mock.calls.map(([input]) => requestUrl(input));
+    expect(
+      requestedUrls.some(
+        (url) => url.includes('/api/shared/content?') && url.includes('claude-builtin')
+      )
+    ).toBe(true);
+  });
 });

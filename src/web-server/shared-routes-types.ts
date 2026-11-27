@@ -4,17 +4,19 @@
 
 export type SharedCollectionType = 'commands' | 'skills' | 'agents' | 'plugins';
 export type SharedContentType = SharedCollectionType | 'settings';
+export type SharedItemSource = 'ccs-shared' | 'claude-default';
 
 export interface SharedItem {
   name: string;
   description: string;
   path: string;
   type: 'command' | 'skill' | 'agent' | 'plugin';
+  source?: SharedItemSource;
 }
 
 export interface SharedItemsCacheEntry {
   items: SharedItem[];
-  sharedDir: string;
+  cacheKey: string;
   expiresAt: number;
 }
 
